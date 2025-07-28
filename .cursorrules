@@ -1,0 +1,60 @@
+# Cursor Project Rules for WebGPU 3D Physics Engine
+
+## Development Environment
+
+- Use zsh as the default shell for all terminal operations
+- Use pnpm as the package manager for all dependency management
+- Always run commands in zsh terminal
+- Prefer pnpm over npm or yarn for package operations
+
+## Package Management Commands
+
+- Install dependencies: `pnpm install`
+- Add new dependency: `pnpm add <package>`
+- Add dev dependency: `pnpm add -D <package>`
+- Run scripts: `pnpm run <script>`
+- Start dev server: `pnpm dev`
+- Build project: `pnpm build`
+- Run tests: `pnpm test`
+
+## Terminal Configuration
+
+- Default shell: zsh
+- Package manager: pnpm
+- Node.js version: 18+ (project requirement)
+
+## Code Standards
+
+- Use TypeScript with strict mode
+- Follow ESLint rules defined in .eslintrc.json
+- Use English comments in code
+- Never delete comments in code
+- Do not break irrelevant code when editing
+
+## Project Structure
+
+- Follow the established module structure in src/
+- Use module aliases defined in tsconfig.json (@math, @renderer, etc.)
+- Keep plans/ directory for documentation
+- Maintain tests/ directory for unit tests
+
+## WebGPU Development
+
+- Use @webgpu/types for type definitions
+- Follow WebGPU best practices
+- Test in browsers with WebGPU support (Chrome Canary, Firefox Nightly)
+- Handle WebGPU availability gracefully
+
+## Git Workflow
+
+- Use conventional commit messages
+- Follow the branch naming: feature/module-name
+- Keep main branch stable
+- Use develop branch for integration
+
+## When suggesting commands or terminal operations:
+
+1. Always use zsh shell
+2. Always use pnpm for package operations
+3. Provide full commands with pnpm
+4. Consider Windows compatibility in zsh environment
