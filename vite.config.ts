@@ -1,17 +1,16 @@
 import { defineConfig } from "vite";
-import { resolve } from "path";
+import path, { resolve } from "path";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 export default defineConfig({
-  root: ".",
+  base: "/",
   publicDir: "public",
+  plugins: [svelte({ compilerOptions: { hmr: true } })],
   build: {
-    outDir: "dist",
-    sourcemap: true,
-    target: "es2022",
+    outDir: path.resolve(__dirname, "./dist"),
+    emptyOutDir: false,
+    assetsDir: "assets",
     rollupOptions: {
-      input: {
-        main: resolve(__dirname, "index.html"),
-      },
       output: {
         manualChunks: {
           math: ["@math/*"],
@@ -23,10 +22,13 @@ export default defineConfig({
         },
       },
     },
+    sourcemap: true,
+    target: "es2022",
   },
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
+      "@ecs": resolve(__dirname, "./src/ecs"),
       "@math": resolve(__dirname, "./src/math"),
       "@renderer": resolve(__dirname, "./src/renderer"),
       "@physics": resolve(__dirname, "./src/physics"),
@@ -36,14 +38,12 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 5173,
     host: true,
-    open: true,
-    cors: true,
-  },
-  preview: {
-    port: 4173,
-    host: true,
+    headers: {
+      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Opener-Policy": "same-origin",
+    },
   },
   optimizeDeps: {
     exclude: ["@webgpu/types"],
