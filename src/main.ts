@@ -642,7 +642,7 @@ class PhysicsEngineApp {
         entries: [
           {
             binding: 0,
-            visibility: BindGroupLayoutVisibility.COMPUTE,
+            visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
             buffer: { type: "uniform" },
           },
         ],
