@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      webgpu-utils:
+        specifier: 1.11.0
+        version: 1.11.0
     devDependencies:
       '@sveltejs/adapter-auto':
         specifier: 6.1.0
@@ -3024,6 +3028,9 @@ packages:
 
   walker@1.0.8:
     resolution: {integrity: sha512-ts/8E8l5b7kY0vlWLewOkDXMmPdLcVV4GmOQLyxuSswIJsweeFZtAsMF7k1Nszz+TYBQrlYRmzOnr398y1JemQ==}
+
+  webgpu-utils@1.11.0:
+    resolution: {integrity: sha512-Y9SEnCuLAGKM80xy1crG3VyS6KAldT8jo+TFg0tLH4mYr8EuI1DACuQoVa4QJ+hz+aNM6ecrsgqdDNiB0MAElg==}
 
   webidl-conversions@7.0.0:
     resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
@@ -6414,6 +6421,8 @@ snapshots:
   walker@1.0.8:
     dependencies:
       makeerror: 1.0.12
+
+  webgpu-utils@1.11.0: {}
 
   webidl-conversions@7.0.0: {}
 

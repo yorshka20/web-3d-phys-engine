@@ -1,6 +1,5 @@
 import {
   BufferManager,
-  BufferType,
   ShaderManager,
   ShaderType,
   TimeManager,
@@ -512,91 +511,93 @@ class PhysicsEngineApp {
       throw new Error("WebGPU context or shader manager not initialized");
     }
 
-    //  create vertex shader
+    // Define the complete shader code with all structures
+    const shaderCode = `
+      struct TimeUniforms {
+        time: f32,
+        deltaTime: f32,
+        frameCount: u32,
+        padding: u32,
+      }
+
+      struct VertexInput {
+        @location(0) position: vec3<f32>
+      }
+
+      struct VertexOutput {
+        @builtin(position) position: vec4<f32>,
+        @location(0) color: vec4<f32>
+      }
+
+      @group(0) @binding(0) var<uniform> timeData: TimeUniforms;
+
+      @vertex
+      fn vs_main(@location(0) position: vec3<f32>) -> VertexOutput {
+        return VertexOutput(
+          vec4<f32>(position, 1.0),
+          vec4<f32>(position + 0.5, 1.0)
+        );
+      }
+
+      @fragment
+      fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
+        let t = timeData.time;
+        
+        // pulse effect
+        let pulse = sin(t * 2.0) * 0.5 + 0.5;
+        
+        // rainbow color change
+        let hue = (t * 0.5) % 1.0;
+        let animatedColor = hsv_to_rgb(vec3<f32>(hue, 1.0, 1.0));
+        
+        // wave effect based on vertex position
+        let dist = length(color.xy - vec2<f32>(0.5));
+        let wave = sin(dist * 10.0 - t * 5.0) * 0.5 + 0.5;
+        
+        // combine vertex color with animated effects
+        return vec4<f32>(animatedColor * wave * pulse, color.w);
+      }
+
+      // HSV to RGB helper function
+      fn hsv_to_rgb(hsv: vec3<f32>) -> vec3<f32> {
+        let c = hsv.z * hsv.y;
+        let x = c * (1.0 - abs((hsv.x * 6.0) % 2.0 - 1.0));
+        let m = hsv.z - c;
+        
+        var rgb: vec3<f32>;
+        if (hsv.x < 1.0/6.0) { rgb = vec3<f32>(c, x, 0.0); }
+        else if (hsv.x < 2.0/6.0) { rgb = vec3<f32>(x, c, 0.0); }
+        else if (hsv.x < 3.0/6.0) { rgb = vec3<f32>(0.0, c, x); }
+        else if (hsv.x < 4.0/6.0) { rgb = vec3<f32>(0.0, x, c); }
+        else if (hsv.x < 5.0/6.0) { rgb = vec3<f32>(x, 0.0, c); }
+        else { rgb = vec3<f32>(c, 0.0, x); }
+        
+        return rgb + vec3<f32>(m);
+      }
+    `;
+
+    // Create shader modules
     const vertexShader = this.shaderManager.createShaderModule(
       "exampleVertex",
       {
-        code: `
-          struct VertexInput {
-            @location(0) position: vec3<f32>
-          }
-
-          struct VertexOutput {
-            @builtin(position) position: vec4<f32>,
-            @location(0) color: vec4<f32>
-          }
-
-          @vertex
-          fn main(@location(0) position: vec3<f32>) -> VertexOutput {
-            return VertexOutput(
-              vec4<f32>(position, 1.0),
-              vec4<f32>(position + 0.5, 1.0)
-            );
-          }
-        `,
+        code: shaderCode,
         type: ShaderType.VERTEX,
-        entryPoint: "main",
+        entryPoint: "vs_main",
         label: "Example Vertex Shader",
       }
     );
 
-    //  create fragment shader
     const fragmentShader = this.shaderManager.createShaderModule(
       "exampleFragment",
       {
-        code: `
-          struct TimeUniforms {
-            time: f32,
-            deltaTime: f32,
-            frameCount: u32,
-            padding: u32,
-          }
-
-          @group(0) @binding(0) var<uniform> timeData: TimeUniforms;
-
-          @fragment
-          fn main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
-            let t = timeData.time;
-            
-            // pulse effect
-            let pulse = sin(t * 2.0) * 0.5 + 0.5;
-            
-            // rainbow color change
-            let hue = (t * 0.5) % 1.0;
-            let animatedColor = hsv_to_rgb(vec3<f32>(hue, 1.0, 1.0));
-            
-            // wave effect based on vertex position
-            let dist = length(color.xy - vec2<f32>(0.5));
-            let wave = sin(dist * 10.0 - t * 5.0) * 0.5 + 0.5;
-            
-            // combine vertex color with animated effects
-            return vec4<f32>(animatedColor * wave * pulse, color.w);
-          }
-
-          // HSV to RGB helper function
-          fn hsv_to_rgb(hsv: vec3<f32>) -> vec3<f32> {
-            let c = hsv.z * hsv.y;
-            let x = c * (1.0 - abs((hsv.x * 6.0) % 2.0 - 1.0));
-            let m = hsv.z - c;
-            
-            var rgb: vec3<f32>;
-            if (hsv.x < 1.0/6.0) { rgb = vec3<f32>(c, x, 0.0); }
-            else if (hsv.x < 2.0/6.0) { rgb = vec3<f32>(x, c, 0.0); }
-            else if (hsv.x < 3.0/6.0) { rgb = vec3<f32>(0.0, c, x); }
-            else if (hsv.x < 4.0/6.0) { rgb = vec3<f32>(0.0, x, c); }
-            else if (hsv.x < 5.0/6.0) { rgb = vec3<f32>(x, 0.0, c); }
-            else { rgb = vec3<f32>(c, 0.0, x); }
-            
-            return rgb + vec3<f32>(m);
-          }
-        `,
+        code: shaderCode,
         type: ShaderType.FRAGMENT,
-        entryPoint: "main",
+        entryPoint: "fs_main",
         label: "Example Fragment Shader",
       }
     );
 
-    //  create compute shader
+    // Create compute shader for compute pipeline
     const computeShader = this.shaderManager.createShaderModule(
       "exampleCompute",
       {
@@ -618,24 +619,20 @@ class PhysicsEngineApp {
       }
     );
 
-    // create custom bind group layout - create storage buffer layout for compute pipeline
+    // Create compute bind group layout manually since it's not in the main shader
     const computeBindGroupLayout =
       this.shaderManager.createCustomBindGroupLayout("computeBindGroup", {
         entries: [
           {
             binding: 0,
             visibility: BindGroupLayoutVisibility.COMPUTE,
-            buffer: { type: "storage" as GPUBufferBindingType },
+            buffer: { type: "storage" },
           },
         ],
         label: "Compute Bind Group Layout",
       });
 
-    console.log(
-      "Compute bind group layout created:",
-      computeBindGroupLayout ? "success" : "failed"
-    );
-
+    // Create time bind group layout using shader manager
     const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
       "timeBindGroup",
       {
@@ -650,7 +647,7 @@ class PhysicsEngineApp {
       }
     );
 
-    // create render pipeline layout - empty layout because we don't need bind group
+    // create render pipeline layout using the time bind group layout
     const renderPipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [timeBindGroupLayout],
       label: "render_pipeline_layout",
@@ -667,7 +664,7 @@ class PhysicsEngineApp {
       layout: renderPipelineLayout,
       vertex: {
         module: vertexShader,
-        entryPoint: "main",
+        entryPoint: "vs_main",
         buffers: [
           {
             arrayStride: 12, // 3 floats * 4 bytes per float
@@ -684,7 +681,7 @@ class PhysicsEngineApp {
       },
       fragment: {
         module: fragmentShader,
-        entryPoint: "main",
+        entryPoint: "fs_main",
         targets: [
           {
             format: this.context.getPreferredFormat(),
