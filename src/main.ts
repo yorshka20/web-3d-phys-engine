@@ -65,7 +65,7 @@ class PhysicsEngineApp {
       this.displayDeviceInfo();
 
       // 5. Set up UI controls
-      this.setupControls();
+      // this.setupControls();
 
       // 6. Set up scene
       this.setupScene();
@@ -655,7 +655,11 @@ class PhysicsEngineApp {
     }
 
     if (memoryElement) {
-      memoryElement.textContent = "0 MB";
+      const memoryUsage = this.bufferManager?.getMemoryUsage();
+      memoryElement.textContent =
+        Object.values(memoryUsage || {})
+          .reduce((a, b) => a + b, 0)
+          .toString() + " MB";
     }
   }
 
