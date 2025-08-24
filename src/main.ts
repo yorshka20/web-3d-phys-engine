@@ -1,9 +1,12 @@
 import {
   BufferManager,
+  BufferType,
   ShaderManager,
   ShaderType,
+  TimeManager,
   WebGPUContext,
 } from "./renderer/webGPU";
+import { BindGroupLayoutVisibility } from "./renderer/webGPU/core";
 
 /**
  * Main application entry point for the WebGPU 3D Physics Engine
@@ -14,6 +17,7 @@ class PhysicsEngineApp {
   private context: WebGPUContext | null = null;
   private bufferManager: BufferManager | null = null;
   private shaderManager: ShaderManager | null = null;
+  private timeManager: TimeManager | null = null;
   private frameCount: number = 0;
 
   private get device(): GPUDevice {
@@ -55,22 +59,21 @@ class PhysicsEngineApp {
         },
       });
 
-      // 2. create buffer manager
+      // 2. create manager
       this.bufferManager = new BufferManager(this.device);
-
-      // 3. create shader manager
       this.shaderManager = new ShaderManager(this.device);
+      this.timeManager = new TimeManager(this.device, this.bufferManager);
 
-      // 4. display device info
+      // 3. display device info
       this.displayDeviceInfo();
 
-      // 5. Set up UI controls
-      // this.setupControls();
+      // 4. Set up UI controls
+      // this.setupControls(); // Commented out to avoid UI errors
 
-      // 6. Set up scene
+      // 5. Set up scene
       this.setupScene();
 
-      // 7. Start the render loop
+      // 6. Start the render loop
       this.render();
 
       console.log("WebGPU Physics Engine initialized successfully");
@@ -188,13 +191,33 @@ class PhysicsEngineApp {
    * Main render loop
    */
   private render(): void {
-    if (!this.context || !this.shaderManager) {
+    if (
+      !this.context ||
+      !this.shaderManager ||
+      !this.timeManager ||
+      !this.bufferManager
+    ) {
       console.warn("WebGPU not initialized");
       return;
     }
 
     const device = this.device;
     const context = this.context.getContext();
+
+    // update time
+    this.timeManager.updateTime();
+
+    // create time bind group
+    const timeBuffer = this.timeManager.getBuffer();
+    const timeBindGroup = device.createBindGroup({
+      layout: this.shaderManager.getBindGroupLayout("timeBindGroup")!,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: timeBuffer },
+        },
+      ],
+    });
 
     // create command encoder
     const commandEncoder = device.createCommandEncoder();
@@ -224,6 +247,8 @@ class PhysicsEngineApp {
           renderPass.setVertexBuffer(0, vertexBuffer);
         }
       }
+
+      renderPass.setBindGroup(0, timeBindGroup);
 
       // draw triangle
       renderPass.draw(3, 1, 0, 0);
@@ -270,12 +295,10 @@ class PhysicsEngineApp {
     device.queue.submit([commandEncoder.finish()]);
 
     // Read compute pipeline results every few frames
-    if (this.frameCount % 60 === 0) {
-      // 每60帧读取一次结果
-      this.readComputeResults();
-    }
-
-    console.log("Example render completed");
+    // if (this.frameCount % 60 === 0) {
+    //   // 每60帧读取一次结果
+    //   this.readComputeResults();
+    // }
 
     // Update debug UI
     this.updateDebugUI();
@@ -522,9 +545,49 @@ class PhysicsEngineApp {
       "exampleFragment",
       {
         code: `
+          struct TimeUniforms {
+            time: f32,
+            deltaTime: f32,
+            frameCount: u32,
+            padding: u32,
+          }
+
+          @group(0) @binding(0) var<uniform> timeData: TimeUniforms;
+
           @fragment
           fn main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
-            return color;
+            let t = timeData.time;
+            
+            // pulse effect
+            let pulse = sin(t * 2.0) * 0.5 + 0.5;
+            
+            // rainbow color change
+            let hue = (t * 0.5) % 1.0;
+            let animatedColor = hsv_to_rgb(vec3<f32>(hue, 1.0, 1.0));
+            
+            // wave effect based on vertex position
+            let dist = length(color.xy - vec2<f32>(0.5));
+            let wave = sin(dist * 10.0 - t * 5.0) * 0.5 + 0.5;
+            
+            // combine vertex color with animated effects
+            return vec4<f32>(animatedColor * wave * pulse, color.w);
+          }
+
+          // HSV to RGB helper function
+          fn hsv_to_rgb(hsv: vec3<f32>) -> vec3<f32> {
+            let c = hsv.z * hsv.y;
+            let x = c * (1.0 - abs((hsv.x * 6.0) % 2.0 - 1.0));
+            let m = hsv.z - c;
+            
+            var rgb: vec3<f32>;
+            if (hsv.x < 1.0/6.0) { rgb = vec3<f32>(c, x, 0.0); }
+            else if (hsv.x < 2.0/6.0) { rgb = vec3<f32>(x, c, 0.0); }
+            else if (hsv.x < 3.0/6.0) { rgb = vec3<f32>(0.0, c, x); }
+            else if (hsv.x < 4.0/6.0) { rgb = vec3<f32>(0.0, x, c); }
+            else if (hsv.x < 5.0/6.0) { rgb = vec3<f32>(x, 0.0, c); }
+            else { rgb = vec3<f32>(c, 0.0, x); }
+            
+            return rgb + vec3<f32>(m);
           }
         `,
         type: ShaderType.FRAGMENT,
@@ -544,7 +607,6 @@ class PhysicsEngineApp {
           fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             let index = id.x;
             if (index < arrayLength(&data)) {
-              // 做一些更有趣的计算，让结果更容易看到
               let time = f32(id.x) * 0.1;
               data[index] = sin(time) * cos(time) + f32(index) * 0.01;
             }
@@ -562,7 +624,7 @@ class PhysicsEngineApp {
         entries: [
           {
             binding: 0,
-            visibility: 4, // GPUShaderStage.COMPUTE
+            visibility: BindGroupLayoutVisibility.COMPUTE,
             buffer: { type: "storage" as GPUBufferBindingType },
           },
         ],
@@ -574,9 +636,23 @@ class PhysicsEngineApp {
       computeBindGroupLayout ? "success" : "failed"
     );
 
+    const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+      "timeBindGroup",
+      {
+        entries: [
+          {
+            binding: 0,
+            visibility: BindGroupLayoutVisibility.COMPUTE,
+            buffer: { type: "uniform" },
+          },
+        ],
+        label: "Time Bind Group Layout",
+      }
+    );
+
     // create render pipeline layout - empty layout because we don't need bind group
     const renderPipelineLayout = this.device.createPipelineLayout({
-      bindGroupLayouts: [],
+      bindGroupLayouts: [timeBindGroupLayout],
       label: "render_pipeline_layout",
     });
 
@@ -651,7 +727,7 @@ class PhysicsEngineApp {
     }
 
     if (objectCountElement) {
-      objectCountElement.textContent = "0";
+      // objectCountElement.textContent = "0";
     }
 
     if (memoryElement) {

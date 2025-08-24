@@ -44,12 +44,22 @@ export interface ComputePipelineDescriptor {
 }
 
 /**
+ * bind group layout visibility enum
+ */
+export enum BindGroupLayoutVisibility {
+  VERTEX = 1,
+  FRAGMENT = 2,
+  VERTEX_FRAGMENT = 3,
+  COMPUTE = 4,
+}
+
+/**
  * bind group layout descriptor interface
  */
 export interface BindGroupLayoutDescriptor {
   entries: Array<{
     binding: number;
-    visibility: number;
+    visibility: BindGroupLayoutVisibility;
     buffer?: { type: GPUBufferBindingType };
     sampler?: { type: GPUSamplerBindingType };
     texture?: { sampleType: GPUTextureSampleType };

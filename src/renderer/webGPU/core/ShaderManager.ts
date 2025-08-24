@@ -3,6 +3,7 @@ import {
   RenderPipelineDescriptor,
   BindGroupLayoutDescriptor,
   ComputePipelineDescriptor,
+  BindGroupLayoutVisibility,
 } from "./types";
 
 /**
@@ -229,16 +230,16 @@ export class ShaderManager {
    * @param stage shader stage
    * @returns stage flags
    */
-  private getShaderStageFlags(stage: string): number {
+  private getShaderStageFlags(stage: string): BindGroupLayoutVisibility {
     switch (stage) {
       case "vertex":
-        return 1; // GPUShaderStage.VERTEX
+        return BindGroupLayoutVisibility.VERTEX;
       case "fragment":
-        return 2; // GPUShaderStage.FRAGMENT
+        return BindGroupLayoutVisibility.FRAGMENT;
       case "compute":
-        return 4; // GPUShaderStage.COMPUTE
+        return BindGroupLayoutVisibility.COMPUTE;
       default:
-        return 0;
+        return BindGroupLayoutVisibility.VERTEX_FRAGMENT;
     }
   }
 

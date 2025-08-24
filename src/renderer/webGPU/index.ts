@@ -8,6 +8,7 @@ export {
   type BufferPoolItem,
   type BufferDescriptor,
 } from "./core/types";
+export { TimeManager } from "./TimeManager";
 
 // Ray tracing components
 // export { WebGPURayTracingLayer } from "./rayTracing/WebGPURayTracingLayer";
