@@ -9,8 +9,8 @@ import {
   TransformComponent,
   Vec2,
   World,
-} from "@ecs";
-import { RenderLayerIdentifier } from "@renderer/constant";
+} from '@ecs';
+import { RenderLayerIdentifier } from '@renderer/constant';
 
 type SquareProps = {
   position: Point;
@@ -20,13 +20,13 @@ type SquareProps = {
 };
 
 export function createSquare(world: World, props: SquareProps) {
-  const square = world.createEntity("object");
+  const square = world.createEntity('object');
 
   square.addComponent(
     world.createComponent(TransformComponent, {
       position: props.position,
       rotation: 0,
-    })
+    }),
   );
 
   square.addComponent(
@@ -34,31 +34,31 @@ export function createSquare(world: World, props: SquareProps) {
       velocity: props.velocity,
       speed: 0,
       maxSpeed: 100000,
-      entityType: "PROJECTILE",
-    })
+      entityType: 'PROJECTILE',
+    }),
   );
 
   square.addComponent(
     world.createComponent(ColliderComponent, {
-      type: "rect",
+      type: 'rect',
       size: [props.size, props.size],
-    })
+    }),
   );
 
   square.addComponent(
     world.createComponent(ShapeComponent, {
-      descriptor: createShapeDescriptor("rect", {
+      descriptor: createShapeDescriptor('rect', {
         width: props.size,
         height: props.size,
       }),
-    })
+    }),
   );
 
   square.addComponent(
     world.createComponent(RenderComponent, {
       color: props.color,
       layer: RenderLayerIdentifier.PROJECTILE,
-    })
+    }),
   );
 
   return square;

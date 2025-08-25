@@ -1,4 +1,4 @@
-import { WebGPUContextOptions } from "./types";
+import { WebGPUContextOptions } from './types';
 
 /**
  * WebGPU context manager
@@ -15,7 +15,7 @@ export class WebGPUContext {
   private limits: GPUSupportedLimits | null = null;
 
   // options
-  private powerPreference: GPUPowerPreference = "high-performance";
+  private powerPreference: GPUPowerPreference = 'high-performance';
   private forceFallbackAdapter: boolean = false;
 
   constructor() {
@@ -27,7 +27,7 @@ export class WebGPUContext {
    */
   private checkWebGPUSupport(): void {
     if (!navigator.gpu) {
-      throw new Error("WebGPU not supported in this browser");
+      throw new Error('WebGPU not supported in this browser');
     }
   }
 
@@ -36,12 +36,9 @@ export class WebGPUContext {
    * @param canvas HTML canvas element
    * @param options init options
    */
-  async initialize(
-    canvas: HTMLCanvasElement,
-    options: WebGPUContextOptions = {}
-  ): Promise<void> {
+  async initialize(canvas: HTMLCanvasElement, options: WebGPUContextOptions = {}): Promise<void> {
     this.canvas = canvas;
-    this.powerPreference = options.powerPreference || "high-performance";
+    this.powerPreference = options.powerPreference || 'high-performance';
     this.forceFallbackAdapter = options.forceFallbackAdapter || false;
 
     try {
@@ -54,12 +51,12 @@ export class WebGPUContext {
       // 3. configure canvas context
       await this.configureCanvas();
 
-      console.log("WebGPU context initialized successfully");
-      console.log("Device:", this.device);
-      console.log("Features:", this.features);
-      console.log("Limits:", this.limits);
+      console.log('WebGPU context initialized successfully');
+      console.log('Device:', this.device);
+      console.log('Features:', this.features);
+      console.log('Limits:', this.limits);
     } catch (error) {
-      console.error("Failed to initialize WebGPU context:", error);
+      console.error('Failed to initialize WebGPU context:', error);
       throw error;
     }
   }
@@ -69,17 +66,15 @@ export class WebGPUContext {
    * @param options adapter request options
    * @returns GPU adapter
    */
-  private async requestAdapter(
-    options?: WebGPUContextOptions
-  ): Promise<GPUAdapter> {
+  private async requestAdapter(options?: WebGPUContextOptions): Promise<GPUAdapter> {
     const adapterOptions: GPURequestAdapterOptions = {
-      powerPreference: options?.powerPreference || "high-performance",
+      powerPreference: options?.powerPreference || 'high-performance',
       forceFallbackAdapter: options?.forceFallbackAdapter || false,
     };
 
     const adapter = await navigator.gpu.requestAdapter(adapterOptions);
     if (!adapter) {
-      throw new Error("No GPU adapter found");
+      throw new Error('No GPU adapter found');
     }
 
     this.adapter = adapter;
@@ -93,23 +88,21 @@ export class WebGPUContext {
    * @returns GPU device
    */
   private async requestDevice(
-    requiredFeatures?: GPUDeviceDescriptor["requiredFeatures"]
+    requiredFeatures?: GPUDeviceDescriptor['requiredFeatures'],
   ): Promise<GPUDevice> {
     if (!this.adapter) {
-      throw new Error("No adapter available");
+      throw new Error('No adapter available');
     }
 
     const deviceOptions: GPUDeviceDescriptor = {
-      label: "WebGPU Device",
-      requiredFeatures: requiredFeatures
-        ? new Set(requiredFeatures)
-        : undefined,
+      label: 'WebGPU Device',
+      requiredFeatures: requiredFeatures ? new Set(requiredFeatures) : undefined,
       requiredLimits: {},
     };
 
     const device = await this.adapter.requestDevice(deviceOptions);
     if (!device) {
-      throw new Error("Failed to create GPU device");
+      throw new Error('Failed to create GPU device');
     }
 
     this.device = device;
@@ -125,13 +118,13 @@ export class WebGPUContext {
    */
   private async configureCanvas(): Promise<void> {
     if (!this.canvas || !this.device) {
-      throw new Error("Canvas or device not available");
+      throw new Error('Canvas or device not available');
     }
 
-    this.context = this.canvas.getContext("webgpu") as GPUCanvasContext;
+    this.context = this.canvas.getContext('webgpu') as GPUCanvasContext;
 
     if (!this.context) {
-      throw new Error("Failed to get WebGPU canvas context");
+      throw new Error('Failed to get WebGPU canvas context');
     }
 
     const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
@@ -139,18 +132,18 @@ export class WebGPUContext {
     this.context.configure({
       device: this.device,
       format: canvasFormat,
-      alphaMode: "premultiplied",
+      alphaMode: 'premultiplied',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
 
-    console.log("Canvas configured with format:", canvasFormat);
+    console.log('Canvas configured with format:', canvasFormat);
   }
 
   /**
    * handle device lost
    */
   private async handleDeviceLost(info: GPUDeviceLostInfo): Promise<void> {
-    console.error("Device lost:", info);
+    console.error('Device lost:', info);
 
     // clean up resources
     this.device = null;
@@ -160,9 +153,9 @@ export class WebGPUContext {
     if (this.canvas) {
       try {
         await this.initialize(this.canvas);
-        console.log("WebGPU context reinitialized after device loss");
+        console.log('WebGPU context reinitialized after device loss');
       } catch (error) {
-        console.error("Failed to reinitialize WebGPU context:", error);
+        console.error('Failed to reinitialize WebGPU context:', error);
       }
     }
   }
@@ -172,7 +165,7 @@ export class WebGPUContext {
    */
   getDevice(): GPUDevice {
     if (!this.device) {
-      throw new Error("WebGPU device not initialized");
+      throw new Error('WebGPU device not initialized');
     }
     return this.device;
   }
@@ -182,7 +175,7 @@ export class WebGPUContext {
    */
   getContext(): GPUCanvasContext {
     if (!this.context) {
-      throw new Error("WebGPU context not initialized");
+      throw new Error('WebGPU context not initialized');
     }
     return this.context;
   }
@@ -192,7 +185,7 @@ export class WebGPUContext {
    */
   getCanvas(): HTMLCanvasElement {
     if (!this.canvas) {
-      throw new Error("Canvas not available");
+      throw new Error('Canvas not available');
     }
     return this.canvas;
   }
@@ -236,7 +229,7 @@ export class WebGPUContext {
     limits: Record<string, number>;
   } {
     if (!this.adapter || !this.device) {
-      throw new Error("Device not initialized");
+      throw new Error('Device not initialized');
     }
 
     return {
@@ -245,7 +238,7 @@ export class WebGPUContext {
       architecture: this.device.adapterInfo.architecture,
       features: Array.from(this.device.features),
       limits: Object.fromEntries(
-        Object.entries(this.device.limits).map(([key, value]) => [key, value])
+        Object.entries(this.device.limits).map(([key, value]) => [key, value]),
       ),
     };
   }

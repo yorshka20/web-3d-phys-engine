@@ -1,6 +1,6 @@
-import { Component } from "@ecs/core/ecs/Component";
-import { Color, Point } from "@ecs/types/types";
-import { RenderLayerIdentifier } from "@renderer/constant";
+import { Component } from '@ecs/core/ecs/Component';
+import { Color, Point } from '@ecs/types/types';
+import { RenderLayerIdentifier } from '@renderer/constant';
 
 export interface RenderProperties {
   color: Color;
@@ -20,7 +20,7 @@ export interface RenderProperties {
  * - The rendering system should use ECS queries to render entities that have both `ShapeComponent` and `RenderComponent`.
  */
 export class RenderComponent extends Component {
-  static componentName = "Render";
+  static componentName = 'Render';
 
   // ===== Rendering style parameters (no geometry info) =====
   private visible: boolean;
@@ -38,7 +38,7 @@ export class RenderComponent extends Component {
    * should be provided by ShapeComponent.
    */
   constructor(properties: RenderProperties) {
-    super("Render");
+    super('Render');
     this.color = properties.color;
     this.visible = properties.visible ?? true;
     this.rotation = properties.rotation ?? 0;
@@ -48,9 +48,7 @@ export class RenderComponent extends Component {
     this.laser = properties.laser;
   }
 
-  recreate(
-    properties: Omit<RenderProperties, "shape" | "size" | "patternType">
-  ): void {
+  recreate(properties: Omit<RenderProperties, 'shape' | 'size' | 'patternType'>): void {
     this.visible = properties.visible ?? true;
     this.rotation = properties.rotation ?? 0;
     this.scale = properties.scale ?? 1;
@@ -60,7 +58,7 @@ export class RenderComponent extends Component {
     this.color = properties.color;
   }
 
-  getProperties(): Omit<RenderProperties, "shape" | "size" | "patternType"> {
+  getProperties(): Omit<RenderProperties, 'shape' | 'size' | 'patternType'> {
     return {
       color: this.color,
       offset: this.offset,

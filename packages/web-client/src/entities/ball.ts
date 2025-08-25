@@ -6,9 +6,9 @@ import {
   ShapeComponent,
   TransformComponent,
   World,
-} from "@ecs";
-import { Color, Point, Vec2 } from "@ecs/utils";
-import { RenderLayerIdentifier } from "@renderer/constant";
+} from '@ecs';
+import { Color, Point, Vec2 } from '@ecs/utils';
+import { RenderLayerIdentifier } from '@renderer/constant';
 
 type BallProps = {
   position: Point;
@@ -18,13 +18,13 @@ type BallProps = {
 };
 
 export function createBall(world: World, props: BallProps) {
-  const ball = world.createEntity("object");
+  const ball = world.createEntity('object');
 
   ball.addComponent(
     world.createComponent(TransformComponent, {
       position: props.position,
       rotation: 0,
-    })
+    }),
   );
 
   ball.addComponent(
@@ -35,30 +35,30 @@ export function createBall(world: World, props: BallProps) {
       // Use a generous maxSpeed so force-field acceleration is visible and not clamped early
       maxSpeed: 100000,
       // Mark as PROJECTILE-like for physics tuning (independent of Entity.type)
-      entityType: "PROJECTILE",
-    })
+      entityType: 'PROJECTILE',
+    }),
   );
 
   ball.addComponent(
     world.createComponent(ColliderComponent, {
-      type: "circle",
+      type: 'circle',
       size: [props.size * 2, props.size * 2],
-    })
+    }),
   );
 
   ball.addComponent(
     world.createComponent(ShapeComponent, {
-      descriptor: createShapeDescriptor("circle", {
+      descriptor: createShapeDescriptor('circle', {
         radius: props.size,
       }),
-    })
+    }),
   );
 
   ball.addComponent(
     world.createComponent(RenderComponent, {
       color: props.color,
       layer: RenderLayerIdentifier.PROJECTILE,
-    })
+    }),
   );
   return ball;
 }

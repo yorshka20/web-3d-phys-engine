@@ -1,6 +1,6 @@
-import { RectArea } from "@ecs/types/types";
-import { RenderSystem } from "@ecs/systems";
-import { IRenderLayer } from "./IRenderLayer";
+import { RectArea } from '@ecs/types/types';
+import { RenderSystem } from '@ecs/systems';
+import { IRenderLayer } from './IRenderLayer';
 
 export interface ContextConfig {
   width: number;
@@ -30,11 +30,7 @@ export interface IRenderer {
 
   clear(): void;
 
-  update(
-    deltaTime: number,
-    viewport: RectArea,
-    cameraOffset: [number, number]
-  ): void;
+  update(deltaTime: number, viewport: RectArea, cameraOffset: [number, number]): void;
 
   onResize(): void;
 

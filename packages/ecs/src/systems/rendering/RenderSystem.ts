@@ -1,14 +1,14 @@
-import { TransformComponent } from "@ecs/components";
-import { SystemPriorities } from "@ecs/constants/systemPriorities";
-import { System } from "@ecs/core/ecs/System";
-import { RectArea } from "@ecs/types/types";
-import { RenderLayerIdentifier } from "@renderer/constant";
-import { IRenderer, IRenderLayer } from "@renderer/types";
+import { TransformComponent } from '@ecs/components';
+import { SystemPriorities } from '@ecs/constants/systemPriorities';
+import { System } from '@ecs/core/ecs/System';
+import { RectArea } from '@ecs/types/types';
+import { RenderLayerIdentifier } from '@renderer/constant';
+import { IRenderer, IRenderLayer } from '@renderer/types';
 
 export class RenderSystem extends System {
   static getInstance(): RenderSystem {
     if (!RenderSystem.instance) {
-      throw new Error("RenderSystem instance not initialized");
+      throw new Error('RenderSystem instance not initialized');
     }
     return RenderSystem.instance as RenderSystem;
   }
@@ -29,16 +29,11 @@ export class RenderSystem extends System {
   private playerPosition: [number, number] = [0, 0];
 
   constructor(rootElement: HTMLElement, bgImage?: HTMLImageElement) {
-    super("RenderSystem", SystemPriorities.RENDER, "render");
+    super('RenderSystem', SystemPriorities.RENDER, 'render');
 
     this.rootElement = rootElement;
     const dpr = this.getDPR();
-    this.viewport = [
-      0,
-      0,
-      rootElement.clientWidth * dpr,
-      rootElement.clientHeight * dpr,
-    ];
+    this.viewport = [0, 0, rootElement.clientWidth * dpr, rootElement.clientHeight * dpr];
 
     RenderSystem.instance = this;
 
@@ -128,11 +123,9 @@ export class RenderSystem extends System {
   }
 
   private updatePlayerPosition() {
-    const player = this.world.getEntitiesByType("player")[0];
+    const player = this.world.getEntitiesByType('player')[0];
     if (!player) return;
-    const transform = player.getComponent<TransformComponent>(
-      TransformComponent.componentName
-    );
+    const transform = player.getComponent<TransformComponent>(TransformComponent.componentName);
     if (!transform) return;
     const [px, py] = transform.getPosition();
     this.playerPosition[0] = px;
@@ -145,7 +138,7 @@ export class RenderSystem extends System {
       : undefined;
     if (targetEntity) {
       const transform = targetEntity.getComponent<TransformComponent>(
-        TransformComponent.componentName
+        TransformComponent.componentName,
       );
       if (transform) {
         const [px, py] = transform.getPosition();

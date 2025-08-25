@@ -1,14 +1,14 @@
-import { Color, RectArea } from "@ecs/types/types";
-import { RenderSystem } from "@ecs";
-import { TransformComponent } from "@ecs/components";
-import { IEntity } from "@ecs/core/ecs/types";
-import { RenderLayerIdentifier, RenderLayerPriority } from "../../constant";
-import { IRenderer } from "../../types/IRenderer";
-import { IRenderLayer } from "../../types/IRenderLayer";
+import { Color, RectArea } from '@ecs/types/types';
+import { RenderSystem } from '@ecs';
+import { TransformComponent } from '@ecs/components';
+import { IEntity } from '@ecs/core/ecs/types';
+import { RenderLayerIdentifier, RenderLayerPriority } from '../../constant';
+import { IRenderer } from '../../types/IRenderer';
+import { IRenderLayer } from '../../types/IRenderLayer';
 
 export enum RenderLayerType {
-  CANVAS = "canvas",
-  DOM = "dom",
+  CANVAS = 'canvas',
+  DOM = 'dom',
 }
 
 export abstract class BaseRenderLayer extends IRenderLayer {
@@ -19,7 +19,7 @@ export abstract class BaseRenderLayer extends IRenderLayer {
 
   constructor(
     public identifier: RenderLayerIdentifier,
-    public priority: RenderLayerPriority
+    public priority: RenderLayerPriority,
   ) {
     super(identifier, priority);
   }
@@ -38,19 +38,15 @@ export abstract class BaseRenderLayer extends IRenderLayer {
       return position;
     }
 
-    const player = this.getWorld().getEntitiesByType("player")[0];
+    const player = this.getWorld().getEntitiesByType('player')[0];
     if (!player) return undefined;
-    const transform = player.getComponent<TransformComponent>(
-      TransformComponent.componentName
-    );
+    const transform = player.getComponent<TransformComponent>(TransformComponent.componentName);
     if (!transform) return undefined;
     return transform.getPosition();
   }
 
   isInViewport(entity: IEntity, viewport: RectArea): boolean {
-    const transform = entity.getComponent<TransformComponent>(
-      TransformComponent.componentName
-    );
+    const transform = entity.getComponent<TransformComponent>(TransformComponent.componentName);
     if (!transform) return false;
 
     const playerPos = this.getPlayerPosition();
@@ -76,11 +72,7 @@ export abstract class BaseRenderLayer extends IRenderLayer {
    * @param viewport - The viewport of the game.
    * @param cameraOffset - The offset of the camera.
    */
-  abstract update(
-    deltaTime: number,
-    viewport: RectArea,
-    cameraOffset: [number, number]
-  ): void;
+  abstract update(deltaTime: number, viewport: RectArea, cameraOffset: [number, number]): void;
 
   /**
    * Filter entities that should be rendered by this layer.
@@ -94,9 +86,7 @@ export abstract class BaseRenderLayer extends IRenderLayer {
   }
 
   protected getLayerEntities(viewport: RectArea): IEntity[] {
-    return this.getWorld().getEntitiesByCondition((entity) =>
-      this.filterEntity(entity, viewport)
-    );
+    return this.getWorld().getEntitiesByCondition((entity) => this.filterEntity(entity, viewport));
   }
 
   protected getWorld() {

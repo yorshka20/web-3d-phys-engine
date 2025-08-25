@@ -1,8 +1,8 @@
-import { IEntity } from "@ecs/core/ecs/types";
-import { RectArea } from "@ecs/types/types";
-import { RenderSystem } from "@ecs/systems";
-import { RenderLayerType } from "../canvas2d/base/RenderLayer";
-import { IRenderer } from "./IRenderer";
+import { IEntity } from '@ecs/core/ecs/types';
+import { RectArea } from '@ecs/types/types';
+import { RenderSystem } from '@ecs/systems';
+import { RenderLayerType } from '../canvas2d/base/RenderLayer';
+import { IRenderer } from './IRenderer';
 
 export abstract class IRenderLayer {
   identifier: string;
@@ -27,11 +27,7 @@ export abstract class IRenderLayer {
     this.renderSystem = renderSystem;
   }
 
-  abstract update(
-    deltaTime: number,
-    viewport: RectArea,
-    cameraOffset: [number, number]
-  ): void;
+  abstract update(deltaTime: number, viewport: RectArea, cameraOffset: [number, number]): void;
 
   abstract filterEntity(entity: IEntity, viewport: RectArea): boolean;
 

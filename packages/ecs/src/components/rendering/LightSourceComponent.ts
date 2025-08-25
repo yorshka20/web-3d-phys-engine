@@ -1,10 +1,10 @@
-import { Component } from "@ecs/core/ecs/Component";
-import { Vec3 } from "@ecs/types/types";
-import { RgbaColor } from "@ecs/utils/color";
-import { SerializedLight } from "@renderer/rayTracing";
+import { Component } from '@ecs/core/ecs/Component';
+import { Vec3 } from '@ecs/types/types';
+import { RgbaColor } from '@ecs/utils/color';
+import { SerializedLight } from '@renderer/rayTracing';
 
-export type LightType = "point" | "directional" | "ambient" | "spot";
-export type AttenuationType = "none" | "linear" | "quadratic" | "realistic";
+export type LightType = 'point' | 'directional' | 'ambient' | 'spot';
+export type AttenuationType = 'none' | 'linear' | 'quadratic' | 'realistic';
 
 /**
  * Light source component for 2D ray tracing
@@ -18,32 +18,31 @@ export type AttenuationType = "none" | "linear" | "quadratic" | "realistic";
  * @property {AttenuationType} attenuation - How light intensity decreases with distance.
  */
 export class LightSourceComponent extends Component {
-  static componentName = "LightSource";
+  static componentName = 'LightSource';
 
-  // 基础属性（保持你的原有设计）
-  public position: [number, number] = [0, 0];
-  public color: RgbaColor = { r: 255, g: 255, b: 255, a: 1 };
-  public intensity = 1;
-  public radius = 100;
+  position: [number, number] = [0, 0];
+  color: RgbaColor = { r: 255, g: 255, b: 255, a: 1 };
+  intensity = 1;
+  radius = 100;
 
-  // 新增3D支持
-  public height = 0; // Z坐标，0表示在场景平面上
+  // 3d support
+  height = 0; // Z coordinate, 0 means on the scene plane
 
-  // 光源类型和行为
-  public type: LightType = "point";
-  public castShadows = true;
-  public attenuation: AttenuationType = "quadratic";
+  // light type and behavior
+  type: LightType = 'point';
+  castShadows = true;
+  attenuation: AttenuationType = 'quadratic';
 
-  // 方向光专用属性
-  public direction: [number, number, number] = [0, 0, -1]; // 默认向下
+  // directional light specific properties
+  direction: [number, number, number] = [0, 0, -1]; // default down
 
-  // 聚光灯专用属性
-  public spotAngle = 45; // 聚光灯的光锥角度（度）
-  public spotPenumbra = 5; // 边缘衰减角度（度）
+  // spot light specific properties
+  spotAngle = 45; // spot light cone angle (degrees)
+  spotPenumbra = 5; // edge fade angle (degrees)
 
-  // 控制属性
-  public enabled = true;
-  public layer = 0; // 光照层级，用于分层渲染
+  // control properties
+  enabled = true;
+  layer = 0; // light layer, for layered rendering
 
   constructor(
     props: {
@@ -59,37 +58,37 @@ export class LightSourceComponent extends Component {
       spotAngle?: number;
       enabled?: boolean;
       layer?: number;
-    } = {}
+    } = {},
   ) {
-    super("LightSource");
+    super('LightSource');
 
-    // 使用提供的值或默认值
+    // use provided values or defaults
     this.position = props.position ?? [0, 0];
     this.height = props.height ?? 0;
     this.color = props.color ?? { r: 255, g: 255, b: 255, a: 1 };
     this.intensity = props.intensity ?? 1;
     this.radius = props.radius ?? 100;
-    this.type = props.type ?? "point";
+    this.type = props.type ?? 'point';
     this.castShadows = props.castShadows ?? true;
-    this.attenuation = props.attenuation ?? "quadratic";
+    this.attenuation = props.attenuation ?? 'quadratic';
     this.direction = props.direction ?? [0, 0, -1];
     this.spotAngle = props.spotAngle ?? 45;
     this.enabled = props.enabled ?? true;
     this.layer = props.layer ?? 0;
   }
 
-  // 获取3D位置
+  // get 3D position
   get position3D(): Vec3 {
     return [this.position[0], this.position[1], this.height];
   }
 
-  // 设置3D位置
+  // set 3D position
   setPosition3D(pos: Vec3): void {
     this.position = [pos[0], pos[1]];
     this.height = pos[2];
   }
 
-  // 获取归一化方向向量
+  // get normalized direction vector
   get normalizedDirection(): Vec3 {
     const [x, y, z] = this.direction;
     const length = Math.sqrt(x * x + y * y + z * z);
@@ -98,28 +97,28 @@ export class LightSourceComponent extends Component {
     return [x / length, y / length, z / length];
   }
 
-  // 计算距离衰减
+  // calculate distance attenuation
   calculateAttenuation(distance: number): number {
     if (!this.enabled || distance <= 0) return 0;
     if (distance > this.radius) return 0;
 
     switch (this.attenuation) {
-      case "none":
+      case 'none':
         return 1;
 
-      case "linear":
+      case 'linear':
         return Math.max(0, 1 - distance / this.radius);
 
-      case "quadratic":
+      case 'quadratic':
         const normalizedDistance = distance / this.radius;
         return Math.max(0, 1 - normalizedDistance * normalizedDistance);
 
-      case "realistic":
-        // 物理上更真实的平方反比衰减，但有最小距离防止除零
+      case 'realistic':
+        // more realistic square inverse attenuation, but with minimum distance to prevent division by zero
         const minDistance = 1;
         const effectiveDistance = Math.max(distance, minDistance);
         const falloff = 1 / (effectiveDistance * effectiveDistance);
-        // 在radius处衰减到一个小值，而不是0
+        // fade out at radius to a small value, not 0
         const radiusFalloff = 1 / (this.radius * this.radius);
         return Math.max(0, falloff - radiusFalloff) / (1 - radiusFalloff);
 
@@ -128,7 +127,7 @@ export class LightSourceComponent extends Component {
     }
   }
 
-  // 计算光照强度（考虑距离和角度）
+  // calculate light intensity (considering distance and angle)
   calculateLightIntensity(targetPos: Vec3): number {
     if (!this.enabled) return 0;
 
@@ -136,28 +135,28 @@ export class LightSourceComponent extends Component {
     const distance = Math.sqrt(
       (targetPos[0] - lightPos[0]) ** 2 +
         (targetPos[1] - lightPos[1]) ** 2 +
-        (targetPos[2] - lightPos[2]) ** 2
+        (targetPos[2] - lightPos[2]) ** 2,
     );
 
     let intensity = this.intensity;
 
-    // 根据光源类型计算强度
+    // calculate intensity based on light type
     switch (this.type) {
-      case "ambient":
-        // 环境光不受距离影响
+      case 'ambient':
+        // ambient light is not affected by distance
         return intensity;
 
-      case "directional":
-        // 方向光不受距离影响，但可以考虑方向
+      case 'directional':
+        // directional light is not affected by distance, but can consider direction
         return intensity;
 
-      case "point":
-        // 点光源受距离衰减影响
+      case 'point':
+        // point light is affected by distance attenuation
         intensity *= this.calculateAttenuation(distance);
         break;
 
-      case "spot":
-        // 聚光灯需要检查角度
+      case 'spot':
+        // spot light needs to check angle
         const lightDir = this.normalizedDirection;
         const targetDir = [
           (targetPos[0] - lightPos[0]) / distance,
@@ -166,21 +165,18 @@ export class LightSourceComponent extends Component {
         ];
 
         const dotProduct =
-          lightDir[0] * targetDir[0] +
-          lightDir[1] * targetDir[1] +
-          lightDir[2] * targetDir[2];
-        const angle =
-          (Math.acos(Math.max(-1, Math.min(1, dotProduct))) * 180) / Math.PI;
+          lightDir[0] * targetDir[0] + lightDir[1] * targetDir[1] + lightDir[2] * targetDir[2];
+        const angle = (Math.acos(Math.max(-1, Math.min(1, dotProduct))) * 180) / Math.PI;
 
         const halfAngle = this.spotAngle / 2;
         const penumbraStart = halfAngle - this.spotPenumbra;
 
         if (angle > halfAngle) {
-          return 0; // 超出光锥范围
+          return 0; // outside cone range
         } else if (angle < penumbraStart) {
           intensity *= this.calculateAttenuation(distance);
         } else {
-          // 在边缘衰减区域
+          // in edge fade region
           const falloff = 1 - (angle - penumbraStart) / this.spotPenumbra;
           intensity *= falloff * this.calculateAttenuation(distance);
         }
@@ -190,32 +186,32 @@ export class LightSourceComponent extends Component {
     return Math.max(0, intensity);
   }
 
-  // 检查点是否在光照范围内
+  // check if point is in light range
   isPointInRange(targetPos: Vec3): boolean {
     if (!this.enabled) return false;
 
-    if (this.type === "ambient" || this.type === "directional") {
-      return true; // 环境光和方向光影响所有点
+    if (this.type === 'ambient' || this.type === 'directional') {
+      return true; // ambient and directional light affect all points
     }
 
     const lightPos = this.position3D;
     const distance = Math.sqrt(
       (targetPos[0] - lightPos[0]) ** 2 +
         (targetPos[1] - lightPos[1]) ** 2 +
-        (targetPos[2] - lightPos[2]) ** 2
+        (targetPos[2] - lightPos[2]) ** 2,
     );
 
     return distance <= this.radius;
   }
 
-  // 获取光源到目标点的方向（用于阴影计算）
+  // get direction from light source to target point (for shadow calculation)
   getDirectionToTarget(targetPos: Vec3): Vec3 {
-    if (this.type === "directional") {
-      // 方向光的光线方向是固定的
+    if (this.type === 'directional') {
+      // directional light direction is fixed
       return this.normalizedDirection;
     }
 
-    // 点光源和聚光灯：从光源指向目标
+    // point light and spot light: from light source to target
     const lightPos = this.position3D;
     const dx = targetPos[0] - lightPos[0];
     const dy = targetPos[1] - lightPos[1];
@@ -227,47 +223,40 @@ export class LightSourceComponent extends Component {
     return [dx / length, dy / length, dz / length];
   }
 
-  // 快速设置预设光源类型
+  // quick set preset light type
   setAsAmbientLight(intensity = 0.3): void {
-    this.type = "ambient";
+    this.type = 'ambient';
     this.intensity = intensity;
     this.castShadows = false;
-    this.attenuation = "none";
+    this.attenuation = 'none';
   }
 
-  setAsDirectionalLight(
-    direction: [number, number, number] = [0, 0, -1],
-    intensity = 1
-  ): void {
-    this.type = "directional";
+  setAsDirectionalLight(direction: [number, number, number] = [0, 0, -1], intensity = 1): void {
+    this.type = 'directional';
     this.direction = direction;
     this.intensity = intensity;
     this.castShadows = true;
-    this.attenuation = "none";
+    this.attenuation = 'none';
   }
 
   setAsPointLight(radius = 100, intensity = 1): void {
-    this.type = "point";
+    this.type = 'point';
     this.radius = radius;
     this.intensity = intensity;
     this.castShadows = true;
-    this.attenuation = "quadratic";
+    this.attenuation = 'quadratic';
   }
 
-  setAsSpotLight(
-    angle = 45,
-    penumbra = 5,
-    direction: [number, number, number] = [0, 0, -1]
-  ): void {
-    this.type = "spot";
+  setAsSpotLight(angle = 45, penumbra = 5, direction: [number, number, number] = [0, 0, -1]): void {
+    this.type = 'spot';
     this.spotAngle = angle;
     this.spotPenumbra = penumbra;
     this.direction = direction;
     this.castShadows = true;
-    this.attenuation = "quadratic";
+    this.attenuation = 'quadratic';
   }
 
-  // 调试信息
+  // debug information
   getDebugInfo(): string {
     return (
       `Light(${this.type}): pos=[${this.position[0]},${this.position[1]},${this.height}], ` +
@@ -285,12 +274,12 @@ export class LightSourceComponent extends Component {
   static calculateLightIntensity(
     targetPos: Vec3,
     light: SerializedLight,
-    distance: number
+    distance: number,
   ): number {
     if (!light.enabled) return 0;
 
     // Directional lights have infinite range
-    if (light.type === "directional") {
+    if (light.type === 'directional') {
       return light.intensity;
     }
 
@@ -303,19 +292,19 @@ export class LightSourceComponent extends Component {
 
     // Apply distance attenuation
     switch (light.attenuation) {
-      case "none":
+      case 'none':
         break; // No attenuation
 
-      case "linear":
+      case 'linear':
         intensity *= Math.max(0, 1 - distance / light.radius);
         break;
 
-      case "quadratic":
+      case 'quadratic':
         const normalizedDistance = distance / light.radius;
         intensity *= Math.max(0, 1 - normalizedDistance * normalizedDistance);
         break;
 
-      case "realistic":
+      case 'realistic':
         const minDistance = 1;
         const effectiveDistance = Math.max(distance, minDistance);
         const falloff = 1 / (effectiveDistance * effectiveDistance);
@@ -333,16 +322,11 @@ export class LightSourceComponent extends Component {
    * @param light The serialized spot light source data.
    * @returns The spot light falloff factor, ranging from 0 (outside cone) to 1 (full intensity).
    */
-  static calculateSpotLightFalloff(
-    lightDirection: Vec3,
-    light: SerializedLight
-  ): number {
+  static calculateSpotLightFalloff(lightDirection: Vec3, light: SerializedLight): number {
     const spotDir: Vec3 = [...light.direction];
 
     // Normalize spot direction
-    const spotLength = Math.sqrt(
-      spotDir[0] ** 2 + spotDir[1] ** 2 + spotDir[2] ** 2
-    );
+    const spotLength = Math.sqrt(spotDir[0] ** 2 + spotDir[1] ** 2 + spotDir[2] ** 2);
     if (spotLength === 0) return 0;
 
     const normalizedSpotDir: Vec3 = [
@@ -358,8 +342,8 @@ export class LightSourceComponent extends Component {
         1,
         lightDirection[0] * normalizedSpotDir[0] +
           lightDirection[1] * normalizedSpotDir[1] +
-          lightDirection[2] * normalizedSpotDir[2]
-      )
+          lightDirection[2] * normalizedSpotDir[2],
+      ),
     );
 
     const angle = (Math.acos(Math.abs(dotProduct)) * 180) / Math.PI;

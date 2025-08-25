@@ -1,7 +1,7 @@
 export interface WebGPUContextOptions {
   powerPreference?: GPUPowerPreference;
   forceFallbackAdapter?: boolean;
-  requiredFeatures?: GPUDeviceDescriptor["requiredFeatures"];
+  requiredFeatures?: GPUDeviceDescriptor['requiredFeatures'];
   requiredLimits?: Record<string, number>;
 }
 
@@ -9,9 +9,9 @@ export interface WebGPUContextOptions {
  * shader type enum
  */
 export enum ShaderType {
-  VERTEX = "vertex",
-  FRAGMENT = "fragment",
-  COMPUTE = "compute",
+  VERTEX = 'vertex',
+  FRAGMENT = 'fragment',
+  COMPUTE = 'compute',
 }
 
 /**
@@ -75,13 +75,13 @@ export interface BindGroupLayoutDescriptor {
  * 缓冲区类型枚举
  */
 export enum BufferType {
-  VERTEX = "vertex",
-  INDEX = "index",
-  UNIFORM = "uniform",
-  STORAGE = "storage",
-  STAGING = "staging",
-  COPY_SRC = "copy_src",
-  COPY_DST = "copy_dst",
+  VERTEX = 'vertex',
+  INDEX = 'index',
+  UNIFORM = 'uniform',
+  STORAGE = 'storage',
+  STAGING = 'staging',
+  COPY_SRC = 'copy_src',
+  COPY_DST = 'copy_dst',
 }
 
 /**

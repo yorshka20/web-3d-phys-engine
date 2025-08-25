@@ -1,12 +1,12 @@
-import { LightSourceComponent } from "@ecs/components";
-import { RgbaColor, Vec3 } from "@ecs/utils";
+import { LightSourceComponent } from '@ecs/components';
+import { RgbaColor, Vec3 } from '@ecs/utils';
 import {
   Intersection3D,
   Ray3D,
   SerializedCamera,
   SerializedEntity,
   SerializedLight,
-} from "@renderer/rayTracing";
+} from '@renderer/rayTracing';
 
 /**
  * A service class responsible for 3D shading and lighting calculations in the ray tracing worker.
@@ -28,7 +28,7 @@ export class ShadingService {
     intersection: Intersection3D,
     entities: SerializedEntity[],
     lights: SerializedLight[],
-    camera: SerializedCamera
+    camera: SerializedCamera,
   ): RgbaColor {
     let finalColor: RgbaColor = { r: 0, g: 0, b: 0, a: ShadingService.opacity };
 
@@ -47,27 +47,21 @@ export class ShadingService {
         intersection,
         light,
         entities,
-        materialColor
+        materialColor,
       );
 
       // Debug: Log detailed light contribution for sparse pixels
       if (Math.random() < 0.01) {
         // Log ~1% of pixels for detailed light contribution
-        const lightPos3D: Vec3 = [
-          light.position[0],
-          light.position[1],
-          light.height,
-        ];
+        const lightPos3D: Vec3 = [light.position[0], light.position[1], light.height];
         let lightDirection: Vec3;
         let distance: number;
 
         switch (light.type) {
-          case "directional":
+          case 'directional':
             // Ensure the light direction is normalized
             const dirLength = Math.sqrt(
-              light.direction[0] ** 2 +
-                light.direction[1] ** 2 +
-                light.direction[2] ** 2
+              light.direction[0] ** 2 + light.direction[1] ** 2 + light.direction[2] ** 2,
             );
             const normalizedLightDir: Vec3 =
               dirLength > 0
@@ -84,19 +78,16 @@ export class ShadingService {
             ];
             distance = Infinity; // Directional lights have no distance falloff
             break;
-          case "ambient":
+          case 'ambient':
             // Ambient light contributes equally from all directions
             const ambientIntensity = light.intensity * 0.3; // Reduced ambient contribution
-            finalColor.r +=
-              (materialColor.r * light.color.r * ambientIntensity) / 255;
-            finalColor.g +=
-              (materialColor.g * light.color.g * ambientIntensity) / 255;
-            finalColor.b +=
-              (materialColor.b * light.color.b * ambientIntensity) / 255;
+            finalColor.r += (materialColor.r * light.color.r * ambientIntensity) / 255;
+            finalColor.g += (materialColor.g * light.color.g * ambientIntensity) / 255;
+            finalColor.b += (materialColor.b * light.color.b * ambientIntensity) / 255;
             continue; // Skip further calculations for ambient light
 
-          case "point":
-          case "spot":
+          case 'point':
+          case 'spot':
           default:
             const dx = lightPos3D[0] - intersection.point[0];
             const dy = lightPos3D[1] - intersection.point[1];
@@ -112,7 +103,7 @@ export class ShadingService {
           0,
           intersection.normal[0] * lightDirection[0] +
             intersection.normal[1] * lightDirection[1] +
-            intersection.normal[2] * lightDirection[2]
+            intersection.normal[2] * lightDirection[2],
         );
 
         const shadowStatus = light.castShadows
@@ -121,9 +112,9 @@ export class ShadingService {
               lightPos3D,
               entities,
               distance,
-              intersection.entity
+              intersection.entity,
             )})`
-          : "";
+          : '';
 
         // console.log(
         //   `[Worker] Shading Debug at [${intersection.point[0].toFixed(1)}, ${intersection.point[1].toFixed(1)}, ${intersection.point[2].toFixed(1)}] for Light ${light.type}:
@@ -165,25 +156,19 @@ export class ShadingService {
     intersection: Intersection3D,
     light: SerializedLight,
     entities: SerializedEntity[],
-    materialColor: RgbaColor
+    materialColor: RgbaColor,
   ): RgbaColor {
-    const lightPos3D: Vec3 = [
-      light.position[0],
-      light.position[1],
-      light.height,
-    ];
+    const lightPos3D: Vec3 = [light.position[0], light.position[1], light.height];
 
     let lightDirection: Vec3;
     let distance: number;
 
     // Calculate light direction and distance based on light type
     switch (light.type) {
-      case "directional":
+      case 'directional':
         // Ensure the light direction is normalized
         const dirLength = Math.sqrt(
-          light.direction[0] ** 2 +
-            light.direction[1] ** 2 +
-            light.direction[2] ** 2
+          light.direction[0] ** 2 + light.direction[1] ** 2 + light.direction[2] ** 2,
         );
         const normalizedLightDir: Vec3 =
           dirLength > 0
@@ -193,15 +178,11 @@ export class ShadingService {
                 light.direction[2] / dirLength,
               ]
             : [0, 0, 0];
-        lightDirection = [
-          -normalizedLightDir[0],
-          -normalizedLightDir[1],
-          -normalizedLightDir[2],
-        ];
+        lightDirection = [-normalizedLightDir[0], -normalizedLightDir[1], -normalizedLightDir[2]];
         distance = Infinity; // Directional lights have no distance falloff
         break;
 
-      case "ambient":
+      case 'ambient':
         // Ambient light contributes equally from all directions
         const ambientIntensity = light.intensity * 0.3; // Reduced ambient contribution
         return {
@@ -211,16 +192,15 @@ export class ShadingService {
           a: ShadingService.opacity,
         };
 
-      case "point":
-      case "spot":
+      case 'point':
+      case 'spot':
       default:
         const dx = lightPos3D[0] - intersection.point[0];
         const dy = lightPos3D[1] - intersection.point[1];
         const dz = lightPos3D[2] - intersection.point[2];
         distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-        if (distance === 0)
-          return { r: 0, g: 0, b: 0, a: ShadingService.opacity };
+        if (distance === 0) return { r: 0, g: 0, b: 0, a: ShadingService.opacity };
 
         lightDirection = [dx / distance, dy / distance, dz / distance];
         break;
@@ -230,7 +210,7 @@ export class ShadingService {
     let intensity = LightSourceComponent.calculateLightIntensity(
       intersection.point,
       light,
-      distance
+      distance,
     );
 
     if (intensity <= 0) {
@@ -238,11 +218,8 @@ export class ShadingService {
     }
 
     // Spot light cone check
-    if (light.type === "spot") {
-      const spotFalloff = LightSourceComponent.calculateSpotLightFalloff(
-        lightDirection,
-        light
-      );
+    if (light.type === 'spot') {
+      const spotFalloff = LightSourceComponent.calculateSpotLightFalloff(lightDirection, light);
       intensity *= spotFalloff;
 
       if (intensity <= 0) {
@@ -257,7 +234,7 @@ export class ShadingService {
         lightPos3D,
         entities,
         distance,
-        intersection.entity
+        intersection.entity,
       );
       if (inShadow) {
         return { r: 0, g: 0, b: 0, a: ShadingService.opacity };
@@ -269,7 +246,7 @@ export class ShadingService {
       0,
       intersection.normal[0] * lightDirection[0] +
         intersection.normal[1] * lightDirection[1] +
-        intersection.normal[2] * lightDirection[2]
+        intersection.normal[2] * lightDirection[2],
     );
 
     // Calculate final light contribution
@@ -290,14 +267,11 @@ export class ShadingService {
    * @param lights An array of all serialized light sources in the scene.
    * @returns The background color with ambient lighting applied, clamped to a valid RGBA range.
    */
-  static applyAmbientLighting(
-    backgroundColor: RgbaColor,
-    lights: SerializedLight[]
-  ): RgbaColor {
+  static applyAmbientLighting(backgroundColor: RgbaColor, lights: SerializedLight[]): RgbaColor {
     let result = { ...backgroundColor };
 
     for (const light of lights) {
-      if (light.enabled && light.type === "ambient") {
+      if (light.enabled && light.type === 'ambient') {
         const intensity = light.intensity * 0.5; // Reduced for background
         result.r += (light.color.r * intensity) / 255;
         result.g += (light.color.g * intensity) / 255;

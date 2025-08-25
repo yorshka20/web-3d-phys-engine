@@ -1,6 +1,6 @@
-import { Point, Vec2, Vec3 } from "@ecs";
-import { Intersection3D, SerializedEntity } from "@renderer/rayTracing";
-import { Ray2D } from "./ray2d";
+import { Point, Vec2, Vec3 } from '@ecs';
+import { Intersection3D, SerializedEntity } from '@renderer/rayTracing';
+import { Ray2D } from './ray2d';
 
 /**
  * Enhanced 3D ray class
@@ -16,16 +16,10 @@ export class Ray3D {
 
   private normalize(direction: Vec3): Vec3 {
     const length = Math.sqrt(
-      direction[0] * direction[0] +
-        direction[1] * direction[1] +
-        direction[2] * direction[2]
+      direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2],
     );
     if (length === 0) return [0, 0, 0];
-    return [
-      direction[0] / length,
-      direction[1] / length,
-      direction[2] / length,
-    ];
+    return [direction[0] / length, direction[1] / length, direction[2] / length];
   }
 
   pointAt(t: number): Vec3 {
@@ -60,13 +54,10 @@ export class Ray3D {
    */
   static findClosestIntersection3D(
     ray: Ray3D,
-    entities: SerializedEntity[]
+    entities: SerializedEntity[],
   ): Intersection3D | null {
     // For topdown camera with vertical rays, we check point-in-shape instead of ray intersection
-    if (
-      Math.abs(ray.direction[0]) < 1e-6 &&
-      Math.abs(ray.direction[1]) < 1e-6
-    ) {
+    if (Math.abs(ray.direction[0]) < 1e-6 && Math.abs(ray.direction[1]) < 1e-6) {
       // Vertical ray - calculate intersection with z=0 plane
       let t = 0;
       if (Math.abs(ray.direction[2]) > 1e-6) {
@@ -81,7 +72,7 @@ export class Ray3D {
       let minDistance = Infinity;
 
       for (const entity of entities) {
-        if (entity.shape.type === "circle") {
+        if (entity.shape.type === 'circle') {
           const dx = point2D[0] - entity.position[0];
           const dy = point2D[1] - entity.position[1];
           const distance = Math.sqrt(dx * dx + dy * dy);
@@ -93,8 +84,7 @@ export class Ray3D {
             if (rayDistance < minDistance) {
               minDistance = rayDistance;
 
-              const normal2D: Vec2 =
-                distance > 1e-6 ? [dx / distance, dy / distance] : [0, 1];
+              const normal2D: Vec2 = distance > 1e-6 ? [dx / distance, dy / distance] : [0, 1];
 
               closestIntersection = {
                 point: intersectionPoint,
@@ -120,11 +110,7 @@ export class Ray3D {
 
     // Convert back to 3D
     const point3D: Vec3 = [intersection2D.point[0], intersection2D.point[1], 0];
-    const normal3D: Vec3 = [
-      intersection2D.normal[0],
-      intersection2D.normal[1],
-      0,
-    ];
+    const normal3D: Vec3 = [intersection2D.normal[0], intersection2D.normal[1], 0];
 
     return {
       point: point3D,
@@ -151,7 +137,7 @@ export class Ray3D {
     lightPos: Vec3,
     entities: SerializedEntity[],
     lightDistance: number,
-    shadedEntity: SerializedEntity
+    shadedEntity: SerializedEntity,
   ): boolean {
     // Create shadow ray from surface point to light
     const shadowDirection: Vec3 = [
@@ -161,9 +147,7 @@ export class Ray3D {
     ];
 
     const distance = Math.sqrt(
-      shadowDirection[0] ** 2 +
-        shadowDirection[1] ** 2 +
-        shadowDirection[2] ** 2
+      shadowDirection[0] ** 2 + shadowDirection[1] ** 2 + shadowDirection[2] ** 2,
     );
 
     if (distance === 0) return false;
@@ -190,9 +174,7 @@ export class Ray3D {
     return (
       intersection !== null &&
       intersection.entity.id !== shadedEntity.id && // Ensure it's not self-shadowing
-      (lightDistance === Infinity
-        ? true
-        : intersection.distance < lightDistance - epsilon) // For directional lights, just check if it hits another object
+      (lightDistance === Infinity ? true : intersection.distance < lightDistance - epsilon) // For directional lights, just check if it hits another object
     );
   }
 }

@@ -1,7 +1,7 @@
-import { RectArea, RenderSystem } from "@ecs";
-import { RenderLayerIdentifier } from "@renderer/constant";
-import { IRenderLayer } from "../types/IRenderLayer";
-import { ContextConfig, IRenderer } from "../types/IRenderer";
+import { RectArea, RenderSystem } from '@ecs';
+import { RenderLayerIdentifier } from '@renderer/constant';
+import { IRenderLayer } from '../types/IRenderLayer';
+import { ContextConfig, IRenderer } from '../types/IRenderer';
 
 /**
  * Canvas2dRenderer implements the IRenderer interface for 2D canvas rendering.
@@ -31,13 +31,16 @@ export class Canvas2dRenderer implements IRenderer {
 
   protected layers: IRenderLayer[] = [];
 
-  constructor(protected rootElement: HTMLElement, public name: string) {
+  constructor(
+    protected rootElement: HTMLElement,
+    public name: string,
+  ) {
     const width = rootElement.clientWidth;
     const height = rootElement.clientHeight;
 
     // Create main canvas for game rendering
-    this.mainCanvas = document.createElement("canvas");
-    this.mainCtx = this.mainCanvas.getContext("2d")!;
+    this.mainCanvas = document.createElement('canvas');
+    this.mainCtx = this.mainCanvas.getContext('2d')!;
 
     // Set canvas size based on device pixel ratio
     const dpr = this.getDPR();
@@ -60,14 +63,14 @@ export class Canvas2dRenderer implements IRenderer {
     this.lastInvokeTime = 0;
     this.updateFrequency = 0;
     this.isSkippable = false;
-    this.name = "Canvas2dRenderer";
+    this.name = 'Canvas2dRenderer';
     this.frameCounter = 0;
 
     // inject renderLayer by client
     this.layers = [];
 
     // handle window resize
-    window.addEventListener("resize", this.onResize.bind(this));
+    window.addEventListener('resize', this.onResize.bind(this));
   }
 
   private getDPR(): number {
@@ -101,11 +104,7 @@ export class Canvas2dRenderer implements IRenderer {
     });
   }
 
-  update(
-    deltaTime: number,
-    viewport: RectArea,
-    cameraOffset: [number, number]
-  ): void {
+  update(deltaTime: number, viewport: RectArea, cameraOffset: [number, number]): void {
     for (const layer of this.layers) {
       if (layer.visible) {
         layer.update(deltaTime, viewport, cameraOffset);
@@ -119,7 +118,7 @@ export class Canvas2dRenderer implements IRenderer {
 
   setBackgroundImage(image: HTMLImageElement): void {
     const backgroundLayer = this.layers.find(
-      (l) => l.identifier === RenderLayerIdentifier.BACKGROUND
+      (l) => l.identifier === RenderLayerIdentifier.BACKGROUND,
     );
     if (backgroundLayer) {
       (backgroundLayer as Any).setBackgroundImage(image);

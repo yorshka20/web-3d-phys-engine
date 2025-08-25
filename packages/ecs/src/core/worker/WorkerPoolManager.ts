@@ -8,22 +8,21 @@
  * to the initiating system.
  */
 
-import generalWorker from "./general.worker.ts?worker";
+import generalWorker from './general.worker.ts?worker';
 import {
   GeneralWorkerTask,
   PickWorkerTaskDataType,
   PickWorkerTaskType,
   WorkerResult,
   WorkerTaskType,
-} from "./types";
+} from './types';
 
 export class WorkerPoolManager {
   private static instance: WorkerPoolManager;
   private workers: Worker[] = [];
   private availableWorkers: Worker[] = [];
   private taskQueue: GeneralWorkerTask<WorkerTaskType>[] = [];
-  private activeTasks: Map<number, GeneralWorkerTask<WorkerTaskType>> =
-    new Map();
+  private activeTasks: Map<number, GeneralWorkerTask<WorkerTaskType>> = new Map();
   private taskIdCounter: number = 0;
 
   private static workerCount: number = navigator.hardwareConcurrency || 4;
@@ -36,9 +35,7 @@ export class WorkerPoolManager {
       this.workers.push(worker);
       this.availableWorkers.push(worker);
     }
-    console.log(
-      `WorkerPoolManager initialized with ${WorkerPoolManager.workerCount} workers.`
-    );
+    console.log(`WorkerPoolManager initialized with ${WorkerPoolManager.workerCount} workers.`);
   }
 
   /**
@@ -69,7 +66,7 @@ export class WorkerPoolManager {
   public submitTask<T extends WorkerTaskType>(
     taskType: T,
     data: PickWorkerTaskDataType<T>,
-    priority: number
+    priority: number,
   ): Promise<any> {
     return new Promise((resolve, reject) => {
       const taskId = this.taskIdCounter++;
@@ -142,7 +139,7 @@ export class WorkerPoolManager {
   private handleWorkerError(event: ErrorEvent): void {
     // Find the task associated with the worker that errored
     // This might require iterating through activeTasks or maintaining a worker-to-task map
-    console.error("WorkerPoolManager: Worker error:", event);
+    console.error('WorkerPoolManager: Worker error:', event);
     // For simplicity, we'll just log and potentially re-enable the worker.
     // In a more robust system, you might want to terminate and replace the faulty worker.
   }

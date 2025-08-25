@@ -13,15 +13,15 @@ import {
   TransformComponent,
   TransformSystem,
   World,
-} from "@ecs";
-import { SystemPriorities } from "@ecs/constants/systemPriorities";
-import { Point, Viewport } from "@ecs/types/types";
-import { randomRgb, RgbaColor } from "@ecs/utils/color";
-import { createCanvas2dRenderer } from "@renderer/canvas2d";
-import { createBall } from "./entities/ball";
-import { createGenerator } from "./entities/generator";
-import { createObstacle } from "./entities/obstacle";
-import { Game } from "./game/Game";
+} from '@ecs';
+import { SystemPriorities } from '@ecs/constants/systemPriorities';
+import { Point, Viewport } from '@ecs/types/types';
+import { randomRgb, RgbaColor } from '@ecs/utils/color';
+import { createCanvas2dRenderer } from '@renderer/canvas2d';
+import { createBall } from './entities/ball';
+import { createGenerator } from './entities/generator';
+import { createObstacle } from './entities/obstacle';
+import { Game } from './game/Game';
 
 /**
  * Initializes and returns a new simulator game instance.
@@ -37,7 +37,7 @@ import { Game } from "./game/Game";
  */
 export async function createSimulator(): Promise<Game> {
   // Choose the root DOM element for the renderer to attach to
-  const rootElement = document.getElementById("canvas-wrapper")!;
+  const rootElement = document.getElementById('canvas-wrapper')!;
 
   // Create a new game instance and reference its ECS world
   const game = new Game();
@@ -47,12 +47,9 @@ export async function createSimulator(): Promise<Game> {
   initializeSystems(world, rootElement);
 
   // get actual viewport from renderSystem
-  const renderSystem = world.getSystem<RenderSystem>(
-    "RenderSystem",
-    SystemPriorities.RENDER
-  );
+  const renderSystem = world.getSystem<RenderSystem>('RenderSystem', SystemPriorities.RENDER);
   if (!renderSystem) {
-    throw new Error("RenderSystem not found");
+    throw new Error('RenderSystem not found');
   }
   const viewport = renderSystem.getViewport();
 
@@ -63,11 +60,11 @@ export async function createSimulator(): Promise<Game> {
   await game.initialize();
 
   const spatialGridSystem = world.getSystem<SpatialGridSystem>(
-    "SpatialGridSystem",
-    SystemPriorities.SPATIAL_GRID
+    'SpatialGridSystem',
+    SystemPriorities.SPATIAL_GRID,
   );
   if (!spatialGridSystem) {
-    throw new Error("SpatialGridSystem not found");
+    throw new Error('SpatialGridSystem not found');
   }
   // @ts-ignore
   window.spatial = spatialGridSystem.getSpatialGridComponent();
@@ -105,11 +102,7 @@ function initializeSystems(world: World, rootElement: HTMLElement) {
   const rayTracing = true;
 
   const renderSystem = new RenderSystem(rootElement);
-  const canvas2dRenderer = createCanvas2dRenderer(
-    rootElement,
-    "simulator",
-    rayTracing
-  );
+  const canvas2dRenderer = createCanvas2dRenderer(rootElement, 'simulator', rayTracing);
 
   // inject renderer
   renderSystem.setRenderer(canvas2dRenderer);
@@ -134,7 +127,7 @@ function initializeEntities(world: World, viewport: Viewport) {
     ballSize: 2,
     velocity: [initialV * 110, initialV],
     spawnGap: 50,
-    generatorType: "ball",
+    generatorType: 'ball',
   });
   // world.addEntity(generator);
 
@@ -187,7 +180,7 @@ function initializeEntities(world: World, viewport: Viewport) {
     const wallObstacle = createObstacle(world, {
       position: wall[0],
       shape: world.createComponent(ShapeComponent, {
-        descriptor: createShapeDescriptor("rect", {
+        descriptor: createShapeDescriptor('rect', {
           width: wall[1][0],
           height: wall[1][1],
         }),
@@ -198,13 +191,8 @@ function initializeEntities(world: World, viewport: Viewport) {
   }
 }
 
-function createLightSource(
-  world: World,
-  position: Point,
-  color: RgbaColor,
-  radius: number
-) {
-  const light = world.createEntity("light");
+function createLightSource(world: World, position: Point, color: RgbaColor, radius: number) {
+  const light = world.createEntity('light');
   light.addComponent(world.createComponent(TransformComponent, { position }));
   light.addComponent(
     world.createComponent(LightSourceComponent, {
@@ -212,20 +200,16 @@ function createLightSource(
       color,
       radius,
       intensity: 1,
-    })
+    }),
   );
   world.addEntity(light);
 }
 
-function createObstacleBlock(
-  world: World,
-  position: Point,
-  size: [number, number] = [100, 100]
-) {
+function createObstacleBlock(world: World, position: Point, size: [number, number] = [100, 100]) {
   const obstacle = createObstacle(world, {
     position,
     shape: world.createComponent(ShapeComponent, {
-      descriptor: createShapeDescriptor("rect", {
+      descriptor: createShapeDescriptor('rect', {
         width: size[0],
         height: size[1],
       }),
@@ -239,7 +223,7 @@ function createObstacleCircle(world: World, position: Point, radius: number) {
   const obstacle = createObstacle(world, {
     position,
     shape: world.createComponent(ShapeComponent, {
-      descriptor: createShapeDescriptor("circle", { radius }),
+      descriptor: createShapeDescriptor('circle', { radius }),
     }),
     color: { r: 255, g: 255, b: 255, a: 1 },
   });
@@ -253,12 +237,12 @@ function createRayTracingEntity(world: World, viewport: Viewport) {
   const w = viewport[2];
   const h = viewport[3];
   // Add a camera entity
-  const topDownCameraEntity = world.createEntity("camera");
+  const topDownCameraEntity = world.createEntity('camera');
   const topDownCamera = new Camera3DComponent({
     position: [camX, camY],
     height: 50, // lower camera height to make it closer to the z=0 plane
-    cameraMode: "topdown",
-    projectionMode: "orthographic",
+    cameraMode: 'topdown',
+    projectionMode: 'orthographic',
     resolution: { width: w, height: h },
     viewBounds: {
       left: camX - w / 2,
@@ -271,7 +255,7 @@ function createRayTracingEntity(world: World, viewport: Viewport) {
   topDownCameraEntity.addComponent(
     world.createComponent(TransformComponent, {
       position: [camX, camY],
-    })
+    }),
   );
   world.addEntity(topDownCameraEntity);
 
@@ -279,7 +263,7 @@ function createRayTracingEntity(world: World, viewport: Viewport) {
   // const ambientLight = new LightSourceComponent();
   // ambientLight.setAsAmbientLight(0.2);
 
-  const torchEntity = world.createEntity("light");
+  const torchEntity = world.createEntity('light');
   const torch = new LightSourceComponent({
     height: 100,
     radius: 1000,
@@ -291,19 +275,19 @@ function createRayTracingEntity(world: World, viewport: Viewport) {
     world.createComponent(TransformComponent, {
       position: [400, 400],
       // position: [camX, camY],
-    })
+    }),
   );
 
   world.addEntity(torchEntity);
 
-  const lightEntity = world.createEntity("light");
+  const lightEntity = world.createEntity('light');
   const sunLight = new LightSourceComponent();
   sunLight.setAsDirectionalLight([1, -1, -1], 0.8);
   lightEntity.addComponent(sunLight);
   lightEntity.addComponent(
     world.createComponent(TransformComponent, {
       position: [100, 100],
-    })
+    }),
   );
 
   world.addEntity(lightEntity);

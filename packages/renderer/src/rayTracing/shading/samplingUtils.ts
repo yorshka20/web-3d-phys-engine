@@ -75,7 +75,7 @@ export function shouldSamplePixelRandom(
 
 /**
  * Sparse immediate sampling for fast, visible results.
- * Strategy: 
+ * Strategy:
  * - Pass 0: Sample every 8x8 pixels (12.5% coverage) for immediate visibility
  * - Pass 1-4: Fill in 4x4 grid (25% coverage total)
  * - Pass 5+: Dense random filling
@@ -93,18 +93,18 @@ export function shouldSamplePixelSparseImmediate(
 ): boolean {
   if (currentPass === 0) {
     // First pass: Sample every 8th pixel in both directions for immediate visibility
-    return (x % 8 === 4) && (y % 8 === 4);
+    return x % 8 === 4 && y % 8 === 4;
   } else if (currentPass <= 4) {
     // Passes 1-4: Fill in 4x4 grid progressively
     const subPass = currentPass - 1; // 0,1,2,3
     const offsetX = (subPass % 2) * 4; // 0,4,0,4
     const offsetY = Math.floor(subPass / 2) * 4; // 0,0,4,4
-    return ((x + offsetX) % 8 === 4) && ((y + offsetY) % 8 === 4);
+    return (x + offsetX) % 8 === 4 && (y + offsetY) % 8 === 4;
   } else {
     // Pass 5+: Use random sampling to fill remaining pixels
     const seed = x * 9973 + y * 9967 + currentPass * 9949;
     const pseudoRandom = (seed % 1000) / 1000;
-    
+
     // Higher sampling rate for later passes to fill in details
     const samplingRate = Math.min(0.15 + (currentPass - 5) * 0.05, 0.4);
     return pseudoRandom < samplingRate;

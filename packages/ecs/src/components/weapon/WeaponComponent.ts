@@ -9,6 +9,7 @@ interface WeaponProps {
   attackCooldown?: number;
 }
 
+// TODO: remove this component
 export class WeaponComponent extends Component {
   static componentName = 'Weapon';
   static maxWeapons = 6;

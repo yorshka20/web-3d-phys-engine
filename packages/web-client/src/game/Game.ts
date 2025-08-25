@@ -1,10 +1,10 @@
-import { PerformanceSystem, SpatialGridSystem } from "@ecs/systems";
-import { ResourceManager, SoundManager } from "@ecs/core/resources";
-import { SystemPriorities } from "@ecs/constants/systemPriorities";
-import { World } from "@ecs/core/ecs/World";
-import { GameStore } from "@ecs/core/store/GameStore";
-import { initPatternAssets } from "@renderer/canvas2d/resource/loader";
-import { GameLoop } from "./GameLoop";
+import { PerformanceSystem, SpatialGridSystem } from '@ecs/systems';
+import { ResourceManager, SoundManager } from '@ecs/core/resources';
+import { SystemPriorities } from '@ecs/constants/systemPriorities';
+import { World } from '@ecs/core/ecs/World';
+import { GameStore } from '@ecs/core/store/GameStore';
+import { initPatternAssets } from '@renderer/canvas2d/resource/loader';
+import { GameLoop } from './GameLoop';
 
 /**
  * Game class that initializes and manages the game
@@ -24,7 +24,7 @@ export class Game {
 
   static getInstance(): Game {
     if (!Game.instance) {
-      throw new Error("Game instance not initialized");
+      throw new Error('Game instance not initialized');
     }
     return Game.instance;
   }
@@ -38,20 +38,20 @@ export class Game {
     Game.instance = this;
 
     // Subscribe to game state changes
-    this.store.getStateKey$("state").subscribe((state) => {
+    this.store.getStateKey$('state').subscribe((state) => {
       switch (state) {
-        case "running":
+        case 'running':
           if (this.initialized) {
             this.gameLoop.start();
           } else {
-            console.warn("Game not initialized. Call initialize() first.");
+            console.warn('Game not initialized. Call initialize() first.');
             this.store.pause();
           }
           break;
-        case "paused":
+        case 'paused':
           this.gameLoop.stop();
           break;
-        case "idle":
+        case 'idle':
           this.gameLoop.stop();
           break;
       }
@@ -69,7 +69,7 @@ export class Game {
 
     this.initializationPromise = (async () => {
       try {
-        console.log("Initializing game...");
+        console.log('Initializing game...');
         // Register core systems
         this.world.addSystem(new SpatialGridSystem());
         this.world.addSystem(new PerformanceSystem());
@@ -79,9 +79,9 @@ export class Game {
         await initPatternAssets();
 
         this.initialized = true;
-        console.log("Game initialized successfully");
+        console.log('Game initialized successfully');
       } catch (error) {
-        console.error("Failed to initialize game:", error);
+        console.error('Failed to initialize game:', error);
         this.initialized = false;
         throw error;
       }
@@ -102,7 +102,7 @@ export class Game {
    */
   start(): void {
     if (!this.initialized) {
-      console.warn("Game not initialized. Call initialize() first.");
+      console.warn('Game not initialized. Call initialize() first.');
       return;
     }
     this.store.start();
@@ -135,8 +135,8 @@ export class Game {
 
   private getPerformanceSystem() {
     return this.world.getSystem<PerformanceSystem>(
-      "PerformanceSystem",
-      SystemPriorities.PERFORMANCE
+      'PerformanceSystem',
+      SystemPriorities.PERFORMANCE,
     );
   }
 

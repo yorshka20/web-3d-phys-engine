@@ -1,4 +1,4 @@
-import { BufferType, BufferPoolItem, BufferDescriptor } from "./types";
+import { BufferType, BufferPoolItem, BufferDescriptor } from './types';
 
 /**
  * WebGPU buffer manager
@@ -46,7 +46,7 @@ export class BufferManager {
 
     // record buffer information
     this.activeBuffers.add(buffer);
-    this.bufferLabels.set(buffer, descriptor.label || "unnamed");
+    this.bufferLabels.set(buffer, descriptor.label || 'unnamed');
     this.totalAllocated += alignedSize;
     this.totalActive += alignedSize;
 
@@ -61,7 +61,7 @@ export class BufferManager {
     this.bufferPools.set(descriptor.type, pool);
 
     console.log(
-      `Created ${descriptor.type} buffer: ${alignedSize} bytes (original: ${descriptor.size} bytes)`
+      `Created ${descriptor.type} buffer: ${alignedSize} bytes (original: ${descriptor.size} bytes)`,
     );
 
     return buffer;
@@ -131,10 +131,7 @@ export class BufferManager {
     const buffer = this.createBuffer({
       type: BufferType.STORAGE,
       size: data.byteLength,
-      usage:
-        GPUBufferUsage.STORAGE |
-        GPUBufferUsage.COPY_DST |
-        GPUBufferUsage.COPY_SRC,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       label,
     });
 
@@ -190,11 +187,7 @@ export class BufferManager {
    * @param size size
    * @returns Promise<ArrayBuffer>
    */
-  async readBuffer(
-    buffer: GPUBuffer,
-    offset: number = 0,
-    size?: number
-  ): Promise<ArrayBuffer> {
+  async readBuffer(buffer: GPUBuffer, offset: number = 0, size?: number): Promise<ArrayBuffer> {
     const readSize = size || buffer.size;
 
     // Ensure offset is aligned to 4 bytes
@@ -204,19 +197,10 @@ export class BufferManager {
     const alignedReadSize = Math.ceil(readSize / 4) * 4;
 
     // create staging buffer. will be destroyed after use
-    const stagingBuffer = this.createStagingBuffer(
-      alignedReadSize,
-      "stagingBuffer"
-    );
+    const stagingBuffer = this.createStagingBuffer(alignedReadSize, 'stagingBuffer');
     // copy data to staging buffer
     const commandEncoder = this.device.createCommandEncoder();
-    commandEncoder.copyBufferToBuffer(
-      buffer,
-      alignedOffset,
-      stagingBuffer,
-      0,
-      alignedReadSize
-    );
+    commandEncoder.copyBufferToBuffer(buffer, alignedOffset, stagingBuffer, 0, alignedReadSize);
     this.device.queue.submit([commandEncoder.finish()]);
 
     // map and read data
@@ -244,14 +228,10 @@ export class BufferManager {
     destination: GPUBuffer,
     sourceOffset: number = 0,
     destinationOffset: number = 0,
-    size?: number
+    size?: number,
   ): void {
     const copySize =
-      size ||
-      Math.min(
-        source.size - sourceOffset,
-        destination.size - destinationOffset
-      );
+      size || Math.min(source.size - sourceOffset, destination.size - destinationOffset);
 
     // Ensure offsets are aligned to 4 bytes
     const alignedSourceOffset = Math.floor(sourceOffset / 4) * 4;
@@ -266,7 +246,7 @@ export class BufferManager {
       alignedSourceOffset,
       destination,
       alignedDestOffset,
-      alignedCopySize
+      alignedCopySize,
     );
     this.device.queue.submit([commandEncoder.finish()]);
   }
@@ -280,7 +260,7 @@ export class BufferManager {
       this.activeBuffers.delete(buffer);
       this.totalActive -= buffer.size;
 
-      const label = this.bufferLabels.get(buffer) || "unknown";
+      const label = this.bufferLabels.get(buffer) || 'unknown';
       console.log(`Destroyed buffer: ${label} (${buffer.size} bytes)`);
 
       this.bufferLabels.delete(buffer);
@@ -385,7 +365,7 @@ export class BufferManager {
    * get buffer label
    */
   getBufferLabel(buffer: GPUBuffer): string {
-    return this.bufferLabels.get(buffer) || "unknown";
+    return this.bufferLabels.get(buffer) || 'unknown';
   }
 
   /**

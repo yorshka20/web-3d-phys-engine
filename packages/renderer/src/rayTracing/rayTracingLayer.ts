@@ -7,22 +7,17 @@ import {
   SpatialGridComponent,
   SpatialGridSystem,
   TransformComponent,
-} from "@ecs";
-import { SystemPriorities } from "@ecs/constants/systemPriorities";
-import { IEntity } from "@ecs/core/ecs/types";
-import { WorkerPoolManager } from "@ecs/core/worker";
-import { CanvasRenderLayer } from "@renderer/canvas2d";
-import { RenderLayerIdentifier, RenderLayerPriority } from "@renderer/constant";
+} from '@ecs';
+import { SystemPriorities } from '@ecs/constants/systemPriorities';
+import { IEntity } from '@ecs/core/ecs/types';
+import { WorkerPoolManager } from '@ecs/core/worker';
+import { CanvasRenderLayer } from '@renderer/canvas2d';
+import { RenderLayerIdentifier, RenderLayerPriority } from '@renderer/constant';
 import {
   ProgressiveRayTracingWorkerData,
   ProgressiveTileResult,
-} from "@renderer/rayTracing/worker";
-import {
-  SamplingPattern,
-  SerializedCamera,
-  SerializedEntity,
-  SerializedLight,
-} from "./base/types";
+} from '@renderer/rayTracing/worker';
+import { SamplingPattern, SerializedCamera, SerializedEntity, SerializedLight } from './base/types';
 
 interface ProgressiveRenderState {
   currentPass: number;
@@ -71,7 +66,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
   private progressiveState: ProgressiveRenderState = {
     currentPass: 0,
     totalPasses: 20, // Reduced passes for faster iteration
-    samplingPattern: "checkerboard", // New sparse sampling for immediate visibility
+    samplingPattern: 'checkerboard', // New sparse sampling for immediate visibility
     isComplete: false,
     accumBuffer: null,
     colorAccumBuffer: null,
@@ -86,20 +81,12 @@ export class RayTracingLayer extends CanvasRenderLayer {
 
   constructor(
     protected mainCanvas: HTMLCanvasElement,
-    protected mainCtx: CanvasRenderingContext2D
+    protected mainCtx: CanvasRenderingContext2D,
   ) {
-    super(
-      RenderLayerIdentifier.RAY_TRACING,
-      RenderLayerPriority.RAY_TRACING,
-      mainCanvas,
-      mainCtx
-    );
+    super(RenderLayerIdentifier.RAY_TRACING, RenderLayerPriority.RAY_TRACING, mainCanvas, mainCtx);
 
-    this.offscreenCanvas = new OffscreenCanvas(
-      mainCanvas.width,
-      mainCanvas.height
-    );
-    this.offscreenCtx = this.offscreenCanvas.getContext("2d", {
+    this.offscreenCanvas = new OffscreenCanvas(mainCanvas.width, mainCanvas.height);
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d', {
       willReadFrequently: true,
     })!;
 
@@ -110,11 +97,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
   /**
    * The main update loop for the layer. Called once per frame.
    */
-  update(
-    deltaTime: number,
-    viewport: RectArea,
-    cameraOffset: [number, number]
-  ): void {
+  update(deltaTime: number, viewport: RectArea, cameraOffset: [number, number]): void {
     if (!this.getSpatialGridComponent()) {
       return;
     }
@@ -131,10 +114,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
     }
 
     // Start the ray tracing process and get promises for the results from each worker.
-    const activePromises = this.startRayTracing(
-      this.lastViewport,
-      cameraOffset
-    );
+    const activePromises = this.startRayTracing(this.lastViewport, cameraOffset);
 
     // If there are active rendering tasks, wait for them to complete and process the results.
     if (activePromises.length > 0) {
@@ -147,7 +127,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
   private getCameras(): IEntity[] {
     if (this.cameraEntities.length === 0) {
       this.cameraEntities = this.getWorld().getEntitiesByCondition((entity) =>
-        entity.hasComponent(Camera3DComponent.componentName)
+        entity.hasComponent(Camera3DComponent.componentName),
       );
     }
     return this.cameraEntities;
@@ -156,7 +136,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
   private getLights(): IEntity[] {
     if (this.lightEntities.length === 0) {
       this.lightEntities = this.getWorld().getEntitiesByCondition((entity) =>
-        entity.hasComponent(LightSourceComponent.componentName)
+        entity.hasComponent(LightSourceComponent.componentName),
       );
     }
     return this.lightEntities;
@@ -167,11 +147,11 @@ export class RayTracingLayer extends CanvasRenderLayer {
       return this.spatialGridComponent;
     }
     const spatialGridSystem = this.getWorld().getSystem<SpatialGridSystem>(
-      "SpatialGridSystem",
-      SystemPriorities.SPATIAL_GRID
+      'SpatialGridSystem',
+      SystemPriorities.SPATIAL_GRID,
     );
     if (!spatialGridSystem) {
-      throw new Error("SpatialGridSystem not found");
+      throw new Error('SpatialGridSystem not found');
     }
     this.spatialGridComponent = spatialGridSystem.getSpatialGridComponent();
     return this.spatialGridComponent;
@@ -187,14 +167,14 @@ export class RayTracingLayer extends CanvasRenderLayer {
    */
   private startRayTracing(
     viewport: RectArea,
-    cameraOffset: [number, number]
+    cameraOffset: [number, number],
   ): Promise<ProgressiveTileResult[]>[] {
     // 1. Scene Change Detection: Check if we need to reset progressive rendering
     // const currentSceneHash = this.getSceneHash();
     if (this.shouldResetProgressiveRender()) {
       this.resetProgressiveRender();
       this.frameCount = 0;
-      console.log("Scene changed, resetting progressive render");
+      console.log('Scene changed, resetting progressive render');
     }
 
     // Complete a round and reset pass count without clearing buffers
@@ -219,15 +199,13 @@ export class RayTracingLayer extends CanvasRenderLayer {
 
     // If there's no active camera, we can't render anything.
     if (!serializedCamera) {
-      console.warn("RayTracingLayer: No active camera found. Skipping render.");
+      console.warn('RayTracingLayer: No active camera found. Skipping render.');
       return [];
     }
 
     // Validate camera configuration
     if (!this.validateCameraConfiguration(serializedCamera)) {
-      console.warn(
-        "RayTracingLayer: Invalid camera configuration. Skipping render."
-      );
+      console.warn('RayTracingLayer: Invalid camera configuration. Skipping render.');
       return [];
     }
 
@@ -248,10 +226,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
       // Get cell bounds
       const bounds = this.getSpatialGridComponent().getCellBounds(cellKey);
       // Get all entity IDs in this cell (using 'collision' type for generality)
-      const entityIds = this.getSpatialGridComponent().getEntitiesInCell(
-        cellKey,
-        "object"
-      );
+      const entityIds = this.getSpatialGridComponent().getEntitiesInCell(cellKey, 'object');
       if (entityIds.length === 0) continue; // Skip empty cells
 
       tasks.push({
@@ -296,7 +271,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
         !this.progressiveState.sampledPixelsBuffer ||
         this.progressiveState.sampledPixelsBuffer.byteLength === 0
       ) {
-        console.error("sampledPixelsBuffer is not initialized or empty!");
+        console.error('sampledPixelsBuffer is not initialized or empty!');
         return []; // Skip this pass
       }
 
@@ -325,16 +300,12 @@ export class RayTracingLayer extends CanvasRenderLayer {
       };
 
       // Submit the task to the worker pool and store the promise.
-      activePromises.push(
-        this.workerPoolManager.submitTask("rayTracing", taskData, this.priority)
-      );
+      activePromises.push(this.workerPoolManager.submitTask('rayTracing', taskData, this.priority));
     }
 
     // Advance to next sampling pass
     this.progressiveState.currentPass++;
-    if (
-      this.progressiveState.currentPass >= this.progressiveState.totalPasses
-    ) {
+    if (this.progressiveState.currentPass >= this.progressiveState.totalPasses) {
       this.progressiveState.isComplete = true;
     }
 
@@ -345,22 +316,18 @@ export class RayTracingLayer extends CanvasRenderLayer {
    * Validates camera configuration to ensure all required properties are present.
    */
   private validateCameraConfiguration(camera: SerializedCamera): boolean {
-    if (
-      !camera.resolution ||
-      camera.resolution.width <= 0 ||
-      camera.resolution.height <= 0
-    ) {
-      console.error("Invalid camera resolution:", camera.resolution);
+    if (!camera.resolution || camera.resolution.width <= 0 || camera.resolution.height <= 0) {
+      console.error('Invalid camera resolution:', camera.resolution);
       return false;
     }
 
     if (!camera.viewBounds) {
-      console.error("Missing camera view bounds");
+      console.error('Missing camera view bounds');
       return false;
     }
 
-    if (!["topdown", "sideview", "custom"].includes(camera.cameraMode)) {
-      console.error("Invalid camera mode:", camera.cameraMode);
+    if (!['topdown', 'sideview', 'custom'].includes(camera.cameraMode)) {
+      console.error('Invalid camera mode:', camera.cameraMode);
       return false;
     }
 
@@ -371,7 +338,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
    * Collects results from all workers and accumulates them into the progressive buffer.
    */
   private async handleWorkerResults(
-    activePromises: Promise<ProgressiveTileResult[]>[]
+    activePromises: Promise<ProgressiveTileResult[]>[],
   ): Promise<void> {
     // this will update the display immediately
     this.updateDisplayFromAccumBuffer();
@@ -386,32 +353,21 @@ export class RayTracingLayer extends CanvasRenderLayer {
     const totalPixels = Math.ceil(width) * Math.ceil(height);
 
     // Create display ImageData
-    this.progressiveState.accumBuffer = this.offscreenCtx.createImageData(
-      width,
-      height
-    );
+    this.progressiveState.accumBuffer = this.offscreenCtx.createImageData(width, height);
 
     // Create SharedArrayBuffer for integer accumulation buffer for RGB values (atomic operations compatible)
     // Use fixed-point arithmetic: multiply by 256 for sub-pixel precision
-    this.progressiveState.colorAccumBuffer = new SharedArrayBuffer(
-      totalPixels * 3 * 4
-    ); // 4 bytes per uint32
-    this.progressiveState.colorAccumView = new Uint32Array(
-      this.progressiveState.colorAccumBuffer
-    );
+    this.progressiveState.colorAccumBuffer = new SharedArrayBuffer(totalPixels * 3 * 4); // 4 bytes per uint32
+    this.progressiveState.colorAccumView = new Uint32Array(this.progressiveState.colorAccumBuffer);
 
     // Create SharedArrayBuffer for sample count tracking
     this.progressiveState.sampleCounts = new SharedArrayBuffer(totalPixels * 4); // 4 bytes per uint32
-    this.progressiveState.sampleCountsView = new Uint32Array(
-      this.progressiveState.sampleCounts
-    );
+    this.progressiveState.sampleCountsView = new Uint32Array(this.progressiveState.sampleCounts);
 
     // Create SharedArrayBuffer for sampled pixels tracking
-    this.progressiveState.sampledPixelsBuffer = new SharedArrayBuffer(
-      totalPixels
-    ); // 1 byte per pixel
+    this.progressiveState.sampledPixelsBuffer = new SharedArrayBuffer(totalPixels); // 1 byte per pixel
     this.progressiveState.sampledPixelsView = new Uint8Array(
-      this.progressiveState.sampledPixelsBuffer
+      this.progressiveState.sampledPixelsBuffer,
     );
 
     // Initialize buffers
@@ -429,7 +385,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
     }
 
     console.log(
-      `Initialized shared accumulation buffers: ${width}x${height} (${totalPixels} pixels)`
+      `Initialized shared accumulation buffers: ${width}x${height} (${totalPixels} pixels)`,
     );
   }
 
@@ -451,45 +407,33 @@ export class RayTracingLayer extends CanvasRenderLayer {
     ) {
       this.imageData = this.offscreenCtx.createImageData(
         this.offscreenCanvas.width,
-        this.offscreenCanvas.height
+        this.offscreenCanvas.height,
       );
     }
 
     for (let i = 0; i < this.progressiveState.sampleCountsView.length; i++) {
-      const sampleCount = Atomics.load(
-        this.progressiveState.sampleCountsView,
-        i
-      );
+      const sampleCount = Atomics.load(this.progressiveState.sampleCountsView, i);
       const destIndex = i * 4;
       const accumIndex = i * 3;
 
       if (sampleCount > 0) {
         // Average the accumulated values and scale back down from fixed-point
         // Use atomic loads to safely read from shared memory
-        const accumR = Atomics.load(
-          this.progressiveState.colorAccumView,
-          accumIndex
-        );
-        const accumG = Atomics.load(
-          this.progressiveState.colorAccumView,
-          accumIndex + 1
-        );
-        const accumB = Atomics.load(
-          this.progressiveState.colorAccumView,
-          accumIndex + 2
-        );
+        const accumR = Atomics.load(this.progressiveState.colorAccumView, accumIndex);
+        const accumG = Atomics.load(this.progressiveState.colorAccumView, accumIndex + 1);
+        const accumB = Atomics.load(this.progressiveState.colorAccumView, accumIndex + 2);
 
         this.imageData.data[destIndex] = Math.min(
           255,
-          Math.max(0, Math.round(accumR / 256 / sampleCount))
+          Math.max(0, Math.round(accumR / 256 / sampleCount)),
         );
         this.imageData.data[destIndex + 1] = Math.min(
           255,
-          Math.max(0, Math.round(accumG / 256 / sampleCount))
+          Math.max(0, Math.round(accumG / 256 / sampleCount)),
         );
         this.imageData.data[destIndex + 2] = Math.min(
           255,
-          Math.max(0, Math.round(accumB / 256 / sampleCount))
+          Math.max(0, Math.round(accumB / 256 / sampleCount)),
         );
         this.imageData.data[destIndex + 3] = 255;
       } else {
@@ -517,12 +461,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
     this.progressiveState.sampleCountsView = null;
     this.progressiveState.sampledPixelsBuffer = null;
     this.progressiveState.sampledPixelsView = null;
-    this.offscreenCtx.clearRect(
-      0,
-      0,
-      this.offscreenCanvas.width,
-      this.offscreenCanvas.height
-    );
+    this.offscreenCtx.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
   }
 
   /**
@@ -531,7 +470,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
    */
   filterEntity(entity: IEntity): boolean {
     return (
-      entity.isType("object") &&
+      entity.isType('object') &&
       entity.hasComponent(ShapeComponent.componentName) &&
       entity.hasComponent(TransformComponent.componentName) &&
       entity.hasComponent(RenderComponent.componentName)
@@ -542,20 +481,12 @@ export class RayTracingLayer extends CanvasRenderLayer {
    * Converts entity data into a simple, serializable format for web workers.
    * Only entities that can be seen (i.e., have a shape) are included.
    */
-  private serializeEntities(
-    entities: IEntity[]
-  ): Record<string, SerializedEntity> {
+  private serializeEntities(entities: IEntity[]): Record<string, SerializedEntity> {
     const serialized: Record<string, SerializedEntity> = {};
     for (const entity of entities) {
-      const shape = entity.getComponent<ShapeComponent>(
-        ShapeComponent.componentName
-      );
-      const transform = entity.getComponent<TransformComponent>(
-        TransformComponent.componentName
-      );
-      const render = entity.getComponent<RenderComponent>(
-        RenderComponent.componentName
-      );
+      const shape = entity.getComponent<ShapeComponent>(ShapeComponent.componentName);
+      const transform = entity.getComponent<TransformComponent>(TransformComponent.componentName);
+      const render = entity.getComponent<RenderComponent>(RenderComponent.componentName);
       // We already filtered, but it's good practice to check again.
       if (shape && transform && render) {
         serialized[entity.id] = {
@@ -580,7 +511,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
     }
     const lights = this.getLights();
     if (lights.length === 0) {
-      throw new Error("No active lights found");
+      throw new Error('No active lights found');
     }
     this.serializedLights = this.serializeLights(lights);
     return this.serializedLights;
@@ -592,12 +523,8 @@ export class RayTracingLayer extends CanvasRenderLayer {
   private serializeLights(entities: IEntity[]): SerializedLight[] {
     const lights: SerializedLight[] = [];
     for (const entity of entities) {
-      const light = entity.getComponent<LightSourceComponent>(
-        LightSourceComponent.componentName
-      );
-      const transform = entity.getComponent<TransformComponent>(
-        TransformComponent.componentName
-      );
+      const light = entity.getComponent<LightSourceComponent>(LightSourceComponent.componentName);
+      const transform = entity.getComponent<TransformComponent>(TransformComponent.componentName);
       if (!light?.enabled || !transform) continue;
 
       lights.push({
@@ -626,7 +553,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
     }
     const cameras = this.getCameras();
     if (cameras.length === 0) {
-      throw new Error("No active camera found");
+      throw new Error('No active camera found');
     }
     this.serializedCamera = this.serializeCamera(cameras);
     return this.serializedCamera;
@@ -637,14 +564,10 @@ export class RayTracingLayer extends CanvasRenderLayer {
    */
   private serializeCamera(cameras: IEntity[]): SerializedCamera {
     const entity = cameras[0]!;
-    const camera = entity.getComponent<Camera3DComponent>(
-      Camera3DComponent.componentName
-    );
-    const transform = entity.getComponent<TransformComponent>(
-      TransformComponent.componentName
-    );
+    const camera = entity.getComponent<Camera3DComponent>(Camera3DComponent.componentName);
+    const transform = entity.getComponent<TransformComponent>(TransformComponent.componentName);
     if (!camera || !transform || !camera.isActive) {
-      throw new Error("No active camera found");
+      throw new Error('No active camera found');
     }
     return {
       position: transform.getPosition(),
@@ -670,16 +593,11 @@ export class RayTracingLayer extends CanvasRenderLayer {
    * @param tileSize Size of rendering tiles (smaller = better load balancing, more overhead)
    */
   setRenderingQuality(totalPasses: number, tileSize: number): void {
-    if (
-      totalPasses !== this.progressiveState.totalPasses ||
-      tileSize !== this.tileSize
-    ) {
+    if (totalPasses !== this.progressiveState.totalPasses || tileSize !== this.tileSize) {
       this.progressiveState.totalPasses = Math.max(1, totalPasses);
       this.tileSize = Math.max(1, tileSize);
       this.resetProgressiveRender(); // Reset to apply new settings
-      console.log(
-        `Updated rendering quality: ${totalPasses} passes, ${tileSize}px tiles`
-      );
+      console.log(`Updated rendering quality: ${totalPasses} passes, ${tileSize}px tiles`);
     }
   }
 
@@ -687,9 +605,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
    * Set the sampling pattern for ray tracing.
    * @param pattern The sampling pattern to use
    */
-  setSamplingPattern(
-    pattern: "checkerboard" | "random" | "sparse_immediate"
-  ): void {
+  setSamplingPattern(pattern: 'checkerboard' | 'random' | 'sparse_immediate'): void {
     if (pattern !== this.progressiveState.samplingPattern) {
       this.progressiveState.samplingPattern = pattern;
       this.resetProgressiveRender();
@@ -701,18 +617,18 @@ export class RayTracingLayer extends CanvasRenderLayer {
    * Configure for dynamic scenes (fast response, lower quality)
    */
   enableDynamicSceneMode(): void {
-    this.setSamplingPattern("sparse_immediate");
+    this.setSamplingPattern('sparse_immediate');
     this.setRenderingQuality(10, 50); // Fast, low quality
-    console.log("Enabled dynamic scene mode - prioritizing responsiveness");
+    console.log('Enabled dynamic scene mode - prioritizing responsiveness');
   }
 
   /**
    * Configure for static scenes (slow response, higher quality)
    */
   enableStaticSceneMode(): void {
-    this.setSamplingPattern("random");
+    this.setSamplingPattern('random');
     this.setRenderingQuality(60, 100); // Slow, high quality
-    console.log("Enabled static scene mode - prioritizing quality");
+    console.log('Enabled static scene mode - prioritizing quality');
   }
 
   /**
@@ -725,8 +641,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
     sampledPixels: number;
     totalPixels: number;
   } {
-    const totalPixels =
-      this.offscreenCanvas.width * this.offscreenCanvas.height;
+    const totalPixels = this.offscreenCanvas.width * this.offscreenCanvas.height;
     let sampledPixels = 0;
 
     if (this.progressiveState.sampleCountsView) {

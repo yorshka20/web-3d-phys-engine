@@ -1,5 +1,5 @@
-import { RectArea } from "@ecs/utils";
-import { RayTracingWorkerData, RayTracingWorkerTask } from "@renderer";
+import { RectArea } from '@ecs/utils';
+import { RayTracingWorkerData, RayTracingWorkerTask } from '@renderer';
 
 export interface SimpleEntity {
   id: string;
@@ -9,7 +9,7 @@ export interface SimpleEntity {
   collisionArea: RectArea;
   size: [number, number];
   type: string;
-  entityType: "object" | "obstacle" | "unknown";
+  entityType: 'object' | 'obstacle' | 'unknown';
 }
 
 export interface WorkerMessage {
@@ -27,12 +27,13 @@ export interface GeneralWorkerTask<T extends WorkerTaskType> {
   task: PickWorkerTaskType<T>;
 }
 
-export type WorkerTaskType = "collision" | "rayTracing";
+export type WorkerTaskType = 'collision' | 'rayTracing';
 
-export type PickWorkerTaskDataType<T extends WorkerTaskType> =
-  T extends "collision" ? CollisionWorkerData : RayTracingWorkerData;
+export type PickWorkerTaskDataType<T extends WorkerTaskType> = T extends 'collision'
+  ? CollisionWorkerData
+  : RayTracingWorkerData;
 
-export type PickWorkerTaskType<T extends WorkerTaskType> = T extends "collision"
+export type PickWorkerTaskType<T extends WorkerTaskType> = T extends 'collision'
   ? CollisionWorkerTask
   : RayTracingWorkerTask;
 
@@ -53,7 +54,7 @@ export interface CollisionWorkerTask {
 export interface CollisionWorkerData extends BaseWorkerData {
   entities: Record<string, SimpleEntity>;
   pairs: { a: string; b: string }[];
-  pairMode: "object-object" | "object-obstacle" | "all";
+  pairMode: 'object-object' | 'object-obstacle' | 'all';
 }
 
 // Worker result interfaces

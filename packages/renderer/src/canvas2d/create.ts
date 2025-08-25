@@ -1,12 +1,12 @@
-import { RayTracingLayer } from "@renderer/rayTracing/rayTracingLayer";
-import { IRenderer } from "@renderer/types/IRenderer";
-import { Canvas2dRenderer } from "./Canvas2dRenderer";
-import { BackgroundRenderLayer, EntityRenderLayer } from "./layers";
+import { RayTracingLayer } from '@renderer/rayTracing/rayTracingLayer';
+import { IRenderer } from '@renderer/types/IRenderer';
+import { Canvas2dRenderer } from './Canvas2dRenderer';
+import { BackgroundRenderLayer, EntityRenderLayer } from './layers';
 
 export function createCanvas2dRenderer(
   rootElement: HTMLElement,
   name: string,
-  rayTracing = false
+  rayTracing = false,
 ): IRenderer {
   const renderer = new Canvas2dRenderer(rootElement, name);
 

@@ -4,7 +4,7 @@ import {
   BindGroupLayoutDescriptor,
   ComputePipelineDescriptor,
   BindGroupLayoutVisibility,
-} from "./types";
+} from './types';
 
 /**
  * WebGPU shader manager
@@ -27,10 +27,7 @@ export class ShaderManager {
    * @param descriptor shader descriptor
    * @returns created shader module
    */
-  createShaderModule(
-    id: string,
-    descriptor: ShaderDescriptor
-  ): GPUShaderModule {
+  createShaderModule(id: string, descriptor: ShaderDescriptor): GPUShaderModule {
     // check cache
     if (this.shaderModules.has(id)) {
       return this.shaderModules.get(id)!;
@@ -56,10 +53,7 @@ export class ShaderManager {
    * @param descriptor pipeline descriptor
    * @returns created render pipeline
    */
-  createRenderPipeline(
-    id: string,
-    descriptor: RenderPipelineDescriptor
-  ): GPURenderPipeline {
+  createRenderPipeline(id: string, descriptor: RenderPipelineDescriptor): GPURenderPipeline {
     // check cache
     if (this.renderPipelines.has(id)) {
       return this.renderPipelines.get(id)!;
@@ -67,22 +61,18 @@ export class ShaderManager {
 
     // validate descriptor
     if (!descriptor.vertex || !descriptor.fragment) {
-      throw new Error(
-        "Render pipeline requires both vertex and fragment stages"
-      );
+      throw new Error('Render pipeline requires both vertex and fragment stages');
     }
 
     // create pipeline layout
-    const layout =
-      descriptor.layout ||
-      this.createDefaultPipelineLayout("render", descriptor);
+    const layout = descriptor.layout || this.createDefaultPipelineLayout('render', descriptor);
 
     // create render pipeline
     const pipelineDescriptor: GPURenderPipelineDescriptor = {
       layout,
       vertex: descriptor.vertex,
       fragment: descriptor.fragment,
-      primitive: descriptor.primitive || { topology: "triangle-list" },
+      primitive: descriptor.primitive || { topology: 'triangle-list' },
       depthStencil: descriptor.depthStencil,
       multisample: descriptor.multisample,
       label: descriptor.label || `${id}_pipeline`,
@@ -104,10 +94,7 @@ export class ShaderManager {
    * @param descriptor pipeline descriptor
    * @returns created compute pipeline
    */
-  createComputePipeline(
-    id: string,
-    descriptor: ComputePipelineDescriptor
-  ): GPUComputePipeline {
+  createComputePipeline(id: string, descriptor: ComputePipelineDescriptor): GPUComputePipeline {
     // check cache
     if (this.computePipelines.has(id)) {
       return this.computePipelines.get(id)!;
@@ -115,13 +102,11 @@ export class ShaderManager {
 
     // validate descriptor
     if (!descriptor.compute) {
-      throw new Error("Compute pipeline requires compute stage");
+      throw new Error('Compute pipeline requires compute stage');
     }
 
     // create pipeline layout
-    const layout =
-      descriptor.layout ||
-      this.createDefaultPipelineLayout("compute", descriptor);
+    const layout = descriptor.layout || this.createDefaultPipelineLayout('compute', descriptor);
 
     // create compute pipeline
     const pipelineDescriptor: GPUComputePipelineDescriptor = {
@@ -146,34 +131,28 @@ export class ShaderManager {
    * @returns pipeline layout
    */
   private createDefaultPipelineLayout(
-    type: "render" | "compute",
-    descriptor: RenderPipelineDescriptor | ComputePipelineDescriptor
+    type: 'render' | 'compute',
+    descriptor: RenderPipelineDescriptor | ComputePipelineDescriptor,
   ): GPUPipelineLayout {
     const bindGroupLayouts: GPUBindGroupLayout[] = [];
 
     switch (type) {
-      case "render": {
+      case 'render': {
         const renderDescriptor = descriptor as RenderPipelineDescriptor;
         // create bind group layout for each stage
         if (renderDescriptor.vertex) {
-          bindGroupLayouts.push(
-            this.createBindGroupLayout("vertex", renderDescriptor.vertex)
-          );
+          bindGroupLayouts.push(this.createBindGroupLayout('vertex', renderDescriptor.vertex));
         }
 
         if (renderDescriptor.fragment) {
-          bindGroupLayouts.push(
-            this.createBindGroupLayout("fragment", renderDescriptor.fragment)
-          );
+          bindGroupLayouts.push(this.createBindGroupLayout('fragment', renderDescriptor.fragment));
         }
         break;
       }
-      case "compute": {
+      case 'compute': {
         const computeDescriptor = descriptor as ComputePipelineDescriptor;
         if (computeDescriptor.compute) {
-          bindGroupLayouts.push(
-            this.createBindGroupLayout("compute", computeDescriptor.compute)
-          );
+          bindGroupLayouts.push(this.createBindGroupLayout('compute', computeDescriptor.compute));
         }
         break;
       }
@@ -181,7 +160,7 @@ export class ShaderManager {
 
     return this.device.createPipelineLayout({
       bindGroupLayouts,
-      label: "default_pipeline_layout",
+      label: 'default_pipeline_layout',
     });
   }
 
@@ -191,10 +170,7 @@ export class ShaderManager {
    * @param shaderInfo shader info
    * @returns bind group layout
    */
-  private createBindGroupLayout(
-    stage: string,
-    shaderInfo: any
-  ): GPUBindGroupLayout {
+  private createBindGroupLayout(stage: string, shaderInfo: any): GPUBindGroupLayout {
     const layoutId = `${stage}_bind_group_layout`;
 
     // check cache
@@ -208,12 +184,12 @@ export class ShaderManager {
         {
           binding: 0,
           visibility: this.getShaderStageFlags(stage),
-          buffer: { type: "uniform" },
+          buffer: { type: 'uniform' },
         },
         {
           binding: 1,
           visibility: this.getShaderStageFlags(stage),
-          buffer: { type: "storage" },
+          buffer: { type: 'storage' },
         },
       ],
       label: layoutId,
@@ -232,11 +208,11 @@ export class ShaderManager {
    */
   private getShaderStageFlags(stage: string): BindGroupLayoutVisibility {
     switch (stage) {
-      case "vertex":
+      case 'vertex':
         return BindGroupLayoutVisibility.VERTEX;
-      case "fragment":
+      case 'fragment':
         return BindGroupLayoutVisibility.FRAGMENT;
-      case "compute":
+      case 'compute':
         return BindGroupLayoutVisibility.COMPUTE;
       default:
         return BindGroupLayoutVisibility.VERTEX_FRAGMENT;
@@ -251,7 +227,7 @@ export class ShaderManager {
    */
   createCustomBindGroupLayout(
     id: string,
-    descriptor: BindGroupLayoutDescriptor
+    descriptor: BindGroupLayoutDescriptor,
   ): GPUBindGroupLayout {
     // check cache
     if (this.bindGroupLayouts.has(id)) {

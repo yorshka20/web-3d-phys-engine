@@ -1,16 +1,11 @@
-import { Component } from "@ecs/core/ecs/Component";
-import { Point } from "@ecs/types/types";
+import { Component } from '@ecs/core/ecs/Component';
+import { Point } from '@ecs/types/types';
 import {
   PatternAssetManager,
   PatternEffect,
   PatternState,
-} from "@renderer/canvas2d/resource/PatternAssetManager";
-import {
-  CircleDescriptor,
-  PatternDescriptor,
-  RenderPatternType,
-  ShapeDescriptor,
-} from "./types";
+} from '@renderer/canvas2d/resource/PatternAssetManager';
+import { CircleDescriptor, PatternDescriptor, RenderPatternType, ShapeDescriptor } from './types';
 
 interface ShapeProps {
   descriptor: ShapeDescriptor;
@@ -19,7 +14,7 @@ interface ShapeProps {
 }
 
 export class ShapeComponent extends Component {
-  static componentName = "Shape";
+  static componentName = 'Shape';
 
   descriptor: ShapeDescriptor;
   tessellated: Point[] = []; // Curve tessellation cache
@@ -32,7 +27,7 @@ export class ShapeComponent extends Component {
   private dirty: boolean = true;
 
   constructor(props: ShapeProps) {
-    super("Shape");
+    super('Shape');
     this.descriptor = props.descriptor;
     this.patternManager = PatternAssetManager.getInstance();
     if (this.isPatternDescriptor(this.descriptor)) {
@@ -52,10 +47,8 @@ export class ShapeComponent extends Component {
   /**
    * Type guard for PatternDescriptor
    */
-  private isPatternDescriptor(
-    desc: ShapeDescriptor
-  ): desc is PatternDescriptor {
-    return desc.type === "pattern";
+  private isPatternDescriptor(desc: ShapeDescriptor): desc is PatternDescriptor {
+    return desc.type === 'pattern';
   }
 
   /**
@@ -137,32 +130,26 @@ export class ShapeComponent extends Component {
   getSize(): [number, number] {
     const desc = this.descriptor;
     switch (desc.type) {
-      case "circle":
+      case 'circle':
         // Circle: size is [diameter, diameter]
         return [desc.radius * 2, desc.radius * 2];
-      case "rect":
+      case 'rect':
         // Rect: size is [width, height]
         return [desc.width, desc.height];
-      case "polygon":
+      case 'polygon':
         // Polygon: use bounding box if available, else [0,0]
         if (this.bounds) {
-          return [
-            this.bounds.max[0] - this.bounds.min[0],
-            this.bounds.max[1] - this.bounds.min[1],
-          ];
+          return [this.bounds.max[0] - this.bounds.min[0], this.bounds.max[1] - this.bounds.min[1]];
         }
         return [0, 0];
-      case "pattern":
+      case 'pattern':
         // Pattern: use descriptor.size if present
         return desc.size ?? [0, 0];
-      case "bezier":
-      case "composite":
+      case 'bezier':
+      case 'composite':
         // Bezier/composite: use bounding box if available
         if (this.bounds) {
-          return [
-            this.bounds.max[0] - this.bounds.min[0],
-            this.bounds.max[1] - this.bounds.min[1],
-          ];
+          return [this.bounds.max[0] - this.bounds.min[0], this.bounds.max[1] - this.bounds.min[1]];
         }
         return [0, 0];
       default:
@@ -211,18 +198,14 @@ export class ShapeComponent extends Component {
    * @returns The pattern image to use
    */
   getPatternImageForState(
-    state: PatternState = "normal",
-    effect: PatternEffect = "whiteSilhouette"
+    state: PatternState = 'normal',
+    effect: PatternEffect = 'whiteSilhouette',
   ): HTMLImageElement | null {
     if (!this.isPatternDescriptor(this.descriptor)) return null;
-    if (state === "normal") {
+    if (state === 'normal') {
       return this.patternImage;
     }
-    return this.patternManager.getPatternWithState(
-      this.descriptor.patternType,
-      state,
-      effect
-    );
+    return this.patternManager.getPatternWithState(this.descriptor.patternType, state, effect);
   }
 
   reset(): void {
@@ -231,7 +214,7 @@ export class ShapeComponent extends Component {
     this.tessellated = [];
     this.bounds = null;
     this.dirty = true;
-    this.descriptor = { type: "circle", radius: 1 } as CircleDescriptor;
+    this.descriptor = { type: 'circle', radius: 1 } as CircleDescriptor;
   }
 
   /**
@@ -239,29 +222,26 @@ export class ShapeComponent extends Component {
    */
   static createCircle(radius: number): ShapeComponent {
     return new ShapeComponent({
-      descriptor: { type: "circle", radius },
+      descriptor: { type: 'circle', radius },
     });
   }
 
   static createRect(width: number, height: number): ShapeComponent {
     return new ShapeComponent({
-      descriptor: { type: "rect", width, height },
+      descriptor: { type: 'rect', width, height },
     });
   }
 
   static createPolygon(vertices: Point[]): ShapeComponent {
     return new ShapeComponent({
-      descriptor: { type: "polygon", vertices: [...vertices] },
+      descriptor: { type: 'polygon', vertices: [...vertices] },
     });
   }
 
-  static createBezier(
-    controlPoints: Point[],
-    resolution: number = 50
-  ): ShapeComponent {
+  static createBezier(controlPoints: Point[], resolution: number = 50): ShapeComponent {
     return new ShapeComponent({
       descriptor: {
-        type: "bezier",
+        type: 'bezier',
         controlPoints: [...controlPoints],
         resolution,
       },

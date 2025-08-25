@@ -37,10 +37,7 @@ export class WebGPUResourceManager {
    * @param id Unique identifier for the resource.
    * @param loadFn A function that returns a Promise resolving to the resource.
    */
-  public async loadResource<T>(
-    id: string,
-    loadFn: () => Promise<T>
-  ): Promise<T> {
+  public async loadResource<T>(id: string, loadFn: () => Promise<T>): Promise<T> {
     if (this.resources.has(id)) {
       return this.resources.get(id) as T;
     }
@@ -58,7 +55,7 @@ export class WebGPUResourceManager {
     if (this.resources.has(id)) {
       const resource = this.resources.get(id);
       // TODO: Implement actual WebGPU resource destruction logic here
-      if (resource && typeof (resource as any).destroy === "function") {
+      if (resource && typeof (resource as any).destroy === 'function') {
         (resource as any).destroy();
       }
       this.resources.delete(id);
@@ -74,12 +71,12 @@ export class WebGPUResourceManager {
    */
   public clearAllResources(): void {
     this.resources.forEach((resource, id) => {
-      if (resource && typeof (resource as any).destroy === "function") {
+      if (resource && typeof (resource as any).destroy === 'function') {
         (resource as any).destroy();
       }
       console.log(`Resource with ID '${id}' released.`);
     });
     this.resources.clear();
-    console.log("All WebGPU resources cleared.");
+    console.log('All WebGPU resources cleared.');
   }
 }

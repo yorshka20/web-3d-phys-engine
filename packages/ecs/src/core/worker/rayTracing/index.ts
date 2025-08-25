@@ -1,14 +1,11 @@
-import { Camera3DComponent } from "@ecs/components";
-import { RgbaColor } from "@ecs/utils";
+import { Camera3DComponent } from '@ecs/components';
+import { RgbaColor } from '@ecs/utils';
 import {
   ProgressiveRayTracingWorkerData,
   ProgressiveTileResult,
   Ray3D,
-} from "@renderer/rayTracing";
-import {
-  ShadingService,
-  shouldSamplePixel,
-} from "@renderer/rayTracing/shading";
+} from '@renderer/rayTracing';
+import { ShadingService, shouldSamplePixel } from '@renderer/rayTracing/shading';
 
 // Module-level cache for rays, to be reused across passes for the same camera resolution.
 // Initialized to null and re-initialized when camera resolution changes.
@@ -18,9 +15,7 @@ let lastCameraResolution: { width: number; height: number } | null = null;
 /**
  * Enhanced progressive ray tracing handler with 3D camera and lighting support
  */
-export function handleRayTracing(
-  data: ProgressiveRayTracingWorkerData
-): ProgressiveTileResult[] {
+export function handleRayTracing(data: ProgressiveRayTracingWorkerData): ProgressiveTileResult[] {
   const {
     entities,
     lights,
@@ -36,12 +31,8 @@ export function handleRayTracing(
   const tileResults: ProgressiveTileResult[] = [];
 
   // Initialize shared buffer views if available
-  const colorAccumView = colorAccumBuffer
-    ? new Uint32Array(colorAccumBuffer)
-    : null;
-  const sampleCountsView = sampleCountsBuffer
-    ? new Uint32Array(sampleCountsBuffer)
-    : null;
+  const colorAccumView = colorAccumBuffer ? new Uint32Array(colorAccumBuffer) : null;
+  const sampleCountsView = sampleCountsBuffer ? new Uint32Array(sampleCountsBuffer) : null;
   const sampledPixelsView = new Uint8Array(sampledPixelsBuffer);
 
   for (const tile of tiles) {
@@ -53,27 +44,14 @@ export function handleRayTracing(
         const globalPixelIndex = y * canvasWidth + x;
 
         // Bounds check to prevent RangeError
-        if (
-          globalPixelIndex < 0 ||
-          globalPixelIndex >= sampledPixelsView.length
-        ) {
+        if (globalPixelIndex < 0 || globalPixelIndex >= sampledPixelsView.length) {
           continue; // Skip this pixel
         }
 
         // Check if this pixel should be sampled in the current pass
-        const shouldSample = shouldSamplePixel(
-          x,
-          y,
-          sampling[0],
-          sampling[1],
-          sampling[2]
-        );
+        const shouldSample = shouldSamplePixel(x, y, sampling[0], sampling[1], sampling[2]);
         // Store sampling information using global canvas coordinates
-        Atomics.store(
-          sampledPixelsView,
-          globalPixelIndex,
-          shouldSample ? 1 : 0
-        );
+        Atomics.store(sampledPixelsView, globalPixelIndex, shouldSample ? 1 : 0);
 
         let color: RgbaColor = { r: 0, g: 0, b: 0, a: 100 }; // Dark background
 
@@ -85,8 +63,7 @@ export function handleRayTracing(
           if (
             !cameraRayCache ||
             !lastCameraResolution ||
-            lastCameraResolution.width !==
-              Math.floor(camera.resolution.width) ||
+            lastCameraResolution.width !== Math.floor(camera.resolution.width) ||
             lastCameraResolution.height !== Math.floor(camera.resolution.height)
           ) {
             // Pre-allocate the outer array, and then map to create inner arrays
@@ -110,9 +87,7 @@ export function handleRayTracing(
             ray = new Ray3D(rayData.origin, rayData.direction);
             // Ensure the inner array exists before assigning
             if (!cameraRayCache[x]) {
-              cameraRayCache[x] = new Array(
-                Math.floor(camera.resolution.height)
-              ).fill(null);
+              cameraRayCache[x] = new Array(Math.floor(camera.resolution.height)).fill(null);
             }
             cameraRayCache[x][y] = ray;
           }
@@ -121,12 +96,7 @@ export function handleRayTracing(
 
           // Debug: Log intersection result, especially for misses or sparse hits
           if (intersection) {
-            color = ShadingService.shade3D(
-              intersection,
-              entityList,
-              lights,
-              camera
-            );
+            color = ShadingService.shade3D(intersection, entityList, lights, camera);
           } else {
             // Apply ambient lighting to background
             color = ShadingService.applyAmbientLighting(color, lights);
@@ -143,54 +113,24 @@ export function handleRayTracing(
             const accumIndex = pixelIndex * 3;
 
             // Bounds check for SharedArrayBuffer access
-            if (
-              pixelIndex >= sampleCountsView.length ||
-              accumIndex + 2 >= colorAccumView.length
-            ) {
+            if (pixelIndex >= sampleCountsView.length || accumIndex + 2 >= colorAccumView.length) {
               console.warn(
-                `[Worker] SharedArrayBuffer index out of bounds: pixelIndex=${pixelIndex}, accumIndex=${accumIndex}, sampleCountsLength=${sampleCountsView.length}, colorAccumLength=${colorAccumView.length}`
+                `[Worker] SharedArrayBuffer index out of bounds: pixelIndex=${pixelIndex}, accumIndex=${accumIndex}, sampleCountsLength=${sampleCountsView.length}, colorAccumLength=${colorAccumView.length}`,
               );
               // Don't continue here, just skip the SharedArrayBuffer writes
             } else {
-              const currentSampleCount = Atomics.load(
-                sampleCountsView,
-                pixelIndex
-              );
+              const currentSampleCount = Atomics.load(sampleCountsView, pixelIndex);
 
               if (currentSampleCount === 0) {
                 // First sample, directly assign values (scale by 256 for fixed-point precision)
-                Atomics.store(
-                  colorAccumView,
-                  accumIndex,
-                  Math.round(color.r * 256)
-                );
-                Atomics.store(
-                  colorAccumView,
-                  accumIndex + 1,
-                  Math.round(color.g * 256)
-                );
-                Atomics.store(
-                  colorAccumView,
-                  accumIndex + 2,
-                  Math.round(color.b * 256)
-                );
+                Atomics.store(colorAccumView, accumIndex, Math.round(color.r * 256));
+                Atomics.store(colorAccumView, accumIndex + 1, Math.round(color.g * 256));
+                Atomics.store(colorAccumView, accumIndex + 2, Math.round(color.b * 256));
               } else {
                 // Use simple addition for accumulation (we'll divide by sample count when displaying)
-                Atomics.add(
-                  colorAccumView,
-                  accumIndex,
-                  Math.round(color.r * 256)
-                );
-                Atomics.add(
-                  colorAccumView,
-                  accumIndex + 1,
-                  Math.round(color.g * 256)
-                );
-                Atomics.add(
-                  colorAccumView,
-                  accumIndex + 2,
-                  Math.round(color.b * 256)
-                );
+                Atomics.add(colorAccumView, accumIndex, Math.round(color.r * 256));
+                Atomics.add(colorAccumView, accumIndex + 1, Math.round(color.g * 256));
+                Atomics.add(colorAccumView, accumIndex + 2, Math.round(color.b * 256));
               }
 
               // Atomically increment sample count

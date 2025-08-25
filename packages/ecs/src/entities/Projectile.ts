@@ -9,8 +9,8 @@ import {
   ShapeComponent,
   SoundEffectComponent,
   TransformComponent,
-} from "@ecs/components";
-import { SpiralMovementComponent } from "@ecs/components/projectile/SpiralProjectileComponent";
+} from '@ecs/components';
+import { SpiralMovementComponent } from '@ecs/components/projectile/SpiralProjectileComponent';
 import {
   BaseWeapon,
   RangedWeapon,
@@ -18,11 +18,11 @@ import {
   SpiralWeapon,
   Weapon,
   WeaponType,
-} from "@ecs/components/weapon/WeaponTypes";
-import { World } from "@ecs/core/ecs/World";
-import { SoundType } from "@ecs/core/resources";
-import { Point } from "@ecs/types/types";
-import { RenderLayerIdentifier } from "@renderer/constant";
+} from '@ecs/components/weapon/WeaponTypes';
+import { World } from '@ecs/core/ecs/World';
+import { SoundType } from '@ecs/core/resources';
+import { Point } from '@ecs/types/types';
+import { RenderLayerIdentifier } from '@renderer/constant';
 
 type UniqueProperties<T, U> = Pick<T, Exclude<keyof T, keyof U>>;
 
@@ -36,7 +36,7 @@ interface ProjectileProps {
   penetration?: number;
   source?: string;
   lifetime?: number; // Lifetime in milliseconds
-  type?: "spiral" | "spinning" | "linear" | "bomb";
+  type?: 'spiral' | 'spinning' | 'linear' | 'bomb';
   weapon: Weapon; // Reference to the weapon that created this projectile
   // Ranged weapon properties
   rangedWeapon?: UniqueProperties<RangedWeapon, BaseWeapon>;
@@ -56,24 +56,24 @@ export function createProjectileEntity(
     velocity = [0, 0],
     damage = 10,
     penetration = 1,
-    source = "player",
+    source = 'player',
     size = [8, 8],
     color = { r: 255, g: 255, b: 0, a: 1 },
     lifetime = 2000, // Default lifetime of 2 seconds
     weapon,
-    type = "linear",
+    type = 'linear',
     rangedWeapon,
     spiralData,
     spinningData,
-  }: ProjectileProps
+  }: ProjectileProps,
 ) {
-  const projectile = world.createEntity("projectile");
+  const projectile = world.createEntity('projectile');
 
   projectile.addComponent(
     world.createComponent(TransformComponent, {
       position,
       rotation: Math.atan2(velocity[1], velocity[0]),
-    })
+    }),
   );
 
   // Always add velocity component for base movement
@@ -83,12 +83,12 @@ export function createProjectileEntity(
       speed: Math.sqrt(velocity[0] ** 2 + velocity[1] ** 2),
       friction: 1, // No friction for projectiles
       maxSpeed: 20,
-      entityType: "PROJECTILE",
-    })
+      entityType: 'PROJECTILE',
+    }),
   );
 
   // Add spiral movement if specified
-  if (type === "spiral" && spiralData) {
+  if (type === 'spiral' && spiralData) {
     projectile.addComponent(
       world.createComponent(SpiralMovementComponent, {
         followPlayer: spiralData.followPlayer,
@@ -97,11 +97,11 @@ export function createProjectileEntity(
         radius: spiralData.spiralRadius,
         speed: spiralData.spiralSpeed,
         expansion: spiralData.spiralExpansion,
-      })
+      }),
     );
   }
 
-  if (type === "spinning" && spinningData) {
+  if (type === 'spinning' && spinningData) {
     projectile.addComponent(
       world.createComponent(SpiralMovementComponent, {
         followPlayer: spinningData.followPlayer,
@@ -110,7 +110,7 @@ export function createProjectileEntity(
         radius: spinningData.spinRadius,
         speed: spinningData.spinSpeed,
         expansion: 0,
-      })
+      }),
     );
   }
 
@@ -118,40 +118,38 @@ export function createProjectileEntity(
     world.createComponent(DamageComponent, {
       damage,
       source,
-      team: source === "player" ? "player" : "enemy",
+      team: source === 'player' ? 'player' : 'enemy',
       penetration: penetration,
       duration: lifetime ?? 2000,
       weapon,
-    })
+    }),
   );
 
   if (weapon.spiritName) {
-    projectile.addComponent(
-      world.createComponent(AnimationComponent, weapon.spiritName)
-    );
+    projectile.addComponent(world.createComponent(AnimationComponent, weapon.spiritName));
     projectile.addComponent(
       world.createComponent(ShapeComponent, {
-        descriptor: createShapeDescriptor("pattern", {
-          patternType: "projectile",
+        descriptor: createShapeDescriptor('pattern', {
+          patternType: 'projectile',
           size,
         }),
-      })
+      }),
     );
     projectile.addComponent(
       world.createComponent(RenderComponent, {
         color,
         visible: true,
         layer: RenderLayerIdentifier.PROJECTILE,
-      })
+      }),
     );
   } else {
     // todo: use real shape for projectile
     projectile.addComponent(
       world.createComponent(ShapeComponent, {
-        descriptor: createShapeDescriptor("circle", {
+        descriptor: createShapeDescriptor('circle', {
           radius: size[0] / 2,
         }),
-      })
+      }),
     );
     // Use line shape if requested
     projectile.addComponent(
@@ -159,28 +157,26 @@ export function createProjectileEntity(
         color,
         visible: true,
         layer: RenderLayerIdentifier.PROJECTILE,
-      })
+      }),
     );
   }
 
-  const soundType = [WeaponType.LASER, WeaponType.RANGED_FIXED].includes(
-    weapon.type
-  )
-    ? "laser"
-    : "hit";
+  const soundType = [WeaponType.LASER, WeaponType.RANGED_FIXED].includes(weapon.type)
+    ? 'laser'
+    : 'hit';
   projectile.addComponent(
     world.createComponent(SoundEffectComponent, {
       hitSound: soundType as SoundType,
       volume: 0.5,
-    })
+    }),
   );
 
   projectile.addComponent(
     world.createComponent(ColliderComponent, {
-      type: "circle",
+      type: 'circle',
       size,
       isTrigger: false,
-    })
+    }),
   );
 
   // Add lifecycle component with adjusted lifetime

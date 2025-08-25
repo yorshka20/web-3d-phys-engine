@@ -4,12 +4,9 @@ import {
   ShaderType,
   TimeManager,
   WebGPUContext,
-} from "@renderer/webGPU";
-import { mat4 } from "gl-matrix";
-import {
-  BindGroupLayoutVisibility,
-  WebGPUResourceManager,
-} from "@renderer/webGPU";
+} from '@renderer/webGPU';
+import { mat4 } from 'gl-matrix';
+import { BindGroupLayoutVisibility, WebGPUResourceManager } from '@renderer/webGPU';
 
 /**
  * Main application entry point for the WebGPU 3D Physics Engine
@@ -26,13 +23,13 @@ class PhysicsEngineApp {
 
   private get device(): GPUDevice {
     if (!this.context) {
-      throw new Error("WebGPU context not initialized");
+      throw new Error('WebGPU context not initialized');
     }
     return this.context.getDevice();
   }
 
   constructor() {
-    this.canvas = document.createElement("canvas");
+    this.canvas = document.createElement('canvas');
     document.body.appendChild(this.canvas);
 
     const dpr = window.devicePixelRatio;
@@ -53,8 +50,8 @@ class PhysicsEngineApp {
       this.context = new WebGPUContext();
 
       await this.context.initialize(this.canvas, {
-        powerPreference: "high-performance",
-        requiredFeatures: ["timestamp-query"],
+        powerPreference: 'high-performance',
+        requiredFeatures: ['timestamp-query'],
         requiredLimits: {
           maxStorageBufferBindingSize: 1024 * 1024 * 64, // 64MB
           maxComputeWorkgroupStorageSize: 32768,
@@ -79,12 +76,10 @@ class PhysicsEngineApp {
       // 6. Start the render loop
       this.render();
 
-      console.log("WebGPU Physics Engine initialized successfully");
+      console.log('WebGPU Physics Engine initialized successfully');
     } catch (error) {
-      console.error("Failed to initialize physics engine:", error);
-      this.showError(
-        "Failed to initialize WebGPU. Please check browser compatibility."
-      );
+      console.error('Failed to initialize physics engine:', error);
+      this.showError('Failed to initialize WebGPU. Please check browser compatibility.');
     }
   }
 
@@ -93,86 +88,68 @@ class PhysicsEngineApp {
    */
   private setupControls(): void {
     // Gravity control
-    const gravitySlider = document.getElementById(
-      "gravity"
-    ) as HTMLInputElement;
-    const gravityValue = document.getElementById(
-      "gravityValue"
-    ) as HTMLSpanElement;
+    const gravitySlider = document.getElementById('gravity') as HTMLInputElement;
+    const gravityValue = document.getElementById('gravityValue') as HTMLSpanElement;
 
-    gravitySlider.addEventListener("input", (e) => {
+    gravitySlider.addEventListener('input', (e) => {
       const value = parseFloat((e.target as HTMLInputElement).value);
       gravityValue.textContent = value.toFixed(1);
-      console.log("Gravity set to:", value);
+      console.log('Gravity set to:', value);
     });
 
     // Object count control
-    const objectCountSlider = document.getElementById(
-      "objectCountSlider"
-    ) as HTMLInputElement;
-    const objectCountValue = document.getElementById(
-      "objectCountValue"
-    ) as HTMLSpanElement;
+    const objectCountSlider = document.getElementById('objectCountSlider') as HTMLInputElement;
+    const objectCountValue = document.getElementById('objectCountValue') as HTMLSpanElement;
 
-    objectCountSlider.addEventListener("input", (e) => {
+    objectCountSlider.addEventListener('input', (e) => {
       const value = parseInt((e.target as HTMLInputElement).value);
       objectCountValue.textContent = value.toString();
     });
 
     // Add objects button
-    const addObjectsBtn = document.getElementById(
-      "addObjects"
-    ) as HTMLButtonElement;
-    addObjectsBtn.addEventListener("click", () => {
+    const addObjectsBtn = document.getElementById('addObjects') as HTMLButtonElement;
+    addObjectsBtn.addEventListener('click', () => {
       const count = parseInt(objectCountSlider.value);
-      console.log("Add objects:", count);
+      console.log('Add objects:', count);
     });
 
     // Clear objects button
-    const clearObjectsBtn = document.getElementById(
-      "clearObjects"
-    ) as HTMLButtonElement;
-    clearObjectsBtn.addEventListener("click", () => {
-      console.log("Clear all objects");
+    const clearObjectsBtn = document.getElementById('clearObjects') as HTMLButtonElement;
+    clearObjectsBtn.addEventListener('click', () => {
+      console.log('Clear all objects');
     });
 
     // Pause/Resume button
-    const togglePauseBtn = document.getElementById(
-      "togglePause"
-    ) as HTMLButtonElement;
-    togglePauseBtn.addEventListener("click", () => {
-      console.log("Toggle pause");
+    const togglePauseBtn = document.getElementById('togglePause') as HTMLButtonElement;
+    togglePauseBtn.addEventListener('click', () => {
+      console.log('Toggle pause');
     });
 
     // Reset button
-    const resetBtn = document.getElementById("reset") as HTMLButtonElement;
-    resetBtn.addEventListener("click", () => {
-      console.log("Reset simulation");
+    const resetBtn = document.getElementById('reset') as HTMLButtonElement;
+    resetBtn.addEventListener('click', () => {
+      console.log('Reset simulation');
     });
 
     // Compute pipeline controls
-    const runComputeBtn = document.getElementById(
-      "runCompute"
-    ) as HTMLButtonElement;
+    const runComputeBtn = document.getElementById('runCompute') as HTMLButtonElement;
     if (runComputeBtn) {
-      runComputeBtn.addEventListener("click", () => {
-        console.log("Manual compute pipeline execution");
+      runComputeBtn.addEventListener('click', () => {
+        console.log('Manual compute pipeline execution');
         this.readComputeResults();
       });
     }
 
-    const readResultsBtn = document.getElementById(
-      "readResults"
-    ) as HTMLButtonElement;
+    const readResultsBtn = document.getElementById('readResults') as HTMLButtonElement;
     if (readResultsBtn) {
-      readResultsBtn.addEventListener("click", () => {
-        console.log("Manual read results");
+      readResultsBtn.addEventListener('click', () => {
+        console.log('Manual read results');
         this.readComputeResults();
       });
     }
 
     // Window resize handler
-    window.addEventListener("resize", () => {
+    window.addEventListener('resize', () => {
       this.resize();
     });
   }
@@ -181,7 +158,7 @@ class PhysicsEngineApp {
    * Set up the scene
    */
   private setupScene(): void {
-    console.log("Setting up scene");
+    console.log('Setting up scene');
 
     // 1. create buffers
     this.createBuffers();
@@ -201,7 +178,7 @@ class PhysicsEngineApp {
       !this.bufferManager ||
       !this.webGPUResourceManager
     ) {
-      console.warn("WebGPU not initialized");
+      console.warn('WebGPU not initialized');
       return;
     }
 
@@ -214,8 +191,7 @@ class PhysicsEngineApp {
 
       // create time bind group
       const timeBuffer = this.timeManager.getBuffer();
-      const timeBindGroup =
-        this.webGPUResourceManager.getResource<GPUBindGroup>("Time Bind Group");
+      const timeBindGroup = this.webGPUResourceManager.getResource<GPUBindGroup>('Time Bind Group');
 
       // Update MVP matrix
       const now = performance.now() / 1000;
@@ -227,14 +203,14 @@ class PhysicsEngineApp {
         (2 * Math.PI) / 5, // fovy
         aspectRatio,
         0.1,
-        100.0
+        100.0,
       );
       const viewMatrix = mat4.create();
       mat4.lookAt(
         viewMatrix,
         [0, 0, -5], // eye
         [0, 0, 0], // center
-        [0, 1, 0] // up
+        [0, 1, 0], // up
       );
 
       let modelMatrix = mat4.create();
@@ -245,21 +221,14 @@ class PhysicsEngineApp {
       mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
       mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
 
-      const mvpBuffer = this.webGPUResourceManager.getResource<GPUBuffer>(
-        "MVP Matrix Uniforms"
-      );
+      const mvpBuffer = this.webGPUResourceManager.getResource<GPUBuffer>('MVP Matrix Uniforms');
       if (mvpBuffer) {
         // Write the MVP matrix to the uniform buffer as Float32Array
-        this.device.queue.writeBuffer(
-          mvpBuffer,
-          0,
-          new Float32Array(mvpMatrix)
-        );
+        this.device.queue.writeBuffer(mvpBuffer, 0, new Float32Array(mvpMatrix));
       }
 
       // Create MVP bind group
-      const mvpBindGroup =
-        this.webGPUResourceManager.getResource<GPUBindGroup>("MVP Bind Group");
+      const mvpBindGroup = this.webGPUResourceManager.getResource<GPUBindGroup>('MVP Bind Group');
 
       // create command encoder
       const commandEncoder = device.createCommandEncoder();
@@ -270,30 +239,26 @@ class PhysicsEngineApp {
           {
             view: context.getCurrentTexture().createView(),
             clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
-            loadOp: "clear",
-            storeOp: "store",
+            loadOp: 'clear',
+            storeOp: 'store',
           },
         ],
       });
 
       // set render pipeline
       const pipeline =
-        this.webGPUResourceManager.getResource<GPURenderPipeline>(
-          "example_render_pipeline"
-        );
+        this.webGPUResourceManager.getResource<GPURenderPipeline>('example_render_pipeline');
       if (pipeline) {
         renderPass.setPipeline(pipeline);
 
         // set vertex buffer
-        const vertexBuffer =
-          this.webGPUResourceManager.getResource<GPUBuffer>("Cube Vertices");
+        const vertexBuffer = this.webGPUResourceManager.getResource<GPUBuffer>('Cube Vertices');
         if (vertexBuffer) {
           renderPass.setVertexBuffer(0, vertexBuffer);
         }
-        const indexBuffer =
-          this.webGPUResourceManager.getResource<GPUBuffer>("Cube Indices");
+        const indexBuffer = this.webGPUResourceManager.getResource<GPUBuffer>('Cube Indices');
         if (indexBuffer) {
-          renderPass.setIndexBuffer(indexBuffer, "uint16");
+          renderPass.setIndexBuffer(indexBuffer, 'uint16');
         }
 
         renderPass.setBindGroup(0, timeBindGroup);
@@ -307,19 +272,16 @@ class PhysicsEngineApp {
 
       // set compute pipeline
       const computePass = commandEncoder.beginComputePass();
-      const computePipeline =
-        this.webGPUResourceManager.getResource<GPUComputePipeline>(
-          "example_compute_pipeline"
-        );
+      const computePipeline = this.webGPUResourceManager.getResource<GPUComputePipeline>(
+        'example_compute_pipeline',
+      );
 
       if (computePipeline) {
         computePass.setPipeline(computePipeline);
 
         // Create and set bind group for compute pipeline
         const computeBindGroup =
-          this.webGPUResourceManager.getResource<GPUBindGroup>(
-            "Compute Bind Group"
-          );
+          this.webGPUResourceManager.getResource<GPUBindGroup>('Compute Bind Group');
         computePass.setBindGroup(0, computeBindGroup);
 
         computePass.dispatchWorkgroups(1, 1, 1);
@@ -344,7 +306,7 @@ class PhysicsEngineApp {
       // Continue the loop
       requestAnimationFrame(() => this.render());
     } catch (error) {
-      console.error("Render loop error:", error);
+      console.error('Render loop error:', error);
     }
   }
 
@@ -355,26 +317,18 @@ class PhysicsEngineApp {
     if (!this.bufferManager || !this.webGPUResourceManager) return;
 
     try {
-      const storageBuffer =
-        this.webGPUResourceManager.getResource<GPUBuffer>("Example Storage");
+      const storageBuffer = this.webGPUResourceManager.getResource<GPUBuffer>('Example Storage');
       if (storageBuffer) {
         // Read the first 20 elements to see the results
-        const result = await this.bufferManager.readBuffer(
-          storageBuffer,
-          0,
-          20 * 4
-        ); // 20 floats * 4 bytes
+        const result = await this.bufferManager.readBuffer(storageBuffer, 0, 20 * 4); // 20 floats * 4 bytes
         const resultArray = new Float32Array(result);
-        console.log(
-          "Compute pipeline results (first 20 elements):",
-          resultArray
-        );
+        console.log('Compute pipeline results (first 20 elements):', resultArray);
 
         // Update UI to show results
         this.updateComputeResults(resultArray);
       }
     } catch (error) {
-      console.warn("Failed to read compute results:", error);
+      console.warn('Failed to read compute results:', error);
     }
   }
 
@@ -382,9 +336,9 @@ class PhysicsEngineApp {
    * Update UI with compute results
    */
   private updateComputeResults(results: Float32Array): void {
-    const resultsElement = document.getElementById("computeResults");
+    const resultsElement = document.getElementById('computeResults');
     if (resultsElement) {
-      const firstFew = results.slice(0, 10).join(", ");
+      const firstFew = results.slice(0, 10).join(', ');
       resultsElement.textContent = `Compute Results: [${firstFew}...]`;
     }
   }
@@ -399,7 +353,7 @@ class PhysicsEngineApp {
       !this.bufferManager ||
       !this.webGPUResourceManager
     ) {
-      console.warn("WebGPU not initialized");
+      console.warn('WebGPU not initialized');
       return;
     }
 
@@ -409,64 +363,59 @@ class PhysicsEngineApp {
 
       // Execute compute pipeline
       const computePass = commandEncoder.beginComputePass();
-      const computePipeline =
-        this.webGPUResourceManager.getResource<GPUComputePipeline>(
-          "example_compute_pipeline"
-        );
+      const computePipeline = this.webGPUResourceManager.getResource<GPUComputePipeline>(
+        'example_compute_pipeline',
+      );
 
       if (computePipeline) {
         computePass.setPipeline(computePipeline);
 
         // Create and set bind group
-        const storageBuffer =
-          this.webGPUResourceManager.getResource<GPUBuffer>("Example Storage");
-        const bindGroupLayout =
-          this.shaderManager.getBindGroupLayout("computeBindGroup");
+        const storageBuffer = this.webGPUResourceManager.getResource<GPUBuffer>('Example Storage');
+        const bindGroupLayout = this.shaderManager.getBindGroupLayout('computeBindGroup');
 
         if (storageBuffer && bindGroupLayout) {
           const computeBindGroup =
-            this.webGPUResourceManager.getResource<GPUBindGroup>(
-              "Compute Bind Group"
-            );
+            this.webGPUResourceManager.getResource<GPUBindGroup>('Compute Bind Group');
 
           computePass.setBindGroup(0, computeBindGroup);
           computePass.dispatchWorkgroups(1, 1, 1);
-          console.log("Manual compute pipeline executed successfully");
+          console.log('Manual compute pipeline executed successfully');
         }
       }
 
       computePass.end();
       device.queue.submit([commandEncoder.finish()]);
     } catch (error) {
-      console.error("Failed to execute compute pipeline:", error);
+      console.error('Failed to execute compute pipeline:', error);
     }
   }
 
   private displayDeviceInfo(): void {
     if (!this.context) {
-      throw new Error("WebGPU context not initialized");
+      throw new Error('WebGPU context not initialized');
     }
 
     const deviceInfo = this.context.getDeviceInfo();
 
-    console.log("=== WebGPU Device Information ===");
+    console.log('=== WebGPU Device Information ===');
     console.log(`Name: ${deviceInfo.name}`);
     console.log(`Vendor: ${deviceInfo.vendor}`);
     console.log(`Architecture: ${deviceInfo.architecture}`);
-    console.log("Features:", deviceInfo.features);
-    console.log("Limits:", deviceInfo.limits);
-    console.log("================================");
+    console.log('Features:', deviceInfo.features);
+    console.log('Limits:', deviceInfo.limits);
+    console.log('================================');
   }
 
   private createBuffers() {
     if (!this.context || !this.bufferManager) {
-      throw new Error("WebGPU context or buffer manager not initialized");
+      throw new Error('WebGPU context or buffer manager not initialized');
     }
     if (!this.webGPUResourceManager) {
-      throw new Error("WebGPU resource manager not initialized");
+      throw new Error('WebGPU resource manager not initialized');
     }
 
-    console.log("Creating example buffers...");
+    console.log('Creating example buffers...');
 
     // vertex buffer for cube
     // prettier-ignore
@@ -508,14 +457,11 @@ class PhysicsEngineApp {
       -0.5, 0.5, -0.5,  // 23
     ]);
 
-    this.bufferManager?.createVertexBuffer(vertexData.buffer, "Cube Vertices");
-    const vertexBuffer = this.bufferManager.getVertexBuffer("Cube Vertices");
+    this.bufferManager?.createVertexBuffer(vertexData.buffer, 'Cube Vertices');
+    const vertexBuffer = this.bufferManager.getVertexBuffer('Cube Vertices');
     if (vertexBuffer) {
-      this.webGPUResourceManager.registerResource(
-        "Cube Vertices",
-        vertexBuffer
-      );
-      console.log("Registered resource: Cube Vertices");
+      this.webGPUResourceManager.registerResource('Cube Vertices', vertexBuffer);
+      console.log('Registered resource: Cube Vertices');
     }
 
     // index buffer for cube
@@ -529,11 +475,11 @@ class PhysicsEngineApp {
       20, 21, 22, 22, 23, 20, // Left face
     ]);
 
-    this.bufferManager?.createIndexBuffer(indexData.buffer, "Cube Indices");
-    const indexBuffer = this.bufferManager.getIndexBuffer("Cube Indices");
+    this.bufferManager?.createIndexBuffer(indexData.buffer, 'Cube Indices');
+    const indexBuffer = this.bufferManager.getIndexBuffer('Cube Indices');
     if (indexBuffer) {
-      this.webGPUResourceManager.registerResource("Cube Indices", indexBuffer);
-      console.log("Registered resource: Cube Indices");
+      this.webGPUResourceManager.registerResource('Cube Indices', indexBuffer);
+      console.log('Registered resource: Cube Indices');
     }
 
     // uniform buffer for MVP matrix
@@ -546,19 +492,11 @@ class PhysicsEngineApp {
       0.0, 0.0, 0.0, 1.0,
     ]);
 
-    this.bufferManager?.createUniformBuffer(
-      mvpMatrixData.buffer,
-      "MVP Matrix Uniforms"
-    );
-    const mvpUniformBuffer = this.bufferManager.getUniformBuffer(
-      "MVP Matrix Uniforms"
-    );
+    this.bufferManager?.createUniformBuffer(mvpMatrixData.buffer, 'MVP Matrix Uniforms');
+    const mvpUniformBuffer = this.bufferManager.getUniformBuffer('MVP Matrix Uniforms');
     if (mvpUniformBuffer) {
-      this.webGPUResourceManager.registerResource(
-        "MVP Matrix Uniforms",
-        mvpUniformBuffer
-      );
-      console.log("Registered resource: MVP Matrix Uniforms");
+      this.webGPUResourceManager.registerResource('MVP Matrix Uniforms', mvpUniformBuffer);
+      console.log('Registered resource: MVP Matrix Uniforms');
     }
 
     // storage buffer for compute pipeline
@@ -568,30 +506,23 @@ class PhysicsEngineApp {
     }
 
     // create storage buffer using bufferManager (already has COPY_SRC permission)
-    this.bufferManager?.createStorageBuffer(
-      storageData.buffer,
-      "Example Storage"
-    );
-    const storageBuffer =
-      this.bufferManager.getStorageBuffer("Example Storage");
+    this.bufferManager?.createStorageBuffer(storageData.buffer, 'Example Storage');
+    const storageBuffer = this.bufferManager.getStorageBuffer('Example Storage');
     if (storageBuffer) {
-      this.webGPUResourceManager.registerResource(
-        "Example Storage",
-        storageBuffer
-      );
-      console.log("Registered resource: Example Storage");
+      this.webGPUResourceManager.registerResource('Example Storage', storageBuffer);
+      console.log('Registered resource: Example Storage');
     }
 
-    console.log("Example buffers created successfully");
-    console.log("Memory usage:", this.bufferManager?.getMemoryUsage());
+    console.log('Example buffers created successfully');
+    console.log('Memory usage:', this.bufferManager?.getMemoryUsage());
   }
 
   private compileShaders() {
     if (!this.context || !this.shaderManager) {
-      throw new Error("WebGPU context or shader manager not initialized");
+      throw new Error('WebGPU context or shader manager not initialized');
     }
     if (!this.webGPUResourceManager) {
-      throw new Error("WebGPU resource manager not initialized");
+      throw new Error('WebGPU resource manager not initialized');
     }
 
     // Define the complete shader code with all structures
@@ -665,31 +596,23 @@ class PhysicsEngineApp {
     `;
 
     // Create shader modules
-    const vertexShader = this.shaderManager.createShaderModule(
-      "exampleVertex",
-      {
-        code: shaderCode,
-        type: ShaderType.VERTEX,
-        entryPoint: "vs_main",
-        label: "Example Vertex Shader",
-      }
-    );
+    const vertexShader = this.shaderManager.createShaderModule('exampleVertex', {
+      code: shaderCode,
+      type: ShaderType.VERTEX,
+      entryPoint: 'vs_main',
+      label: 'Example Vertex Shader',
+    });
 
-    const fragmentShader = this.shaderManager.createShaderModule(
-      "exampleFragment",
-      {
-        code: shaderCode,
-        type: ShaderType.FRAGMENT,
-        entryPoint: "fs_main",
-        label: "Example Fragment Shader",
-      }
-    );
+    const fragmentShader = this.shaderManager.createShaderModule('exampleFragment', {
+      code: shaderCode,
+      type: ShaderType.FRAGMENT,
+      entryPoint: 'fs_main',
+      label: 'Example Fragment Shader',
+    });
 
     // Create compute shader for compute pipeline
-    const computeShader = this.shaderManager.createShaderModule(
-      "exampleCompute",
-      {
-        code: `
+    const computeShader = this.shaderManager.createShaderModule('exampleCompute', {
+      code: `
           @group(0) @binding(0) var<storage, read_write> data: array<f32>;
 
           @compute @workgroup_size(64)
@@ -701,79 +624,74 @@ class PhysicsEngineApp {
             }
           }
         `,
-        type: ShaderType.COMPUTE,
-        entryPoint: "main",
-        label: "Example Compute Shader",
-      }
-    );
+      type: ShaderType.COMPUTE,
+      entryPoint: 'main',
+      label: 'Example Compute Shader',
+    });
 
     // Create compute bind group layout manually since it's not in the main shader
-    const computeBindGroupLayout =
-      this.shaderManager.createCustomBindGroupLayout("computeBindGroup", {
+    const computeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+      'computeBindGroup',
+      {
         entries: [
           {
             binding: 0,
             visibility: BindGroupLayoutVisibility.COMPUTE,
-            buffer: { type: "storage" },
+            buffer: { type: 'storage' },
           },
         ],
-        label: "Compute Bind Group Layout",
-      });
+        label: 'Compute Bind Group Layout',
+      },
+    );
 
     // Create time bind group layout using shader manager
-    const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
-      "timeBindGroup",
-      {
-        entries: [
-          {
-            binding: 0,
-            visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
-            buffer: { type: "uniform" },
-          },
-        ],
-        label: "Time Bind Group Layout",
-      }
-    );
+    const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout('timeBindGroup', {
+      entries: [
+        {
+          binding: 0,
+          visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
+      ],
+      label: 'Time Bind Group Layout',
+    });
 
     // Create MVP matrix bind group layout
-    const mvpBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
-      "mvpBindGroup",
-      {
-        entries: [
-          {
-            binding: 0,
-            visibility: BindGroupLayoutVisibility.VERTEX,
-            buffer: { type: "uniform" },
-          },
-        ],
-        label: "MVP Bind Group Layout",
-      }
-    );
+    const mvpBindGroupLayout = this.shaderManager.createCustomBindGroupLayout('mvpBindGroup', {
+      entries: [
+        {
+          binding: 0,
+          visibility: BindGroupLayoutVisibility.VERTEX,
+          buffer: { type: 'uniform' },
+        },
+      ],
+      label: 'MVP Bind Group Layout',
+    });
 
     // create render pipeline layout using the time and mvp bind group layouts
     const renderPipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [timeBindGroupLayout, mvpBindGroupLayout],
-      label: "render_pipeline_layout",
+      label: 'render_pipeline_layout',
     });
 
     // create compute pipeline layout
     const computePipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [computeBindGroupLayout],
-      label: "compute_pipeline_layout",
+      label: 'compute_pipeline_layout',
     });
 
     // create render pipeline
-    const renderPipeline = this.shaderManager.createRenderPipeline("example", {
+    const renderPipeline = this.shaderManager.createRenderPipeline('example', {
       layout: renderPipelineLayout,
       vertex: {
         module: vertexShader,
-        entryPoint: "vs_main",
+        entryPoint: 'vs_main',
         buffers: [
           {
             arrayStride: 12, // 3 floats * 4 bytes per float
             attributes: [
               {
-                format: "float32x3",
+                format: 'float32x3',
                 offset: 0,
                 shaderLocation: 0,
               },
@@ -784,7 +702,7 @@ class PhysicsEngineApp {
       },
       fragment: {
         module: fragmentShader,
-        entryPoint: "fs_main",
+        entryPoint: 'fs_main',
         targets: [
           {
             format: this.context.getPreferredFormat(),
@@ -793,44 +711,35 @@ class PhysicsEngineApp {
         constants: {},
       },
       primitive: {
-        topology: "triangle-list",
+        topology: 'triangle-list',
       },
-      label: "example_render_pipeline",
+      label: 'example_render_pipeline',
     });
     if (renderPipeline) {
-      this.webGPUResourceManager.registerResource(
-        "example_render_pipeline",
-        renderPipeline
-      );
-      console.log("Registered resource: example_render_pipeline");
+      this.webGPUResourceManager.registerResource('example_render_pipeline', renderPipeline);
+      console.log('Registered resource: example_render_pipeline');
     }
 
     // create compute pipeline
-    const computePipeline = this.shaderManager.createComputePipeline(
-      "example",
-      {
-        layout: computePipelineLayout,
-        compute: {
-          module: computeShader,
-          entryPoint: "main",
-          constants: {},
-        },
-        label: "example_compute_pipeline",
-      }
-    );
+    const computePipeline = this.shaderManager.createComputePipeline('example', {
+      layout: computePipelineLayout,
+      compute: {
+        module: computeShader,
+        entryPoint: 'main',
+        constants: {},
+      },
+      label: 'example_compute_pipeline',
+    });
     if (computePipeline) {
-      this.webGPUResourceManager.registerResource(
-        "example_compute_pipeline",
-        computePipeline
-      );
-      console.log("Registered resource: example_compute_pipeline");
+      this.webGPUResourceManager.registerResource('example_compute_pipeline', computePipeline);
+      console.log('Registered resource: example_compute_pipeline');
     }
 
-    console.log("Compute pipeline created successfully");
+    console.log('Compute pipeline created successfully');
 
     // Create bind groups
     if (!this.timeManager) {
-      throw new Error("Time manager not initialized");
+      throw new Error('Time manager not initialized');
     }
 
     const timeBindGroup = this.device.createBindGroup({
@@ -841,13 +750,10 @@ class PhysicsEngineApp {
           resource: { buffer: this.timeManager.getBuffer() },
         },
       ],
-      label: "Time Bind Group",
+      label: 'Time Bind Group',
     });
-    this.webGPUResourceManager.registerResource(
-      "Time Bind Group",
-      timeBindGroup
-    );
-    console.log("Registered resource: Time Bind Group");
+    this.webGPUResourceManager.registerResource('Time Bind Group', timeBindGroup);
+    console.log('Registered resource: Time Bind Group');
 
     const mvpBindGroup = this.device.createBindGroup({
       layout: mvpBindGroupLayout,
@@ -855,16 +761,14 @@ class PhysicsEngineApp {
         {
           binding: 0,
           resource: {
-            buffer: this.webGPUResourceManager.getResource<GPUBuffer>(
-              "MVP Matrix Uniforms"
-            ),
+            buffer: this.webGPUResourceManager.getResource<GPUBuffer>('MVP Matrix Uniforms'),
           },
         },
       ],
-      label: "MVP Bind Group",
+      label: 'MVP Bind Group',
     });
-    this.webGPUResourceManager.registerResource("MVP Bind Group", mvpBindGroup);
-    console.log("Registered resource: MVP Bind Group");
+    this.webGPUResourceManager.registerResource('MVP Bind Group', mvpBindGroup);
+    console.log('Registered resource: MVP Bind Group');
 
     const computeBindGroup = this.device.createBindGroup({
       layout: computeBindGroupLayout,
@@ -872,34 +776,26 @@ class PhysicsEngineApp {
         {
           binding: 0,
           resource: {
-            buffer:
-              this.webGPUResourceManager.getResource<GPUBuffer>(
-                "Example Storage"
-              ),
+            buffer: this.webGPUResourceManager.getResource<GPUBuffer>('Example Storage'),
           },
         },
       ],
-      label: "Compute Bind Group",
+      label: 'Compute Bind Group',
     });
-    this.webGPUResourceManager.registerResource(
-      "Compute Bind Group",
-      computeBindGroup
-    );
-    console.log("Registered resource: Compute Bind Group");
+    this.webGPUResourceManager.registerResource('Compute Bind Group', computeBindGroup);
+    console.log('Registered resource: Compute Bind Group');
   }
 
   /**
    * Update debug UI with placeholder values
    */
   private updateDebugUI(): void {
-    const fpsElement = document.getElementById("fps") as HTMLElement;
-    const objectCountElement = document.getElementById(
-      "objectCount"
-    ) as HTMLElement;
-    const memoryElement = document.getElementById("memory") as HTMLElement;
+    const fpsElement = document.getElementById('fps') as HTMLElement;
+    const objectCountElement = document.getElementById('objectCount') as HTMLElement;
+    const memoryElement = document.getElementById('memory') as HTMLElement;
 
     if (fpsElement) {
-      fpsElement.textContent = "60";
+      fpsElement.textContent = '60';
     }
 
     if (objectCountElement) {
@@ -911,7 +807,7 @@ class PhysicsEngineApp {
       memoryElement.textContent =
         Object.values(memoryUsage || {})
           .reduce((a, b) => a + b, 0)
-          .toString() + " MB";
+          .toString() + ' MB';
     }
   }
 
@@ -931,7 +827,7 @@ class PhysicsEngineApp {
     this.context.getContext().configure({
       device: this.device,
       format: canvasFormat,
-      alphaMode: "premultiplied",
+      alphaMode: 'premultiplied',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
   }
@@ -940,14 +836,14 @@ class PhysicsEngineApp {
    * Show error message to user
    */
   private showError(message: string): void {
-    const errorDiv = document.createElement("div");
-    errorDiv.className = "error";
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error';
     errorDiv.textContent = message;
     document.body.appendChild(errorDiv);
   }
 }
 
 // Start the application when the page loads
-window.addEventListener("load", () => {
+window.addEventListener('load', () => {
   new PhysicsEngineApp();
 });

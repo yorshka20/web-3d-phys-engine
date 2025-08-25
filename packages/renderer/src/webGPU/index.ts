@@ -1,6 +1,6 @@
 // Core WebGPU components
-export * from "./core";
-export * from "./TimeManager";
+export * from './core';
+export * from './TimeManager';
 
 // Ray tracing components
 // export { WebGPURayTracingLayer } from "./rayTracing/WebGPURayTracingLayer";

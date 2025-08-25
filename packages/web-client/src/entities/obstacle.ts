@@ -1,12 +1,6 @@
-import {
-  PhysicsComponent,
-  RenderComponent,
-  ShapeComponent,
-  TransformComponent,
-  World,
-} from "@ecs";
-import { Color, Point } from "@ecs/utils";
-import { RenderLayerIdentifier } from "@renderer/constant";
+import { PhysicsComponent, RenderComponent, ShapeComponent, TransformComponent, World } from '@ecs';
+import { Color, Point } from '@ecs/utils';
+import { RenderLayerIdentifier } from '@renderer/constant';
 
 type ObstacleProps = {
   position: Point;
@@ -15,7 +9,7 @@ type ObstacleProps = {
 };
 
 export function createObstacle(world: World, props: ObstacleProps) {
-  const obstacle = world.createEntity("obstacle");
+  const obstacle = world.createEntity('obstacle');
 
   // fixed true to prevent movement
   obstacle.addComponent(
@@ -23,7 +17,7 @@ export function createObstacle(world: World, props: ObstacleProps) {
       position: props.position,
       fixed: true,
       recyclable: false,
-    })
+    }),
   );
 
   obstacle.addComponent(props.shape);
@@ -32,15 +26,15 @@ export function createObstacle(world: World, props: ObstacleProps) {
     new RenderComponent({
       color: props.color,
       layer: RenderLayerIdentifier.BACKGROUND,
-    })
+    }),
   );
 
   obstacle.addComponent(
     new PhysicsComponent({
       velocity: [0, 0],
       maxSpeed: 0,
-      entityType: "OBSTACLE",
-    })
+      entityType: 'OBSTACLE',
+    }),
   );
 
   return obstacle;

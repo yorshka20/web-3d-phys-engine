@@ -1,7 +1,7 @@
-import { BufferManager, BufferType } from "./core";
+import { BufferManager, BufferType } from './core';
 
 export class TimeManager {
-  static TimeBufferLabel = "Time";
+  static TimeBufferLabel = 'Time';
 
   private startTime = performance.now();
   private lastTime = 0;
@@ -17,9 +17,7 @@ export class TimeManager {
   }
 
   getBuffer() {
-    let buffer = this.bufferManager.getBufferByLabel(
-      TimeManager.TimeBufferLabel
-    );
+    let buffer = this.bufferManager.getBufferByLabel(TimeManager.TimeBufferLabel);
     if (!buffer) {
       buffer = this.bufferManager.createBuffer({
         type: BufferType.UNIFORM,

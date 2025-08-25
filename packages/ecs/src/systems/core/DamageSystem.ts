@@ -6,16 +6,16 @@ import {
   ShapeComponent,
   StateComponent,
   TransformComponent,
-} from "@ecs/components";
-import { LaserWeapon } from "@ecs/components/weapon/WeaponTypes";
-import { SystemPriorities } from "@ecs/constants/systemPriorities";
-import { Entity } from "@ecs/core/ecs/Entity";
-import { System } from "@ecs/core/ecs/System";
-import { SoundManager } from "@ecs/core/resources/SoundManager";
-import { createDamageTextEntity } from "@ecs/entities";
-import { IRenderLayer } from "@renderer/types/IRenderLayer";
-import { CollisionSystem } from "../physics/collision";
-import { RenderSystem } from "../rendering";
+} from '@ecs/components';
+import { LaserWeapon } from '@ecs/components/weapon/WeaponTypes';
+import { SystemPriorities } from '@ecs/constants/systemPriorities';
+import { Entity } from '@ecs/core/ecs/Entity';
+import { System } from '@ecs/core/ecs/System';
+import { SoundManager } from '@ecs/core/resources/SoundManager';
+import { createDamageTextEntity } from '@ecs/entities';
+import { IRenderLayer } from '@renderer/types/IRenderLayer';
+import { CollisionSystem } from '../physics/collision';
+import { RenderSystem } from '../rendering';
 
 export class DamageSystem extends System {
   private collisionSystem: CollisionSystem | null = null;
@@ -23,7 +23,7 @@ export class DamageSystem extends System {
   private highlightedCells: string[] = [];
 
   constructor() {
-    super("DamageSystem", SystemPriorities.DAMAGE, "logic");
+    super('DamageSystem', SystemPriorities.DAMAGE, 'logic');
     // this.debug = true;
   }
 
@@ -36,12 +36,12 @@ export class DamageSystem extends System {
 
     if (!this.collisionSystem) {
       this.collisionSystem = this.world.getSystem<CollisionSystem>(
-        "CollisionSystem",
-        this.priority
+        'CollisionSystem',
+        this.priority,
       );
     }
     if (!this.collisionSystem) {
-      throw new Error("CollisionSystem not found");
+      throw new Error('CollisionSystem not found');
     }
     return this.collisionSystem;
   }
@@ -51,7 +51,7 @@ export class DamageSystem extends System {
     enemy: Entity,
     damageComponent: DamageComponent,
     health: HealthComponent,
-    position: [number, number]
+    position: [number, number],
   ): void {
     // Skip if this projectile has already hit this enemy
     if (damageComponent.hasHit(enemy.id)) {
@@ -63,9 +63,7 @@ export class DamageSystem extends System {
     health.takeDamage(damage);
 
     // Set hit and daze states
-    const stateComponent = enemy.getComponent<StateComponent>(
-      StateComponent.componentName
-    );
+    const stateComponent = enemy.getComponent<StateComponent>(StateComponent.componentName);
     if (stateComponent) {
       stateComponent.setHit(13); // 3 frames hit effect
       stateComponent.setDazed(13); // 3 frames daze effect
@@ -80,13 +78,11 @@ export class DamageSystem extends System {
     this.world.addEntity(damageTextEntity);
 
     // Play hit sound
-    SoundManager.playSound(enemy, "hit");
+    SoundManager.playSound(enemy, 'hit');
 
     // Check for death
     if (health.currentHealth <= 0) {
-      enemy.addComponent(
-        this.world.createComponent(DeathMarkComponent, undefined)
-      );
+      enemy.addComponent(this.world.createComponent(DeathMarkComponent, undefined));
     }
 
     // Record the hit
@@ -98,7 +94,7 @@ export class DamageSystem extends System {
     enemy: Entity,
     damageComponent: DamageComponent,
     health: HealthComponent,
-    position: [number, number]
+    position: [number, number],
   ): void {
     // Check if it's time for a new damage tick
     if (!damageComponent.canTick()) {
@@ -110,9 +106,7 @@ export class DamageSystem extends System {
     health.takeDamage(damage);
 
     // Set hit and daze states
-    const stateComponent = enemy.getComponent<StateComponent>(
-      StateComponent.componentName
-    );
+    const stateComponent = enemy.getComponent<StateComponent>(StateComponent.componentName);
     if (stateComponent) {
       stateComponent.setHit(1); // 1 frame hit effect
       stateComponent.setDazed(2); // 2 frames daze effect
@@ -127,23 +121,18 @@ export class DamageSystem extends System {
     this.world.addEntity(damageTextEntity);
 
     // Play hit sound
-    SoundManager.playSound(enemy, "hit");
+    SoundManager.playSound(enemy, 'hit');
 
     // Check for death
     if (health.currentHealth <= 0) {
-      enemy.addComponent(
-        this.world.createComponent(DeathMarkComponent, undefined)
-      );
+      enemy.addComponent(this.world.createComponent(DeathMarkComponent, undefined));
     }
 
     // Update tick time
     damageComponent.updateTickTime();
   }
 
-  private processAoeDamage(
-    damageSource: Entity,
-    damageComponent: DamageComponent
-  ): void {
+  private processAoeDamage(damageSource: Entity, damageComponent: DamageComponent): void {
     const { damage, isCritical } = damageComponent.getDamage();
     const position = damageSource
       .getComponent<TransformComponent>(TransformComponent.componentName)
@@ -152,7 +141,7 @@ export class DamageSystem extends System {
     const enemies = this.gridComponent?.getNearbyEntities(
       position,
       damageComponent.getAoeRadius(),
-      "damage"
+      'damage',
     );
     if (!enemies?.length) return;
 
@@ -170,8 +159,7 @@ export class DamageSystem extends System {
         .getComponent<TransformComponent>(TransformComponent.componentName)
         .getPosition();
       const distance = Math.sqrt(
-        (position[0] - enemyPosition[0]) ** 2 +
-          (position[1] - enemyPosition[1]) ** 2
+        (position[0] - enemyPosition[0]) ** 2 + (position[1] - enemyPosition[1]) ** 2,
       );
       if (distance > damageComponent.getAoeRadius()) {
         continue;
@@ -180,9 +168,7 @@ export class DamageSystem extends System {
     }
 
     for (const enemy of aoeEnemies) {
-      const health = enemy.getComponent<HealthComponent>(
-        HealthComponent.componentName
-      );
+      const health = enemy.getComponent<HealthComponent>(HealthComponent.componentName);
       health.takeDamage(damage);
       damageComponent.recordHit(enemy.id);
 
@@ -190,9 +176,7 @@ export class DamageSystem extends System {
         .getComponent<TransformComponent>(TransformComponent.componentName)
         .getPosition();
       // Set hit and daze states
-      const stateComponent = enemy.getComponent<StateComponent>(
-        StateComponent.componentName
-      );
+      const stateComponent = enemy.getComponent<StateComponent>(StateComponent.componentName);
       if (stateComponent) {
         stateComponent.setHit(12); // 12 frames hit effect
         stateComponent.setDazed(12); // 12 frames daze effect
@@ -206,21 +190,16 @@ export class DamageSystem extends System {
       this.world.addEntity(damageTextEntity);
 
       // Play hit sound
-      SoundManager.playSound(enemy, "hit");
+      SoundManager.playSound(enemy, 'hit');
 
       // Check for death
       if (health.currentHealth <= 0) {
-        enemy.addComponent(
-          this.world.createComponent(DeathMarkComponent, undefined)
-        );
+        enemy.addComponent(this.world.createComponent(DeathMarkComponent, undefined));
       }
     }
   }
 
-  private processLaserDamage(
-    damageSource: Entity,
-    damageComponent: DamageComponent
-  ): void {
+  private processLaserDamage(damageSource: Entity, damageComponent: DamageComponent): void {
     // laser only attack once because it's aoe
     if (damageComponent.laserProcessed) return;
 
@@ -258,11 +237,7 @@ export class DamageSystem extends System {
     ];
 
     // Get cells that the laser passes through
-    const cells = this.gridComponent?.getCellsInLine(
-      startPos,
-      endPos,
-      laserWidth
-    );
+    const cells = this.gridComponent?.getCellsInLine(startPos, endPos, laserWidth);
     if (!cells) {
       return;
     }
@@ -275,7 +250,7 @@ export class DamageSystem extends System {
 
     // Check enemies in each cell
     for (const cell of cells) {
-      const enemyIds = this.gridComponent?.getEntitiesInCell(cell, "damage");
+      const enemyIds = this.gridComponent?.getEntitiesInCell(cell, 'damage');
       if (!enemyIds) continue;
 
       for (const enemyId of enemyIds) {
@@ -302,12 +277,7 @@ export class DamageSystem extends System {
         const enemyRadius = Math.max(enemySize[0], enemySize[1]) / 2;
 
         // Calculate distance from enemy to laser line
-        const distance = this.pointToRayDistance(
-          enemyPos,
-          startPos,
-          dirX,
-          dirY
-        );
+        const distance = this.pointToRayDistance(enemyPos, startPos, dirX, dirY);
 
         // If enemy is within laser width plus their radius, they are hit
         if (distance <= laserWidth / 2 + enemyRadius) {
@@ -318,15 +288,11 @@ export class DamageSystem extends System {
 
     // Apply damage to all hit enemies
     for (const enemy of hitEnemies) {
-      const health = enemy.getComponent<HealthComponent>(
-        HealthComponent.componentName
-      );
+      const health = enemy.getComponent<HealthComponent>(HealthComponent.componentName);
       health.takeDamage(damage);
 
       // Set hit and daze states
-      const stateComponent = enemy.getComponent<StateComponent>(
-        StateComponent.componentName
-      );
+      const stateComponent = enemy.getComponent<StateComponent>(StateComponent.componentName);
       if (stateComponent) {
         stateComponent.setHit(12); // 12 frames hit effect
         stateComponent.setDazed(12); // 12 frames daze effect
@@ -343,13 +309,11 @@ export class DamageSystem extends System {
       this.world.addEntity(damageTextEntity);
 
       // Play hit sound
-      SoundManager.playSound(enemy, "hit");
+      SoundManager.playSound(enemy, 'hit');
 
       // Check for death
       if (health.currentHealth <= 0) {
-        enemy.addComponent(
-          this.world.createComponent(DeathMarkComponent, undefined)
-        );
+        enemy.addComponent(this.world.createComponent(DeathMarkComponent, undefined));
       }
     }
 
@@ -362,7 +326,7 @@ export class DamageSystem extends System {
     point: [number, number],
     rayStart: [number, number],
     dirX: number,
-    dirY: number
+    dirY: number,
   ): number {
     const x = point[0];
     const y = point[1];
@@ -436,28 +400,23 @@ export class DamageSystem extends System {
         entity2.hasComponent(DeathMarkComponent.componentName) ||
         !entity1.hasComponent(ColliderComponent.componentName) ||
         !entity2.hasComponent(ColliderComponent.componentName) ||
-        entity1.isType("player") ||
-        entity2.isType("player") ||
-        (entity1.isType("enemy") && entity2.isType("enemy"))
+        entity1.isType('player') ||
+        entity2.isType('player') ||
+        (entity1.isType('enemy') && entity2.isType('enemy'))
       ) {
         continue;
       }
 
       // Handle projectile damage
-      const isProjectile1 = entity1.isType("projectile");
-      const isProjectile2 = entity2.isType("projectile");
-      const isAreaEffect1 = entity1.isType("areaEffect");
-      const isAreaEffect2 = entity2.isType("areaEffect");
+      const isProjectile1 = entity1.isType('projectile');
+      const isProjectile2 = entity2.isType('projectile');
+      const isAreaEffect1 = entity1.isType('areaEffect');
+      const isAreaEffect2 = entity2.isType('areaEffect');
 
       // Skip invalid collision types
-      if ((isProjectile1 && isProjectile2) || (isAreaEffect1 && isAreaEffect2))
-        continue;
+      if ((isProjectile1 && isProjectile2) || (isAreaEffect1 && isAreaEffect2)) continue;
 
-      const damageSource = isProjectile1
-        ? entity1
-        : isAreaEffect1
-        ? entity1
-        : entity2;
+      const damageSource = isProjectile1 ? entity1 : isAreaEffect1 ? entity1 : entity2;
       const enemy = isProjectile1 || isAreaEffect1 ? entity2 : entity1;
 
       if (
@@ -470,51 +429,33 @@ export class DamageSystem extends System {
         continue;
       }
 
-      const health = enemy.getComponent<HealthComponent>(
-        HealthComponent.componentName
-      );
+      const health = enemy.getComponent<HealthComponent>(HealthComponent.componentName);
       const position = enemy
         .getComponent<TransformComponent>(TransformComponent.componentName)
         .getPosition();
       const damageComponent = damageSource.getComponent<DamageComponent>(
-        DamageComponent.componentName
+        DamageComponent.componentName,
       );
 
       // For area effects (which are triggers), always process continuous damage
       if (isAreaEffect1 || isAreaEffect2) {
         // Check if area effect is still valid
         if (damageComponent.isAoe() && !damageComponent.isExpired()) {
-          this.processContinuousDamage(
-            damageSource,
-            enemy,
-            damageComponent,
-            health,
-            position
-          );
+          this.processContinuousDamage(damageSource, enemy, damageComponent, health, position);
         } else if (damageComponent.isLaser()) {
           this.processLaserDamage(damageSource, damageComponent);
         }
       } else if (isProjectile1 || isProjectile2) {
         // For projectiles, only process damage if not a trigger
         const projectileCollider = isProjectile1
-          ? entity1.getComponent<ColliderComponent>(
-              ColliderComponent.componentName
-            )
-          : entity2.getComponent<ColliderComponent>(
-              ColliderComponent.componentName
-            );
+          ? entity1.getComponent<ColliderComponent>(ColliderComponent.componentName)
+          : entity2.getComponent<ColliderComponent>(ColliderComponent.componentName);
         if (projectileCollider?.isTriggerOnly()) continue;
 
         if (damageComponent.isAoe() && damageComponent.canExplode()) {
           this.processAoeDamage(damageSource, damageComponent);
         } else {
-          this.processDamage(
-            damageSource,
-            enemy,
-            damageComponent,
-            health,
-            position
-          );
+          this.processDamage(damageSource, enemy, damageComponent, health, position);
         }
       }
 
