@@ -1,12 +1,15 @@
+import { WebGPURenderSystem } from '@ecs';
 import {
+  BindGroupLayoutVisibility,
   BufferManager,
   ShaderManager,
   ShaderType,
   TimeManager,
   WebGPUContext,
+  WebGPUResourceManager,
 } from '@renderer/webGPU';
 import { mat4 } from 'gl-matrix';
-import { BindGroupLayoutVisibility, WebGPUResourceManager } from '@renderer/webGPU';
+import { Game } from './game/Game';
 
 /**
  * Main application entry point for the WebGPU 3D Physics Engine
@@ -845,5 +848,20 @@ class PhysicsEngineApp {
 
 // Start the application when the page loads
 window.addEventListener('load', () => {
-  new PhysicsEngineApp();
+  // new PhysicsEngineApp();
+  main();
 });
+
+async function main() {
+  const rootElement = document.body;
+
+  const game = new Game();
+  const world = game.getWorld();
+
+  world.addSystem(new WebGPURenderSystem(rootElement));
+
+  // Initialize the game
+  await game.initialize();
+
+  game.start();
+}

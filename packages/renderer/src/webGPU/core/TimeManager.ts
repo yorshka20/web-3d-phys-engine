@@ -1,4 +1,5 @@
-import { BufferManager, BufferType } from './core';
+import { BufferManager } from './BufferManager';
+import { BufferType } from './types';
 
 export class TimeManager {
   static TimeBufferLabel = 'Time';

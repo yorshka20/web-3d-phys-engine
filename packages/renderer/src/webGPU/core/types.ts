@@ -105,3 +105,10 @@ export interface BufferPoolItem {
   inUse: boolean;
   lastUsed: number;
 }
+
+export interface SamplerDescriptor {
+  id: string;
+  addressMode: GPUAddressMode;
+  magFilter: GPUFilterMode;
+  minFilter: GPUFilterMode;
+}

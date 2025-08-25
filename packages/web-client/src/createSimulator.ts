@@ -17,6 +17,7 @@ import {
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Point, Viewport } from '@ecs/types/types';
 import { randomRgb, RgbaColor } from '@ecs/utils/color';
+import { I2DRenderer } from '@renderer';
 import { createCanvas2dRenderer } from '@renderer/canvas2d';
 import { createBall } from './entities/ball';
 import { createGenerator } from './entities/generator';
@@ -105,7 +106,7 @@ function initializeSystems(world: World, rootElement: HTMLElement) {
   const canvas2dRenderer = createCanvas2dRenderer(rootElement, 'simulator', rayTracing);
 
   // inject renderer
-  renderSystem.setRenderer(canvas2dRenderer);
+  renderSystem.setRenderer(canvas2dRenderer as I2DRenderer);
   // init renderSystem after adding all layers
   renderSystem.init();
   // Add renderer last so it has access to a fully configured world

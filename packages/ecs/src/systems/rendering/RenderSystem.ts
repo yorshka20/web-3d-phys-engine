@@ -3,7 +3,7 @@ import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { System } from '@ecs/core/ecs/System';
 import { RectArea } from '@ecs/types/types';
 import { RenderLayerIdentifier } from '@renderer/constant';
-import { IRenderer, IRenderLayer } from '@renderer/types';
+import { I2DRenderer, IRenderLayer } from '@renderer/types';
 
 export class RenderSystem extends System {
   static getInstance(): RenderSystem {
@@ -15,7 +15,7 @@ export class RenderSystem extends System {
 
   private static instance: RenderSystem;
 
-  private renderer!: IRenderer;
+  private renderer!: I2DRenderer;
 
   private rootElement: HTMLElement;
   private viewport: RectArea;
@@ -46,11 +46,11 @@ export class RenderSystem extends System {
     return this.coarseMode ? 1 : window.devicePixelRatio || 1;
   }
 
-  setRenderer(renderer: IRenderer): void {
+  setRenderer(renderer: I2DRenderer): void {
     this.renderer = renderer;
   }
 
-  getRenderer(): IRenderer {
+  getRenderer(): I2DRenderer {
     return this.renderer;
   }
 

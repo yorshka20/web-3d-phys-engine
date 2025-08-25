@@ -572,15 +572,14 @@ export class RayTracingLayer extends CanvasRenderLayer {
       throw new Error('No active camera found');
     }
     return {
-      position: transform.getPosition(),
+      position: [transform.getPosition()[0], transform.getPosition()[1], camera.position[2]],
       fov: camera.fov,
       facing: camera.facing,
-      height: camera.height,
       pitch: camera.pitch,
       roll: camera.roll,
       projectionMode: camera.projectionMode,
       cameraMode: camera.cameraMode,
-      aspect: camera.aspectRatio,
+      aspectRatio: camera.aspectRatio,
       near: camera.near,
       far: camera.far,
       viewBounds: camera.viewBounds,

@@ -1,5 +1,11 @@
-import { RectArea } from '@ecs/types/types';
 import { RenderSystem } from '@ecs/systems';
+import { RectArea } from '@ecs/types/types';
+import {
+  BufferDescriptor,
+  PipelineDescriptor,
+  RenderContext,
+  TextureDescriptor,
+} from '../webGPU/types'; // Import WebGPU-specific types from the new location
 import { IRenderLayer } from './IRenderLayer';
 
 export interface ContextConfig {
@@ -17,15 +23,8 @@ export interface IRenderer {
   debug: boolean;
   priority: number;
 
-  init(renderSystem: RenderSystem): void;
-
-  addRenderLayer(ctor: new (...args: any[]) => IRenderLayer): void;
-
-  getLayers(): IRenderLayer[];
-
   updateContextConfig(config: ContextConfig): void;
 
-  // TODO: do we need this?
   setBackgroundImage(image: HTMLImageElement): void;
 
   clear(): void;
@@ -35,4 +34,27 @@ export interface IRenderer {
   onResize(): void;
 
   onDestroy(): void;
+}
+
+export interface I2DRenderer extends IRenderer {
+  init(renderSystem: RenderSystem): void;
+  addRenderLayer(ctor: new (...args: any[]) => IRenderLayer): void;
+  getLayers(): IRenderLayer[];
+}
+
+export interface IWebGPURenderer extends IRenderer {
+  init(canvas: HTMLCanvasElement): Promise<void>;
+
+  // WebGPU specific methods
+  getDevice(): GPUDevice | null;
+  createBuffer(descriptor: BufferDescriptor): string;
+  createTexture(descriptor: TextureDescriptor): string;
+  createPipeline(descriptor: PipelineDescriptor): string;
+
+  // Unified resource management
+  updateBuffer(id: string, data: ArrayBuffer): void;
+  updateTexture(id: string, data: ImageData | HTMLImageElement): void;
+
+  // The render method for WebGPU, which uses RenderContext
+  render(deltaTime: number, context: RenderContext): void;
 }
