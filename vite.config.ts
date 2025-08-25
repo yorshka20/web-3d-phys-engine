@@ -1,11 +1,10 @@
 import { defineConfig } from "vite";
 import path, { resolve } from "path";
-import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 export default defineConfig({
   base: "/",
   publicDir: "public",
-  plugins: [svelte({ compilerOptions: { hmr: true } })],
+  plugins: [],
   build: {
     outDir: path.resolve(__dirname, "./dist"),
     emptyOutDir: false,
@@ -13,12 +12,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          math: ["@math/*"],
+          ecs: ["@ecs/*"],
           renderer: ["@renderer/*"],
-          physics: ["@physics/*"],
-          shaders: ["@shaders/*"],
-          scene: ["@scene/*"],
-          utils: ["@utils/*"],
+          webClient: ["@web-client/*"],
         },
       },
     },
@@ -27,14 +23,16 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": resolve(__dirname, "./src"),
-      "@ecs": resolve(__dirname, "./src/ecs"),
-      "@math": resolve(__dirname, "./src/math"),
-      "@renderer": resolve(__dirname, "./src/renderer"),
-      "@physics": resolve(__dirname, "./src/physics"),
-      "@shaders": resolve(__dirname, "./src/shaders"),
-      "@scene": resolve(__dirname, "./src/scene"),
-      "@utils": resolve(__dirname, "./src/utils"),
+      "@ecs": resolve(__dirname, "./packages/ecs"),
+      "@ecs/core": resolve(__dirname, "./packages/ecs/src/core"),
+      "@ecs/components": resolve(__dirname, "./packages/ecs/src/components"),
+      "@ecs/systems": resolve(__dirname, "./packages/ecs/src/systems"),
+      "@ecs/entities": resolve(__dirname, "./packages/ecs/src/entities"),
+      "@ecs/constants": resolve(__dirname, "./packages/ecs/src/constants"),
+      "@renderer": resolve(__dirname, "./packages/renderer/src"),
+      "@renderer/*": resolve(__dirname, "./packages/renderer/src/*"),
+      "@web-client": resolve(__dirname, "./packages/web-client/src"),
+      "@web-client/*": resolve(__dirname, "./packages/web-client/src/*"),
     },
   },
   server: {

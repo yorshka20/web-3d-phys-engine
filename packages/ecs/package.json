@@ -1,0 +1,17 @@
+{
+  "name": "@web-3d-phys-engine/ecs",
+  "version": "0.0.1",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@web-3d-phys-engine/renderer": "workspace:*"
+  },
+  "devDependencies": {}
+}

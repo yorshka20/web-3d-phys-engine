@@ -1,0 +1,21 @@
+{
+  "name": "@web-3d-phys-engine/renderer",
+  "version": "0.1.0",
+  "description": "Renderer implementation for Web 3D Phys Engine.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "@web-3d-phys-engine/ecs": "workspace:*"
+  },
+  "devDependencies": {},
+  "files": [
+    "dist"
+  ],
+  "license": "MIT"
+}
