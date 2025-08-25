@@ -1,4 +1,4 @@
-import { LightSourceComponent } from '@ecs/components';
+import { LightSource3DComponent } from '@ecs/components';
 import { RgbaColor, Vec3 } from '@ecs/utils';
 import {
   Intersection3D,
@@ -207,7 +207,7 @@ export class ShadingService {
     }
 
     // Calculate light intensity with distance attenuation
-    let intensity = LightSourceComponent.calculateLightIntensity(
+    let intensity = LightSource3DComponent.calculateLightIntensity(
       intersection.point,
       light,
       distance,
@@ -219,7 +219,7 @@ export class ShadingService {
 
     // Spot light cone check
     if (light.type === 'spot') {
-      const spotFalloff = LightSourceComponent.calculateSpotLightFalloff(lightDirection, light);
+      const spotFalloff = LightSource3DComponent.calculateSpotLightFalloff(lightDirection, light);
       intensity *= spotFalloff;
 
       if (intensity <= 0) {

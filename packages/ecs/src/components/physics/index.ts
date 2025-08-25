@@ -6,3 +6,4 @@ export * from './RigidComponent';
 export * from './shape';
 export * from './SpatialGridComponent';
 export * from './TransformComponent';
+export * from './Transform3DComponent';

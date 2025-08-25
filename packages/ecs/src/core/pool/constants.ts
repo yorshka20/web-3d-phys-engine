@@ -11,7 +11,7 @@ import {
   HealthComponent,
   InputComponent,
   LifecycleComponent,
-  LightSourceComponent,
+  LightSource3DComponent,
   PhysicsComponent,
   PickupComponent,
   RenderComponent,
@@ -63,6 +63,6 @@ export const ComponentPoolList: ComponentConstructor<IComponent>[] = [
   StateComponent,
   AnimationComponent,
   ShapeComponent,
-  LightSourceComponent,
+  LightSource3DComponent,
   Camera3DComponent,
 ];

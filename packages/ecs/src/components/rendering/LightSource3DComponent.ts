@@ -17,7 +17,7 @@ export type AttenuationType = 'none' | 'linear' | 'quadratic' | 'realistic';
  * @property {boolean} castShadows - Whether this light casts shadows.
  * @property {AttenuationType} attenuation - How light intensity decreases with distance.
  */
-export class LightSourceComponent extends Component {
+export class LightSource3DComponent extends Component {
   static componentName = 'LightSource';
 
   position: [number, number] = [0, 0];
@@ -44,6 +44,14 @@ export class LightSourceComponent extends Component {
   enabled = true;
   layer = 0; // light layer, for layered rendering
 
+  // Enhanced 3D properties for WebGPU compatibility
+  range: number = 100; // Maximum range for 3D lighting
+  shadowMapSize: number = 1024; // Shadow map resolution
+  shadowBias: number = 0.001; // Shadow bias to prevent shadow acne
+  flicker: boolean = false; // Whether the light flickers
+  flickerSpeed: number = 1; // Flicker speed
+  flickerIntensity: number = 0.1; // Flicker intensity
+
   constructor(
     props: {
       position?: [number, number];
@@ -58,6 +66,12 @@ export class LightSourceComponent extends Component {
       spotAngle?: number;
       enabled?: boolean;
       layer?: number;
+      range?: number;
+      shadowMapSize?: number;
+      shadowBias?: number;
+      flicker?: boolean;
+      flickerSpeed?: number;
+      flickerIntensity?: number;
     } = {},
   ) {
     super('LightSource');
@@ -75,6 +89,14 @@ export class LightSourceComponent extends Component {
     this.spotAngle = props.spotAngle ?? 45;
     this.enabled = props.enabled ?? true;
     this.layer = props.layer ?? 0;
+
+    // Enhanced 3D properties
+    this.range = props.range ?? 100;
+    this.shadowMapSize = props.shadowMapSize ?? 1024;
+    this.shadowBias = props.shadowBias ?? 0.001;
+    this.flicker = props.flicker ?? false;
+    this.flickerSpeed = props.flickerSpeed ?? 1;
+    this.flickerIntensity = props.flickerIntensity ?? 0.1;
   }
 
   // get 3D position
@@ -262,6 +284,172 @@ export class LightSourceComponent extends Component {
       `Light(${this.type}): pos=[${this.position[0]},${this.position[1]},${this.height}], ` +
       `intensity=${this.intensity}, radius=${this.radius}, shadows=${this.castShadows}`
     );
+  }
+
+  // Enhanced 3D methods for WebGPU compatibility
+
+  /**
+   * Get the range for 3D lighting
+   */
+  getRange(): number {
+    return this.range;
+  }
+
+  /**
+   * Set the range for 3D lighting
+   */
+  setRange(range: number): void {
+    this.range = range;
+  }
+
+  /**
+   * Get shadow map size
+   */
+  getShadowMapSize(): number {
+    return this.shadowMapSize;
+  }
+
+  /**
+   * Set shadow map size
+   */
+  setShadowMapSize(size: number): void {
+    this.shadowMapSize = size;
+  }
+
+  /**
+   * Get shadow bias
+   */
+  getShadowBias(): number {
+    return this.shadowBias;
+  }
+
+  /**
+   * Set shadow bias
+   */
+  setShadowBias(bias: number): void {
+    this.shadowBias = bias;
+  }
+
+  /**
+   * Get effective intensity considering flicker
+   */
+  getEffectiveIntensity(time?: number): number {
+    if (!this.flicker || !time) {
+      return this.intensity;
+    }
+
+    const flickerValue = Math.sin(time * this.flickerSpeed) * this.flickerIntensity;
+    return this.intensity * (1 + flickerValue);
+  }
+
+  /**
+   * Set flicker properties
+   */
+  setFlicker(flicker: boolean, speed: number = 1, intensity: number = 0.1): void {
+    this.flicker = flicker;
+    this.flickerSpeed = speed;
+    this.flickerIntensity = intensity;
+  }
+
+  /**
+   * Get light color as normalized values (0-1)
+   */
+  getNormalizedColor(): Vec3 {
+    return [this.color.r / 255, this.color.g / 255, this.color.b / 255];
+  }
+
+  /**
+   * Get light direction as Vec3
+   */
+  getDirection3D(): Vec3 {
+    return this.normalizedDirection;
+  }
+
+  /**
+   * Set light direction as Vec3
+   */
+  setDirection3D(direction: Vec3): void {
+    this.direction = direction;
+  }
+
+  // Convenient creation methods for 3D rendering
+  static createDirectionalLight(
+    color: RgbaColor,
+    intensity: number,
+    direction: Vec3,
+  ): LightSource3DComponent {
+    return new LightSource3DComponent({
+      type: 'directional',
+      color,
+      intensity,
+      direction,
+      castShadows: true,
+      shadowMapSize: 2048,
+    });
+  }
+
+  static createPointLight(
+    color: RgbaColor,
+    intensity: number,
+    range: number,
+  ): LightSource3DComponent {
+    return new LightSource3DComponent({
+      type: 'point',
+      color,
+      intensity,
+      radius: range,
+      range,
+    });
+  }
+
+  static createSpotLight(
+    color: RgbaColor,
+    intensity: number,
+    angle: number,
+    range: number,
+  ): LightSource3DComponent {
+    return new LightSource3DComponent({
+      type: 'spot',
+      color,
+      intensity,
+      spotAngle: angle,
+      radius: range,
+      range,
+      castShadows: true,
+    });
+  }
+
+  static createAmbientLight(color: RgbaColor, intensity: number): LightSource3DComponent {
+    return new LightSource3DComponent({
+      type: 'ambient',
+      color,
+      intensity,
+      castShadows: false,
+    });
+  }
+
+  static createSunLight(): LightSource3DComponent {
+    return new LightSource3DComponent({
+      type: 'directional',
+      color: { r: 255, g: 242, b: 204, a: 1 }, // Warm sunlight color
+      intensity: 1,
+      direction: [0, -1, 0],
+      castShadows: true,
+      shadowMapSize: 2048,
+    });
+  }
+
+  static createFireLight(): LightSource3DComponent {
+    return new LightSource3DComponent({
+      type: 'point',
+      color: { r: 255, g: 128, b: 51, a: 1 }, // Fire color
+      intensity: 2,
+      radius: 5,
+      range: 5,
+      flicker: true,
+      flickerSpeed: 10,
+      flickerIntensity: 0.3,
+    });
   }
 
   /**

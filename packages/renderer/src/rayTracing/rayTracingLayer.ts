@@ -1,6 +1,6 @@
 import {
   Camera3DComponent,
-  LightSourceComponent,
+  LightSource3DComponent,
   RectArea,
   RenderComponent,
   ShapeComponent,
@@ -136,7 +136,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
   private getLights(): IEntity[] {
     if (this.lightEntities.length === 0) {
       this.lightEntities = this.getWorld().getEntitiesByCondition((entity) =>
-        entity.hasComponent(LightSourceComponent.componentName),
+        entity.hasComponent(LightSource3DComponent.componentName),
       );
     }
     return this.lightEntities;
@@ -523,7 +523,9 @@ export class RayTracingLayer extends CanvasRenderLayer {
   private serializeLights(entities: IEntity[]): SerializedLight[] {
     const lights: SerializedLight[] = [];
     for (const entity of entities) {
-      const light = entity.getComponent<LightSourceComponent>(LightSourceComponent.componentName);
+      const light = entity.getComponent<LightSource3DComponent>(
+        LightSource3DComponent.componentName,
+      );
       const transform = entity.getComponent<TransformComponent>(TransformComponent.componentName);
       if (!light?.enabled || !transform) continue;
 
@@ -578,7 +580,7 @@ export class RayTracingLayer extends CanvasRenderLayer {
       roll: camera.roll,
       projectionMode: camera.projectionMode,
       cameraMode: camera.cameraMode,
-      aspect: camera.aspect,
+      aspect: camera.aspectRatio,
       near: camera.near,
       far: camera.far,
       viewBounds: camera.viewBounds,

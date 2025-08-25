@@ -16,6 +16,13 @@ export interface Camera3DProps {
   resolution?: Resolution;
   viewBounds?: ViewBounds;
   isActive?: boolean;
+
+  // Enhanced 3D properties for WebGPU compatibility
+  aspectRatio?: number;
+  near?: number;
+  far?: number;
+  target?: Vec3; // Look-at target for 3D camera
+  up?: Vec3; // Up vector for 3D camera
 }
 
 export class Camera3DComponent extends Component {
@@ -33,7 +40,6 @@ export class Camera3DComponent extends Component {
   // projection and rendering settings
   projectionMode: ProjectionMode = 'perspective';
   cameraMode: CameraMode = 'sideview';
-  aspect = 16 / 9; // aspect ratio
   near = 0.1;
   far = 1000;
 
@@ -49,6 +55,11 @@ export class Camera3DComponent extends Component {
   // control properties
   isActive = true;
   zoom = 1.0;
+
+  // Enhanced 3D properties for WebGPU compatibility
+  aspectRatio: number = 16 / 9;
+  target: Vec3 = [0, 0, 0];
+  up: Vec3 = [0, 1, 0];
 
   constructor(props: Camera3DProps = {}) {
     super('Camera');
@@ -256,5 +267,140 @@ export class Camera3DComponent extends Component {
       top: this.position[1] + halfHeight,
       bottom: this.position[1] - halfHeight,
     };
+  }
+
+  // Enhanced 3D methods for WebGPU compatibility
+
+  /**
+   * Get the aspect ratio for 3D rendering
+   */
+  getAspectRatio(): number {
+    return this.aspectRatio;
+  }
+
+  /**
+   * Set the aspect ratio for 3D rendering
+   */
+  setAspectRatio(aspectRatio: number): void {
+    this.aspectRatio = aspectRatio;
+  }
+
+  /**
+   * Get the look-at target for 3D camera
+   */
+  getTarget(): Vec3 {
+    return this.target;
+  }
+
+  /**
+   * Set the look-at target for 3D camera
+   */
+  setTarget(target: Vec3): void {
+    this.target = target;
+  }
+
+  /**
+   * Get the up vector for 3D camera
+   */
+  getUp(): Vec3 {
+    return this.up;
+  }
+
+  /**
+   * Set the up vector for 3D camera
+   */
+  setUp(up: Vec3): void {
+    this.up = up;
+  }
+
+  /**
+   * Get projection matrix for WebGPU rendering
+   * This would be calculated by the rendering system
+   */
+  getProjectionMatrix(): Float32Array {
+    // Placeholder - should be calculated by rendering system
+    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  }
+
+  /**
+   * Get view matrix for WebGPU rendering
+   * This would be calculated by the rendering system
+   */
+  getViewMatrix(): Float32Array {
+    // Placeholder - should be calculated by rendering system
+    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  }
+
+  /**
+   * Set camera to look at a specific target
+   */
+  lookAt(target: Vec3, up: Vec3 = [0, 1, 0]): void {
+    this.target = target;
+    this.up = up;
+  }
+
+  /**
+   * Create a perspective camera configuration
+   */
+  setPerspective(fov: number, aspectRatio: number, near: number, far: number): void {
+    this.fov = fov;
+    this.aspectRatio = aspectRatio;
+    this.near = near;
+    this.far = far;
+    this.projectionMode = 'perspective';
+  }
+
+  /**
+   * Create an orthographic camera configuration
+   */
+  setOrthographic(
+    left: number,
+    right: number,
+    top: number,
+    bottom: number,
+    near: number,
+    far: number,
+  ): void {
+    this.projectionMode = 'orthographic';
+    this.near = near;
+    this.far = far;
+    // Store orthographic bounds in viewBounds for compatibility
+    this.viewBounds = { left, right, top, bottom };
+  }
+
+  // Convenient creation methods for 3D rendering
+  static createPerspectiveCamera(
+    fov: number = 75,
+    aspectRatio: number = 16 / 9,
+  ): Camera3DComponent {
+    return new Camera3DComponent({
+      fov,
+      aspectRatio,
+      projectionMode: 'perspective',
+      cameraMode: 'custom',
+    });
+  }
+
+  static createOrthographicCamera(
+    left: number = -1,
+    right: number = 1,
+    top: number = 1,
+    bottom: number = -1,
+  ): Camera3DComponent {
+    return new Camera3DComponent({
+      projectionMode: 'orthographic',
+      cameraMode: 'custom',
+      viewBounds: { left, right, top, bottom },
+    });
+  }
+
+  static createMainCamera(): Camera3DComponent {
+    return new Camera3DComponent({
+      fov: 75,
+      aspectRatio: 16 / 9,
+      projectionMode: 'perspective',
+      cameraMode: 'custom',
+      isActive: true,
+    });
   }
 }

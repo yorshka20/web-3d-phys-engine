@@ -3,7 +3,7 @@ import {
   Camera3DComponent,
   createShapeDescriptor,
   ForceFieldSystem,
-  LightSourceComponent,
+  LightSource3DComponent,
   ParallelCollisionSystem,
   PhysicsSystem,
   RenderSystem,
@@ -195,7 +195,7 @@ function createLightSource(world: World, position: Point, color: RgbaColor, radi
   const light = world.createEntity('light');
   light.addComponent(world.createComponent(TransformComponent, { position }));
   light.addComponent(
-    world.createComponent(LightSourceComponent, {
+    world.createComponent(LightSource3DComponent, {
       position,
       color,
       radius,
@@ -264,7 +264,7 @@ function createRayTracingEntity(world: World, viewport: Viewport) {
   // ambientLight.setAsAmbientLight(0.2);
 
   const torchEntity = world.createEntity('light');
-  const torch = new LightSourceComponent({
+  const torch = new LightSource3DComponent({
     height: 100,
     radius: 1000,
     color: { r: 255, g: 200, b: 100, a: 1 },
@@ -281,7 +281,7 @@ function createRayTracingEntity(world: World, viewport: Viewport) {
   world.addEntity(torchEntity);
 
   const lightEntity = world.createEntity('light');
-  const sunLight = new LightSourceComponent();
+  const sunLight = new LightSource3DComponent();
   sunLight.setAsDirectionalLight([1, -1, -1], 0.8);
   lightEntity.addComponent(sunLight);
   lightEntity.addComponent(
