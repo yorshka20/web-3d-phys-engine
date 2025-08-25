@@ -1,4 +1,4 @@
-import { SoundEffectComponent } from '@ecs/components/state/SoundEffectComponent';
+import { SoundEffectComponent } from '@ecs/components';
 import { IEntity } from '@ecs/core/ecs/types';
 import { ResourceManager } from './ResourceManager';
 

@@ -105,18 +105,17 @@ export interface SerializedLight {
 // Enhanced camera serialization
 export interface SerializedCamera {
   // Basic properties (for backward compatibility)
-  position: [number, number];
+  position: Vec3;
   fov: number;
   facing: number;
 
   // Extended properties for 3D ray tracing
-  height: number;
   pitch: number;
   roll: number;
 
   projectionMode: 'perspective' | 'orthographic';
   cameraMode: 'topdown' | 'sideview' | 'custom';
-  aspect: number;
+  aspectRatio: number;
   near: number;
   far: number;
 

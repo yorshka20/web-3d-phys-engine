@@ -1,38 +1,39 @@
-import fs from "fs-extra";
-import { resolve } from "path";
-import { defineConfig } from "vite";
+import fs from 'fs-extra';
+import { resolve } from 'path';
+import { defineConfig } from 'vite';
 
-const packageJson = fs.readJSONSync(resolve(__dirname, "../../package.json"));
+const packageJson = fs.readJSONSync(resolve(__dirname, '../../package.json'));
 
 export default defineConfig(({ mode }) => {
   return {
-    base: "/",
+    base: '/',
     plugins: [],
-    publicDir: "public",
+    publicDir: 'public',
     build: {
-      outDir: resolve(__dirname, "./dist"),
+      outDir: resolve(__dirname, './dist'),
       emptyOutDir: false,
-      assetsDir: "assets",
+      assetsDir: 'assets',
       rollupOptions: {
-        output: {},
+        output: {
+          manualChunks: {
+            ecs: ['@ecs/*'],
+            renderer: ['@renderer/*'],
+            webClient: ['@web-client/*'],
+          },
+        },
       },
     },
     resolve: {
       alias: {
-        "@ecs": resolve(__dirname, "../../packages/ecs"),
-        "@ecs/core": resolve(__dirname, "../../packages/ecs/src/core"),
-        "@ecs/components": resolve(
-          __dirname,
-          "../../packages/ecs/src/components"
-        ),
-        "@ecs/systems": resolve(__dirname, "../../packages/ecs/src/systems"),
-        "@ecs/entities": resolve(__dirname, "../../packages/ecs/src/entities"),
-        "@ecs/constants": resolve(
-          __dirname,
-          "../../packages/ecs/src/constants"
-        ),
-        "@renderer": resolve(__dirname, "../../packages/renderer/src"),
-        "@renderer/*": resolve(__dirname, "../../packages/renderer/src/*"),
+        '@ecs': resolve(__dirname, '../ecs/src'),
+        '@ecs/core': resolve(__dirname, '../ecs/src/core'),
+        '@ecs/components': resolve(__dirname, '../ecs/src/components'),
+        '@ecs/systems': resolve(__dirname, '../ecs/src/systems'),
+        '@ecs/entities': resolve(__dirname, '../ecs/src/entities'),
+        '@ecs/constants': resolve(__dirname, '../ecs/src/constants'),
+        '@ecs/types': resolve(__dirname, '../ecs/src/types'),
+        '@renderer': resolve(__dirname, '../renderer/src'),
+        '@renderer/*': resolve(__dirname, '../renderer/src/*'),
       },
     },
     json: {
@@ -40,11 +41,15 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
-      host: "0.0.0.0",
+      host: '0.0.0.0',
+      headers: {
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+        'Cross-Origin-Opener-Policy': 'same-origin',
+      },
     },
     define: {
-      "import.meta.env.VITE_REPO_URL": JSON.stringify(
-        packageJson.repository?.url?.replace(".git", "")
+      'import.meta.env.VITE_REPO_URL': JSON.stringify(
+        packageJson.repository?.url?.replace('.git', ''),
       ),
     },
   };

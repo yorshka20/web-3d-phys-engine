@@ -1,5 +1,5 @@
-import { SpatialGridComponent } from '@ecs/components/physics/SpatialGridComponent';
-import { SystemPriorities } from '@ecs/constants/systemPriorities';
+import { SystemPriorities } from '@ecs';
+import { SpatialGridComponent } from '@ecs/components';
 import { Entity } from './Entity';
 import { World } from './World';
 import { ISystem, SystemType } from './types';

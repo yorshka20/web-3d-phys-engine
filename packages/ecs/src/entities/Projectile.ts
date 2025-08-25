@@ -1,24 +1,22 @@
 import {
   AnimationComponent,
+  BaseWeapon,
   ColliderComponent,
   createShapeDescriptor,
   DamageComponent,
   LifecycleComponent,
   PhysicsComponent,
+  RangedWeapon,
   RenderComponent,
   ShapeComponent,
   SoundEffectComponent,
-  TransformComponent,
-} from '@ecs/components';
-import { SpiralMovementComponent } from '@ecs/components/projectile/SpiralProjectileComponent';
-import {
-  BaseWeapon,
-  RangedWeapon,
   SpinningWeapon,
+  SpiralMovementComponent,
   SpiralWeapon,
+  TransformComponent,
   Weapon,
   WeaponType,
-} from '@ecs/components/weapon/WeaponTypes';
+} from '@ecs/components';
 import { World } from '@ecs/core/ecs/World';
 import { SoundType } from '@ecs/core/resources';
 import { Point } from '@ecs/types/types';

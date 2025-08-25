@@ -20,23 +20,15 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@ecs": ["packages/ecs/src/index.ts"],
+      "@ecs": ["packages/ecs/src"],
       "@ecs/*": ["packages/ecs/src/*"],
       "@web-client": ["packages/web-client/src/main.ts"],
       "@web-client/*": ["packages/web-client/src/*"],
-      "@renderer": ["packages/renderer/src/index.ts"],
+      "@renderer": ["packages/renderer/src"],
       "@renderer/*": ["packages/renderer/src/*"]
     },
-    "typeRoots": [
-      "./node_modules/@types",
-      "./node_modules/@webgpu/types",
-      "./global.d.ts"
-    ]
+    "typeRoots": ["./node_modules/@types", "./node_modules/@webgpu/types", "./global.d.ts"]
   },
-  "include": [
-    "packages/*/src/**/*.ts",
-    "packages/*/src/**/*.d.ts",
-    "global.d.ts"
-  ],
+  "include": ["packages/*/src/**/*.ts", "packages/*/src/**/*.d.ts", "global.d.ts"],
   "exclude": ["node_modules", "**/dist"]
 }

@@ -239,7 +239,7 @@ function createRayTracingEntity(world: World, viewport: Viewport) {
   // Add a camera entity
   const topDownCameraEntity = world.createEntity('camera');
   const topDownCamera = new Camera3DComponent({
-    position: [camX, camY],
+    position: [camX, camY, 0],
     height: 50, // lower camera height to make it closer to the z=0 plane
     cameraMode: 'topdown',
     projectionMode: 'orthographic',

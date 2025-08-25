@@ -7,8 +7,8 @@ import {
   RenderPatternType,
   ShapeComponent,
   TransformComponent,
+  Weapon,
 } from '@ecs/components';
-import { Weapon } from '@ecs/components/weapon/WeaponTypes';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { World } from '@ecs/core/ecs/World';
 import { Point } from '@ecs/types/types';

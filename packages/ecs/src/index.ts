@@ -1,3 +1,4 @@
+export { SystemPriorities } from './constants/systemPriorities';
 export { type Entity } from './core/ecs/Entity';
 export { System } from './core/ecs/System';
 export { World } from './core/ecs/World';

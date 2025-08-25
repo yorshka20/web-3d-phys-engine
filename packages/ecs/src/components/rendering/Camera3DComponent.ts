@@ -8,7 +8,7 @@ export type CameraMode = 'topdown' | 'sideview' | 'custom';
 export interface Camera3DProps {
   fov?: number;
   facing?: number;
-  position?: [number, number];
+  position?: Vec3;
   height?: number;
   pitch?: number;
   projectionMode?: ProjectionMode;
@@ -30,10 +30,10 @@ export class Camera3DComponent extends Component {
 
   fov = 90; // Field of view in degrees
   facing = 0; // Angle in degrees (yaw rotation)
-  position: [number, number] = [0, 0]; // [x, y] 2D position
+  position: Vec3 = [0, 0, 0]; // [x, y, z] 3D position
 
   // 3d properties
-  height = 0; // Z coordinate, 0 means on the scene plane
+  // height is now part of position
   pitch = 0; // pitch angle (up and down)
   roll = 0; // roll angle (rarely used)
 
@@ -67,8 +67,7 @@ export class Camera3DComponent extends Component {
     // use provided values or defaults
     this.fov = props.fov ?? 90;
     this.facing = props.facing ?? 0;
-    this.position = props.position ?? [0, 0];
-    this.height = props.height ?? 0;
+    this.position = props.position ?? [0, 0, 0];
     this.pitch = props.pitch ?? 0;
     this.projectionMode = props.projectionMode ?? 'perspective';
     this.cameraMode = props.cameraMode ?? 'sideview';
@@ -84,13 +83,12 @@ export class Camera3DComponent extends Component {
 
   // get 3D position
   get position3D(): Vec3 {
-    return [this.position[0], this.position[1], this.height];
+    return this.position;
   }
 
   // set 3D position
   setPosition3D(pos: Vec3): void {
-    this.position = [pos[0], pos[1]];
-    this.height = pos[2];
+    this.position = pos;
   }
 
   // get forward vector
@@ -108,14 +106,14 @@ export class Camera3DComponent extends Component {
   // quick set preset mode
   setTopDownMode(height = 10): void {
     this.cameraMode = 'topdown';
-    this.height = height;
+    this.position[2] = height;
     this.pitch = -90; // look down
     this.projectionMode = 'orthographic';
   }
 
   setSideViewMode(): void {
     this.cameraMode = 'sideview';
-    this.height = 0;
+    this.position[2] = 0;
     this.pitch = 0; // look horizontal
     this.projectionMode = 'perspective';
   }
@@ -156,7 +154,7 @@ export class Camera3DComponent extends Component {
     const worldY =
       camera.viewBounds.bottom + normalizedY * (camera.viewBounds.top - camera.viewBounds.bottom);
 
-    const origin: Vec3 = [camera.position[0], camera.position[1], camera.height];
+    const origin: Vec3 = [...camera.position]; // Create a copy to avoid modifying the component's position directly
 
     let direction: Vec3;
 
@@ -171,7 +169,7 @@ export class Camera3DComponent extends Component {
       }
     } else if (camera.cameraMode === 'sideview') {
       // Side view: rays from camera position to world points
-      direction = [worldX - origin[0], worldY - origin[1], 0 - origin[2]];
+      direction = [worldX - origin[0], worldY - origin[1], 0 - origin[2]]; // Assuming a target Z of 0 for sideview
 
       // Normalize direction
       const length = Math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2);
@@ -183,7 +181,7 @@ export class Camera3DComponent extends Component {
     } else {
       // Custom camera mode - implement perspective calculation
       const halfFov = (camera.fov / 2) * (Math.PI / 180);
-      const aspectRatio = camera.aspect;
+      const aspectRatio = camera.aspectRatio;
 
       const screenNormalizedX = (normalizedX * 2 - 1) * aspectRatio;
       const screenNormalizedY = 1 - normalizedY * 2;
@@ -196,7 +194,7 @@ export class Camera3DComponent extends Component {
       ];
 
       // Apply camera rotations (facing, pitch, roll)
-      direction = Camera3DComponent.applyCameraRotations(cameraDirection, camera);
+      direction = Camera3DComponent.applyCameraRotations(cameraDirection, camera); // Pass Camera3DComponent directly
     }
 
     return { origin, direction };
@@ -206,7 +204,7 @@ export class Camera3DComponent extends Component {
    * Applies camera rotations (pitch, facing, roll) to a given 3D direction vector.
    * This transforms a direction from camera space to world space.
    * @param direction The 3D direction vector in camera space.
-   * @param camera The serialized camera data containing its rotation properties.
+   * @param camera The Camera3DComponent instance containing its rotation properties.
    * @returns The rotated 3D direction vector in world space.
    */
   static applyCameraRotations(direction: Vec3, camera: SerializedCamera): Vec3 {
@@ -332,11 +330,42 @@ export class Camera3DComponent extends Component {
   }
 
   /**
+   * Get view projection matrix for WebGPU rendering
+   * This would be calculated by multiplying projection and view matrices.
+   */
+  getViewProjectionMatrix(): Float32Array {
+    // Placeholder - should be calculated by rendering system
+    const viewMatrix = this.getViewMatrix();
+    const projectionMatrix = this.getProjectionMatrix();
+    // For now, return an identity matrix. Actual multiplication will be done in the renderer.
+    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  }
+
+  /**
    * Set camera to look at a specific target
    */
   lookAt(target: Vec3, up: Vec3 = [0, 1, 0]): void {
     this.target = target;
     this.up = up;
+  }
+
+  /**
+   * Move camera by a given offset
+   */
+  moveBy(offset: Vec3): void {
+    this.position[0] += offset[0];
+    this.position[1] += offset[1];
+    this.position[2] += offset[2];
+  }
+
+  /**
+   * Rotate camera around a target point.
+   * This is a simplified placeholder. Actual rotation would involve matrix operations.
+   */
+  rotateAround(target: Vec3, axis: Vec3, angle: number): void {
+    // Placeholder implementation - actual rotation would use a math library
+    // For now, we'll just log a message.
+    console.log(`Rotating camera around target ${target} by angle ${angle} along axis ${axis}`);
   }
 
   /**

@@ -25,7 +25,7 @@ export class RenderSystem extends System {
   private dpr: number = 1;
   private coarseMode: boolean = false;
 
-  private cameraOffset: [number, number] = [0, 0];
+  private cameraOffset: [number, number] = [0, 0]; // Retained
   private playerPosition: [number, number] = [0, 0];
 
   constructor(rootElement: HTMLElement, bgImage?: HTMLImageElement) {
