@@ -6,6 +6,7 @@ import {
   WebGPUContext,
 } from "./renderer/webGPU";
 import { BindGroupLayoutVisibility } from "./renderer/webGPU/core";
+import { mat4 } from "gl-matrix";
 
 /**
  * Main application entry point for the WebGPU 3D Physics Engine
@@ -218,6 +219,53 @@ class PhysicsEngineApp {
       ],
     });
 
+    // Update MVP matrix
+    const now = performance.now() / 1000;
+    const aspectRatio = this.canvas.width / this.canvas.height;
+
+    const projectionMatrix = mat4.create();
+    mat4.perspective(
+      projectionMatrix,
+      (2 * Math.PI) / 5, // fovy
+      aspectRatio,
+      0.1,
+      100.0
+    );
+    const viewMatrix = mat4.create();
+    mat4.lookAt(
+      viewMatrix,
+      [0, 0, -5], // eye
+      [0, 0, 0], // center
+      [0, 1, 0] // up
+    );
+
+    let modelMatrix = mat4.create();
+    mat4.rotateY(modelMatrix, modelMatrix, now * 0.5);
+    mat4.rotateX(modelMatrix, modelMatrix, now * 0.3);
+
+    const mvpMatrix = mat4.create();
+    mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
+    mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
+
+    const mvpBuffer = this.bufferManager.getUniformBuffer(
+      "MVP Matrix Uniforms"
+    );
+    if (mvpBuffer) {
+      // Write the MVP matrix to the uniform buffer as Float32Array
+      this.device.queue.writeBuffer(mvpBuffer, 0, new Float32Array(mvpMatrix));
+    }
+
+    // Create MVP bind group
+    const mvpBindGroup = device.createBindGroup({
+      layout: this.shaderManager.getBindGroupLayout("mvpBindGroup")!,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: mvpBuffer! },
+        },
+      ],
+    });
+
     // create command encoder
     const commandEncoder = device.createCommandEncoder();
 
@@ -241,16 +289,21 @@ class PhysicsEngineApp {
       // set vertex buffer
       if (this.bufferManager) {
         const vertexBuffer =
-          this.bufferManager.getVertexBuffer("Triangle Vertices");
+          this.bufferManager.getVertexBuffer("Cube Vertices");
         if (vertexBuffer) {
           renderPass.setVertexBuffer(0, vertexBuffer);
+        }
+        const indexBuffer = this.bufferManager.getIndexBuffer("Cube Indices");
+        if (indexBuffer) {
+          renderPass.setIndexBuffer(indexBuffer, "uint16");
         }
       }
 
       renderPass.setBindGroup(0, timeBindGroup);
+      renderPass.setBindGroup(1, mvpBindGroup);
 
-      // draw triangle
-      renderPass.draw(3, 1, 0, 0);
+      // draw cube
+      renderPass.drawIndexed(36);
     }
 
     renderPass.end();
@@ -270,7 +323,7 @@ class PhysicsEngineApp {
           this.shaderManager.getBindGroupLayout("computeBindGroup");
 
         if (storageBuffer && bindGroupLayout) {
-          const computeBindGroup = this.device.createBindGroup({
+          const computeBindGroup = device.createBindGroup({
             layout: bindGroupLayout,
             entries: [
               {
@@ -424,83 +477,87 @@ class PhysicsEngineApp {
 
     console.log("Creating example buffers...");
 
-    // 创建顶点缓冲区
+    // vertex buffer for cube
+    // prettier-ignore
     const vertexData = new Float32Array([
-      // 位置 (x, y, z)
-      -0.5,
-      -0.5,
-      0.0, // 左下
-      0.5,
-      -0.5,
-      0.0, // 右下
-      0.0,
-      0.5,
-      0.0, // 顶部
+      // Front face
+      -0.5, -0.5, 0.5,  // 0
+      0.5, -0.5, 0.5,  // 1
+      0.5, 0.5, 0.5,   // 2
+      -0.5, 0.5, 0.5,  // 3
+
+      // Back face
+      -0.5, -0.5, -0.5, // 4
+      -0.5, 0.5, -0.5,  // 5
+      0.5, 0.5, -0.5,   // 6
+      0.5, -0.5, -0.5,  // 7
+
+      // Top face
+      -0.5, 0.5, -0.5,  // 8
+      -0.5, 0.5, 0.5,   // 9
+      0.5, 0.5, 0.5,    // 10
+      0.5, 0.5, -0.5,   // 11
+
+      // Bottom face
+      -0.5, -0.5, -0.5, // 12
+      0.5, -0.5, -0.5,  // 13
+      0.5, -0.5, 0.5,   // 14
+      -0.5, -0.5, 0.5,  // 15
+
+      // Right face
+      0.5, -0.5, -0.5,  // 16
+      0.5, 0.5, -0.5,   // 17
+      0.5, 0.5, 0.5,    // 18
+      0.5, -0.5, 0.5,   // 19
+
+      // Left face
+      -0.5, -0.5, -0.5, // 20
+      -0.5, -0.5, 0.5,  // 21
+      -0.5, 0.5, 0.5,   // 22
+      -0.5, 0.5, -0.5,  // 23
     ]);
 
-    const vertexBuffer = this.bufferManager?.createVertexBuffer(
-      vertexData.buffer,
-      "Triangle Vertices"
-    );
+    this.bufferManager?.createVertexBuffer(vertexData.buffer, "Cube Vertices");
 
-    // 创建索引缓冲区
-    const indexData = new Uint16Array([0, 1, 2]);
-    // Ensure 4-byte alignment by padding if necessary
-    const paddedIndexData =
-      indexData.byteLength % 4 === 0
-        ? indexData
-        : new Uint16Array([...indexData, 0]); // Add padding element if needed
-
-    const indexBuffer = this.bufferManager?.createIndexBuffer(
-      paddedIndexData.buffer,
-      "Triangle Indices"
-    );
-
-    // 创建统一缓冲区 - 暂时不使用，但保留以备将来扩展
-    const uniformData = new Float32Array([
-      1.0,
-      0.0,
-      0.0,
-      1.0, // 红色
-      0.0,
-      1.0,
-      0.0,
-      1.0, // 绿色
-      0.0,
-      0.0,
-      1.0,
-      1.0, // 蓝色
+    // index buffer for cube
+    // prettier-ignore
+    const indexData = new Uint16Array([
+      0, 1, 2, 2, 3, 0,    // Front face
+      4, 5, 6, 6, 7, 4,    // Back face
+      8, 9, 10, 10, 11, 8, // Top face
+      12, 13, 14, 14, 15, 12, // Bottom face
+      16, 17, 18, 18, 19, 16, // Right face
+      20, 21, 22, 22, 23, 20, // Left face
     ]);
 
-    const uniformBuffer = this.bufferManager?.createUniformBuffer(
-      uniformData.buffer,
-      "Color Uniforms"
+    this.bufferManager?.createIndexBuffer(indexData.buffer, "Cube Indices");
+
+    // uniform buffer for MVP matrix
+    // 4x4 matrix, 16 floats. Initialized to identity.
+    // prettier-ignore
+    const mvpMatrixData = new Float32Array([
+      1.0, 0.0, 0.0, 0.0,
+      0.0, 1.0, 0.0, 0.0,
+      0.0, 0.0, 1.0, 0.0,
+      0.0, 0.0, 0.0, 1.0,
+    ]);
+
+    this.bufferManager?.createUniformBuffer(
+      mvpMatrixData.buffer,
+      "MVP Matrix Uniforms"
     );
 
-    // 创建存储缓冲区 - 使用更有趣的初始数据
+    // storage buffer for compute pipeline
     const storageData = new Float32Array(1000);
     for (let i = 0; i < 1000; i++) {
-      storageData[i] = i * 0.1; // 创建递增的初始值
+      storageData[i] = i * 0.1; // incrementing initial value
     }
 
-    // 使用bufferManager创建存储缓冲区（已经包含了COPY_SRC权限）
-    const storageBuffer = this.bufferManager?.createStorageBuffer(
+    // create storage buffer using bufferManager (already has COPY_SRC permission)
+    this.bufferManager?.createStorageBuffer(
       storageData.buffer,
       "Example Storage"
     );
-
-    console.log(
-      "Storage buffer created:",
-      storageBuffer ? "success" : "failed"
-    );
-    if (storageBuffer) {
-      console.log("Storage buffer size:", storageBuffer.size);
-      console.log("Storage buffer usage:", storageBuffer.usage);
-      console.log(
-        "Initial data (first 10 elements):",
-        storageData.slice(0, 10)
-      );
-    }
 
     console.log("Example buffers created successfully");
     console.log("Memory usage:", this.bufferManager?.getMemoryUsage());
@@ -519,6 +576,10 @@ class PhysicsEngineApp {
         frameCount: u32,
         padding: u32,
       }
+      
+      struct MVPUniforms {
+        mvpMatrix: mat4x4<f32>,
+      }
 
       struct VertexInput {
         @location(0) position: vec3<f32>
@@ -530,13 +591,14 @@ class PhysicsEngineApp {
       }
 
       @group(0) @binding(0) var<uniform> timeData: TimeUniforms;
+      @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
 
       @vertex
       fn vs_main(@location(0) position: vec3<f32>) -> VertexOutput {
-        return VertexOutput(
-          vec4<f32>(position, 1.0),
-          vec4<f32>(position + 0.5, 1.0)
-        );
+        var out: VertexOutput;
+        out.position = mvp.mvpMatrix * vec4<f32>(position, 1.0);
+        out.color = vec4<f32>(position + 0.5, 1.0);
+        return out;
       }
 
       @fragment
@@ -647,9 +709,24 @@ class PhysicsEngineApp {
       }
     );
 
-    // create render pipeline layout using the time bind group layout
+    // Create MVP matrix bind group layout
+    const mvpBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+      "mvpBindGroup",
+      {
+        entries: [
+          {
+            binding: 0,
+            visibility: BindGroupLayoutVisibility.VERTEX,
+            buffer: { type: "uniform" },
+          },
+        ],
+        label: "MVP Bind Group Layout",
+      }
+    );
+
+    // create render pipeline layout using the time and mvp bind group layouts
     const renderPipelineLayout = this.device.createPipelineLayout({
-      bindGroupLayouts: [timeBindGroupLayout],
+      bindGroupLayouts: [timeBindGroupLayout, mvpBindGroupLayout],
       label: "render_pipeline_layout",
     });
 

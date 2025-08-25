@@ -43,6 +43,7 @@
     "node": ">=21.0.0"
   },
   "dependencies": {
+    "gl-matrix": "3.4.4",
     "webgpu-utils": "1.11.0"
   }
 }

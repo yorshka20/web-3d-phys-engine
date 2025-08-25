@@ -416,6 +416,32 @@ export class BufferManager {
   }
 
   /**
+   * get uniform buffer by label
+   * @param label label
+   * @returns uniform buffer or undefined
+   */
+  getUniformBuffer(label: string): GPUBuffer | undefined {
+    const buffer = this.getBufferByLabel(label);
+    if (buffer && this.activeBuffers.has(buffer)) {
+      return buffer;
+    }
+    return undefined;
+  }
+
+  /**
+   * get index buffer by label
+   * @param label label
+   * @returns index buffer or undefined
+   */
+  getIndexBuffer(label: string): GPUBuffer | undefined {
+    const buffer = this.getBufferByLabel(label);
+    if (buffer && this.activeBuffers.has(buffer)) {
+      return buffer;
+    }
+    return undefined;
+  }
+
+  /**
    * get storage buffer by label
    * @param label label
    * @returns storage buffer or undefined
