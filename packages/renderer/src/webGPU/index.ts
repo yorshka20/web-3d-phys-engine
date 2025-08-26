@@ -3,4 +3,4 @@ export * from './core';
 export * from './create';
 
 // Renderer
-export { WebGPURenderer } from './WebGPURenderer';
+export { WebGPURenderer } from './renderer/WebGPURenderer';
