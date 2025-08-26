@@ -1,24 +1,35 @@
 import { RectArea, SystemPriorities } from '@ecs';
 import { mat4 } from 'gl-matrix';
-import { ContextConfig, IWebGPURenderer } from '../types';
 import {
   BindGroupLayoutVisibility,
   ShaderType,
   TimeManager,
   WebGPUContext,
   WebGPUResourceManager,
-} from './core';
-import { BufferManager } from './core/BufferManager';
-import { InstanceManager } from './core/InstanceManager';
-import { ShaderManager } from './core/ShaderManager';
-import { TextureManager } from './core/TextureManager';
+} from '../core';
+import { BufferManager } from '../core/BufferManager';
+import { InstanceManager } from '../core/InstanceManager';
+import { ShaderManager } from '../core/ShaderManager';
+import { TextureManager } from '../core/TextureManager';
+import { BufferDescriptor, RenderBatch, ShaderDescriptor } from '../core/types';
+import { RenderContext } from '../types';
 import {
-  BufferDescriptor,
-  PipelineDescriptor,
-  RenderBatch,
-  RenderContext,
-  TextureDescriptor,
-} from './types';
+  BindGroup,
+  Camera,
+  ComputePass,
+  ComputePassDescriptor,
+  Geometry,
+  IWebGPURenderer,
+  Material,
+  MaterialDescriptor,
+  Mesh,
+  PostProcessEffect,
+  RenderPass,
+  RenderPassDescriptor,
+  RenderPipeline,
+  Scene,
+  Texture,
+} from './types/IWebGPURenderer';
 
 /**
  * WebGPU Renderer
@@ -71,6 +82,131 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.viewport = [0, 0, width * dpr, height * dpr];
     // this.updateContextConfig({ width, height, dpr });
   }
+  destroy(): void {
+    throw new Error('Method not implemented.');
+  }
+  getContext(): GPUCanvasContext {
+    throw new Error('Method not implemented.');
+  }
+  getAdapter(): GPUAdapter {
+    throw new Error('Method not implemented.');
+  }
+  createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline {
+    throw new Error('Method not implemented.');
+  }
+  createComputePipeline(descriptor: GPUComputePipelineDescriptor): GPUComputePipeline {
+    throw new Error('Method not implemented.');
+  }
+  createBindGroupLayout(descriptor: GPUBindGroupLayoutDescriptor): GPUBindGroupLayout {
+    throw new Error('Method not implemented.');
+  }
+  createBindGroup(descriptor: GPUBindGroupDescriptor): GPUBindGroup {
+    throw new Error('Method not implemented.');
+  }
+  destroyBuffer(bufferId: string): void {
+    throw new Error('Method not implemented.');
+  }
+  destroyTexture(textureId: string): void {
+    throw new Error('Method not implemented.');
+  }
+  destroyShader(shaderId: string): void {
+    throw new Error('Method not implemented.');
+  }
+  renderScene(scene: Scene, camera: Camera): void {
+    throw new Error('Method not implemented.');
+  }
+  renderEntity(entityId: number, world: unknown): void {
+    throw new Error('Method not implemented.');
+  }
+  createMaterial(descriptor: MaterialDescriptor): Material {
+    throw new Error('Method not implemented.');
+  }
+  createTexture(data: ImageData | HTMLImageElement): Texture {
+    throw new Error('Method not implemented.');
+  }
+  createMesh(geometry: Geometry): Mesh {
+    throw new Error('Method not implemented.');
+  }
+  addPostProcessEffect(effect: PostProcessEffect): void {
+    throw new Error('Method not implemented.');
+  }
+  removePostProcessEffect(effectId: string): void {
+    throw new Error('Method not implemented.');
+  }
+  beginFrame(): void {
+    throw new Error('Method not implemented.');
+  }
+  endFrame(): void {
+    throw new Error('Method not implemented.');
+  }
+  destroyMaterial(materialId: string): void {
+    throw new Error('Method not implemented.');
+  }
+  destroyMesh(meshId: string): void {
+    throw new Error('Method not implemented.');
+  }
+  beginRenderPass(descriptor: RenderPassDescriptor): RenderPass {
+    throw new Error('Method not implemented.');
+  }
+  beginComputePass(descriptor?: ComputePassDescriptor): ComputePass {
+    throw new Error('Method not implemented.');
+  }
+  setRenderPipeline(pipeline: RenderPipeline): void {
+    throw new Error('Method not implemented.');
+  }
+  setComputePipeline(pipeline: GPUComputePipeline): void {
+    throw new Error('Method not implemented.');
+  }
+  setBindGroup(index: number, bindGroup: BindGroup): void {
+    throw new Error('Method not implemented.');
+  }
+  draw(
+    vertexCount: number,
+    instanceCount?: number,
+    firstVertex?: number,
+    firstInstance?: number,
+  ): void {
+    throw new Error('Method not implemented.');
+  }
+  drawIndexed(
+    indexCount: number,
+    instanceCount?: number,
+    firstIndex?: number,
+    baseVertex?: number,
+    firstInstance?: number,
+  ): void {
+    throw new Error('Method not implemented.');
+  }
+  dispatch(x: number, y?: number, z?: number): void {
+    throw new Error('Method not implemented.');
+  }
+  setVertexBuffer(slot: number, buffer: GPUBuffer, offset?: number, size?: number): void {
+    throw new Error('Method not implemented.');
+  }
+  setIndexBuffer(buffer: GPUBuffer, format: GPUIndexFormat, offset?: number, size?: number): void {
+    throw new Error('Method not implemented.');
+  }
+  submit(): void {
+    throw new Error('Method not implemented.');
+  }
+  getRenderStats(): {
+    frameTime: number;
+    drawCalls: number;
+    triangles: number;
+    memoryUsage: { buffers: number; textures: number; total: number };
+  } {
+    throw new Error('Method not implemented.');
+  }
+  setDebugMode(enabled: boolean): void {
+    throw new Error('Method not implemented.');
+  }
+  getDebugInfo(): {
+    deviceInfo: GPUAdapterInfo;
+    supportedFeatures: string[];
+    limits: Record<string, number>;
+  } {
+    throw new Error('Method not implemented.');
+  }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
     this.canvas = canvas;
@@ -83,7 +219,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.textureManager = new TextureManager(this.device);
     this.shaderManager = new ShaderManager(this.device);
     // TODO: can remove this
-    this.resourceManager = new WebGPUResourceManager(this.device);
+    this.resourceManager = new WebGPUResourceManager();
     this.timeManager = new TimeManager(this.device, this.bufferManager);
 
     await this.setupScene();
@@ -330,6 +466,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Create shader modules
     const vertexShader = this.shaderManager.createShaderModule('exampleVertex', {
+      id: 'exampleVertex',
       code: shaderCode,
       type: ShaderType.VERTEX,
       entryPoint: 'vs_main',
@@ -338,6 +475,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.resourceManager.registerResource('exampleVertex', vertexShader);
 
     const fragmentShader = this.shaderManager.createShaderModule('exampleFragment', {
+      id: 'exampleFragment',
       code: shaderCode,
       type: ShaderType.FRAGMENT,
       entryPoint: 'fs_main',
@@ -359,9 +497,9 @@ export class WebGPURenderer implements IWebGPURenderer {
     const vertexShader = this.resourceManager.getResource<GPUShaderModule>('exampleVertex');
     const fragmentShader = this.resourceManager.getResource<GPUShaderModule>('exampleFragment');
 
-    // create render pipeline
+    // create render pipeline. pipeline is a template for rendering. render pass is the actual rendering.
     const renderPipeline = this.shaderManager.createRenderPipeline('example', {
-      layout: renderPipelineLayout,
+      layout: renderPipelineLayout, // declare bind group layout
       vertex: {
         module: vertexShader,
         entryPoint: 'vs_main',
@@ -459,7 +597,7 @@ export class WebGPURenderer implements IWebGPURenderer {
         [0, 1, 0], // up
       );
 
-      let modelMatrix = mat4.create();
+      const modelMatrix = mat4.create();
       mat4.rotateY(modelMatrix, modelMatrix, now * 0.5);
       mat4.rotateX(modelMatrix, modelMatrix, now * 0.3);
 
@@ -500,15 +638,15 @@ export class WebGPURenderer implements IWebGPURenderer {
         // set vertex buffer
         const vertexBuffer = this.resourceManager.getResource<GPUBuffer>('Cube Vertices');
         if (vertexBuffer) {
-          renderPass.setVertexBuffer(0, vertexBuffer);
+          renderPass.setVertexBuffer(0, vertexBuffer); // binding actual vertex buffer
         }
         const indexBuffer = this.resourceManager.getResource<GPUBuffer>('Cube Indices');
         if (indexBuffer) {
-          renderPass.setIndexBuffer(indexBuffer, 'uint16');
+          renderPass.setIndexBuffer(indexBuffer, 'uint16'); // binding actual index buffer
         }
 
-        renderPass.setBindGroup(0, timeBindGroup);
-        renderPass.setBindGroup(1, mvpBindGroup);
+        renderPass.setBindGroup(0, timeBindGroup); // binding actual bind group
+        renderPass.setBindGroup(1, mvpBindGroup); // binding actual bind group
 
         // draw cube
         renderPass.drawIndexed(36);
@@ -556,31 +694,31 @@ export class WebGPURenderer implements IWebGPURenderer {
     return this.device;
   }
 
-  createBuffer(descriptor: BufferDescriptor): string {
-    throw new Error('Method not implemented.');
+  createBuffer(descriptor: BufferDescriptor): GPUBuffer {
+    return this.bufferManager.createBuffer(descriptor);
   }
-  createTexture(descriptor: TextureDescriptor): string {
-    throw new Error('Method not implemented.');
+
+  createShader(descriptor: ShaderDescriptor): GPUShaderModule {
+    return this.shaderManager.createShaderModule(descriptor.id, descriptor);
   }
-  createPipeline(descriptor: PipelineDescriptor): string {
-    throw new Error('Method not implemented.');
-  }
-  updateBuffer(id: string, data: ArrayBuffer): void {
-    throw new Error('Method not implemented.');
+  updateBuffer(id: string, data: ArrayBuffer, offset?: number): void {
+    if (!this.bufferManager) {
+      throw new Error('Buffer manager not initialized');
+    }
   }
   updateTexture(id: string, data: ImageData | HTMLImageElement): void {
-    throw new Error('Method not implemented.');
+    return;
   }
 
   update(deltaTime: number, viewport: RectArea, cameraOffset: [number, number]): void {
-    throw new Error('Method not implemented.');
+    return;
   }
 
-  updateContextConfig(config: ContextConfig): void {
-    throw new Error('Method not implemented.');
+  updateContextConfig(config: GPUCanvasConfiguration): void {
+    this.context.getContext().configure(config);
   }
   setBackgroundImage(image: HTMLImageElement): void {
-    throw new Error('Method not implemented.');
+    return;
   }
   clear(): void {
     // do nothing
@@ -590,6 +728,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     throw new Error('Method not implemented.');
   }
   onDestroy(): void {
-    throw new Error('Method not implemented.');
+    this.context.destroy();
   }
 }
