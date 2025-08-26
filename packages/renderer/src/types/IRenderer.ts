@@ -1,11 +1,7 @@
 import { RenderSystem } from '@ecs/systems';
 import { RectArea } from '@ecs/types/types';
-import {
-  BufferDescriptor,
-  PipelineDescriptor,
-  RenderContext,
-  TextureDescriptor,
-} from '../webGPU/types'; // Import WebGPU-specific types from the new location
+import { BufferDescriptor, ShaderDescriptor, TextureDescriptor } from '../webGPU/core/types';
+import { RenderContext } from '../webGPU/types';
 import { IRenderLayer } from './IRenderLayer';
 
 export interface ContextConfig {
@@ -23,7 +19,7 @@ export interface IRenderer {
   debug: boolean;
   priority: number;
 
-  updateContextConfig(config: ContextConfig): void;
+  updateContextConfig(config: GPUCanvasConfiguration): void;
 
   setBackgroundImage(image: HTMLImageElement): void;
 
@@ -38,7 +34,7 @@ export interface IRenderer {
 
 export interface I2DRenderer extends IRenderer {
   init(renderSystem: RenderSystem): void;
-  addRenderLayer(ctor: new (...args: any[]) => IRenderLayer): void;
+  addRenderLayer(ctor: new (...args: Any[]) => IRenderLayer): void;
   getLayers(): IRenderLayer[];
 }
 
@@ -47,9 +43,10 @@ export interface IWebGPURenderer extends IRenderer {
 
   // WebGPU specific methods
   getDevice(): GPUDevice | null;
-  createBuffer(descriptor: BufferDescriptor): string;
-  createTexture(descriptor: TextureDescriptor): string;
-  createPipeline(descriptor: PipelineDescriptor): string;
+  createBuffer(descriptor: BufferDescriptor): GPUBuffer;
+  createTexture(descriptor: TextureDescriptor): GPUTexture;
+  createShader(descriptor: ShaderDescriptor): GPUShaderModule;
+  // createPipeline(descriptor: PipelineDescriptor): GPURenderPipeline;
 
   // Unified resource management
   updateBuffer(id: string, data: ArrayBuffer): void;

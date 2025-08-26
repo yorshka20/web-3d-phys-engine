@@ -1,23 +1,11 @@
-export interface WebGPUContextOptions {
-  powerPreference?: GPUPowerPreference;
-  forceFallbackAdapter?: boolean;
-  requiredFeatures?: GPUDeviceDescriptor['requiredFeatures'];
-  requiredLimits?: Record<string, number>;
-}
-
-/**
- * shader type enum
- */
-export enum ShaderType {
-  VERTEX = 'vertex',
-  FRAGMENT = 'fragment',
-  COMPUTE = 'compute',
-}
+import { Transform3DComponent } from '@ecs/components';
+import { BindGroupLayoutVisibility, BufferType, ShaderType } from './constant';
 
 /**
  * shader descriptor interface
  */
 export interface ShaderDescriptor {
+  id: string;
   label: string;
   type: ShaderType;
   code: string;
@@ -44,16 +32,6 @@ export interface ComputePipelineDescriptor {
 }
 
 /**
- * bind group layout visibility enum
- */
-export enum BindGroupLayoutVisibility {
-  VERTEX = 1,
-  FRAGMENT = 2,
-  VERTEX_FRAGMENT = 3,
-  COMPUTE = 4,
-}
-
-/**
  * bind group layout descriptor interface
  */
 export interface BindGroupLayoutDescriptor {
@@ -72,19 +50,6 @@ export interface BindGroupLayoutDescriptor {
 }
 
 /**
- * 缓冲区类型枚举
- */
-export enum BufferType {
-  VERTEX = 'vertex',
-  INDEX = 'index',
-  UNIFORM = 'uniform',
-  STORAGE = 'storage',
-  STAGING = 'staging',
-  COPY_SRC = 'copy_src',
-  COPY_DST = 'copy_dst',
-}
-
-/**
  * buffer descriptor interface
  */
 export interface BufferDescriptor {
@@ -92,23 +57,42 @@ export interface BufferDescriptor {
   size: number;
   usage: GPUBufferUsageFlags;
   dynamic?: boolean;
-  label?: string;
+  label: string;
   mappedAtCreation?: boolean;
 }
 
 /**
- * buffer pool item interface
+ * sampler descriptor interface
  */
-export interface BufferPoolItem {
-  buffer: GPUBuffer;
-  size: number;
-  inUse: boolean;
-  lastUsed: number;
-}
-
 export interface SamplerDescriptor {
   id: string;
   addressMode: GPUAddressMode;
   magFilter: GPUFilterMode;
   minFilter: GPUFilterMode;
+}
+
+export interface TextureDescriptor {
+  id: string;
+  width: number;
+  height: number;
+  format: GPUTextureFormat;
+  usage: GPUTextureUsageFlags;
+  initialData?: ImageBitmap | HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas;
+}
+
+export interface PipelineDescriptor {
+  id: string;
+  shaderId: string;
+  vertexBuffers: GPUVertexBufferLayout[];
+  primitive: GPUPrimitiveState;
+  depthStencil?: GPUDepthStencilState;
+  multisample?: GPUMultisampleState;
+  targets: GPUColorTargetState[];
+  layout: GPUPipelineLayout;
+}
+
+export interface InstanceDescriptor {
+  id: string;
+  modelId: string;
+  transform: Transform3DComponent;
 }
