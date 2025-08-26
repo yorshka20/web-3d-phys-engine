@@ -1,29 +1,29 @@
-import { CanvasRenderLayer } from '../../canvas2d/base/CanvasRenderLayer';
-import { WebGPUContext } from '../core/WebGPUContext';
-import { BufferManager } from '../core/BufferManager';
-import { ShaderManager } from '../core/ShaderManager';
-import { ShaderType } from '../core/types';
-import { WebGPUProgressiveRenderer } from './WebGPUProgressiveRenderer';
 import {
-  SerializedCamera,
-  SerializedLight,
-  SerializedEntity,
-  SamplingPattern,
-} from '../../rayTracing/base/types';
-import {
-  SpatialGridComponent,
-  RectArea,
   Camera3DComponent,
   LightSource3DComponent,
-  SpatialGridSystem,
-  ShapeComponent,
-  TransformComponent,
+  RectArea,
   RenderComponent,
+  ShapeComponent,
+  SpatialGridComponent,
+  SpatialGridSystem,
   Transform3DComponent,
+  TransformComponent,
 } from '@ecs';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { IEntity } from '@ecs/core/ecs/types';
+import { CanvasRenderLayer } from '../../canvas2d/base/CanvasRenderLayer';
 import { RenderLayerIdentifier, RenderLayerPriority } from '../../constant';
+import {
+  SamplingPattern,
+  SerializedCamera,
+  SerializedEntity,
+  SerializedLight,
+} from '../../rayTracing/base/types';
+import { BufferManager } from '../core/BufferManager';
+import { ShaderManager } from '../core/ShaderManager';
+import { ShaderType } from '../core/types';
+import { WebGPUContext } from '../core/WebGPUContext';
+import { WebGPUProgressiveRenderer } from './WebGPUProgressiveRenderer';
 
 /**
  * WebGPU光线追踪渲染层
@@ -682,8 +682,8 @@ export class WebGPURayTracingLayer extends CanvasRenderLayer {
    * 销毁资源
    */
   destroy(): void {
-    this.bufferManager.destroyAll();
-    this.shaderManager.destroyAll();
+    this.bufferManager.onDestroy();
+    this.shaderManager.onDestroy();
     this.progressiveRenderer.destroy();
     this.webGPUContext.destroy();
   }

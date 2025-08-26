@@ -1,9 +1,14 @@
 export class WebGPUResourceManager {
-  private device: GPUDevice;
-  private resources: Map<string, any> = new Map();
+  static instance: WebGPUResourceManager;
+  private resources: Map<string, Any> = new Map();
 
-  constructor(device: GPUDevice) {
-    this.device = device;
+  constructor() {
+    if (WebGPUResourceManager.instance) {
+      return WebGPUResourceManager.instance;
+    }
+
+    WebGPUResourceManager.instance = this;
+    console.log('WebGPUResourceManager initialized');
   }
 
   /**
@@ -55,8 +60,8 @@ export class WebGPUResourceManager {
     if (this.resources.has(id)) {
       const resource = this.resources.get(id);
       // TODO: Implement actual WebGPU resource destruction logic here
-      if (resource && typeof (resource as any).destroy === 'function') {
-        (resource as any).destroy();
+      if (resource && typeof (resource as Any).destroy === 'function') {
+        (resource as Any).destroy();
       }
       this.resources.delete(id);
       console.log(`Resource with ID '${id}' released.`);
@@ -71,8 +76,8 @@ export class WebGPUResourceManager {
    */
   public clearAllResources(): void {
     this.resources.forEach((resource, id) => {
-      if (resource && typeof (resource as any).destroy === 'function') {
-        (resource as any).destroy();
+      if (resource && typeof (resource as Any).destroy === 'function') {
+        (resource as Any).destroy();
       }
       console.log(`Resource with ID '${id}' released.`);
     });

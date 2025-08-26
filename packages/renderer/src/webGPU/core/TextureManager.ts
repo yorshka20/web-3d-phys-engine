@@ -1,5 +1,4 @@
-import { TextureDescriptor } from '../types';
-import { SamplerDescriptor } from './types';
+import { SamplerDescriptor, TextureDescriptor } from './types';
 
 export class TextureManager {
   private textures: Map<string, GPUTexture> = new Map();
@@ -28,13 +27,13 @@ export class TextureManager {
     // this.device.queue.copyExternalImageToTexture({ source: data }, { texture });
   }
 
-  createTexture(descriptor: TextureDescriptor): string {
+  createTexture(descriptor: TextureDescriptor): GPUTexture {
     const texture = this.device.createTexture({
       size: { width: descriptor.width, height: descriptor.height },
       format: descriptor.format,
       usage: descriptor.usage,
     });
     this.textures.set(descriptor.id, texture);
-    return descriptor.id;
+    return texture;
   }
 }

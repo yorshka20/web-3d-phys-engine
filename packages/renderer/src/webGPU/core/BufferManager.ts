@@ -1,4 +1,5 @@
-import { BufferType, BufferPoolItem, BufferDescriptor } from './types';
+import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
+import { WebGPUResourceManager } from './WebGPUResourceManager';
 
 /**
  * WebGPU buffer manager
@@ -10,6 +11,8 @@ export class BufferManager {
   private activeBuffers: Set<GPUBuffer> = new Set();
   private bufferLabels: Map<GPUBuffer, string> = new Map();
 
+  private resourceManager: WebGPUResourceManager;
+
   //  statistics
   private totalAllocated: number = 0;
   private totalActive: number = 0;
@@ -17,6 +20,8 @@ export class BufferManager {
   constructor(device: GPUDevice) {
     this.device = device;
     this.initializeBufferPools();
+
+    this.resourceManager = new WebGPUResourceManager();
   }
 
   /**
@@ -41,12 +46,12 @@ export class BufferManager {
       size: alignedSize,
       usage: descriptor.usage,
       mappedAtCreation: descriptor.mappedAtCreation || false,
-      label: descriptor.label || `${descriptor.type}_buffer`,
+      label: descriptor.label,
     });
 
     // record buffer information
     this.activeBuffers.add(buffer);
-    this.bufferLabels.set(buffer, descriptor.label || 'unnamed');
+    this.bufferLabels.set(buffer, descriptor.label);
     this.totalAllocated += alignedSize;
     this.totalActive += alignedSize;
 
@@ -63,6 +68,8 @@ export class BufferManager {
     console.log(
       `Created ${descriptor.type} buffer: ${alignedSize} bytes (original: ${descriptor.size} bytes)`,
     );
+
+    this.resourceManager.registerResource(descriptor.label, buffer);
 
     return buffer;
   }
@@ -460,7 +467,7 @@ export class BufferManager {
   /**
    * destroy all buffers
    */
-  destroyAll(): void {
+  onDestroy(): void {
     for (const buffer of this.activeBuffers) {
       buffer.destroy();
     }

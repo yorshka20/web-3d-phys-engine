@@ -1,35 +1,7 @@
-import { Transform3DComponent } from '@ecs/components/physics/Transform3DComponent';
 import { Camera3DComponent } from '@ecs/components/rendering/Camera3DComponent';
 
 export type BufferUsage = number; // Placeholder for GPUBufferUsageFlags
 export type ShaderStage = number; // Placeholder for GPUShaderStageFlags
-
-export interface BufferDescriptor {
-  id: string;
-  size: number;
-  usage: BufferUsage;
-  initialData?: BufferSource;
-}
-
-export interface TextureDescriptor {
-  id: string;
-  width: number;
-  height: number;
-  format: GPUTextureFormat;
-  usage: GPUTextureUsageFlags;
-  initialData?: ImageBitmap | HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas;
-}
-
-export interface PipelineDescriptor {
-  id: string;
-  shaderId: string;
-  vertexBuffers: GPUVertexBufferLayout[];
-  primitive: GPUPrimitiveState;
-  depthStencil?: GPUDepthStencilState;
-  multisample?: GPUMultisampleState;
-  targets: GPUColorTargetState[];
-  layout: GPUPipelineLayout;
-}
 
 export type BlendMode = 'normal' | 'add' | 'subtract' | 'multiply' | 'screen';
 
@@ -83,15 +55,4 @@ export interface ViewportData {
   y: number;
   width: number;
   height: number;
-}
-
-export interface InstanceDescriptor {
-  id: string;
-  modelId: string;
-  transform: Transform3DComponent;
-}
-
-export interface RenderBatch {
-  id: string;
-  instances: InstanceDescriptor[];
 }

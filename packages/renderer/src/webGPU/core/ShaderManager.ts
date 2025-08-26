@@ -1,9 +1,9 @@
 import {
-  ShaderDescriptor,
-  RenderPipelineDescriptor,
   BindGroupLayoutDescriptor,
-  ComputePipelineDescriptor,
   BindGroupLayoutVisibility,
+  ComputePipelineDescriptor,
+  RenderPipelineDescriptor,
+  ShaderDescriptor,
 } from './types';
 
 /**
@@ -170,7 +170,7 @@ export class ShaderManager {
    * @param shaderInfo shader info
    * @returns bind group layout
    */
-  private createBindGroupLayout(stage: string, shaderInfo: any): GPUBindGroupLayout {
+  private createBindGroupLayout(stage: string, shaderInfo: Any): GPUBindGroupLayout {
     const layoutId = `${stage}_bind_group_layout`;
 
     // check cache
@@ -334,7 +334,7 @@ export class ShaderManager {
   /**
    * clean all resources
    */
-  destroyAll(): void {
+  onDestroy(): void {
     // clean shader modules - GPUShaderModule doesn't have destroy method
     this.shaderModules.clear();
 
