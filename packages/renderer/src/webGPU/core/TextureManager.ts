@@ -24,7 +24,11 @@ export class TextureManager {
 
   updateTexture(id: string, data: ImageData): void {
     const texture = this.getTexture(id);
-    // this.device.queue.copyExternalImageToTexture({ source: data }, { texture });
+    this.device.queue.copyExternalImageToTexture(
+      { source: data },
+      { texture },
+      { width: data.width, height: data.height },
+    );
   }
 
   createTexture(descriptor: TextureDescriptor): GPUTexture {

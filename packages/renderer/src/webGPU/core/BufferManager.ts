@@ -1,5 +1,5 @@
+import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
-import { WebGPUResourceManager } from './WebGPUResourceManager';
 
 /**
  * WebGPU buffer manager

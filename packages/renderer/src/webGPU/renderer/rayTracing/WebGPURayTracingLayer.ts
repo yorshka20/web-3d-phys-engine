@@ -11,18 +11,18 @@ import {
 } from '@ecs';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { IEntity } from '@ecs/core/ecs/types';
-import { CanvasRenderLayer } from '../../canvas2d/base/CanvasRenderLayer';
-import { RenderLayerIdentifier, RenderLayerPriority } from '../../constant';
+import { CanvasRenderLayer } from '../../../canvas2d/base/CanvasRenderLayer';
+import { RenderLayerIdentifier, RenderLayerPriority } from '../../../constant';
 import {
   SamplingPattern,
   SerializedCamera,
   SerializedEntity,
   SerializedLight,
-} from '../../rayTracing/base/types';
-import { BufferManager } from '../core/BufferManager';
-import { ShaderManager } from '../core/ShaderManager';
-import { ShaderType } from '../core/types';
-import { WebGPUContext } from '../core/WebGPUContext';
+} from '../../../rayTracing/base/types';
+import { BufferManager } from '../../core/BufferManager';
+import { ShaderManager } from '../../core/ShaderManager';
+import { ShaderType } from '../../core/types';
+import { WebGPUContext } from '../../core/WebGPUContext';
 import { WebGPUProgressiveRenderer } from './WebGPUProgressiveRenderer';
 
 /**
@@ -113,6 +113,7 @@ export class WebGPURayTracingLayer extends CanvasRenderLayer {
   private async compileShaders(): Promise<void> {
     // 编译光线追踪计算着色器
     this.shaderManager.createShaderModule('rayTracing', {
+      id: 'rayTracing',
       code: this.getRayTracingComputeShader(),
       type: ShaderType.COMPUTE,
       entryPoint: 'main',
@@ -121,6 +122,7 @@ export class WebGPURayTracingLayer extends CanvasRenderLayer {
 
     // 编译显示渲染着色器
     this.shaderManager.createShaderModule('display', {
+      id: 'display',
       code: this.getDisplayRenderShader(),
       type: ShaderType.VERTEX,
       entryPoint: 'vertex_main',
@@ -128,6 +130,7 @@ export class WebGPURayTracingLayer extends CanvasRenderLayer {
     });
 
     this.shaderManager.createShaderModule('displayFragment', {
+      id: 'displayFragment',
       code: this.getDisplayFragmentShader(),
       type: ShaderType.FRAGMENT,
       entryPoint: 'fragment_main',
@@ -259,7 +262,7 @@ export class WebGPURayTracingLayer extends CanvasRenderLayer {
   /**
    * 创建显示绑定组
    */
-  private createDisplayBindGroup(): any {
+  private createDisplayBindGroup(): Any {
     // 这里需要创建绑定组来绑定累积纹理
     // 暂时返回null
     return null;
@@ -268,7 +271,7 @@ export class WebGPURayTracingLayer extends CanvasRenderLayer {
   /**
    * 序列化场景数据
    */
-  private serializeScene(): any {
+  private serializeScene(): Any {
     const entities = this.getLayerEntities(this.lastViewport);
     const lights = this.getSerializedLights();
     const camera = this.getSerializedCamera();
