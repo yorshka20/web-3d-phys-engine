@@ -8,6 +8,12 @@ import {
   WebGPUResourceManager,
 } from '../core';
 import { BufferManager } from '../core/BufferManager';
+import {
+  GeometryCacheItem,
+  GeometryManager,
+  GeometryParams,
+  GeometryType,
+} from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
@@ -63,10 +69,22 @@ export class WebGPURenderer implements IWebGPURenderer {
   private textureManager!: TextureManager;
   private resourceManager!: WebGPUResourceManager;
   private timeManager!: TimeManager;
+  private geometryManager!: GeometryManager;
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
   private instanceManager!: InstanceManager;
+
+  // Multiple geometry instances
+  private geometryInstances: Array<{
+    geometry: GeometryCacheItem;
+    transform: mat4;
+    scale: [number, number, number];
+    position: [number, number, number];
+    rotation: [number, number, number];
+    mvpBuffer: GPUBuffer;
+    mvpBindGroup: GPUBindGroup;
+  }> = [];
 
   private get device(): GPUDevice {
     return this.context.getDevice();
@@ -221,11 +239,15 @@ export class WebGPURenderer implements IWebGPURenderer {
     // TODO: can remove this
     this.resourceManager = new WebGPUResourceManager();
     this.timeManager = new TimeManager(this.device, this.bufferManager);
+    this.geometryManager = new GeometryManager(this.device, this.bufferManager);
 
     await this.setupScene();
 
     // create render pipelines
     await this.createRenderPipelines();
+
+    // setup multiple geometry instances
+    this.setupGeometryInstances();
   }
 
   private async setupScene(): Promise<void> {
@@ -241,73 +263,22 @@ export class WebGPURenderer implements IWebGPURenderer {
     if (!this.resourceManager) {
       throw new Error('WebGPU resource manager not initialized');
     }
+    if (!this.geometryManager) {
+      throw new Error('Geometry manager not initialized');
+    }
 
     console.log('Creating example buffers...');
 
-    // vertex buffer for cube
-    // prettier-ignore
-    const vertexData = new Float32Array([
-      // Front face
-      -0.5, -0.5, 0.5,  // 0
-      0.5, -0.5, 0.5,  // 1
-      0.5, 0.5, 0.5,   // 2
-      -0.5, 0.5, 0.5,  // 3
+    // Use geometry manager to create unit cube data
+    const cubeGeometry = this.geometryManager.createCube();
 
-      // Back face
-      -0.5, -0.5, -0.5, // 4
-      -0.5, 0.5, -0.5,  // 5
-      0.5, 0.5, -0.5,   // 6
-      0.5, -0.5, -0.5,  // 7
+    // Register vertex buffer
+    this.resourceManager.registerResource('Cube Vertices', cubeGeometry.vertexBuffer);
+    console.log('Registered resource: Cube Vertices');
 
-      // Top face
-      -0.5, 0.5, -0.5,  // 8
-      -0.5, 0.5, 0.5,   // 9
-      0.5, 0.5, 0.5,    // 10
-      0.5, 0.5, -0.5,   // 11
-
-      // Bottom face
-      -0.5, -0.5, -0.5, // 12
-      0.5, -0.5, -0.5,  // 13
-      0.5, -0.5, 0.5,   // 14
-      -0.5, -0.5, 0.5,  // 15
-
-      // Right face
-      0.5, -0.5, -0.5,  // 16
-      0.5, 0.5, -0.5,   // 17
-      0.5, 0.5, 0.5,    // 18
-      0.5, -0.5, 0.5,   // 19
-
-      // Left face
-      -0.5, -0.5, -0.5, // 20
-      -0.5, -0.5, 0.5,  // 21
-      -0.5, 0.5, 0.5,   // 22
-      -0.5, 0.5, -0.5,  // 23
-    ]);
-
-    this.bufferManager?.createVertexBuffer(vertexData.buffer, 'Cube Vertices');
-    const vertexBuffer = this.bufferManager.getVertexBuffer('Cube Vertices');
-    if (vertexBuffer) {
-      this.resourceManager.registerResource('Cube Vertices', vertexBuffer);
-      console.log('Registered resource: Cube Vertices');
-    }
-
-    // index buffer for cube
-    // prettier-ignore
-    const indexData = new Uint16Array([
-      0, 1, 2, 2, 3, 0,    // Front face
-      4, 5, 6, 6, 7, 4,    // Back face
-      8, 9, 10, 10, 11, 8, // Top face
-      12, 13, 14, 14, 15, 12, // Bottom face
-      16, 17, 18, 18, 19, 16, // Right face
-      20, 21, 22, 22, 23, 20, // Left face
-    ]);
-
-    this.bufferManager?.createIndexBuffer(indexData.buffer, 'Cube Indices');
-    const indexBuffer = this.bufferManager.getIndexBuffer('Cube Indices');
-    if (indexBuffer) {
-      this.resourceManager.registerResource('Cube Indices', indexBuffer);
-      console.log('Registered resource: Cube Indices');
-    }
+    // Register index buffer
+    this.resourceManager.registerResource('Cube Indices', cubeGeometry.indexBuffer);
+    console.log('Registered resource: Cube Indices');
 
     // uniform buffer for MVP matrix
     // 4x4 matrix, 16 floats. Initialized to identity.
@@ -538,6 +509,81 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
   }
 
+  /**
+   * Setup multiple geometry instances with different transforms
+   */
+  private setupGeometryInstances(): void {
+    if (!this.geometryManager) {
+      throw new Error('Geometry manager not initialized');
+    }
+
+    // Get MVP bind group layout for creating individual bind groups
+    const mvpBindGroupLayout = this.resourceManager.getResource<GPUBindGroupLayout>('mvpBindGroup');
+    if (!mvpBindGroupLayout) {
+      throw new Error('MVP bind group layout not found');
+    }
+
+    // Create three cubes with different positions, scales, and rotations
+    const cube1 = this.geometryManager.createCube();
+    const cube2 = this.geometryManager.createCube();
+    const cube3 = this.geometryManager.createCube();
+
+    // Create individual MVP buffers and bind groups for each instance
+    const createInstance = (
+      geometry: any,
+      scale: [number, number, number],
+      position: [number, number, number],
+      rotation: [number, number, number],
+      instanceName: string,
+    ) => {
+      // Create individual MVP buffer for this instance
+      const mvpBuffer = this.device.createBuffer({
+        size: 64, // 4x4 matrix * 4 bytes per float
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        label: `MVP Buffer ${instanceName}`,
+      });
+
+      // Create individual MVP bind group for this instance
+      const mvpBindGroup = this.device.createBindGroup({
+        layout: mvpBindGroupLayout,
+        entries: [
+          {
+            binding: 0,
+            resource: { buffer: mvpBuffer },
+          },
+        ],
+        label: `MVP Bind Group ${instanceName}`,
+      });
+
+      return {
+        geometry,
+        transform: mat4.create(),
+        scale,
+        position,
+        rotation,
+        mvpBuffer,
+        mvpBindGroup,
+      };
+    };
+
+    // Cube 1: Small cube on the left
+    this.geometryInstances.push(
+      createInstance(cube1, [0.5, 0.5, 0.5], [-2, 0, 0], [0, 0, 0], 'Cube1'),
+    );
+
+    // Cube 2: Medium cube in the center
+    this.geometryInstances.push(
+      createInstance(cube2, [1.0, 1.0, 1.0], [0, 0, 0], [0, Math.PI / 4, 0], 'Cube2'),
+    );
+
+    // Cube 3: Large cube on the right
+    this.geometryInstances.push(
+      createInstance(cube3, [1.5, 1.5, 1.5], [2, 0, 0], [Math.PI / 6, 0, Math.PI / 6], 'Cube3'),
+    );
+
+    console.log('Setup 3 geometry instances with different transforms and individual MVP buffers');
+  }
+
   private async initializeWebGPU(): Promise<void> {
     this.context = new WebGPUContext();
     await this.context.initialize(this.canvas, {
@@ -577,7 +623,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       const timeBuffer = this.timeManager.getBuffer();
       const timeBindGroup = this.resourceManager.getResource<GPUBindGroup>('Time Bind Group');
 
-      // Update MVP matrix
+      // Update projection and view matrices (same for all cubes)
       const now = performance.now() / 1000;
       const aspectRatio = this.canvas.width / this.canvas.height;
 
@@ -592,27 +638,10 @@ export class WebGPURenderer implements IWebGPURenderer {
       const viewMatrix = mat4.create();
       mat4.lookAt(
         viewMatrix,
-        [0, 0, -5], // eye
+        [0, 0, -8], // eye - moved back to see all cubes
         [0, 0, 0], // center
         [0, 1, 0], // up
       );
-
-      const modelMatrix = mat4.create();
-      mat4.rotateY(modelMatrix, modelMatrix, now * 0.5);
-      mat4.rotateX(modelMatrix, modelMatrix, now * 0.3);
-
-      const mvpMatrix = mat4.create();
-      mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
-      mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
-
-      const mvpBuffer = this.resourceManager.getResource<GPUBuffer>('MVP Matrix Uniforms');
-      if (mvpBuffer) {
-        // Write the MVP matrix to the uniform buffer as Float32Array
-        this.device.queue.writeBuffer(mvpBuffer, 0, new Float32Array(mvpMatrix));
-      }
-
-      // Create MVP bind group
-      const mvpBindGroup = this.resourceManager.getResource<GPUBindGroup>('MVP Bind Group');
 
       // create command encoder
       const commandEncoder = this.device.createCommandEncoder();
@@ -646,10 +675,37 @@ export class WebGPURenderer implements IWebGPURenderer {
         }
 
         renderPass.setBindGroup(0, timeBindGroup); // binding actual bind group
-        renderPass.setBindGroup(1, mvpBindGroup); // binding actual bind group
 
-        // draw cube
-        renderPass.drawIndexed(36);
+        // Render each geometry instance
+        for (const instance of this.geometryInstances) {
+          // Update model matrix for this instance
+          const modelMatrix = mat4.create();
+
+          // Apply scale
+          mat4.scale(modelMatrix, modelMatrix, instance.scale);
+
+          // Apply rotation
+          mat4.rotateY(modelMatrix, modelMatrix, now * 0.5 + instance.rotation[1]);
+          mat4.rotateX(modelMatrix, modelMatrix, now * 0.3 + instance.rotation[0]);
+          mat4.rotateZ(modelMatrix, modelMatrix, instance.rotation[2]);
+
+          // Apply position
+          mat4.translate(modelMatrix, modelMatrix, instance.position);
+
+          // Calculate MVP matrix for this instance
+          const mvpMatrix = mat4.create();
+          mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
+          mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
+
+          // Update this instance's MVP uniform buffer
+          this.device.queue.writeBuffer(instance.mvpBuffer, 0, new Float32Array(mvpMatrix));
+
+          // Use this instance's MVP bind group
+          renderPass.setBindGroup(1, instance.mvpBindGroup);
+
+          // Draw this instance
+          renderPass.drawIndexed(36);
+        }
       }
 
       renderPass.end();
@@ -701,6 +757,47 @@ export class WebGPURenderer implements IWebGPURenderer {
   createShader(descriptor: ShaderDescriptor): GPUShaderModule {
     return this.shaderManager.createShaderModule(descriptor.id, descriptor);
   }
+
+  /**
+   * Create geometry using geometry manager
+   * @param type Geometry type
+   * @param params Geometry parameters
+   * @returns Geometry cache item
+   */
+  createGeometry(type: GeometryType, params: GeometryParams = {}) {
+    if (!this.geometryManager) {
+      throw new Error('Geometry manager not initialized');
+    }
+    return this.geometryManager.getGeometry(type, params);
+  }
+
+  /**
+   * Create unit cube geometry (1x1x1)
+   * @param segments Cube segments (not used for cube, kept for consistency)
+   * @returns Geometry cache item
+   */
+  createCube(segments?: number) {
+    return this.createGeometry('cube', { cube: { segments } });
+  }
+
+  /**
+   * Create unit sphere geometry (radius = 0.5)
+   * @param segments Sphere segments
+   * @returns Geometry cache item
+   */
+  createSphere(segments: number = 32) {
+    return this.createGeometry('sphere', { sphere: { segments } });
+  }
+
+  /**
+   * Create unit plane geometry (1x1)
+   * @param segments Plane segments
+   * @returns Geometry cache item
+   */
+  createPlane(segments: number = 1) {
+    return this.createGeometry('plane', { plane: { segments } });
+  }
+
   updateBuffer(id: string, data: ArrayBuffer, offset?: number): void {
     if (!this.bufferManager) {
       throw new Error('Buffer manager not initialized');
