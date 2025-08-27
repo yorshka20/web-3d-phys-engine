@@ -237,19 +237,27 @@ export class GeometryFactory {
       const z = Math.sin(angle) * radius;
 
       // Bottom vertices
-      // prettier-ignore
       vertices.push(
-        x, -halfHeight, z, // position
-        x / radius, 0, z / radius, // normal
-        i / segments, 0, // uv
+        x,
+        -halfHeight,
+        z, // position
+        x / radius,
+        0,
+        z / radius, // normal (normalized)
+        i / segments,
+        0, // uv
       );
 
       // Top vertices
-      // prettier-ignore
       vertices.push(
-        x, halfHeight, z, // position
-        x / radius, 0, z / radius, // normal
-        i / segments, 1, // uv
+        x,
+        halfHeight,
+        z, // position
+        x / radius,
+        0,
+        z / radius, // normal (normalized)
+        i / segments,
+        1, // uv
       );
     }
 
@@ -258,11 +266,12 @@ export class GeometryFactory {
       const current = i * 2;
       const next = (i + 1) * 2;
 
+      // Side face triangles (counter-clockwise)
       indices.push(current, next, current + 1);
       indices.push(next, next + 1, current + 1);
     }
 
-    // Add top and bottom faces
+    // Add top and bottom center vertices
     const topCenter = vertices.length / 8;
     const bottomCenter = topCenter + 1;
 
@@ -276,10 +285,11 @@ export class GeometryFactory {
       const current = i * 2;
       const next = ((i + 1) % segments) * 2;
 
-      // Top face triangles
-      indices.push(topCenter, next, current);
-      // Bottom face triangles
-      indices.push(bottomCenter, current + 1, next + 1);
+      // Top face triangles (counter-clockwise from above)
+      indices.push(topCenter, current + 1, next + 1);
+
+      // Bottom face triangles (clockwise from below = counter-clockwise from above)
+      indices.push(bottomCenter, next, current);
     }
 
     return {

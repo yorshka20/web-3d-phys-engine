@@ -461,19 +461,21 @@ export class WebGPURenderer implements IWebGPURenderer {
       fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         let t = timeData.time;
         
-        // pulse effect
-        let pulse = sin(t * 2.0) * 0.5 + 0.5;
+        let pulse = sin(t * 2.0) * 0.2 + 0.8;  // more stable pulse
         
-        // rainbow color change
         let hue = (t * 0.5) % 1.0;
-        let animatedColor = hsv_to_rgb(vec3<f32>(hue, 1.0, 1.0));
+        let animatedColor = hsv_to_rgb(vec3<f32>(hue, 0.8, 1.0));  // slightly lower saturation
         
-        // wave effect based on vertex position
         let dist = length(color.xy - vec2<f32>(0.5));
-        let wave = sin(dist * 10.0 - t * 5.0) * 0.5 + 0.5;
+        let wave = sin(dist * 10.0 - t * 5.0) * 0.25 + 0.75;  // brighter wave
         
-        // combine vertex color with animated effects
-        return vec4<f32>(animatedColor * wave * pulse, color.w);
+        // add ambient light and brightness
+        let ambient = 0.15;
+        let brightness = 1.0;
+        
+        let finalColor = (animatedColor * wave * pulse + ambient) * brightness;
+        
+        return vec4<f32>(finalColor, color.w);
       }
 
       // HSV to RGB helper function
@@ -581,7 +583,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Create three cubes with different positions, scales, and rotations
     const cube1 = this.geometryManager.createCube();
     const cube2 = this.geometryManager.createCube();
-    const cube3 = this.geometryManager.createCube();
+    const cylinder = this.geometryManager.createCylinder();
+    const sphere = this.geometryManager.createSphere();
 
     // Create individual MVP buffers and bind groups for each instance
     const createInstance = (
@@ -631,9 +634,20 @@ export class WebGPURenderer implements IWebGPURenderer {
       createInstance(cube2, [1.0, 1.0, 1.0], [0, 0, 0], [0, Math.PI / 4, 0], 'Cube2'),
     );
 
-    // Cube 3: Large cube on the right
+    // Cylinder
     this.geometryInstances.push(
-      createInstance(cube3, [1.5, 1.5, 1.5], [2, 0, 0], [Math.PI / 6, 0, Math.PI / 6], 'Cube3'),
+      createInstance(
+        cylinder,
+        [1.5, 1.5, 1.5],
+        [2, 0, 0],
+        [Math.PI / 6, 0, Math.PI / 6],
+        'Cylinder',
+      ),
+    );
+
+    // Sphere
+    this.geometryInstances.push(
+      createInstance(sphere, [2, 2, 2], [0, 2, 0], [Math.PI / 6, 0, Math.PI / 6], 'Sphere'),
     );
 
     console.log('Setup 3 geometry instances with different transforms and individual MVP buffers');
@@ -698,7 +712,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     const viewMatrix = mat4.create();
     mat4.lookAt(
       viewMatrix,
-      [0, 0, -5], // eye - moved back to see all cubes
+      [0, 0, -15], // eye - moved back to see all cubes
       [0, 0, 0], // center
       [0, 1, 0], // up
     );
@@ -730,16 +744,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     if (renderPipeline) {
       renderPass.setPipeline(renderPipeline.pipeline);
 
-      // set vertex buffer
-      const vertexBuffer = this.resourceManager.getBufferResource('Cube Vertices');
-      if (vertexBuffer) {
-        renderPass.setVertexBuffer(0, vertexBuffer.buffer); // binding actual vertex buffer
-      }
-      const indexBuffer = this.resourceManager.getBufferResource('Cube Indices');
-      if (indexBuffer) {
-        renderPass.setIndexBuffer(indexBuffer.buffer, 'uint16'); // binding actual index buffer
-      }
-
       renderPass.setBindGroup(0, timeBindGroup.bindGroup); // binding actual bind group
 
       // Render each geometry instance
@@ -769,8 +773,19 @@ export class WebGPURenderer implements IWebGPURenderer {
         // Use this instance's MVPBindGroup
         renderPass.setBindGroup(1, instance.mvpBindGroup);
 
+        // set vertex buffer
+        renderPass.setVertexBuffer(0, instance.geometry.vertexBuffer); // binding actual vertex buffer
+        // set index buffer
+        renderPass.setIndexBuffer(instance.geometry.indexBuffer, 'uint16'); // binding actual index buffer
+
         // Draw this instance
-        renderPass.drawIndexed(36);
+        renderPass.drawIndexed(instance.geometry.indexCount);
+
+        console.log('current vertices:', instance.geometry.vertexCount);
+        console.log('current indices:', instance.geometry.indexCount);
+        console.log('Current vertex buffer:', instance.geometry.vertexBuffer);
+        console.log('Current index buffer:', instance.geometry.indexBuffer);
+        console.log('---');
       }
     }
 
