@@ -1,5 +1,6 @@
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ResourceType } from '../types/constant';
+import { DIContainer } from './DIContainer';
 
 /**
  * Enhanced type definitions for decorators
@@ -10,6 +11,9 @@ export type ResourceCreationMethod<TResource = any> = (...args: any[]) => TResou
 
 // Injectable class interface
 export interface InjectableClass {
+  container?: DIContainer;
+  setContainer(container: DIContainer): void;
+  getContainer(): DIContainer | undefined;
   resourceManager?: WebGPUResourceManager;
   setResourceManager(manager: WebGPUResourceManager): void;
   getResourceManager(): WebGPUResourceManager | undefined;
@@ -19,6 +23,9 @@ export interface InjectableClass {
   destroyResource(resource: any): void;
   setResourceLifecycle?(resourceId: string, lifecycle: string): void;
   cleanupResources?(lifecycle: string): void;
+  resourceLifecycles?: Map<string, string>;
+  resourceCache?: Map<string, any>;
+  resourcePool?: Map<string, any>;
 }
 
 // Smart resource class interface

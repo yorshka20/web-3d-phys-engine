@@ -1,13 +1,18 @@
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ResourceState, ResourceType } from '../types/constant';
 import {
+  BindGroupLayoutResource,
+  BindGroupResource,
   BufferResource,
   ComputePipelineResource,
   RenderPipelineResource,
+  SamplerResource,
   ShaderResource,
+  TextureResource,
 } from '../types/resource';
 import {
   AutoRegisterOptions,
+  InjectableClass,
   ResourceFactoryOptions,
   ResourceLifecycle,
   SmartResourceOptions,
@@ -36,7 +41,7 @@ export function AutoRegisterResource<T extends ResourceType>(
   return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: any, ...args: [string, Any]) {
+    return function (this: InjectableClass, ...args: [string, Any]) {
       // Execute original method
       const result = originalMethod.apply(this, args);
 
@@ -63,15 +68,32 @@ export function AutoRegisterResource<T extends ResourceType>(
 
 /**
  * Injectable decorator for dependency injection
- * Automatically injects ResourceManager dependency
+ * Automatically injects ResourceManager dependency and sets up DI container support
  */
 export function Injectable() {
   return function (target: any, context: ClassDecoratorContext) {
     // Add resource manager property and methods to prototype
-    const proto = target.prototype;
+    const proto = target.prototype as InjectableClass;
 
     if (!proto.hasOwnProperty('resourceManager')) {
       proto.resourceManager = undefined;
+    }
+
+    // Add container property for @Inject decorator support
+    if (!proto.hasOwnProperty('container')) {
+      proto.container = undefined;
+    }
+
+    if (!proto.hasOwnProperty('setContainer')) {
+      proto.setContainer = function (container: any) {
+        this.container = container;
+      };
+    }
+
+    if (!proto.hasOwnProperty('getContainer')) {
+      proto.getContainer = function (): any {
+        return this.container;
+      };
     }
 
     if (!proto.hasOwnProperty('setResourceManager')) {
@@ -140,47 +162,58 @@ export function Injectable() {
     if (!proto.hasOwnProperty('createResourceWrapper')) {
       proto.createResourceWrapper = function (type: ResourceType, resource: any) {
         // Add the appropriate property based on resource type
+        const resourceWrapper = {
+          type,
+          state: ResourceState.READY,
+          dependencies: [],
+          destroy: () => this.destroyResource(resource),
+        };
         switch (type) {
           case ResourceType.BUFFER:
             return {
-              type,
-              state: ResourceState.READY,
-              dependencies: [],
-              destroy: () => this.destroyResource(resource),
+              ...resourceWrapper,
               buffer: resource,
             } as BufferResource;
           case ResourceType.SHADER:
             return {
-              type,
-              state: ResourceState.READY,
-              dependencies: [],
-              destroy: () => this.destroyResource(resource),
+              ...resourceWrapper,
               shader: resource,
             } as ShaderResource;
           case ResourceType.PIPELINE:
             if (resource instanceof GPURenderPipeline) {
               return {
-                type,
-                state: ResourceState.READY,
-                dependencies: [],
-                destroy: () => this.destroyResource(resource),
+                ...resourceWrapper,
                 pipeline: resource,
               } as RenderPipelineResource;
             } else {
               return {
-                type,
-                state: ResourceState.READY,
-                dependencies: [],
-                destroy: () => this.destroyResource(resource),
+                ...resourceWrapper,
                 pipeline: resource,
               } as ComputePipelineResource;
             }
+          case ResourceType.BIND_GROUP_LAYOUT:
+            return {
+              ...resourceWrapper,
+              layout: resource,
+            } as BindGroupLayoutResource;
+          case ResourceType.BIND_GROUP:
+            return {
+              ...resourceWrapper,
+              bindGroup: resource,
+            } as BindGroupResource;
+          case ResourceType.TEXTURE:
+            return {
+              ...resourceWrapper,
+              texture: resource,
+            } as TextureResource;
+          case ResourceType.SAMPLER:
+            return {
+              ...resourceWrapper,
+              sampler: resource,
+            } as SamplerResource;
           default:
             return {
-              type,
-              state: ResourceState.READY,
-              dependencies: [],
-              destroy: () => this.destroyResource(resource),
+              ...resourceWrapper,
               resource: resource,
             } as any;
         }
@@ -236,7 +269,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
   return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: any, ...args: [string, Any]) {
+    return function (this: InjectableClass, ...args: [string, Any]) {
       // Initialize resource cache and pool on instance
       if (!this.resourceCache) {
         this.resourceCache = new Map();
@@ -275,7 +308,9 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
         // Implement cache size limit
         if (options.maxCacheSize && this.resourceCache.size > options.maxCacheSize) {
           const firstKey = this.resourceCache.keys().next().value;
-          this.resourceCache.delete(firstKey);
+          if (firstKey) {
+            this.resourceCache.delete(firstKey);
+          }
         }
       }
 
@@ -286,7 +321,9 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
 
       // Set lifecycle
       if (options.lifecycle) {
-        this.setResourceLifecycle(resourceId, options.lifecycle);
+        if (this.setResourceLifecycle) {
+          this.setResourceLifecycle(resourceId, options.lifecycle);
+        }
       }
 
       // Auto-register
@@ -311,16 +348,15 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
 export function Inject(token: string) {
   return function (target: any, context: ClassFieldDecoratorContext) {
     return function (this: any, initialValue: any) {
-      // Store initial value
       let value = initialValue;
 
-      // Define the property on the instance during initialization
       Object.defineProperty(this, context.name as string, {
         get() {
+          // If container is available, resolve now
           if (this.container) {
             return this.container.resolve(token);
           }
-          // Fallback to initial value
+
           return value;
         },
         set(newValue: any) {

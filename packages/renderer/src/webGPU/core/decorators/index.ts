@@ -55,56 +55,44 @@ export * from './types';
 export { DIContainer, globalContainer, ServiceTokens, type ServiceToken } from './DIContainer';
 
 /**
- * Quick setup function for basic decorator usage
- */
-export function setupBasicDecorators(device: GPUDevice) {
-  // Create and register core services
-  const resourceManager = new WebGPUResourceManager();
-
-  globalContainer.registerInstance(ServiceTokens.WEBGPU_DEVICE, device);
-  globalContainer.registerInstance(ServiceTokens.RESOURCE_MANAGER, resourceManager);
-
-  return {
-    resourceManager,
-    container: globalContainer,
-  };
-}
-
-/**
  * Advanced setup function with full DI container configuration
  */
-export function setupAdvancedDecorators(device: GPUDevice) {
-  // Create core services
-  const resourceManager = new WebGPUResourceManager();
-
+export function initContainer(device: GPUDevice) {
   // Register all services in DI container
   globalContainer.registerInstance(ServiceTokens.WEBGPU_DEVICE, device);
-  globalContainer.registerInstance(ServiceTokens.RESOURCE_MANAGER, resourceManager);
+  globalContainer.registerInstance(ServiceTokens.RESOURCE_MANAGER, new WebGPUResourceManager());
+
+  // Create a factory function that sets container BEFORE the manager is used
+  const createManagerWithContainer = <T>(
+    ManagerClass: new (device: GPUDevice) => T,
+    device: GPUDevice,
+  ): T => {
+    const manager = new ManagerClass(device);
+    // This ensures @Inject decorators can resolve dependencies
+    if (typeof (manager as any).setContainer === 'function') {
+      (manager as any).setContainer(globalContainer);
+    }
+    return manager;
+  };
 
   globalContainer.register(ServiceTokens.BUFFER_MANAGER, (device: GPUDevice) => {
-    const manager = new BufferManager(device);
-    manager.setResourceManager(resourceManager);
-    return manager;
+    return createManagerWithContainer(BufferManager, device);
   });
 
   globalContainer.register(ServiceTokens.SHADER_MANAGER, (device: GPUDevice) => {
-    const manager = new ShaderManager(device);
-    manager.setResourceManager(resourceManager);
-    return manager;
+    return createManagerWithContainer(ShaderManager, device);
   });
 
   globalContainer.register(ServiceTokens.TEXTURE_MANAGER, (device: GPUDevice) => {
-    const manager = new TextureManager(device);
-    manager.setResourceManager(resourceManager);
-    return manager;
+    return createManagerWithContainer(TextureManager, device);
   });
 
   return {
-    resourceManager,
     container: globalContainer,
-    bufferManager: globalContainer.resolve(ServiceTokens.BUFFER_MANAGER, device),
-    shaderManager: globalContainer.resolve(ServiceTokens.SHADER_MANAGER, device),
-    textureManager: globalContainer.resolve(ServiceTokens.TEXTURE_MANAGER, device),
+    resourceManager: globalContainer.resolve<WebGPUResourceManager>(ServiceTokens.RESOURCE_MANAGER),
+    bufferManager: globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER, device),
+    shaderManager: globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER, device),
+    textureManager: globalContainer.resolve<TextureManager>(ServiceTokens.TEXTURE_MANAGER, device),
   };
 }
 
@@ -119,9 +107,21 @@ export function createDecoratedInstance<T>(
 ): T {
   const instance = new ClassConstructor(device, ...additionalArgs);
 
-  // If the instance has setResourceManager method and no resource manager provided,
-  // create a default one
-  if (typeof (instance as any).setResourceManager === 'function') {
+  // Set up DI container if the instance supports it
+  if (typeof (instance as any).setContainer === 'function') {
+    // If no resource manager provided, create a default one
+    if (!resourceManager) {
+      resourceManager = new WebGPUResourceManager();
+    }
+
+    // Create a temporary container with the resource manager
+    const tempContainer = globalContainer.createChild();
+    tempContainer.registerInstance(ServiceTokens.RESOURCE_MANAGER, resourceManager);
+    tempContainer.registerInstance(ServiceTokens.WEBGPU_DEVICE, device);
+
+    (instance as any).setContainer(tempContainer);
+  } else if (typeof (instance as any).setResourceManager === 'function') {
+    // Fallback to old method for backward compatibility
     if (!resourceManager) {
       resourceManager = new WebGPUResourceManager();
     }

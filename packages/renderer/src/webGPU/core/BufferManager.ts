@@ -1,4 +1,6 @@
 import { AutoRegisterResource, Injectable, SmartResource } from './decorators';
+import { globalContainer, ServiceTokens } from './decorators/DIContainer';
+import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
 import { ResourceType } from './types/constant';
 
@@ -8,6 +10,7 @@ import { ResourceType } from './types/constant';
  */
 @Injectable()
 export class BufferManager {
+  private resourceManager: WebGPUResourceManager;
   private device: GPUDevice;
   private bufferPools: Map<BufferType, BufferPoolItem[]> = new Map();
   private activeBuffers: Set<GPUBuffer> = new Set();
@@ -20,6 +23,7 @@ export class BufferManager {
 
   constructor(device: GPUDevice) {
     this.device = device;
+    this.resourceManager = globalContainer.resolve(ServiceTokens.RESOURCE_MANAGER);
     this.initializeBufferPools();
   }
 

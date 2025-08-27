@@ -1,4 +1,6 @@
 import { AutoRegisterResource, Injectable, SmartResource } from './decorators';
+import { globalContainer, ServiceTokens } from './decorators/DIContainer';
+import { WebGPUResourceManager } from './ResourceManager';
 import {
   BindGroupDescriptor,
   BindGroupLayoutDescriptor,
@@ -15,6 +17,7 @@ import { ResourceType } from './types/constant';
  */
 @Injectable()
 export class ShaderManager {
+  private resourceManager: WebGPUResourceManager;
   private device: GPUDevice;
   private shaderModules: Map<string, GPUShaderModule> = new Map();
   private renderPipelines: Map<string, GPURenderPipeline> = new Map();
@@ -24,6 +27,7 @@ export class ShaderManager {
 
   constructor(device: GPUDevice) {
     this.device = device;
+    this.resourceManager = globalContainer.resolve(ServiceTokens.RESOURCE_MANAGER);
   }
 
   /**
@@ -266,7 +270,7 @@ export class ShaderManager {
     // create bind group layout
     const bindGroupLayout = this.device.createBindGroupLayout({
       entries: descriptor.entries,
-      label: descriptor.label || `${id}_bind_group_layout`,
+      label: descriptor.label,
     });
 
     // cache bind group layout

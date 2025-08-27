@@ -9,6 +9,7 @@ import {
   WebGPUResourceManager,
 } from '../core';
 import { BufferManager } from '../core/BufferManager';
+import { DIContainer, initContainer } from '../core/decorators';
 import {
   GeometryCacheItem,
   GeometryManager,
@@ -53,6 +54,8 @@ export class WebGPURenderer implements IWebGPURenderer {
   debug = false;
   priority = SystemPriorities.RENDER;
 
+  private initialized = false;
+
   private canvas!: HTMLCanvasElement;
   private context!: WebGPUContext;
   private aspectRatio = 1;
@@ -66,6 +69,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private shaders!: Map<string, GPUShaderModule>;
 
   // resource managers
+  private container!: DIContainer;
   private bufferManager!: BufferManager;
   private shaderManager!: ShaderManager;
   private textureManager!: TextureManager;
@@ -282,18 +286,29 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
+    if (this.initialized) {
+      throw new Error('Renderer already initialized');
+    }
+
     this.canvas = canvas;
 
     // init webgpu
     await this.initializeWebGPU();
 
-    // init resource managers
-    this.resourceManager = new WebGPUResourceManager();
-    this.bufferManager = new BufferManager(this.device);
-    this.textureManager = new TextureManager(this.device);
-    this.shaderManager = new ShaderManager(this.device);
+    // init resource managers using DI container
+    const { resourceManager, bufferManager, shaderManager, textureManager, container } =
+      initContainer(this.device);
+    this.container = container;
+    this.resourceManager = resourceManager;
+    this.bufferManager = bufferManager;
+    this.shaderManager = shaderManager;
+    this.textureManager = textureManager;
+
+    // These managers don't use DI yet, so create them manually
     this.timeManager = new TimeManager(this.device, this.bufferManager);
     this.geometryManager = new GeometryManager(this.bufferManager);
+
+    console.log('Initialized WebGPU managers with DI container');
 
     await this.setupScene();
 
@@ -302,6 +317,8 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // create render pipelines
     await this.createRenderPipelines();
+
+    this.initialized = true;
   }
 
   private async setupScene(): Promise<void> {
@@ -642,13 +659,7 @@ export class WebGPURenderer implements IWebGPURenderer {
    * Main render loop
    */
   render(deltaTime: number, context: RenderContext): void {
-    if (
-      !this.context ||
-      !this.shaderManager ||
-      !this.timeManager ||
-      !this.bufferManager ||
-      !this.resourceManager
-    ) {
+    if (!this.initialized) {
       console.warn('WebGPU not initialized');
       return;
     }
