@@ -37,13 +37,12 @@ export interface GeometryParams {
  * Manages different types of geometries, including caching and resource management
  */
 export class GeometryManager {
-  private device: GPUDevice;
-  private bufferManager: BufferManager;
   private geometryCache: Map<string, GeometryCacheItem> = new Map();
 
-  constructor(device: GPUDevice, bufferManager: BufferManager) {
-    this.device = device;
-    this.bufferManager = bufferManager;
+  constructor(private bufferManager: BufferManager) {
+    if (!bufferManager) {
+      throw new Error('Buffer manager is required');
+    }
   }
 
   /**
@@ -166,16 +165,20 @@ export class GeometryManager {
    */
   private createCacheItem(geometry: GeometryData, cacheKey: string): GeometryCacheItem {
     // Create vertex buffer
-    this.bufferManager.createVertexBuffer(geometry.vertices.buffer, `${cacheKey}_vertices`);
-    const vertexBuffer = this.bufferManager.getVertexBuffer(`${cacheKey}_vertices`);
+    const vertexBuffer = this.bufferManager.createVertexBuffer(
+      geometry.vertices.buffer,
+      `${cacheKey}_vertices`,
+    );
 
     if (!vertexBuffer) {
       throw new Error(`Failed to create vertex buffer for ${cacheKey}`);
     }
 
     // Create index buffer
-    this.bufferManager.createIndexBuffer(geometry.indices.buffer, `${cacheKey}_indices`);
-    const indexBuffer = this.bufferManager.getIndexBuffer(`${cacheKey}_indices`);
+    const indexBuffer = this.bufferManager.createIndexBuffer(
+      geometry.indices.buffer,
+      `${cacheKey}_indices`,
+    );
 
     if (!indexBuffer) {
       throw new Error(`Failed to create index buffer for ${cacheKey}`);

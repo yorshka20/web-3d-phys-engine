@@ -1,5 +1,6 @@
 import { Transform3DComponent } from '@ecs/components';
-import { BindGroupLayoutVisibility, BufferType, ShaderType } from './constant';
+import { BindGroupLayoutVisibility, BufferType, ResourceType, ShaderType } from './constant';
+import { WebGPUResource } from './resource';
 
 /**
  * shader descriptor interface
@@ -95,4 +96,15 @@ export interface InstanceDescriptor {
   id: string;
   modelId: string;
   transform: Transform3DComponent;
+}
+
+/**
+ * Resource descriptor for creation
+ */
+export interface ResourceDescriptor<T extends WebGPUResource> {
+  id: string;
+  type: ResourceType;
+  factory: () => Promise<T>;
+  dependencies?: string[];
+  metadata?: Record<string, any>;
 }

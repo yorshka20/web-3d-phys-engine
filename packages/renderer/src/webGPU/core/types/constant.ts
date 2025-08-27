@@ -29,3 +29,27 @@ export enum BufferType {
   COPY_SRC = 'copy_src',
   COPY_DST = 'copy_dst',
 }
+
+/**
+ * WebGPU resource types
+ */
+export enum ResourceType {
+  BUFFER = 'buffer',
+  SHADER = 'shader',
+  PIPELINE = 'pipeline',
+  BIND_GROUP_LAYOUT = 'bind_group_layout',
+  BIND_GROUP = 'bind_group',
+  TEXTURE = 'texture',
+  SAMPLER = 'sampler',
+}
+
+/**
+ * Resource states
+ */
+export enum ResourceState {
+  PENDING = 'pending',
+  CREATING = 'creating',
+  READY = 'ready',
+  ERROR = 'error',
+  DESTROYED = 'destroyed',
+}

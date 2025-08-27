@@ -243,7 +243,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.shaderManager = new ShaderManager(this.device);
     this.resourceManager = new WebGPUResourceManager();
     this.timeManager = new TimeManager(this.device, this.bufferManager);
-    this.geometryManager = new GeometryManager(this.device, this.bufferManager);
+    this.geometryManager = new GeometryManager(this.bufferManager);
 
     await this.setupScene();
 
@@ -281,9 +281,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'Cube Vertices',
       type: ResourceType.BUFFER,
       factory: async () => ({
-        id: 'Cube Vertices',
         type: ResourceType.BUFFER,
-        state: 'ready' as any,
+        state: ResourceState.READY,
         dependencies: [],
         destroy: () => {},
         buffer: cubeGeometry.vertexBuffer,
@@ -297,9 +296,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'Cube Indices',
       type: ResourceType.BUFFER,
       factory: async () => ({
-        id: 'Cube Indices',
         type: ResourceType.BUFFER,
-        state: 'ready' as any,
+        state: ResourceState.READY,
         dependencies: [],
         destroy: () => {},
         buffer: cubeGeometry.indexBuffer,
@@ -326,9 +324,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'MVP Matrix Uniforms',
       type: ResourceType.BUFFER,
       factory: async () => ({
-        id: 'MVP Matrix Uniforms',
         type: ResourceType.BUFFER,
-        state: 'ready' as any,
+        state: ResourceState.READY,
         dependencies: [],
         destroy: () => {},
         buffer: mvpUniformBuffer,
@@ -358,9 +355,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'timeBindGroup',
       type: ResourceType.BIND_GROUP_LAYOUT,
       factory: async () => ({
-        id: 'timeBindGroup',
         type: ResourceType.BIND_GROUP_LAYOUT,
-        state: 'ready' as any,
+        state: ResourceState.READY,
         dependencies: [],
         destroy: () => {},
         layout: timeBindGroupLayout,
@@ -383,9 +379,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'mvpBindGroup',
       type: ResourceType.BIND_GROUP_LAYOUT,
       factory: async () => ({
-        id: 'mvpBindGroup',
         type: ResourceType.BIND_GROUP_LAYOUT,
-        state: 'ready' as any,
+        state: ResourceState.READY,
         dependencies: [],
         destroy: () => {},
         layout: mvpBindGroupLayout,
@@ -407,9 +402,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'Time Bind Group',
       type: ResourceType.BIND_GROUP,
       factory: async () => ({
-        id: 'Time Bind Group',
         type: ResourceType.BIND_GROUP,
-        state: 'ready' as any,
+        state: ResourceState.READY,
         dependencies: [],
         destroy: () => {},
         bindGroup: timeBindGroup,
@@ -433,9 +427,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'MVP Bind Group',
       type: ResourceType.BIND_GROUP,
       factory: async () => ({
-        id: 'MVP Bind Group',
         type: ResourceType.BIND_GROUP,
-        state: 'ready' as any,
+        state: ResourceState.READY,
         dependencies: [],
         destroy: () => {},
         bindGroup: mvpBindGroup,
@@ -533,7 +526,6 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'exampleVertex',
       type: ResourceType.SHADER,
       factory: async () => ({
-        id: 'exampleVertex',
         type: ResourceType.SHADER,
         state: ResourceState.READY,
         dependencies: [],
@@ -553,7 +545,6 @@ export class WebGPURenderer implements IWebGPURenderer {
       id: 'exampleFragment',
       type: ResourceType.SHADER,
       factory: async () => ({
-        id: 'exampleFragment',
         type: ResourceType.SHADER,
         state: ResourceState.READY,
         dependencies: [],
@@ -615,7 +606,6 @@ export class WebGPURenderer implements IWebGPURenderer {
         id: 'example_render_pipeline',
         type: ResourceType.PIPELINE,
         factory: async () => ({
-          id: 'example_render_pipeline',
           type: ResourceType.PIPELINE,
           state: ResourceState.READY,
           dependencies: [],

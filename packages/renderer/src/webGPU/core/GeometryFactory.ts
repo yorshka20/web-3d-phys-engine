@@ -237,27 +237,19 @@ export class GeometryFactory {
       const z = Math.sin(angle) * radius;
 
       // Bottom vertices
+      // prettier-ignore
       vertices.push(
-        x,
-        -halfHeight,
-        z, // position
-        x / radius,
-        0,
-        z / radius, // normal
-        i / segments,
-        0, // uv
+        x, -halfHeight, z, // position
+        x / radius, 0, z / radius, // normal
+        i / segments, 0, // uv
       );
 
       // Top vertices
+      // prettier-ignore
       vertices.push(
-        x,
-        halfHeight,
-        z, // position
-        x / radius,
-        0,
-        z / radius, // normal
-        i / segments,
-        1, // uv
+        x, halfHeight, z, // position
+        x / radius, 0, z / radius, // normal
+        i / segments, 1, // uv
       );
     }
 
@@ -324,15 +316,11 @@ export class GeometryFactory {
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
 
+      // prettier-ignore
       vertices.push(
-        x,
-        -halfHeight,
-        z, // position
-        0,
-        -1,
-        0, // normal
-        i / segments,
-        0, // uv
+        x, -halfHeight, z, // position
+        0, -1, 0,          // normal
+        i / segments, 0,   // uv
       );
     }
 

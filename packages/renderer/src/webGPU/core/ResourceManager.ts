@@ -1,105 +1,14 @@
-/**
- * WebGPU resource types
- */
-export enum ResourceType {
-  BUFFER = 'buffer',
-  SHADER = 'shader',
-  PIPELINE = 'pipeline',
-  BIND_GROUP_LAYOUT = 'bind_group_layout',
-  BIND_GROUP = 'bind_group',
-  TEXTURE = 'texture',
-  SAMPLER = 'sampler',
-}
-
-/**
- * Resource states
- */
-export enum ResourceState {
-  PENDING = 'pending',
-  CREATING = 'creating',
-  READY = 'ready',
-  ERROR = 'error',
-  DESTROYED = 'destroyed',
-}
-
-/**
- * Base resource interface
- */
-export interface IWebGPUResource {
-  id: string;
-  type: ResourceType;
-  state: ResourceState;
-  dependencies: string[];
-  metadata?: Record<string, any>;
-  destroy(): void;
-}
-
-/**
- * Specific resource types
- */
-export interface BufferResource extends IWebGPUResource {
-  type: ResourceType.BUFFER;
-  buffer: GPUBuffer;
-}
-
-export interface ShaderResource extends IWebGPUResource {
-  type: ResourceType.SHADER;
-  shader: GPUShaderModule;
-}
-
-export interface RenderPipelineResource extends IWebGPUResource {
-  type: ResourceType.PIPELINE;
-  pipeline: GPURenderPipeline;
-}
-
-export interface ComputePipelineResource extends IWebGPUResource {
-  type: ResourceType.PIPELINE;
-  pipeline: GPUComputePipeline;
-}
-
-export interface BindGroupLayoutResource extends IWebGPUResource {
-  type: ResourceType.BIND_GROUP_LAYOUT;
-  layout: GPUBindGroupLayout;
-}
-
-export interface BindGroupResource extends IWebGPUResource {
-  type: ResourceType.BIND_GROUP;
-  bindGroup: GPUBindGroup;
-}
-
-export interface TextureResource extends IWebGPUResource {
-  type: ResourceType.TEXTURE;
-  texture: GPUTexture;
-}
-
-export interface SamplerResource extends IWebGPUResource {
-  type: ResourceType.SAMPLER;
-  sampler: GPUSampler;
-}
-
-/**
- * Union type for all resources
- */
-export type WebGPUResource =
-  | BufferResource
-  | ShaderResource
-  | RenderPipelineResource
-  | ComputePipelineResource
-  | BindGroupLayoutResource
-  | BindGroupResource
-  | TextureResource
-  | SamplerResource;
-
-/**
- * Resource descriptor for creation
- */
-export interface ResourceDescriptor<T extends WebGPUResource> {
-  id: string;
-  type: ResourceType;
-  factory: () => Promise<T>;
-  dependencies?: string[];
-  metadata?: Record<string, any>;
-}
+import { ResourceState, ResourceType } from './types/constant';
+import { ResourceDescriptor } from './types/descriptor';
+import {
+  BindGroupLayoutResource,
+  BindGroupResource,
+  BufferResource,
+  ComputePipelineResource,
+  RenderPipelineResource,
+  ShaderResource,
+  WebGPUResource,
+} from './types/resource';
 
 /**
  * Resource metadata
