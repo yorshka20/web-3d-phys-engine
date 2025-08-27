@@ -1,7 +1,10 @@
 import { RectArea, SystemPriorities } from '@ecs';
+import chroma from 'chroma-js';
 import { mat4 } from 'gl-matrix';
 import {
   BindGroupLayoutVisibility,
+  ResourceState,
+  ResourceType,
   ShaderType,
   TimeManager,
   WebGPUContext,
@@ -24,6 +27,7 @@ import {
   Camera,
   ComputePass,
   ComputePassDescriptor,
+  ContextConfig,
   Geometry,
   IWebGPURenderer,
   Material,
@@ -53,10 +57,10 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   private canvas!: HTMLCanvasElement;
   private context!: WebGPUContext;
+  private aspectRatio = 1;
 
   private viewport!: RectArea;
   private frameCount = 0;
-
   private renderContext!: RenderContext;
 
   // shaders and pipelines
@@ -98,6 +102,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     const height = rootElement.clientHeight;
     const dpr = this.getDPR();
     this.viewport = [0, 0, width * dpr, height * dpr];
+    this.aspectRatio = width / height;
     // this.updateContextConfig({ width, height, dpr });
   }
   destroy(): void {
@@ -236,7 +241,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.bufferManager = new BufferManager(this.device);
     this.textureManager = new TextureManager(this.device);
     this.shaderManager = new ShaderManager(this.device);
-    // TODO: can remove this
     this.resourceManager = new WebGPUResourceManager();
     this.timeManager = new TimeManager(this.device, this.bufferManager);
     this.geometryManager = new GeometryManager(this.device, this.bufferManager);
@@ -273,11 +277,35 @@ export class WebGPURenderer implements IWebGPURenderer {
     const cubeGeometry = this.geometryManager.createCube();
 
     // Register vertex buffer
-    this.resourceManager.registerResource('Cube Vertices', cubeGeometry.vertexBuffer);
+    this.resourceManager.createResource({
+      id: 'Cube Vertices',
+      type: ResourceType.BUFFER,
+      factory: async () => ({
+        id: 'Cube Vertices',
+        type: ResourceType.BUFFER,
+        state: 'ready' as any,
+        dependencies: [],
+        destroy: () => {},
+        buffer: cubeGeometry.vertexBuffer,
+      }),
+      dependencies: [],
+    });
     console.log('Registered resource: Cube Vertices');
 
     // Register index buffer
-    this.resourceManager.registerResource('Cube Indices', cubeGeometry.indexBuffer);
+    this.resourceManager.createResource({
+      id: 'Cube Indices',
+      type: ResourceType.BUFFER,
+      factory: async () => ({
+        id: 'Cube Indices',
+        type: ResourceType.BUFFER,
+        state: 'ready' as any,
+        dependencies: [],
+        destroy: () => {},
+        buffer: cubeGeometry.indexBuffer,
+      }),
+      dependencies: [],
+    });
     console.log('Registered resource: Cube Indices');
 
     // uniform buffer for MVP matrix
@@ -290,12 +318,24 @@ export class WebGPURenderer implements IWebGPURenderer {
       0.0, 0.0, 0.0, 1.0,
     ]);
 
-    this.bufferManager?.createUniformBuffer(mvpMatrixData.buffer, 'MVP Matrix Uniforms');
-    const mvpUniformBuffer = this.bufferManager.getUniformBuffer('MVP Matrix Uniforms');
-    if (mvpUniformBuffer) {
-      this.resourceManager.registerResource('MVP Matrix Uniforms', mvpUniformBuffer);
-      console.log('Registered resource: MVP Matrix Uniforms');
-    }
+    const mvpUniformBuffer = this.bufferManager.createUniformBuffer(
+      mvpMatrixData.buffer,
+      'MVP Matrix Uniforms',
+    );
+    this.resourceManager.createResource({
+      id: 'MVP Matrix Uniforms',
+      type: ResourceType.BUFFER,
+      factory: async () => ({
+        id: 'MVP Matrix Uniforms',
+        type: ResourceType.BUFFER,
+        state: 'ready' as any,
+        dependencies: [],
+        destroy: () => {},
+        buffer: mvpUniformBuffer,
+      }),
+      dependencies: [],
+    });
+    console.log('Registered resource: MVP Matrix Uniforms');
   }
 
   private async createBindGroups(): Promise<void> {
@@ -314,7 +354,19 @@ export class WebGPURenderer implements IWebGPURenderer {
       ],
       label: 'Time Bind Group Layout',
     });
-    this.resourceManager.registerResource('timeBindGroup', timeBindGroupLayout);
+    this.resourceManager.createResource({
+      id: 'timeBindGroup',
+      type: ResourceType.BIND_GROUP_LAYOUT,
+      factory: async () => ({
+        id: 'timeBindGroup',
+        type: ResourceType.BIND_GROUP_LAYOUT,
+        state: 'ready' as any,
+        dependencies: [],
+        destroy: () => {},
+        layout: timeBindGroupLayout,
+      }),
+      dependencies: [],
+    });
 
     // Create MVP matrix bind group layout
     const mvpBindGroupLayout = this.shaderManager.createCustomBindGroupLayout('mvpBindGroup', {
@@ -327,7 +379,19 @@ export class WebGPURenderer implements IWebGPURenderer {
       ],
       label: 'MVP Bind Group Layout',
     });
-    this.resourceManager.registerResource('mvpBindGroup', mvpBindGroupLayout);
+    this.resourceManager.createResource({
+      id: 'mvpBindGroup',
+      type: ResourceType.BIND_GROUP_LAYOUT,
+      factory: async () => ({
+        id: 'mvpBindGroup',
+        type: ResourceType.BIND_GROUP_LAYOUT,
+        state: 'ready' as any,
+        dependencies: [],
+        destroy: () => {},
+        layout: mvpBindGroupLayout,
+      }),
+      dependencies: [],
+    });
 
     const timeBindGroup = this.device.createBindGroup({
       layout: timeBindGroupLayout,
@@ -339,7 +403,18 @@ export class WebGPURenderer implements IWebGPURenderer {
       ],
       label: 'Time Bind Group',
     });
-    this.resourceManager.registerResource('Time Bind Group', timeBindGroup);
+    this.resourceManager.createResource({
+      id: 'Time Bind Group',
+      type: ResourceType.BIND_GROUP,
+      factory: async () => ({
+        id: 'Time Bind Group',
+        type: ResourceType.BIND_GROUP,
+        state: 'ready' as any,
+        dependencies: [],
+        destroy: () => {},
+        bindGroup: timeBindGroup,
+      }),
+    });
     console.log('Registered resource: Time Bind Group');
 
     const mvpBindGroup = this.device.createBindGroup({
@@ -348,13 +423,24 @@ export class WebGPURenderer implements IWebGPURenderer {
         {
           binding: 0,
           resource: {
-            buffer: this.resourceManager.getResource<GPUBuffer>('MVP Matrix Uniforms'),
+            buffer: this.resourceManager.getBufferResource('MVP Matrix Uniforms').buffer,
           },
         },
       ],
       label: 'MVP Bind Group',
     });
-    this.resourceManager.registerResource('MVP Bind Group', mvpBindGroup);
+    this.resourceManager.createResource({
+      id: 'MVP Bind Group',
+      type: ResourceType.BIND_GROUP,
+      factory: async () => ({
+        id: 'MVP Bind Group',
+        type: ResourceType.BIND_GROUP,
+        state: 'ready' as any,
+        dependencies: [],
+        destroy: () => {},
+        bindGroup: mvpBindGroup,
+      }),
+    });
     console.log('Registered resource: MVP Bind Group');
   }
 
@@ -443,7 +529,18 @@ export class WebGPURenderer implements IWebGPURenderer {
       entryPoint: 'vs_main',
       label: 'Example Vertex Shader',
     });
-    this.resourceManager.registerResource('exampleVertex', vertexShader);
+    this.resourceManager.createResource({
+      id: 'exampleVertex',
+      type: ResourceType.SHADER,
+      factory: async () => ({
+        id: 'exampleVertex',
+        type: ResourceType.SHADER,
+        state: ResourceState.READY,
+        dependencies: [],
+        destroy: () => {},
+        shader: vertexShader,
+      }),
+    });
 
     const fragmentShader = this.shaderManager.createShaderModule('exampleFragment', {
       id: 'exampleFragment',
@@ -452,27 +549,37 @@ export class WebGPURenderer implements IWebGPURenderer {
       entryPoint: 'fs_main',
       label: 'Example Fragment Shader',
     });
-    this.resourceManager.registerResource('exampleFragment', fragmentShader);
+    this.resourceManager.createResource({
+      id: 'exampleFragment',
+      type: ResourceType.SHADER,
+      factory: async () => ({
+        id: 'exampleFragment',
+        type: ResourceType.SHADER,
+        state: ResourceState.READY,
+        dependencies: [],
+        destroy: () => {},
+        shader: fragmentShader,
+      }),
+    });
   }
 
   private async createRenderPipelines(): Promise<void> {
-    const timeBindGroupLayout =
-      this.resourceManager.getResource<GPUBindGroupLayout>('timeBindGroup');
-    const mvpBindGroupLayout = this.resourceManager.getResource<GPUBindGroupLayout>('mvpBindGroup');
+    const timeBindGroupLayout = this.resourceManager.getBindGroupLayoutResource('timeBindGroup');
+    const mvpBindGroupLayout = this.resourceManager.getBindGroupLayoutResource('mvpBindGroup');
 
     const renderPipelineLayout = this.device.createPipelineLayout({
-      bindGroupLayouts: [timeBindGroupLayout, mvpBindGroupLayout],
+      bindGroupLayouts: [timeBindGroupLayout.layout, mvpBindGroupLayout.layout],
       label: 'render_pipeline_layout',
     });
 
-    const vertexShader = this.resourceManager.getResource<GPUShaderModule>('exampleVertex');
-    const fragmentShader = this.resourceManager.getResource<GPUShaderModule>('exampleFragment');
+    const vertexShader = this.resourceManager.getShaderResource('exampleVertex');
+    const fragmentShader = this.resourceManager.getShaderResource('exampleFragment');
 
     // create render pipeline. pipeline is a template for rendering. render pass is the actual rendering.
     const renderPipeline = this.shaderManager.createRenderPipeline('example', {
       layout: renderPipelineLayout, // declare bind group layout
       vertex: {
-        module: vertexShader,
+        module: vertexShader.shader,
         entryPoint: 'vs_main',
         buffers: [
           {
@@ -489,7 +596,7 @@ export class WebGPURenderer implements IWebGPURenderer {
         constants: {},
       },
       fragment: {
-        module: fragmentShader,
+        module: fragmentShader.shader,
         entryPoint: 'fs_main',
         targets: [
           {
@@ -504,7 +611,18 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'example_render_pipeline',
     });
     if (renderPipeline) {
-      this.resourceManager.registerResource('example_render_pipeline', renderPipeline);
+      this.resourceManager.createResource({
+        id: 'example_render_pipeline',
+        type: ResourceType.PIPELINE,
+        factory: async () => ({
+          id: 'example_render_pipeline',
+          type: ResourceType.PIPELINE,
+          state: ResourceState.READY,
+          dependencies: [],
+          destroy: () => {},
+          pipeline: renderPipeline,
+        }),
+      });
       console.log('Registered resource: example_render_pipeline');
     }
   }
@@ -518,7 +636,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Get MVP bind group layout for creating individual bind groups
-    const mvpBindGroupLayout = this.resourceManager.getResource<GPUBindGroupLayout>('mvpBindGroup');
+    const mvpBindGroupLayout = this.resourceManager.getBindGroupLayoutResource('mvpBindGroup');
     if (!mvpBindGroupLayout) {
       throw new Error('MVP bind group layout not found');
     }
@@ -545,7 +663,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
       // Create individual MVP bind group for this instance
       const mvpBindGroup = this.device.createBindGroup({
-        layout: mvpBindGroupLayout,
+        layout: mvpBindGroupLayout.layout,
         entries: [
           {
             binding: 0,
@@ -616,134 +734,137 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     try {
-      // update time
-      this.timeManager.updateTime();
-
-      // create time bind group
-      const timeBuffer = this.timeManager.getBuffer();
-      const timeBindGroup = this.resourceManager.getResource<GPUBindGroup>('Time Bind Group');
-
-      // Update projection and view matrices (same for all cubes)
-      const now = performance.now() / 1000;
-      const aspectRatio = this.canvas.width / this.canvas.height;
-
-      const projectionMatrix = mat4.create();
-      mat4.perspective(
-        projectionMatrix,
-        (2 * Math.PI) / 5, // fovy
-        aspectRatio,
-        0.1,
-        100.0,
-      );
-      const viewMatrix = mat4.create();
-      mat4.lookAt(
-        viewMatrix,
-        [0, 0, -8], // eye - moved back to see all cubes
-        [0, 0, 0], // center
-        [0, 1, 0], // up
-      );
-
-      // create command encoder
-      const commandEncoder = this.device.createCommandEncoder();
-
-      // begin render pass
-      const renderPass = commandEncoder.beginRenderPass({
-        colorAttachments: [
-          {
-            view: this.context.getContext().getCurrentTexture().createView(),
-            clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
-            loadOp: 'clear',
-            storeOp: 'store',
-          },
-        ],
-      });
-
-      // set render pipeline
-      const pipeline =
-        this.resourceManager.getResource<GPURenderPipeline>('example_render_pipeline');
-      if (pipeline) {
-        renderPass.setPipeline(pipeline);
-
-        // set vertex buffer
-        const vertexBuffer = this.resourceManager.getResource<GPUBuffer>('Cube Vertices');
-        if (vertexBuffer) {
-          renderPass.setVertexBuffer(0, vertexBuffer); // binding actual vertex buffer
-        }
-        const indexBuffer = this.resourceManager.getResource<GPUBuffer>('Cube Indices');
-        if (indexBuffer) {
-          renderPass.setIndexBuffer(indexBuffer, 'uint16'); // binding actual index buffer
-        }
-
-        renderPass.setBindGroup(0, timeBindGroup); // binding actual bind group
-
-        // Render each geometry instance
-        for (const instance of this.geometryInstances) {
-          // Update model matrix for this instance
-          const modelMatrix = mat4.create();
-
-          // Apply scale
-          mat4.scale(modelMatrix, modelMatrix, instance.scale);
-
-          // Apply rotation
-          mat4.rotateY(modelMatrix, modelMatrix, now * 0.5 + instance.rotation[1]);
-          mat4.rotateX(modelMatrix, modelMatrix, now * 0.3 + instance.rotation[0]);
-          mat4.rotateZ(modelMatrix, modelMatrix, instance.rotation[2]);
-
-          // Apply position
-          mat4.translate(modelMatrix, modelMatrix, instance.position);
-
-          // Calculate MVP matrix for this instance
-          const mvpMatrix = mat4.create();
-          mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
-          mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
-
-          // Update this instance's MVP uniform buffer
-          this.device.queue.writeBuffer(instance.mvpBuffer, 0, new Float32Array(mvpMatrix));
-
-          // Use this instance's MVP bind group
-          renderPass.setBindGroup(1, instance.mvpBindGroup);
-
-          // Draw this instance
-          renderPass.drawIndexed(36);
-        }
-      }
-
-      renderPass.end();
-
-      // set compute pipeline
-      // const computePass = commandEncoder.beginComputePass();
-      // const computePipeline = this.resourceManager.getResource<GPUComputePipeline>(
-      //   'example_compute_pipeline',
-      // );
-
-      // if (computePipeline) {
-      //   computePass.setPipeline(computePipeline);
-
-      //   // Create and set bind group for compute pipeline
-      //   const computeBindGroup =
-      //     this.resourceManager.getResource<GPUBindGroup>('Compute Bind Group');
-      //   computePass.setBindGroup(0, computeBindGroup);
-
-      //   computePass.dispatchWorkgroups(1, 1, 1);
-      // }
-      // computePass.end();
-
-      // submit command
-      this.device.queue.submit([commandEncoder.finish()]);
-
-      // Read compute pipeline results every few frames
-      // if (this.frameCount % 60 === 0) {
-      //   this.readComputeResults();
-      // }
-
-      // Increment frame counter
-      this.frameCount++;
-
-      // Continue the loop
-      requestAnimationFrame(() => this.render(deltaTime, context));
+      this.renderTick(deltaTime, context);
     } catch (error) {
       console.error('Render loop error:', error);
     }
+  }
+
+  private renderTick(deltaTime: number, context: RenderContext): void {
+    // update time
+    this.timeManager.updateTime();
+
+    // create time bind group
+    const timeBuffer = this.timeManager.getBuffer();
+    const timeBindGroup = this.resourceManager.getBindGroupResource('Time Bind Group');
+
+    // Update projection and view matrices (same for all cubes)
+    const now = performance.now() / 1000;
+
+    const projectionMatrix = mat4.create();
+    mat4.perspective(
+      projectionMatrix,
+      (2 * Math.PI) / 5, // fovy
+      this.aspectRatio,
+      0.1,
+      100.0,
+    );
+    const viewMatrix = mat4.create();
+    mat4.lookAt(
+      viewMatrix,
+      [0, 0, -5], // eye - moved back to see all cubes
+      [0, 0, 0], // center
+      [0, 1, 0], // up
+    );
+
+    // create command encoder
+    const commandEncoder = this.device.createCommandEncoder();
+
+    // begin render pass
+    const renderPass = commandEncoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: this.context.getContext().getCurrentTexture().createView(),
+          clearValue: chroma('#f8f8f8').gl(),
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+
+    // set render pipeline
+    const renderPipeline =
+      this.resourceManager.getRenderPipelineResource('example_render_pipeline');
+    if (renderPipeline) {
+      renderPass.setPipeline(renderPipeline.pipeline);
+
+      // set vertex buffer
+      const vertexBuffer = this.resourceManager.getBufferResource('Cube Vertices');
+      if (vertexBuffer) {
+        renderPass.setVertexBuffer(0, vertexBuffer.buffer); // binding actual vertex buffer
+      }
+      const indexBuffer = this.resourceManager.getBufferResource('Cube Indices');
+      if (indexBuffer) {
+        renderPass.setIndexBuffer(indexBuffer.buffer, 'uint16'); // binding actual index buffer
+      }
+
+      renderPass.setBindGroup(0, timeBindGroup.bindGroup); // binding actual bind group
+
+      // Render each geometry instance
+      for (const instance of this.geometryInstances) {
+        // Update model matrix for this instance
+        const modelMatrix = mat4.create();
+
+        // Apply scale
+        mat4.scale(modelMatrix, modelMatrix, instance.scale);
+
+        // Apply rotation
+        mat4.rotateY(modelMatrix, modelMatrix, now * 0.5 + instance.rotation[1]);
+        mat4.rotateX(modelMatrix, modelMatrix, now * 0.3 + instance.rotation[0]);
+        mat4.rotateZ(modelMatrix, modelMatrix, instance.rotation[2]);
+
+        // Apply position
+        mat4.translate(modelMatrix, modelMatrix, instance.position);
+
+        // Calculate MVP matrix for this instance
+        const mvpMatrix = mat4.create();
+        mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
+        mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
+
+        // Update this instance's MVP uniform buffer
+        this.device.queue.writeBuffer(instance.mvpBuffer, 0, new Float32Array(mvpMatrix));
+
+        // Use this instance's MVP bind group
+        renderPass.setBindGroup(1, instance.mvpBindGroup);
+
+        // Draw this instance
+        renderPass.drawIndexed(36);
+      }
+    }
+
+    renderPass.end();
+
+    // set compute pipeline
+    // const computePass = commandEncoder.beginComputePass();
+    // const computePipeline = this.resourceManager.getResource<GPUComputePipeline>(
+    //   'example_compute_pipeline',
+    // );
+
+    // if (computePipeline) {
+    //   computePass.setPipeline(computePipeline);
+
+    //   // Create and set bind group for compute pipeline
+    //   const computeBindGroup =
+    //     this.resourceManager.getResource<GPUBindGroup>('Compute Bind Group');
+    //   computePass.setBindGroup(0, computeBindGroup);
+
+    //   computePass.dispatchWorkgroups(1, 1, 1);
+    // }
+    // computePass.end();
+
+    // submit command
+    this.device.queue.submit([commandEncoder.finish()]);
+
+    // Read compute pipeline results every few frames
+    // if (this.frameCount % 60 === 0) {
+    //   this.readComputeResults();
+    // }
+
+    // Increment frame counter
+    this.frameCount++;
+
+    // Continue the loop
+    requestAnimationFrame(() => this.render(deltaTime, context));
   }
 
   getDevice(): GPUDevice {
@@ -811,8 +932,12 @@ export class WebGPURenderer implements IWebGPURenderer {
     return;
   }
 
-  updateContextConfig(config: GPUCanvasConfiguration): void {
-    this.context.getContext().configure(config);
+  updateContextConfig(config: ContextConfig): void {
+    this.context.getContext().configure({
+      device: this.device,
+      format: navigator.gpu.getPreferredCanvasFormat(),
+      alphaMode: 'opaque',
+    });
   }
   setBackgroundImage(image: HTMLImageElement): void {
     return;

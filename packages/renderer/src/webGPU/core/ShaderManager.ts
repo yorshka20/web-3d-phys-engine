@@ -170,7 +170,7 @@ export class ShaderManager {
    * @param shaderInfo shader info
    * @returns bind group layout
    */
-  private createBindGroupLayout(stage: string, shaderInfo: Any): GPUBindGroupLayout {
+  private createBindGroupLayout(stage: string, shaderInfo: any): GPUBindGroupLayout {
     const layoutId = `${stage}_bind_group_layout`;
 
     // check cache

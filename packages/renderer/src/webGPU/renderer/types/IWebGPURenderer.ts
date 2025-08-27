@@ -120,6 +120,12 @@ export interface PostProcessEffect {
   order: number;
 }
 
+export interface ContextConfig {
+  width: number;
+  height: number;
+  dpr: number;
+}
+
 // ===== ECS-Oriented Render Interface =====
 
 /**
@@ -148,6 +154,9 @@ export interface IRenderer {
   destroyMaterial(materialId: string): void;
   destroyTexture(textureId: string): void;
   destroyMesh(meshId: string): void;
+
+  onResize(): void;
+  destroy(): void;
 }
 
 // ===== Low-level WebGPU Backend Interface =====
@@ -188,6 +197,8 @@ export interface IRenderBackend {
 
   // Synchronization
   submit(): void;
+
+  updateContextConfig(config: ContextConfig): void;
 }
 
 // ===== Unified WebGPU Renderer Interface =====
@@ -200,6 +211,8 @@ export abstract class IWebGPURenderer implements IRenderer, IRenderBackend {
   // ===== Initialization =====
   abstract init(canvas: HTMLCanvasElement): Promise<void>;
   abstract destroy(): void;
+  abstract onResize(): void;
+  abstract updateContextConfig(config: ContextConfig): void;
 
   // ===== WebGPU Device Access =====
   abstract getDevice(): GPUDevice;

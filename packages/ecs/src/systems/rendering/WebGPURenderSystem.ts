@@ -3,8 +3,8 @@ import { Camera3DComponent } from '@ecs/components/rendering/Camera3DComponent';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { System } from '@ecs/core/ecs/System';
 import { RectArea } from '@ecs/types/types';
-import { IRenderLayer, IWebGPURenderer } from '@renderer/types';
 import { createWebGPURenderer } from '@renderer/webGPU';
+import { IWebGPURenderer } from '@renderer/webGPU/renderer/types/IWebGPURenderer';
 import { GlobalUniforms, RenderContext, RenderStats, ViewportData } from '@renderer/webGPU/types';
 
 /**
@@ -39,7 +39,7 @@ export class WebGPURenderSystem extends System {
 
   // New 3D camera system
   private camera3D!: Camera3DComponent;
-  private renderMode: 'AUTO' | '2D' | '3D' | 'MIXED' = 'AUTO';
+  private renderMode: 'AUTO' | '2D' | '3D' | 'MIXED' = '3D';
 
   // WebGPU specific
   private globalUniforms!: GlobalUniforms;
@@ -105,11 +105,6 @@ export class WebGPURenderSystem extends System {
     return this.coarseMode ? 1 : window.devicePixelRatio || 1;
   }
 
-  // New methods for 3D rendering
-  setRenderMode(mode: 'AUTO' | '2D' | '3D' | 'MIXED'): void {
-    this.renderMode = mode;
-  }
-
   setCamera3D(camera: Camera3DComponent): void {
     this.camera3D = camera;
   }
@@ -168,10 +163,6 @@ export class WebGPURenderSystem extends System {
     this.updateGlobalUniforms(); // Update uniforms on DPR change
   }
 
-  getDevicePixelRatio(): number {
-    return this.dpr;
-  }
-
   getViewport(): RectArea {
     return this.viewport;
   }
@@ -202,7 +193,6 @@ export class WebGPURenderSystem extends System {
     this.globalUniforms.deltaTime = deltaTime;
     this.updateCamera(); // Unified camera update logic
     this.updateGlobalUniforms();
-    this.clear();
 
     const viewportData: ViewportData = {
       x: this.viewport[0],
@@ -230,31 +220,25 @@ export class WebGPURenderSystem extends System {
     return undefined; // Or throw an error if not applicable
   }
 
-  private clear(): void {
-    this.renderer.clear();
-  }
-
   private updateCamera(): void {
     // Update 3D camera if in 3D or MIXED mode
-    if (this.renderMode === '3D' || this.renderMode === 'MIXED') {
-      // Logic to update camera3D based on cameraTargetId or other factors
-      // For now, this is a placeholder. Real implementation would involve using Transform3DComponent.
-      if (this.cameraTargetId) {
-        const targetEntity = this.world.getEntityById(this.cameraTargetId);
-        if (targetEntity) {
-          const transform3D = targetEntity.getComponent<Transform3DComponent>('Transform3D');
-          if (transform3D) {
-            // Assuming camera3D exists and has a lookAt method
-            this.camera3D.lookAt(transform3D.position);
-            // Update camera position based on offset or other logic
-            // For now, just setting camera position to target position + some offset
-            const offset: [number, number, number] = [0, 5, 10]; // Example offset
-            this.camera3D.position = [
-              transform3D.position[0] + offset[0],
-              transform3D.position[1] + offset[1],
-              transform3D.position[2] + offset[2],
-            ];
-          }
+    // Logic to update camera3D based on cameraTargetId or other factors
+    // For now, this is a placeholder. Real implementation would involve using Transform3DComponent.
+    if (this.cameraTargetId) {
+      const targetEntity = this.world.getEntityById(this.cameraTargetId);
+      if (targetEntity) {
+        const transform3D = targetEntity.getComponent<Transform3DComponent>('Transform3D');
+        if (transform3D) {
+          // Assuming camera3D exists and has a lookAt method
+          this.camera3D.lookAt(transform3D.position);
+          // Update camera position based on offset or other logic
+          // For now, just setting camera position to target position + some offset
+          const offset: [number, number, number] = [0, 5, 10]; // Example offset
+          this.camera3D.position = [
+            transform3D.position[0] + offset[0],
+            transform3D.position[1] + offset[1],
+            transform3D.position[2] + offset[2],
+          ];
         }
       }
     }
@@ -266,11 +250,6 @@ export class WebGPURenderSystem extends System {
   }
 
   onDestroy(): void {
-    this.renderer.onDestroy();
-  }
-
-  // Add method to get grid debug layer (may or may not be relevant for 3D)
-  getGridDebugLayer(): IRenderLayer | undefined {
-    return undefined; // Or implement 3D grid debug logic
+    this.renderer.destroy();
   }
 }

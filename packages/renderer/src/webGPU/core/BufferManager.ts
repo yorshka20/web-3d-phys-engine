@@ -1,4 +1,3 @@
-import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
 
 /**
@@ -10,8 +9,7 @@ export class BufferManager {
   private bufferPools: Map<BufferType, BufferPoolItem[]> = new Map();
   private activeBuffers: Set<GPUBuffer> = new Set();
   private bufferLabels: Map<GPUBuffer, string> = new Map();
-
-  private resourceManager: WebGPUResourceManager;
+  private bufferCache: Map<string, GPUBuffer> = new Map(); // Internal cache for quick lookup
 
   //  statistics
   private totalAllocated: number = 0;
@@ -20,8 +18,6 @@ export class BufferManager {
   constructor(device: GPUDevice) {
     this.device = device;
     this.initializeBufferPools();
-
-    this.resourceManager = new WebGPUResourceManager();
   }
 
   /**
@@ -39,6 +35,13 @@ export class BufferManager {
    * @returns created GPU buffer
    */
   createBuffer(descriptor: BufferDescriptor): GPUBuffer {
+    // Check cache first
+    const cachedBuffer = this.bufferCache.get(descriptor.label);
+    if (cachedBuffer) {
+      console.log(`Using cached buffer: ${descriptor.label}`);
+      return cachedBuffer;
+    }
+
     // WebGPU requires buffer sizes to be aligned to 4-byte boundaries
     const alignedSize = Math.ceil(descriptor.size / 4) * 4;
 
@@ -52,6 +55,7 @@ export class BufferManager {
     // record buffer information
     this.activeBuffers.add(buffer);
     this.bufferLabels.set(buffer, descriptor.label);
+    this.bufferCache.set(descriptor.label, buffer);
     this.totalAllocated += alignedSize;
     this.totalActive += alignedSize;
 
@@ -68,8 +72,6 @@ export class BufferManager {
     console.log(
       `Created ${descriptor.type} buffer: ${alignedSize} bytes (original: ${descriptor.size} bytes)`,
     );
-
-    this.resourceManager.registerResource(descriptor.label, buffer);
 
     return buffer;
   }
@@ -270,6 +272,8 @@ export class BufferManager {
       const label = this.bufferLabels.get(buffer) || 'unknown';
       console.log(`Destroyed buffer: ${label} (${buffer.size} bytes)`);
 
+      // Remove from cache
+      this.bufferCache.delete(label);
       this.bufferLabels.delete(buffer);
       buffer.destroy();
     }
@@ -381,6 +385,13 @@ export class BufferManager {
    * @returns buffer or undefined
    */
   getBufferByLabel(label: string): GPUBuffer | undefined {
+    // Check cache first for performance
+    const cachedBuffer = this.bufferCache.get(label);
+    if (cachedBuffer && this.activeBuffers.has(cachedBuffer)) {
+      return cachedBuffer;
+    }
+
+    // Fallback to label lookup
     for (const [buffer, bufferLabel] of this.bufferLabels) {
       if (bufferLabel === label) {
         return buffer;
@@ -450,6 +461,7 @@ export class BufferManager {
     // record buffer information
     this.activeBuffers.add(buffer);
     this.bufferLabels.set(buffer, label);
+    this.bufferCache.set(label, buffer);
 
     // add to the corresponding pool
     const pool = this.bufferPools.get(BufferType.STORAGE) || [];
@@ -474,6 +486,7 @@ export class BufferManager {
 
     this.activeBuffers.clear();
     this.bufferLabels.clear();
+    this.bufferCache.clear();
     this.bufferPools.clear();
     this.totalAllocated = 0;
     this.totalActive = 0;

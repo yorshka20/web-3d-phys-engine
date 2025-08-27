@@ -1,3 +1,4 @@
+import { BufferManager } from './BufferManager';
 import { GeometryData, GeometryFactory } from './GeometryFactory';
 
 /**
@@ -37,10 +38,10 @@ export interface GeometryParams {
  */
 export class GeometryManager {
   private device: GPUDevice;
-  private bufferManager: any; // BufferManager type
+  private bufferManager: BufferManager;
   private geometryCache: Map<string, GeometryCacheItem> = new Map();
 
-  constructor(device: GPUDevice, bufferManager: any) {
+  constructor(device: GPUDevice, bufferManager: BufferManager) {
     this.device = device;
     this.bufferManager = bufferManager;
   }
