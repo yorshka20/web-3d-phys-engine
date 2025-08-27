@@ -26,6 +26,7 @@ export class TimeManager {
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         label: TimeManager.TimeBufferLabel,
       });
+      // todo: auto register
     }
     return buffer;
   }

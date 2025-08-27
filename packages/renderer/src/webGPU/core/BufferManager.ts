@@ -1,5 +1,4 @@
 import { AutoRegisterResource, Injectable, SmartResource } from './decorators';
-import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
 import { ResourceType } from './types/constant';
 
@@ -14,7 +13,6 @@ export class BufferManager {
   private activeBuffers: Set<GPUBuffer> = new Set();
   private bufferLabels: Map<GPUBuffer, string> = new Map();
   private bufferCache: Map<string, GPUBuffer> = new Map(); // Internal cache for quick lookup
-  private resourceManager?: WebGPUResourceManager; // Reference to resource manager
 
   //  statistics
   private totalAllocated: number = 0;
@@ -23,13 +21,6 @@ export class BufferManager {
   constructor(device: GPUDevice) {
     this.device = device;
     this.initializeBufferPools();
-  }
-
-  /**
-   * Set resource manager reference for auto-registration
-   */
-  setResourceManager(resourceManager: WebGPUResourceManager): void {
-    this.resourceManager = resourceManager;
   }
 
   /**
@@ -102,7 +93,7 @@ export class BufferManager {
   @AutoRegisterResource(ResourceType.BUFFER, {
     lifecycle: 'scene',
   })
-  createVertexBuffer(data: ArrayBuffer, label: string): GPUBuffer {
+  createVertexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     const buffer = this.createBuffer({
       type: BufferType.VERTEX,
       size: data.byteLength,
@@ -123,7 +114,7 @@ export class BufferManager {
   @AutoRegisterResource(ResourceType.BUFFER, {
     lifecycle: 'scene',
   })
-  createIndexBuffer(data: ArrayBuffer, label: string): GPUBuffer {
+  createIndexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     const buffer = this.createBuffer({
       type: BufferType.INDEX,
       size: data.byteLength,
@@ -146,7 +137,7 @@ export class BufferManager {
     lifecycle: 'frame',
     maxCacheSize: 20,
   })
-  createUniformBuffer(data: ArrayBuffer, label: string): GPUBuffer {
+  createUniformBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     const buffer = this.createBuffer({
       type: BufferType.UNIFORM,
       size: data.byteLength,
@@ -167,7 +158,7 @@ export class BufferManager {
   @AutoRegisterResource(ResourceType.BUFFER, {
     lifecycle: 'persistent',
   })
-  createStorageBuffer(data: ArrayBuffer, label: string): GPUBuffer {
+  createStorageBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     const buffer = this.createBuffer({
       type: BufferType.STORAGE,
       size: data.byteLength,
@@ -189,7 +180,7 @@ export class BufferManager {
     pool: true,
     lifecycle: 'frame',
   })
-  createStagingBuffer(size: number, label: string): GPUBuffer {
+  createStagingBuffer(label: string, size: number): GPUBuffer {
     return this.createBuffer({
       type: BufferType.STAGING,
       size,
@@ -241,7 +232,7 @@ export class BufferManager {
     const alignedReadSize = Math.ceil(readSize / 4) * 4;
 
     // create staging buffer. will be destroyed after use
-    const stagingBuffer = this.createStagingBuffer(alignedReadSize, 'stagingBuffer');
+    const stagingBuffer = this.createStagingBuffer('stagingBuffer', alignedReadSize);
     // copy data to staging buffer
     const commandEncoder = this.device.createCommandEncoder();
     commandEncoder.copyBufferToBuffer(buffer, alignedOffset, stagingBuffer, 0, alignedReadSize);

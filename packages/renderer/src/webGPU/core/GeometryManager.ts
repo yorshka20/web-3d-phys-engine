@@ -166,8 +166,8 @@ export class GeometryManager {
   private createCacheItem(geometry: GeometryData, cacheKey: string): GeometryCacheItem {
     // Create vertex buffer
     const vertexBuffer = this.bufferManager.createVertexBuffer(
-      geometry.vertices.buffer,
       `${cacheKey}_vertices`,
+      geometry.vertices.buffer,
     );
 
     if (!vertexBuffer) {
@@ -176,8 +176,8 @@ export class GeometryManager {
 
     // Create index buffer
     const indexBuffer = this.bufferManager.createIndexBuffer(
-      geometry.indices.buffer,
       `${cacheKey}_indices`,
+      geometry.indices.buffer,
     );
 
     if (!indexBuffer) {

@@ -1,6 +1,6 @@
 import { AutoRegisterResource, Injectable, SmartResource } from './decorators';
-import { WebGPUResourceManager } from './ResourceManager';
 import {
+  BindGroupDescriptor,
   BindGroupLayoutDescriptor,
   BindGroupLayoutVisibility,
   ComputePipelineDescriptor,
@@ -20,17 +20,10 @@ export class ShaderManager {
   private renderPipelines: Map<string, GPURenderPipeline> = new Map();
   private computePipelines: Map<string, GPUComputePipeline> = new Map();
   private bindGroupLayouts: Map<string, GPUBindGroupLayout> = new Map();
-  private resourceManager?: WebGPUResourceManager; // Reference to resource manager
+  private bindGroups: Map<string, GPUBindGroup> = new Map();
 
   constructor(device: GPUDevice) {
     this.device = device;
-  }
-
-  /**
-   * Set resource manager reference for auto-registration
-   */
-  setResourceManager(resourceManager: WebGPUResourceManager): void {
-    this.resourceManager = resourceManager;
   }
 
   /**
@@ -203,9 +196,6 @@ export class ShaderManager {
    * @param shaderInfo shader info
    * @returns bind group layout
    */
-  @AutoRegisterResource(ResourceType.BIND_GROUP_LAYOUT, {
-    lifecycle: 'persistent',
-  })
   private createBindGroupLayout(stage: string, shaderInfo: any): GPUBindGroupLayout {
     const layoutId = `${stage}_bind_group_layout`;
 
@@ -324,6 +314,47 @@ export class ShaderManager {
   }
 
   /**
+   * create bind group with automatic resource registration
+   * @param id bind group id
+   * @param descriptor bind group descriptor
+   * @returns created bind group
+   */
+  @AutoRegisterResource(ResourceType.BIND_GROUP, {
+    lifecycle: 'scene',
+  })
+  createBindGroup(id: string, descriptor: BindGroupDescriptor): GPUBindGroup {
+    // check cache
+    if (this.bindGroups.has(id)) {
+      return this.bindGroups.get(id)!;
+    }
+
+    // create bind group
+    const bindGroup = this.device.createBindGroup({
+      layout: descriptor.layout,
+      entries: descriptor.entries,
+      label: descriptor.label,
+    });
+
+    // cache bind group
+    this.bindGroups.set(id, bindGroup);
+
+    // Note: Auto-registration is now handled by decorators
+
+    console.log(`Created bind group: ${id}`);
+
+    return bindGroup;
+  }
+
+  /**
+   * get bind group
+   * @param id bind group id
+   * @returns bind group or undefined
+   */
+  getBindGroup(id: string): GPUBindGroup | undefined {
+    return this.bindGroups.get(id);
+  }
+
+  /**
    * reload shader
    * @param id shader id
    * @param newCode new code
@@ -361,12 +392,14 @@ export class ShaderManager {
     renderPipelines: number;
     computePipelines: number;
     bindGroupLayouts: number;
+    bindGroups: number;
   } {
     return {
       shaderModules: this.shaderModules.size,
       renderPipelines: this.renderPipelines.size,
       computePipelines: this.computePipelines.size,
       bindGroupLayouts: this.bindGroupLayouts.size,
+      bindGroups: this.bindGroups.size,
     };
   }
 
@@ -383,6 +416,9 @@ export class ShaderManager {
 
     // clean bind group layouts
     this.bindGroupLayouts.clear();
+
+    // clean bind groups
+    this.bindGroups.clear();
   }
 
   /**
@@ -395,5 +431,8 @@ export class ShaderManager {
     // clean pipelines
     this.renderPipelines.clear();
     this.computePipelines.clear();
+
+    // clean bind groups (frame-level cleanup)
+    this.bindGroups.clear();
   }
 }

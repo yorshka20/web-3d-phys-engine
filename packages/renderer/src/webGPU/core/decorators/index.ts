@@ -30,6 +30,11 @@
  * ```
  */
 
+import { BufferManager } from '../BufferManager';
+import { WebGPUResourceManager } from '../ResourceManager';
+import { ShaderManager } from '../ShaderManager';
+import { TextureManager } from '../TextureManager';
+import { globalContainer, ServiceTokens } from './DIContainer';
 import { AutoRegisterResource, Injectable, SmartResource } from './ResourceDecorators';
 
 // Core decorators
@@ -53,9 +58,6 @@ export { DIContainer, globalContainer, ServiceTokens, type ServiceToken } from '
  * Quick setup function for basic decorator usage
  */
 export function setupBasicDecorators(device: GPUDevice) {
-  const { WebGPUResourceManager } = require('../ResourceManager');
-  const { globalContainer, ServiceTokens } = require('./DIContainer');
-
   // Create and register core services
   const resourceManager = new WebGPUResourceManager();
 
@@ -72,12 +74,6 @@ export function setupBasicDecorators(device: GPUDevice) {
  * Advanced setup function with full DI container configuration
  */
 export function setupAdvancedDecorators(device: GPUDevice) {
-  const { WebGPUResourceManager } = require('../ResourceManager');
-  const { BufferManager } = require('../BufferManager');
-  const { ShaderManager } = require('../ShaderManager');
-  const { TextureManager } = require('../TextureManager');
-  const { globalContainer, ServiceTokens } = require('./DIContainer');
-
   // Create core services
   const resourceManager = new WebGPUResourceManager();
 
@@ -127,7 +123,6 @@ export function createDecoratedInstance<T>(
   // create a default one
   if (typeof (instance as any).setResourceManager === 'function') {
     if (!resourceManager) {
-      const { WebGPUResourceManager } = require('../ResourceManager');
       resourceManager = new WebGPUResourceManager();
     }
     (instance as any).setResourceManager(resourceManager);

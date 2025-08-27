@@ -36,16 +36,21 @@ export function AutoRegisterResource<T extends ResourceType>(
   return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: any, ...args: any[]) {
+    return function (this: any, ...args: [string, Any]) {
       // Execute original method
       const result = originalMethod.apply(this, args);
 
       // Auto-register resource if resource manager is available
       if (this.resourceManager && result) {
-        const resourceId = this.generateResourceId(String(context.name), args);
+        // Use first argument as resource ID if it's a string, otherwise generate one
+        const resourceId =
+          typeof args[0] === 'string'
+            ? args[0]
+            : this.generateResourceId(String(context.name), args);
         console.log(
           `[Decorator:AutoRegisterResource] Registering resource: ${resourceId}, type: ${type}`,
         );
+
         this.registerResource(resourceId, result, type, options);
       } else if (!this.resourceManager) {
         console.warn(`[Decorator:AutoRegisterResource] No resource manager set`);
@@ -231,7 +236,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
   return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: any, ...args: any[]) {
+    return function (this: any, ...args: [string, Any]) {
       // Initialize resource cache and pool on instance
       if (!this.resourceCache) {
         this.resourceCache = new Map();
@@ -243,7 +248,10 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
         this.resourceLifecycles = new Map();
       }
 
-      const resourceId = this.generateResourceId(String(context.name), args);
+      // Use first argument as resource ID if it's a string, otherwise generate one
+      const resourceId =
+        typeof args[0] === 'string' ? args[0] : this.generateResourceId(String(context.name), args);
+      console.log(`[Decorator:SmartResource] Registering resource: ${resourceId}, type: ${type}`);
 
       // Check cache first
       if (options.cache && this.resourceCache.has(resourceId)) {

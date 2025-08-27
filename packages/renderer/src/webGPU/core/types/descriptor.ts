@@ -51,6 +51,18 @@ export interface BindGroupLayoutDescriptor {
 }
 
 /**
+ * bind group descriptor interface
+ */
+export interface BindGroupDescriptor {
+  layout: GPUBindGroupLayout;
+  entries: Array<{
+    binding: number;
+    resource: GPUBindingResource;
+  }>;
+  label?: string;
+}
+
+/**
  * buffer descriptor interface
  */
 export interface BufferDescriptor {

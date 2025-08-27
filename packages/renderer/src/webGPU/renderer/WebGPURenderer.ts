@@ -295,10 +295,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.timeManager = new TimeManager(this.device, this.bufferManager);
     this.geometryManager = new GeometryManager(this.bufferManager);
 
-    // Set resource manager references for auto-registration
-    this.bufferManager.setResourceManager(this.resourceManager);
-    this.shaderManager.setResourceManager(this.resourceManager);
-
     await this.setupScene();
 
     // setup multiple geometry instances
@@ -328,11 +324,11 @@ export class WebGPURenderer implements IWebGPURenderer {
     const cubeGeometry = this.geometryManager.createCube();
 
     // Create vertex buffer (auto-registered to resource manager)
-    this.bufferManager.createVertexBuffer(cubeGeometry.geometry.vertices.buffer, 'Cube Vertices');
+    this.bufferManager.createVertexBuffer('Cube Vertices', cubeGeometry.geometry.vertices.buffer);
     console.log('Created and auto-registered: Cube Vertices');
 
     // Create index buffer (auto-registered to resource manager)
-    this.bufferManager.createIndexBuffer(cubeGeometry.geometry.indices.buffer, 'Cube Indices');
+    this.bufferManager.createIndexBuffer('Cube Indices', cubeGeometry.geometry.indices.buffer);
     console.log('Created and auto-registered: Cube Indices');
 
     // Create uniform buffer for MVP matrix (auto-registered to resource manager)
@@ -345,7 +341,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       0.0, 0.0, 0.0, 1.0,
     ]);
 
-    this.bufferManager.createUniformBuffer(mvpMatrixData.buffer, 'MVP Matrix Uniforms');
+    this.bufferManager.createUniformBuffer('MVP Matrix Uniforms', mvpMatrixData.buffer);
     console.log('Created and auto-registered: MVP Matrix Uniforms');
   }
 
@@ -366,6 +362,19 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'TimeBindGroup Layout',
     });
 
+    this.shaderManager.createBindGroup('TimeBindGroup', {
+      layout: timeBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: this.timeManager.getBuffer() },
+        },
+      ],
+      label: 'TimeBindGroup',
+    });
+
+    console.log('Created and auto-registered: TimeBindGroup');
+
     // Create MVP matrix bind group layout
     const mvpBindGroupLayout = this.shaderManager.createCustomBindGroupLayout('mvpBindGroup', {
       entries: [
@@ -378,20 +387,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'MVPBindGroup Layout',
     });
 
-    this.device.createBindGroup({
-      layout: timeBindGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: { buffer: this.timeManager.getBuffer() },
-        },
-      ],
-      label: 'TimeBindGroup',
-    });
-
-    console.log('Registered resource: TimeBindGroup');
-
-    this.device.createBindGroup({
+    this.shaderManager.createBindGroup('MVPBindGroup', {
       layout: mvpBindGroupLayout,
       entries: [
         {
@@ -404,7 +400,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'MVPBindGroup',
     });
 
-    console.log('Registered resource: MVPBindGroup');
+    console.log('Created and auto-registered: MVPBindGroup');
   }
 
   private async compileShaders(): Promise<void> {
