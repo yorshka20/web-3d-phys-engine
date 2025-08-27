@@ -19,7 +19,13 @@ import {
 import { InstanceManager } from '../core/InstanceManager';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
-import { BufferDescriptor, RenderBatch, ShaderDescriptor } from '../core/types';
+import {
+  BufferDescriptor,
+  BufferType,
+  GeometryInstanceDescriptor,
+  RenderBatch,
+  ShaderDescriptor,
+} from '../core/types';
 import { RenderContext } from '../types';
 import {
   BindGroup,
@@ -589,9 +595,10 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
-   * Setup multiple geometry instances with different transforms
+   * Create geometry instances from descriptors in batch
+   * @param descriptors Array of geometry instance descriptors
    */
-  private setupGeometryInstances(): void {
+  createGeometryInstances(descriptors: GeometryInstanceDescriptor[]): void {
     if (!this.geometryManager) {
       throw new Error('Geometry manager not initialized');
     }
@@ -602,29 +609,27 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('MVPBindGroup layout not found');
     }
 
-    // Create three cubes with different positions, scales, and rotations
-    const cube1 = this.geometryManager.getGeometry('cube');
-    const cube2 = this.geometryManager.getGeometry('cube');
-    const cylinder = this.geometryManager.getGeometry('cylinder');
-    const sphere = this.geometryManager.getGeometry('sphere');
+    // Clear existing instances
+    this.geometryInstances = [];
 
-    // Create individual MVP buffers and bind groups for each instance
-    const createInstance = (
-      geometry: GeometryCacheItem,
-      scale: [number, number, number],
-      position: [number, number, number],
-      rotation: [number, number, number],
-      instanceName: string,
-    ) => {
-      // Create individual MVP buffer for this instance
-      const mvpBuffer = this.device.createBuffer({
+    // Create instances from descriptors
+    descriptors.forEach((descriptor, index) => {
+      // Create geometry using geometry manager
+      const geometry = this.geometryManager.getGeometry(descriptor.type, descriptor.params);
+
+      // Generate instance name
+      const instanceName = descriptor.name || `${descriptor.type}_${index}`;
+
+      // Create individual MVP buffer for this instance using BufferManager
+      const mvpBuffer = this.bufferManager.createBuffer({
+        type: BufferType.UNIFORM,
         size: 64, // 4x4 matrix * 4 bytes per float
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         label: `MVP Buffer ${instanceName}`,
       });
 
       // Create individual MVPBindGroup for this instance
-      const mvpBindGroup = this.device.createBindGroup({
+      const mvpBindGroup = this.shaderManager.createBindGroup(`MVPBindGroup_${instanceName}`, {
         layout: mvpBindGroupLayout.layout,
         entries: [
           {
@@ -635,44 +640,67 @@ export class WebGPURenderer implements IWebGPURenderer {
         label: `MVPBindGroup ${instanceName}`,
       });
 
-      return {
+      // Add to instances array
+      this.geometryInstances.push({
         geometry,
         transform: mat4.create(),
-        scale,
-        position,
-        rotation,
+        scale: descriptor.transform.scale,
+        position: descriptor.transform.position,
+        rotation: descriptor.transform.rotation,
         mvpBuffer,
         mvpBindGroup,
-      };
-    };
+      });
+    });
 
-    // Cube 1: Small cube on the left
-    this.geometryInstances.push(
-      createInstance(cube1, [0.5, 0.5, 0.5], [-2, 0, 0], [0, 0, 0], 'Cube1'),
-    );
+    console.log(`Created ${descriptors.length} geometry instances with individual MVP buffers`);
+  }
 
-    // Cube 2: Medium cube in the center
-    this.geometryInstances.push(
-      createInstance(cube2, [1.0, 1.0, 1.0], [0, 0, 0], [0, Math.PI / 4, 0], 'Cube2'),
-    );
+  /**
+   * Setup multiple geometry instances with different transforms (using new API)
+   */
+  private setupGeometryInstances(): void {
+    // Define geometry instances using the new unified API
+    const geometryDescriptors: GeometryInstanceDescriptor[] = [
+      {
+        type: 'cube',
+        transform: {
+          position: [-2, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [0.5, 0.5, 0.5],
+        },
+        name: 'SmallCube',
+      },
+      {
+        type: 'cube',
+        transform: {
+          position: [0, 0, 0],
+          rotation: [0, Math.PI / 4, 0],
+          scale: [1.0, 1.0, 1.0],
+        },
+        name: 'MediumCube',
+      },
+      {
+        type: 'cylinder',
+        transform: {
+          position: [2, 0, 0],
+          rotation: [Math.PI / 6, 0, Math.PI / 6],
+          scale: [1.5, 1.5, 1.5],
+        },
+        name: 'Cylinder',
+      },
+      {
+        type: 'sphere',
+        transform: {
+          position: [0, 2, 0],
+          rotation: [Math.PI / 6, 0, Math.PI / 6],
+          scale: [2, 2, 2],
+        },
+        name: 'Sphere',
+      },
+    ];
 
-    // Cylinder
-    this.geometryInstances.push(
-      createInstance(
-        cylinder,
-        [1.5, 1.5, 1.5],
-        [2, 0, 0],
-        [Math.PI / 6, 0, Math.PI / 6],
-        'Cylinder',
-      ),
-    );
-
-    // Sphere
-    this.geometryInstances.push(
-      createInstance(sphere, [2, 2, 2], [0, 2, 0], [Math.PI / 6, 0, Math.PI / 6], 'Sphere'),
-    );
-
-    console.log('Setup 3 geometry instances with different transforms and individual MVP buffers');
+    // Create all geometry instances in one call
+    this.createGeometryInstances(geometryDescriptors);
   }
 
   private async initializeWebGPU(): Promise<void> {
@@ -861,6 +889,112 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('Geometry manager not initialized');
     }
     return this.geometryManager.getGeometry(type, params);
+  }
+
+  /**
+   * Add a single geometry instance
+   * @param descriptor Geometry instance descriptor
+   */
+  addGeometryInstance(descriptor: GeometryInstanceDescriptor): void {
+    if (!this.initialized) {
+      throw new Error('Renderer not initialized');
+    }
+
+    if (!this.geometryManager) {
+      throw new Error('Geometry manager not initialized');
+    }
+
+    // Get MVPBindGroup layout
+    const mvpBindGroupLayout = this.resourceManager.getBindGroupLayoutResource('mvpBindGroup');
+    if (!mvpBindGroupLayout) {
+      throw new Error('MVPBindGroup layout not found');
+    }
+
+    // Create geometry using geometry manager
+    const geometry = this.geometryManager.getGeometry(descriptor.type, descriptor.params);
+
+    // Generate instance name
+    const instanceName = descriptor.name || `${descriptor.type}_${this.geometryInstances.length}`;
+
+    // Create individual MVP buffer for this instance using BufferManager
+    const mvpBuffer = this.bufferManager.createBuffer({
+      type: BufferType.UNIFORM,
+      size: 64, // 4x4 matrix * 4 bytes per float
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: `MVP Buffer ${instanceName}`,
+    });
+
+    // Create individual MVPBindGroup for this instance
+    const mvpBindGroup = this.shaderManager.createBindGroup(`MVPBindGroup_${instanceName}`, {
+      layout: mvpBindGroupLayout.layout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: mvpBuffer },
+        },
+      ],
+      label: `MVPBindGroup ${instanceName}`,
+    });
+
+    // Add to instances array
+    this.geometryInstances.push({
+      geometry,
+      transform: mat4.create(),
+      scale: descriptor.transform.scale,
+      position: descriptor.transform.position,
+      rotation: descriptor.transform.rotation,
+      mvpBuffer,
+      mvpBindGroup,
+    });
+
+    console.log(`Added geometry instance: ${instanceName}`);
+  }
+
+  /**
+   * Remove a specific geometry instance by name
+   * @param instanceName Name of the instance to remove
+   */
+  removeGeometryInstance(instanceName: string): boolean {
+    const instanceIndex = this.geometryInstances.findIndex((instance) => {
+      // Extract name from buffer label (format: "MVP Buffer {instanceName}")
+      const bufferLabel = this.bufferManager.getBufferLabel(instance.mvpBuffer);
+      return bufferLabel?.includes(instanceName);
+    });
+
+    if (instanceIndex === -1) {
+      console.warn(`Geometry instance not found: ${instanceName}`);
+      return false;
+    }
+
+    const instance = this.geometryInstances[instanceIndex];
+
+    // Use BufferManager to properly destroy and pool the buffer
+    this.bufferManager.destroyBuffer(instance.mvpBuffer);
+
+    // Note: Bind groups don't need explicit cleanup - they will be garbage collected
+    // when no longer referenced. The ShaderManager will handle internal cleanup.
+
+    // Remove from instances array
+    this.geometryInstances.splice(instanceIndex, 1);
+
+    console.log(`Removed geometry instance: ${instanceName} and returned resources to pool`);
+    return true;
+  }
+
+  /**
+   * Clear all geometry instances
+   */
+  clearGeometryInstances(): void {
+    // Clean up GPU resources using BufferManager
+    this.geometryInstances.forEach((instance) => {
+      // Use BufferManager to properly destroy and pool the buffer
+      this.bufferManager.destroyBuffer(instance.mvpBuffer);
+      // Note: Bind groups don't need explicit cleanup - they will be garbage collected
+      // when no longer referenced. The ShaderManager handles internal cleanup.
+    });
+
+    this.geometryInstances = [];
+    console.log('Cleared all geometry instances and returned resources to pool');
   }
 
   updateBuffer(id: string, data: ArrayBuffer, offset?: number): void {

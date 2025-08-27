@@ -1,4 +1,5 @@
 import { Transform3DComponent } from '@ecs/components';
+import { GeometryParams, GeometryType } from '../GeometryManager';
 import { BindGroupLayoutVisibility, BufferType, ResourceType, ShaderType } from './constant';
 import { WebGPUResource } from './resource';
 
@@ -119,4 +120,18 @@ export interface ResourceDescriptor<T extends WebGPUResource> {
   factory: () => Promise<T>;
   dependencies?: string[];
   metadata?: Record<string, any>;
+}
+
+/**
+ * Geometry instance descriptor for batch creation
+ */
+export interface GeometryInstanceDescriptor {
+  type: GeometryType;
+  params?: GeometryParams;
+  transform: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  };
+  name?: string;
 }
