@@ -1,4 +1,7 @@
+import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
+import { ResourceState, ResourceType } from './types/constant';
+import { BufferResource } from './types/resource';
 
 /**
  * WebGPU buffer manager
@@ -10,6 +13,7 @@ export class BufferManager {
   private activeBuffers: Set<GPUBuffer> = new Set();
   private bufferLabels: Map<GPUBuffer, string> = new Map();
   private bufferCache: Map<string, GPUBuffer> = new Map(); // Internal cache for quick lookup
+  private resourceManager?: WebGPUResourceManager; // Reference to resource manager
 
   //  statistics
   private totalAllocated: number = 0;
@@ -18,6 +22,13 @@ export class BufferManager {
   constructor(device: GPUDevice) {
     this.device = device;
     this.initializeBufferPools();
+  }
+
+  /**
+   * Set resource manager reference for auto-registration
+   */
+  setResourceManager(resourceManager: WebGPUResourceManager): void {
+    this.resourceManager = resourceManager;
   }
 
   /**
@@ -30,7 +41,7 @@ export class BufferManager {
   }
 
   /**
-   * create buffer
+   * create buffer with automatic resource registration
    * @param descriptor buffer descriptor
    * @returns created GPU buffer
    */
@@ -69,11 +80,50 @@ export class BufferManager {
     });
     this.bufferPools.set(descriptor.type, pool);
 
+    // Auto-register to resource manager if available
+    this.autoRegisterBuffer(buffer, descriptor.label, descriptor.type);
+
     console.log(
       `Created ${descriptor.type} buffer: ${alignedSize} bytes (original: ${descriptor.size} bytes)`,
     );
 
     return buffer;
+  }
+
+  /**
+   * Auto-register buffer to resource manager
+   */
+  private autoRegisterBuffer(buffer: GPUBuffer, label: string, type: BufferType): void {
+    if (!this.resourceManager) {
+      console.warn(`Resource manager not set, skipping auto-registration for buffer: ${label}`);
+      return;
+    }
+
+    // Create resource descriptor
+    const resourceDescriptor = {
+      id: label,
+      type: ResourceType.BUFFER,
+      factory: async (): Promise<BufferResource> => ({
+        type: ResourceType.BUFFER,
+        state: ResourceState.READY,
+        dependencies: [],
+        destroy: () => {
+          this.destroyBuffer(buffer);
+        },
+        buffer,
+      }),
+      dependencies: [],
+      metadata: {
+        bufferType: type,
+        size: buffer.size,
+        usage: buffer.usage,
+      },
+    };
+
+    // Register resource
+    this.resourceManager.createResource(resourceDescriptor).catch((error) => {
+      console.error(`Failed to auto-register buffer ${label}:`, error);
+    });
   }
 
   /**

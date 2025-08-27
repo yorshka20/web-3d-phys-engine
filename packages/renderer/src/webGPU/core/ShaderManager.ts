@@ -1,3 +1,4 @@
+import { WebGPUResourceManager } from './ResourceManager';
 import {
   BindGroupLayoutDescriptor,
   BindGroupLayoutVisibility,
@@ -5,6 +6,8 @@ import {
   RenderPipelineDescriptor,
   ShaderDescriptor,
 } from './types';
+import { ResourceState, ResourceType } from './types/constant';
+import { ComputePipelineResource, RenderPipelineResource, ShaderResource } from './types/resource';
 
 /**
  * WebGPU shader manager
@@ -16,13 +19,21 @@ export class ShaderManager {
   private renderPipelines: Map<string, GPURenderPipeline> = new Map();
   private computePipelines: Map<string, GPUComputePipeline> = new Map();
   private bindGroupLayouts: Map<string, GPUBindGroupLayout> = new Map();
+  private resourceManager?: WebGPUResourceManager; // Reference to resource manager
 
   constructor(device: GPUDevice) {
     this.device = device;
   }
 
   /**
-   * create shader module
+   * Set resource manager reference for auto-registration
+   */
+  setResourceManager(resourceManager: WebGPUResourceManager): void {
+    this.resourceManager = resourceManager;
+  }
+
+  /**
+   * create shader module with automatic resource registration
    * @param id shader id
    * @param descriptor shader descriptor
    * @returns created shader module
@@ -42,13 +53,57 @@ export class ShaderManager {
     // cache shader module
     this.shaderModules.set(id, shaderModule);
 
+    // Auto-register to resource manager if available
+    this.autoRegisterShader(shaderModule, id, descriptor);
+
     console.log(`Created shader module: ${id}`);
 
     return shaderModule;
   }
 
   /**
-   * create render pipeline
+   * Auto-register shader to resource manager
+   */
+  private autoRegisterShader(
+    shaderModule: GPUShaderModule,
+    id: string,
+    descriptor: ShaderDescriptor,
+  ): void {
+    if (!this.resourceManager) {
+      console.warn(`Resource manager not set, skipping auto-registration for shader: ${id}`);
+      return;
+    }
+
+    // Create resource descriptor
+    const resourceDescriptor = {
+      id,
+      type: ResourceType.SHADER,
+      factory: async (): Promise<ShaderResource> => ({
+        type: ResourceType.SHADER,
+        state: ResourceState.READY,
+        dependencies: [],
+        destroy: () => {
+          // GPUShaderModule doesn't have destroy method, just remove from cache
+          this.shaderModules.delete(id);
+        },
+        shader: shaderModule,
+      }),
+      dependencies: [],
+      metadata: {
+        shaderType: descriptor.type,
+        entryPoint: descriptor.entryPoint,
+        codeLength: descriptor.code.length,
+      },
+    };
+
+    // Register resource
+    this.resourceManager.createResource(resourceDescriptor).catch((error) => {
+      console.error(`Failed to auto-register shader ${id}:`, error);
+    });
+  }
+
+  /**
+   * create render pipeline with automatic resource registration
    * @param id pipeline id
    * @param descriptor pipeline descriptor
    * @returns created render pipeline
@@ -83,13 +138,59 @@ export class ShaderManager {
     // cache render pipeline
     this.renderPipelines.set(id, pipeline);
 
+    // Auto-register to resource manager if available
+    this.autoRegisterRenderPipeline(pipeline, id, descriptor);
+
     console.log(`Created render pipeline: ${id}`);
 
     return pipeline;
   }
 
   /**
-   * create compute pipeline
+   * Auto-register render pipeline to resource manager
+   */
+  private autoRegisterRenderPipeline(
+    pipeline: GPURenderPipeline,
+    id: string,
+    descriptor: RenderPipelineDescriptor,
+  ): void {
+    if (!this.resourceManager) {
+      console.warn(
+        `Resource manager not set, skipping auto-registration for render pipeline: ${id}`,
+      );
+      return;
+    }
+
+    // Create resource descriptor
+    const resourceDescriptor = {
+      id,
+      type: ResourceType.PIPELINE,
+      factory: async (): Promise<RenderPipelineResource> => ({
+        type: ResourceType.PIPELINE,
+        state: ResourceState.READY,
+        dependencies: [],
+        destroy: () => {
+          // GPURenderPipeline doesn't have destroy method, just remove from cache
+          this.renderPipelines.delete(id);
+        },
+        pipeline,
+      }),
+      dependencies: [],
+      metadata: {
+        pipelineType: 'render',
+        hasDepthStencil: !!descriptor.depthStencil,
+        primitiveTopology: descriptor.primitive?.topology || 'triangle-list',
+      },
+    };
+
+    // Register resource
+    this.resourceManager.createResource(resourceDescriptor).catch((error) => {
+      console.error(`Failed to auto-register render pipeline ${id}:`, error);
+    });
+  }
+
+  /**
+   * create compute pipeline with automatic resource registration
    * @param id pipeline id
    * @param descriptor pipeline descriptor
    * @returns created compute pipeline
@@ -120,9 +221,54 @@ export class ShaderManager {
     // cache compute pipeline
     this.computePipelines.set(id, pipeline);
 
+    // Auto-register to resource manager if available
+    this.autoRegisterComputePipeline(pipeline, id, descriptor);
+
     console.log(`Created compute pipeline: ${id}`);
 
     return pipeline;
+  }
+
+  /**
+   * Auto-register compute pipeline to resource manager
+   */
+  private autoRegisterComputePipeline(
+    pipeline: GPUComputePipeline,
+    id: string,
+    descriptor: ComputePipelineDescriptor,
+  ): void {
+    if (!this.resourceManager) {
+      console.warn(
+        `Resource manager not set, skipping auto-registration for compute pipeline: ${id}`,
+      );
+      return;
+    }
+
+    // Create resource descriptor
+    const resourceDescriptor = {
+      id,
+      type: ResourceType.PIPELINE,
+      factory: async (): Promise<ComputePipelineResource> => ({
+        type: ResourceType.PIPELINE,
+        state: ResourceState.READY,
+        dependencies: [],
+        destroy: () => {
+          // GPUComputePipeline doesn't have destroy method, just remove from cache
+          this.computePipelines.delete(id);
+        },
+        pipeline,
+      }),
+      dependencies: [],
+      metadata: {
+        pipelineType: 'compute',
+        entryPoint: descriptor.compute.entryPoint,
+      },
+    };
+
+    // Register resource
+    this.resourceManager.createResource(resourceDescriptor).catch((error) => {
+      console.error(`Failed to auto-register compute pipeline ${id}:`, error);
+    });
   }
 
   /**
