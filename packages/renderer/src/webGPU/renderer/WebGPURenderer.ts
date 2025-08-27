@@ -338,7 +338,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     console.log('Creating example buffers...');
 
     // Use geometry manager to create unit cube data
-    const cubeGeometry = this.geometryManager.createCube();
+    const cubeGeometry = this.geometryManager.getGeometry('cube');
 
     // Create vertex buffer (auto-registered to resource manager)
     this.bufferManager.createVertexBuffer('Cube Vertices', cubeGeometry.geometry.vertices.buffer);
@@ -603,14 +603,14 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Create three cubes with different positions, scales, and rotations
-    const cube1 = this.geometryManager.createCube();
-    const cube2 = this.geometryManager.createCube();
-    const cylinder = this.geometryManager.createCylinder();
-    const sphere = this.geometryManager.createSphere();
+    const cube1 = this.geometryManager.getGeometry('cube');
+    const cube2 = this.geometryManager.getGeometry('cube');
+    const cylinder = this.geometryManager.getGeometry('cylinder');
+    const sphere = this.geometryManager.getGeometry('sphere');
 
     // Create individual MVP buffers and bind groups for each instance
     const createInstance = (
-      geometry: any,
+      geometry: GeometryCacheItem,
       scale: [number, number, number],
       position: [number, number, number],
       rotation: [number, number, number],
@@ -861,33 +861,6 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('Geometry manager not initialized');
     }
     return this.geometryManager.getGeometry(type, params);
-  }
-
-  /**
-   * Create unit cube geometry (1x1x1)
-   * @param segments Cube segments (not used for cube, kept for consistency)
-   * @returns Geometry cache item
-   */
-  createCube(segments?: number) {
-    return this.createGeometry('cube', { cube: { segments } });
-  }
-
-  /**
-   * Create unit sphere geometry (radius = 0.5)
-   * @param segments Sphere segments
-   * @returns Geometry cache item
-   */
-  createSphere(segments: number = 32) {
-    return this.createGeometry('sphere', { sphere: { segments } });
-  }
-
-  /**
-   * Create unit plane geometry (1x1)
-   * @param segments Plane segments
-   * @returns Geometry cache item
-   */
-  createPlane(segments: number = 1) {
-    return this.createGeometry('plane', { plane: { segments } });
   }
 
   updateBuffer(id: string, data: ArrayBuffer, offset?: number): void {

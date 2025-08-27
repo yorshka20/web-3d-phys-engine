@@ -1,3 +1,21 @@
+import { BoxOptions } from 'primitive-geometry/types/src/box';
+import { CapsuleOptions } from 'primitive-geometry/types/src/capsule';
+import { CircleOptions } from 'primitive-geometry/types/src/circle';
+import { ConeOptions } from 'primitive-geometry/types/src/cone';
+import { CubeOptions } from 'primitive-geometry/types/src/cube';
+import { CylinderOptions } from 'primitive-geometry/types/src/cylinder';
+import { DiscOptions } from 'primitive-geometry/types/src/disc';
+import { EllipseOptions } from 'primitive-geometry/types/src/ellipse';
+import { EllipsoidOptions } from 'primitive-geometry/types/src/ellipsoid';
+import { IcosahedronOptions } from 'primitive-geometry/types/src/icosahedron';
+import { IcosphereOptions } from 'primitive-geometry/types/src/icosphere';
+import { PlaneOptions } from 'primitive-geometry/types/src/plane';
+import { QuadOptions } from 'primitive-geometry/types/src/quad';
+import { RoundedCubeOptions } from 'primitive-geometry/types/src/rounded-cube';
+import { SphereOptions } from 'primitive-geometry/types/src/sphere';
+import { StadiumOptions } from 'primitive-geometry/types/src/stadium';
+import { TetrahedronOptions } from 'primitive-geometry/types/src/tetrahedron';
+import { TorusOptions } from 'primitive-geometry/types/src/torus';
 import { BufferManager } from './BufferManager';
 import { GeometryData, GeometryFactory } from './GeometryFactory';
 
@@ -19,17 +37,80 @@ export interface GeometryCacheItem {
 /**
  * Geometry types
  */
-export type GeometryType = 'cube' | 'sphere' | 'plane' | 'cylinder' | 'cone';
+export type GeometryType =
+  // Basic 3D shapes
+  | 'cube'
+  | 'sphere'
+  | 'plane'
+  | 'cylinder'
+  | 'cone'
+  // Additional 3D shapes
+  | 'box'
+  | 'roundedCube'
+  | 'icosphere'
+  | 'ellipsoid'
+  | 'capsule'
+  | 'torus'
+  | 'tetrahedron'
+  | 'icosahedron'
+  // 2D shapes
+  | 'quad'
+  | 'roundedRectangle'
+  | 'stadium'
+  | 'ellipse'
+  | 'disc'
+  | 'circle';
+
+export type GeometryPrimitiveOptions = {
+  cube: CubeOptions;
+  sphere: SphereOptions;
+  plane: PlaneOptions;
+  cylinder: CylinderOptions;
+  cone: ConeOptions;
+  box: BoxOptions;
+  roundedCube: RoundedCubeOptions;
+  icosphere: IcosphereOptions;
+  ellipsoid: EllipsoidOptions;
+  capsule: CapsuleOptions;
+  torus: TorusOptions;
+  tetrahedron: TetrahedronOptions;
+  icosahedron: IcosahedronOptions;
+  quad: QuadOptions;
+  roundedRectangle: RoundedCubeOptions;
+  stadium: StadiumOptions;
+  ellipse: EllipseOptions;
+  disc: DiscOptions;
+  circle: CircleOptions;
+};
 
 /**
  * Geometry parameters
  */
 export interface GeometryParams {
-  cube?: { segments?: number };
-  sphere?: { segments?: number };
-  plane?: { segments?: number };
-  cylinder?: { segments?: number };
-  cone?: { segments?: number };
+  // Basic 3D shapes
+  cube?: GeometryPrimitiveOptions['cube'];
+  sphere?: GeometryPrimitiveOptions['sphere'];
+  plane?: GeometryPrimitiveOptions['plane'];
+  cylinder?: GeometryPrimitiveOptions['cylinder'];
+  cone?: GeometryPrimitiveOptions['cone'];
+
+  // Additional 3D shapes
+  box?: GeometryPrimitiveOptions['box'];
+  roundedCube?: GeometryPrimitiveOptions['roundedCube'];
+  icosphere?: GeometryPrimitiveOptions['icosphere'];
+  ellipsoid?: GeometryPrimitiveOptions['ellipsoid'];
+  capsule?: GeometryPrimitiveOptions['capsule'];
+  torus?: GeometryPrimitiveOptions['torus'];
+  tetrahedron?: GeometryPrimitiveOptions['tetrahedron'];
+  icosahedron?: GeometryPrimitiveOptions['icosahedron'];
+
+  // 2D shapes
+  quad?: GeometryPrimitiveOptions['quad'];
+  roundedRectangle?: GeometryPrimitiveOptions['roundedRectangle'];
+  stadium?: GeometryPrimitiveOptions['stadium'];
+  ellipse?: GeometryPrimitiveOptions['ellipse'];
+  disc?: GeometryPrimitiveOptions['disc'];
+  circle?: GeometryPrimitiveOptions['circle'];
 }
 
 /**
@@ -70,51 +151,6 @@ export class GeometryManager {
   }
 
   /**
-   * Create unit cube geometry (1x1x1)
-   * @param segments Cube segments (not used for cube, kept for consistency)
-   * @returns Geometry cache item
-   */
-  createCube(segments?: number): GeometryCacheItem {
-    return this.getGeometry('cube', { cube: { segments } });
-  }
-
-  /**
-   * Create unit sphere geometry (radius = 0.5)
-   * @param segments Sphere segments
-   * @returns Geometry cache item
-   */
-  createSphere(segments: number = 32): GeometryCacheItem {
-    return this.getGeometry('sphere', { sphere: { segments } });
-  }
-
-  /**
-   * Create unit plane geometry (1x1)
-   * @param segments Plane segments
-   * @returns Geometry cache item
-   */
-  createPlane(segments: number = 1): GeometryCacheItem {
-    return this.getGeometry('plane', { plane: { segments } });
-  }
-
-  /**
-   * Create unit cylinder geometry (radius = 0.5, height = 1.0)
-   * @param segments Cylinder segments
-   * @returns Geometry cache item
-   */
-  createCylinder(segments: number = 32): GeometryCacheItem {
-    return this.getGeometry('cylinder', { cylinder: { segments } });
-  }
-
-  /**
-   * Create unit cone geometry (radius = 0.5, height = 1.0)
-   * @param segments Cone segments
-   * @returns Geometry cache item
-   */
-  createCone(segments: number = 32): GeometryCacheItem {
-    return this.getGeometry('cone', { cone: { segments } });
-  }
-
-  /**
    * Generate cache key
    * @param type Geometry type
    * @param params Geometry parameters
@@ -133,24 +169,65 @@ export class GeometryManager {
    */
   private createGeometry(type: GeometryType, params: GeometryParams): GeometryData {
     switch (type) {
+      // Basic 3D shapes
       case 'cube':
         return GeometryFactory.createCube();
 
       case 'sphere':
-        const sphereSegments = params.sphere?.segments ?? 32;
-        return GeometryFactory.createSphere(sphereSegments);
+        return GeometryFactory.createSphere(params.sphere ?? {});
 
       case 'plane':
-        const planeSegments = params.plane?.segments ?? 1;
-        return GeometryFactory.createPlane(planeSegments);
+        return GeometryFactory.createPlane(params.plane ?? {});
 
       case 'cylinder':
-        const cylinderSegments = params.cylinder?.segments ?? 32;
-        return GeometryFactory.createCylinder(cylinderSegments);
+        return GeometryFactory.createCylinder(params.cylinder ?? {});
 
       case 'cone':
-        const coneSegments = params.cone?.segments ?? 32;
-        return GeometryFactory.createCone(coneSegments);
+        return GeometryFactory.createCone(params.cone ?? {});
+
+      // Additional 3D shapes
+      case 'box':
+        return GeometryFactory.createBox(params.box ?? {});
+
+      case 'roundedCube':
+        return GeometryFactory.createRoundedCube(params.roundedCube ?? {});
+
+      case 'icosphere':
+        return GeometryFactory.createIcosphere(params.icosphere ?? {});
+
+      case 'ellipsoid':
+        return GeometryFactory.createEllipsoid(params.ellipsoid ?? {});
+
+      case 'capsule':
+        return GeometryFactory.createCapsule(params.capsule ?? {});
+
+      case 'torus':
+        return GeometryFactory.createTorus(params.torus ?? {});
+
+      case 'tetrahedron':
+        return GeometryFactory.createTetrahedron(params.tetrahedron ?? {});
+
+      case 'icosahedron':
+        return GeometryFactory.createIcosahedron(params.icosahedron ?? {});
+
+      // 2D shapes
+      case 'quad':
+        return GeometryFactory.createQuad(params.quad ?? {});
+
+      case 'roundedRectangle':
+        return GeometryFactory.createRoundedRectangle(params.roundedRectangle ?? {});
+
+      case 'stadium':
+        return GeometryFactory.createStadium(params.stadium ?? {});
+
+      case 'ellipse':
+        return GeometryFactory.createEllipse(params.ellipse ?? {});
+
+      case 'disc':
+        return GeometryFactory.createDisc(params.disc ?? {});
+
+      case 'circle':
+        return GeometryFactory.createCircle(params.circle ?? {});
 
       default:
         throw new Error(`Unsupported geometry type: ${type}`);

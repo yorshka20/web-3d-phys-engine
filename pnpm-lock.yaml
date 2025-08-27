@@ -99,6 +99,9 @@ importers:
       chroma-js:
         specifier: 3.1.2
         version: 3.1.2
+      primitive-geometry:
+        specifier: 2.11.0
+        version: 2.11.0
     devDependencies:
       vite-plugin-swc-transform:
         specifier: 1.1.0
@@ -2682,6 +2685,10 @@ packages:
   pretty-format@29.7.0:
     resolution: {integrity: sha512-Pdlw/oPxN+aXdmM9R00JVC9WVFoCLTKJvDVLgmJ+qAffBMxsV85l/Lu7sNx4zSzPyoL2euImuEwHhOXdEgNFZQ==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
+
+  primitive-geometry@2.11.0:
+    resolution: {integrity: sha512-W/Kl9za7sIQWRWvY6Fvr/wnexhP6D3fBcPz4gZsE2aMiUgm0N8ZUCQiwG/h+r+P1qTKi2yEINF3x79WN6gJSXA==}
+    engines: {node: '>=22.0.0', npm: '>=10.5.1', snowdev: '>=2.3.x'}
 
   prompts@2.4.2:
     resolution: {integrity: sha512-NxNv/kLguCA7p3jE8oL2aEBsrJWgAakBpgmgK6lpPWV+WuOmY6r2/zbAVnP+T8bQlA0nzHXSJSJW0Hq7ylaD2Q==}
@@ -6304,6 +6311,8 @@ snapshots:
       '@jest/schemas': 29.6.3
       ansi-styles: 5.2.0
       react-is: 18.3.1
+
+  primitive-geometry@2.11.0: {}
 
   prompts@2.4.2:
     dependencies:

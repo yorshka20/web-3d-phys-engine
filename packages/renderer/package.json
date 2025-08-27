@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@web-3d-phys-engine/ecs": "workspace:*",
-    "chroma-js": "3.1.2"
+    "chroma-js": "3.1.2",
+    "primitive-geometry": "2.11.0"
   },
   "files": [
     "dist"

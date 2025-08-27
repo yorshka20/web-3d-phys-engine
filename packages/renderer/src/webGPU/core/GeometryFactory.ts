@@ -1,4 +1,28 @@
 import { Vec2, Vec3 } from '@ecs/types/types';
+import {
+  box,
+  capsule,
+  circle,
+  cone,
+  // 3D shapes
+  cube,
+  cylinder,
+  disc,
+  ellipse,
+  ellipsoid,
+  icosahedron,
+  icosphere,
+  plane,
+  // 2D shapes
+  quad,
+  roundedCube,
+  roundedRectangle,
+  sphere,
+  stadium,
+  tetrahedron,
+  torus,
+} from 'primitive-geometry';
+import { GeometryPrimitiveOptions } from './GeometryManager';
 
 /**
  * 3D vertex data structure
@@ -34,339 +58,273 @@ export interface GeometryData {
 
 /**
  * Geometry Factory Class
- * Used to generate common 3D geometry data
+ * Used to generate common 3D geometry data using primitive-geometry library
  */
 export class GeometryFactory {
   /**
-   * Create a unit cube geometry data
-   * @param size Cube size is 1x1x1
-   * @returns Cube vertex and index data
+   * Convert primitive-geometry data to our GeometryData format
+   * @param primitiveData Data from primitive-geometry library
+   * @returns Converted geometry data
    */
-  static createCube(): GeometryData {
-    const halfSize = 0.5;
+  private static convertPrimitiveGeometry(primitiveData: {
+    positions: Float32Array;
+    normals?: Float32Array;
+    uvs?: Float32Array;
+    cells: Uint16Array | Uint8Array | Uint32Array;
+  }): GeometryData {
+    const { positions, normals, uvs, cells } = primitiveData;
 
-    // Vertex data: 24 vertices (4 vertices per face)
-    // Format: [x, y, z, nx, ny, nz, u, v] - 8 floats per vertex
-    // prettier-ignore
-    const vertices = new Float32Array([
-    // Front face (Z+) - normal: (0, 0, 1)
-    -halfSize, -halfSize,  halfSize,  0, 0, 1,  0, 0,  // 0: left bottom
-     halfSize, -halfSize,  halfSize,  0, 0, 1,  1, 0,  // 1: right bottom
-     halfSize,  halfSize,  halfSize,  0, 0, 1,  1, 1,  // 2: right top
-    -halfSize,  halfSize,  halfSize,  0, 0, 1,  0, 1,  // 3: left top
+    // Calculate vertex count (positions array length / 3)
+    const vertexCount = positions.length / 3;
 
-    // Back face (Z-) - normal: (0, 0, -1)
-    -halfSize, -halfSize, -halfSize,  0, 0, -1,  1, 0,  // 4: left bottom
-    -halfSize,  halfSize, -halfSize,  0, 0, -1,  1, 1,  // 5: left top
-     halfSize,  halfSize, -halfSize,  0, 0, -1,  0, 1,  // 6: right top
-     halfSize, -halfSize, -halfSize,  0, 0, -1,  0, 0,  // 7: right bottom
+    // Interleave vertex data: [x, y, z, nx, ny, nz, u, v] per vertex
+    const vertices = new Float32Array(vertexCount * 8);
 
-    // Top face (Y+) - normal: (0, 1, 0)
-    -halfSize,  halfSize, -halfSize,  0, 1, 0,  0, 1,   // 8: left back
-    -halfSize,  halfSize,  halfSize,  0, 1, 0,  0, 0,   // 9: left front
-     halfSize,  halfSize,  halfSize,  0, 1, 0,  1, 0,   // 10: right front
-     halfSize,  halfSize, -halfSize,  0, 1, 0,  1, 1,   // 11: right back
+    for (let i = 0; i < vertexCount; i++) {
+      const posIndex = i * 3;
+      const uvIndex = i * 2;
+      const vertexIndex = i * 8;
 
-    // Bottom face (Y-) - normal: (0, -1, 0)
-    -halfSize, -halfSize, -halfSize,  0, -1, 0,  0, 0,  // 12: left back
-     halfSize, -halfSize, -halfSize,  0, -1, 0,  1, 0,  // 13: right back
-     halfSize, -halfSize,  halfSize,  0, -1, 0,  1, 1,  // 14: right front
-    -halfSize, -halfSize,  halfSize,  0, -1, 0,  0, 1,  // 15: left front
+      // Position (x, y, z)
+      vertices[vertexIndex] = positions[posIndex];
+      vertices[vertexIndex + 1] = positions[posIndex + 1];
+      vertices[vertexIndex + 2] = positions[posIndex + 2];
 
-    // Right face (X+) - normal: (1, 0, 0)
-     halfSize, -halfSize, -halfSize,  1, 0, 0,  0, 0,   // 16: bottom back
-     halfSize,  halfSize, -halfSize,  1, 0, 0,  0, 1,   // 17: top back
-     halfSize,  halfSize,  halfSize,  1, 0, 0,  1, 1,   // 18: top front
-     halfSize, -halfSize,  halfSize,  1, 0, 0,  1, 0,   // 19: bottom front
+      // Normal (nx, ny, nz) - use default if not provided
+      if (normals && normals.length >= posIndex + 3) {
+        vertices[vertexIndex + 3] = normals[posIndex];
+        vertices[vertexIndex + 4] = normals[posIndex + 1];
+        vertices[vertexIndex + 5] = normals[posIndex + 2];
+      } else {
+        // Default normal pointing up
+        vertices[vertexIndex + 3] = 0;
+        vertices[vertexIndex + 4] = 1;
+        vertices[vertexIndex + 5] = 0;
+      }
 
-    // Left face (X-) - normal: (-1, 0, 0)
-    -halfSize, -halfSize, -halfSize,  -1, 0, 0,  1, 0,  // 20: bottom back
-    -halfSize, -halfSize,  halfSize,  -1, 0, 0,  0, 0,  // 21: bottom front
-    -halfSize,  halfSize,  halfSize,  -1, 0, 0,  0, 1,  // 22: top front
-    -halfSize,  halfSize, -halfSize,  -1, 0, 0,  1, 1,  // 23: top back
-  ]);
+      // UV (u, v) - use default if not provided
+      if (uvs && uvs.length >= uvIndex + 2) {
+        vertices[vertexIndex + 6] = uvs[uvIndex];
+        vertices[vertexIndex + 7] = uvs[uvIndex + 1];
+      } else {
+        // Default UV coordinates
+        vertices[vertexIndex + 6] = 0;
+        vertices[vertexIndex + 7] = 0;
+      }
+    }
 
-    // Index data: 36 indices (6 faces, 2 triangles per face)
-    // prettier-ignore
-    const indices = new Uint16Array([
-    0,  1,  2,   2,  3,  0,   // Front face
-    4,  5,  6,   6,  7,  4,   // Back face
-    8,  9,  10,  10, 11, 8,   // Top face
-    12, 13, 14,  14, 15, 12,  // Bottom face
-    16, 17, 18,  18, 19, 16,  // Right face
-    20, 21, 22,  22, 23, 20,  // Left face
-  ]);
+    // Calculate bounds
+    let minX = Infinity,
+      minY = Infinity,
+      minZ = Infinity;
+    let maxX = -Infinity,
+      maxY = -Infinity,
+      maxZ = -Infinity;
+
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i];
+      const y = positions[i + 1];
+      const z = positions[i + 2];
+
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      minZ = Math.min(minZ, z);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      maxZ = Math.max(maxZ, z);
+    }
+
+    // Convert cells to Uint16Array if needed
+    const indices = cells instanceof Uint16Array ? cells : new Uint16Array(cells);
 
     return {
       vertices,
       indices,
-      vertexCount: 24,
-      indexCount: 36,
-      vertexFormat: 'full' as VertexFormat, // position + normal + uv (8 floats)
-      bounds: {
-        min: [-halfSize, -halfSize, -halfSize],
-        max: [halfSize, halfSize, halfSize],
-      },
-    };
-  }
-
-  /**
-   * Create a unit sphere geometry data (radius = 0.5)
-   * @param segments Sphere segments
-   * @returns Unit sphere vertex and index data
-   */
-  static createSphere(segments: number = 32): GeometryData {
-    const radius = 0.5;
-    const vertices: number[] = [];
-    const indices: number[] = [];
-
-    // Generate sphere vertices
-    for (let lat = 0; lat <= segments; lat++) {
-      const theta = (lat * Math.PI) / segments;
-      const sinTheta = Math.sin(theta);
-      const cosTheta = Math.cos(theta);
-
-      for (let lon = 0; lon <= segments; lon++) {
-        const phi = (lon * 2 * Math.PI) / segments;
-        const sinPhi = Math.sin(phi);
-        const cosPhi = Math.cos(phi);
-
-        const x = cosPhi * sinTheta;
-        const y = cosTheta;
-        const z = sinPhi * sinTheta;
-
-        vertices.push(
-          x * radius, // position x
-          y * radius, // position y
-          z * radius, // position z
-          x, // normal x
-          y, // normal y
-          z, // normal z
-          lon / segments, // uv u
-          lat / segments, // uv v
-        );
-      }
-    }
-
-    // Generate sphere indices
-    for (let lat = 0; lat < segments; lat++) {
-      for (let lon = 0; lon < segments; lon++) {
-        const current = lat * (segments + 1) + lon;
-        const next = current + segments + 1;
-
-        indices.push(current, next, current + 1);
-        indices.push(next, next + 1, current + 1);
-      }
-    }
-
-    return {
-      vertices: new Float32Array(vertices),
-      indices: new Uint16Array(indices),
-      vertexCount: vertices.length / 8, // 8 floats per vertex (pos + normal + uv)
+      vertexCount,
       indexCount: indices.length,
-      vertexFormat: 'full' as VertexFormat, // pos + normal + uv
+      vertexFormat: 'full' as VertexFormat,
       bounds: {
-        min: [-radius, -radius, -radius],
-        max: [radius, radius, radius],
+        min: [minX, minY, minZ],
+        max: [maxX, maxY, maxZ],
       },
     };
   }
+  /**
+   * Create a cube geometry using primitive-geometry
+   * @returns Cube vertex and index data
+   */
+  static createCube(options: GeometryPrimitiveOptions['cube'] = {}): GeometryData {
+    const primitiveData = cube(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
 
   /**
-   * Create a unit plane geometry data (1x1)
-   * @param segments Plane segments
+   * Create a sphere geometry using primitive-geometry
+   * @returns Sphere vertex and index data
+   */
+  static createSphere(options: GeometryPrimitiveOptions['sphere'] = {}): GeometryData {
+    const primitiveData = sphere(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  /**
+   * Create a unit plane geometry data using primitive-geometry
    * @returns Unit plane vertex and index data
    */
-  static createPlane(segments: number = 1): GeometryData {
-    const vertices: number[] = [];
-    const indices: number[] = [];
-
-    const width = 1.0;
-    const height = 1.0;
-    const halfWidth = width * 0.5;
-    const halfHeight = height * 0.5;
-
-    // Generate plane vertices
-    for (let z = 0; z <= segments; z++) {
-      for (let x = 0; x <= segments; x++) {
-        const xPos = (x / segments - 0.5) * width;
-        const zPos = (z / segments - 0.5) * height;
-
-        vertices.push(
-          xPos, // position x
-          0, // position y
-          zPos, // position z
-          0, // normal x
-          1, // normal y
-          0, // normal z
-          x / segments, // uv u
-          z / segments, // uv v
-        );
-      }
-    }
-
-    // Generate plane indices
-    for (let z = 0; z < segments; z++) {
-      for (let x = 0; x < segments; x++) {
-        const current = z * (segments + 1) + x;
-        const next = current + segments + 1;
-
-        indices.push(current, next, current + 1);
-        indices.push(next, next + 1, current + 1);
-      }
-    }
-
-    return {
-      vertices: new Float32Array(vertices),
-      indices: new Uint16Array(indices),
-      vertexCount: vertices.length / 8, // 8 floats per vertex (pos + normal + uv)
-      indexCount: indices.length,
-      vertexFormat: 'full' as VertexFormat, // pos + normal + uv
-      bounds: {
-        min: [-halfWidth, 0, -halfHeight],
-        max: [halfWidth, 0, halfHeight],
-      },
-    };
+  static createPlane(options: GeometryPrimitiveOptions['plane'] = {}): GeometryData {
+    const primitiveData = plane(options);
+    return this.convertPrimitiveGeometry(primitiveData);
   }
 
   /**
-   * Create a unit cylinder geometry data (radius = 0.5, height = 1.0)
-   * @param segments Cylinder segments
+   * Create a unit cylinder geometry data using primitive-geometry
    * @returns Unit cylinder vertex and index data
    */
-  static createCylinder(segments: number = 32): GeometryData {
-    const radius = 0.5;
-    const height = 1.0;
-    const vertices: number[] = [];
-    const indices: number[] = [];
-
-    const halfHeight = height * 0.5;
-
-    // Generate cylinder side vertices
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i * 2 * Math.PI) / segments;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-
-      // Bottom vertices
-      vertices.push(
-        x,
-        -halfHeight,
-        z, // position
-        x / radius,
-        0,
-        z / radius, // normal (normalized)
-        i / segments,
-        0, // uv
-      );
-
-      // Top vertices
-      vertices.push(
-        x,
-        halfHeight,
-        z, // position
-        x / radius,
-        0,
-        z / radius, // normal (normalized)
-        i / segments,
-        1, // uv
-      );
-    }
-
-    // Generate side indices
-    for (let i = 0; i < segments; i++) {
-      const current = i * 2;
-      const next = (i + 1) * 2;
-
-      // Side face triangles (counter-clockwise)
-      indices.push(current, next, current + 1);
-      indices.push(next, next + 1, current + 1);
-    }
-
-    // Add top and bottom center vertices
-    const topCenter = vertices.length / 8;
-    const bottomCenter = topCenter + 1;
-
-    // Top face center point
-    vertices.push(0, halfHeight, 0, 0, 1, 0, 0.5, 0.5);
-    // Bottom face center point
-    vertices.push(0, -halfHeight, 0, 0, -1, 0, 0.5, 0.5);
-
-    // Generate top and bottom face indices
-    for (let i = 0; i < segments; i++) {
-      const current = i * 2;
-      const next = ((i + 1) % segments) * 2;
-
-      // Top face triangles (counter-clockwise from above)
-      indices.push(topCenter, current + 1, next + 1);
-
-      // Bottom face triangles (clockwise from below = counter-clockwise from above)
-      indices.push(bottomCenter, next, current);
-    }
-
-    return {
-      vertices: new Float32Array(vertices),
-      indices: new Uint16Array(indices),
-      vertexCount: vertices.length / 8, // 8 floats per vertex (pos + normal + uv)
-      indexCount: indices.length,
-      vertexFormat: 'full' as VertexFormat, // pos + normal + uv
-      bounds: {
-        min: [-radius, -halfHeight, -radius],
-        max: [radius, halfHeight, radius],
-      },
-    };
+  static createCylinder(options: GeometryPrimitiveOptions['cylinder'] = {}): GeometryData {
+    const primitiveData = cylinder(options);
+    return this.convertPrimitiveGeometry(primitiveData);
   }
 
   /**
-   * Create a unit cone geometry data (radius = 0.5, height = 1.0)
-   * @param segments Cone segments
+   * Create a unit cone geometry data using primitive-geometry
    * @returns Unit cone vertex and index data
    */
-  static createCone(segments: number = 32): GeometryData {
-    const radius = 0.5;
-    const height = 1.0;
-    const vertices: number[] = [];
-    const indices: number[] = [];
+  static createCone(options: GeometryPrimitiveOptions['cone'] = {}): GeometryData {
+    const primitiveData = cone(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
 
-    const halfHeight = height * 0.5;
+  // === 2D Shapes ===
 
-    // Apex vertex
-    vertices.push(0, halfHeight, 0, 0, 1, 0, 0.5, 1); // Apex
+  /**
+   * Create a quad geometry using primitive-geometry
+   * @returns Quad vertex and index data
+   */
+  static createQuad(options: GeometryPrimitiveOptions['quad'] = {}): GeometryData {
+    const primitiveData = quad(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
 
-    // Base circle vertices
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i * 2 * Math.PI) / segments;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
+  /**
+   * Create a rounded rectangle geometry using primitive-geometry
+   * @returns Rounded rectangle vertex and index data
+   */
+  static createRoundedRectangle(
+    options: GeometryPrimitiveOptions['roundedRectangle'] = {},
+  ): GeometryData {
+    const primitiveData = roundedRectangle(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
 
-      // prettier-ignore
-      vertices.push(
-        x, -halfHeight, z, // position
-        0, -1, 0,          // normal
-        i / segments, 0,   // uv
-      );
-    }
+  /**
+   * Create a stadium geometry using primitive-geometry
+   * @returns Stadium vertex and index data
+   */
+  static createStadium(options: GeometryPrimitiveOptions['stadium'] = {}): GeometryData {
+    const primitiveData = stadium(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
 
-    // Side indices
-    for (let i = 0; i < segments; i++) {
-      indices.push(0, i + 1, ((i + 1) % segments) + 1);
-    }
+  /**
+   * Create an ellipse geometry using primitive-geometry
+   * @returns Ellipse vertex and index data
+   */
+  static createEllipse(options: GeometryPrimitiveOptions['ellipse'] = {}): GeometryData {
+    const primitiveData = ellipse(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
 
-    // Base indices
-    for (let i = 1; i < segments - 1; i++) {
-      indices.push(1, i + 1, i + 2);
-    }
+  /**
+   * Create a disc geometry using primitive-geometry
+   * @returns Disc vertex and index data
+   */
+  static createDisc(options: GeometryPrimitiveOptions['disc'] = {}): GeometryData {
+    const primitiveData = disc(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
 
-    return {
-      vertices: new Float32Array(vertices),
-      indices: new Uint16Array(indices),
-      vertexCount: vertices.length / 8, // 8 floats per vertex (pos + normal + uv)
-      indexCount: indices.length,
-      vertexFormat: 'full' as VertexFormat, // pos + normal + uv
-      bounds: {
-        min: [-radius, -halfHeight, -radius],
-        max: [radius, halfHeight, radius],
-      },
-    };
+  /**
+   * Create a circle geometry using primitive-geometry
+   * @returns Circle vertex and index data
+   */
+  static createCircle(options: GeometryPrimitiveOptions['circle'] = {}): GeometryData {
+    const primitiveData = circle(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  // === 3D Shapes ===
+
+  /**
+   * Create a box geometry using primitive-geometry (without normals/uvs)
+   * @returns Box vertex and index data
+   */
+  static createBox(options: GeometryPrimitiveOptions['box'] = {}): GeometryData {
+    const primitiveData = box(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  /**
+   * Create a rounded cube geometry using primitive-geometry
+   * @returns Rounded cube vertex and index data
+   */
+  static createRoundedCube(options: GeometryPrimitiveOptions['roundedCube'] = {}): GeometryData {
+    const primitiveData = roundedCube(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  /**
+   * Create an icosphere geometry using primitive-geometry
+   * @returns Icosphere vertex and index data
+   */
+  static createIcosphere(options: GeometryPrimitiveOptions['icosphere'] = {}): GeometryData {
+    const primitiveData = icosphere(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  /**
+   * Create an ellipsoid geometry using primitive-geometry
+   * @returns Ellipsoid vertex and index data
+   */
+  static createEllipsoid(options: GeometryPrimitiveOptions['ellipsoid'] = {}): GeometryData {
+    const primitiveData = ellipsoid(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  /**
+   * Create a capsule geometry using primitive-geometry
+   * @returns Capsule vertex and index data
+   */
+  static createCapsule(options: GeometryPrimitiveOptions['capsule'] = {}): GeometryData {
+    const primitiveData = capsule(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  /**
+   * Create a torus geometry using primitive-geometry
+   * @returns Torus vertex and index data
+   */
+  static createTorus(options: GeometryPrimitiveOptions['torus'] = {}): GeometryData {
+    const primitiveData = torus(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  /**
+   * Create a tetrahedron geometry using primitive-geometry
+   * @param radius Tetrahedron radius
+   * @returns Tetrahedron vertex and index data
+   */
+  static createTetrahedron(options: GeometryPrimitiveOptions['tetrahedron'] = {}): GeometryData {
+    const primitiveData = tetrahedron(options);
+    return this.convertPrimitiveGeometry(primitiveData);
+  }
+
+  /**
+   * Create an icosahedron geometry using primitive-geometry
+   * @param radius Icosahedron radius
+   * @returns Icosahedron vertex and index data
+   */
+  static createIcosahedron(options: GeometryPrimitiveOptions['icosahedron'] = {}): GeometryData {
+    const primitiveData = icosahedron(options);
+    return this.convertPrimitiveGeometry(primitiveData);
   }
 }
