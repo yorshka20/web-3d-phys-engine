@@ -8,7 +8,7 @@ export default defineConfig({
       swcOptions: {
         jsc: {
           parser: {
-            syntax: 'ecmascript',
+            syntax: 'typescript',
             decorators: true,
           },
           transform: {
