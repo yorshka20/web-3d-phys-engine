@@ -3,8 +3,6 @@ import chroma from 'chroma-js';
 import { mat4 } from 'gl-matrix';
 import {
   BindGroupLayoutVisibility,
-  ResourceState,
-  ResourceType,
   ShaderType,
   TimeManager,
   WebGPUContext,
@@ -356,7 +354,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('WebGPU context or resource manager or time manager not initialized');
     }
 
-    // Create time bind group layout using shader manager
+    // Create TimeBindGroup layout using shader manager
     const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout('timeBindGroup', {
       entries: [
         {
@@ -365,19 +363,7 @@ export class WebGPURenderer implements IWebGPURenderer {
           buffer: { type: 'uniform' },
         },
       ],
-      label: 'Time Bind Group Layout',
-    });
-    this.resourceManager.createResource({
-      id: 'timeBindGroup',
-      type: ResourceType.BIND_GROUP_LAYOUT,
-      factory: async () => ({
-        type: ResourceType.BIND_GROUP_LAYOUT,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        layout: timeBindGroupLayout,
-      }),
-      dependencies: [],
+      label: 'TimeBindGroup Layout',
     });
 
     // Create MVP matrix bind group layout
@@ -389,22 +375,10 @@ export class WebGPURenderer implements IWebGPURenderer {
           buffer: { type: 'uniform' },
         },
       ],
-      label: 'MVP Bind Group Layout',
-    });
-    this.resourceManager.createResource({
-      id: 'mvpBindGroup',
-      type: ResourceType.BIND_GROUP_LAYOUT,
-      factory: async () => ({
-        type: ResourceType.BIND_GROUP_LAYOUT,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        layout: mvpBindGroupLayout,
-      }),
-      dependencies: [],
+      label: 'MVPBindGroup Layout',
     });
 
-    const timeBindGroup = this.device.createBindGroup({
+    this.device.createBindGroup({
       layout: timeBindGroupLayout,
       entries: [
         {
@@ -412,22 +386,12 @@ export class WebGPURenderer implements IWebGPURenderer {
           resource: { buffer: this.timeManager.getBuffer() },
         },
       ],
-      label: 'Time Bind Group',
+      label: 'TimeBindGroup',
     });
-    this.resourceManager.createResource({
-      id: 'Time Bind Group',
-      type: ResourceType.BIND_GROUP,
-      factory: async () => ({
-        type: ResourceType.BIND_GROUP,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        bindGroup: timeBindGroup,
-      }),
-    });
-    console.log('Registered resource: Time Bind Group');
 
-    const mvpBindGroup = this.device.createBindGroup({
+    console.log('Registered resource: TimeBindGroup');
+
+    this.device.createBindGroup({
       layout: mvpBindGroupLayout,
       entries: [
         {
@@ -437,20 +401,10 @@ export class WebGPURenderer implements IWebGPURenderer {
           },
         },
       ],
-      label: 'MVP Bind Group',
+      label: 'MVPBindGroup',
     });
-    this.resourceManager.createResource({
-      id: 'MVP Bind Group',
-      type: ResourceType.BIND_GROUP,
-      factory: async () => ({
-        type: ResourceType.BIND_GROUP,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        bindGroup: mvpBindGroup,
-      }),
-    });
-    console.log('Registered resource: MVP Bind Group');
+
+    console.log('Registered resource: MVPBindGroup');
   }
 
   private async compileShaders(): Promise<void> {
@@ -605,10 +559,10 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('Geometry manager not initialized');
     }
 
-    // Get MVP bind group layout for creating individual bind groups
+    // Get MVPBindGroup layout for creating individual bind groups
     const mvpBindGroupLayout = this.resourceManager.getBindGroupLayoutResource('mvpBindGroup');
     if (!mvpBindGroupLayout) {
-      throw new Error('MVP bind group layout not found');
+      throw new Error('MVPBindGroup layout not found');
     }
 
     // Create three cubes with different positions, scales, and rotations
@@ -631,7 +585,7 @@ export class WebGPURenderer implements IWebGPURenderer {
         label: `MVP Buffer ${instanceName}`,
       });
 
-      // Create individual MVP bind group for this instance
+      // Create individual MVPBindGroup for this instance
       const mvpBindGroup = this.device.createBindGroup({
         layout: mvpBindGroupLayout.layout,
         entries: [
@@ -640,7 +594,7 @@ export class WebGPURenderer implements IWebGPURenderer {
             resource: { buffer: mvpBuffer },
           },
         ],
-        label: `MVP Bind Group ${instanceName}`,
+        label: `MVPBindGroup ${instanceName}`,
       });
 
       return {
@@ -720,9 +674,8 @@ export class WebGPURenderer implements IWebGPURenderer {
   private renderTick(deltaTime: number, context: RenderContext): void {
     // Note: Time is already updated in beginFrame()
 
-    // create time bind group
-    const timeBuffer = this.timeManager.getBuffer();
-    const timeBindGroup = this.resourceManager.getBindGroupResource('Time Bind Group');
+    // create TimeBindGroup
+    const timeBindGroup = this.resourceManager.getBindGroupResource('TimeBindGroup');
 
     // Update projection and view matrices (same for all cubes)
     const now = performance.now() / 1000;
@@ -806,7 +759,7 @@ export class WebGPURenderer implements IWebGPURenderer {
         // Update this instance's MVP uniform buffer
         this.device.queue.writeBuffer(instance.mvpBuffer, 0, new Float32Array(mvpMatrix));
 
-        // Use this instance's MVP bind group
+        // Use this instance's MVPBindGroup
         renderPass.setBindGroup(1, instance.mvpBindGroup);
 
         // Draw this instance

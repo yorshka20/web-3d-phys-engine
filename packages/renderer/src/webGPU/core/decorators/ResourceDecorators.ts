@@ -43,10 +43,12 @@ export function AutoRegisterResource<T extends ResourceType>(
       // Auto-register resource if resource manager is available
       if (this.resourceManager && result) {
         const resourceId = this.generateResourceId(String(context.name), args);
-        console.log(`[AutoRegisterResource] Registering resource: ${resourceId}, type: ${type}`);
+        console.log(
+          `[Decorator:AutoRegisterResource] Registering resource: ${resourceId}, type: ${type}`,
+        );
         this.registerResource(resourceId, result, type, options);
       } else if (!this.resourceManager) {
-        console.warn(`[AutoRegisterResource] No resource manager set`);
+        console.warn(`[Decorator:AutoRegisterResource] No resource manager set`);
       }
 
       return result;
@@ -281,10 +283,12 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
 
       // Auto-register
       if (this.resourceManager) {
-        console.log(`[SmartResource] Registering resource: ${resourceId}, type: ${type}`);
+        console.log(`[Decorator:SmartResource] Registering resource: ${resourceId}, type: ${type}`);
         this.registerResource(resourceId, resource, type, options);
       } else {
-        console.warn(`[SmartResource] No resource manager set for resource: ${resourceId}`);
+        console.warn(
+          `[Decorator:SmartResource] No resource manager set for resource: ${resourceId}`,
+        );
       }
 
       return resource;

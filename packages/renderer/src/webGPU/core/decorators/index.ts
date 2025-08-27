@@ -30,17 +30,14 @@
  * ```
  */
 
-import {
-  AutoRegisterResource,
-  Injectable,
-  SmartResource,
-} from './ResourceDecorators';
+import { AutoRegisterResource, Injectable, SmartResource } from './ResourceDecorators';
 
 // Core decorators
 export {
   AutoRegisterResource,
   Inject,
   Injectable,
+  MonitorPerformance,
   ResourceFactory,
   SmartResource,
   type ResourceMetadata,
@@ -51,9 +48,6 @@ export * from './types';
 
 // Dependency injection
 export { DIContainer, globalContainer, ServiceTokens, type ServiceToken } from './DIContainer';
-
-// Examples and usage patterns
-export * from './examples/DecoratorExamples';
 
 /**
  * Quick setup function for basic decorator usage

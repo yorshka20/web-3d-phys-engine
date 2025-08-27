@@ -1,8 +1,7 @@
 import { AutoRegisterResource, Injectable, SmartResource } from './decorators';
 import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
-import { ResourceState, ResourceType } from './types/constant';
-import { BufferResource } from './types/resource';
+import { ResourceType } from './types/constant';
 
 /**
  * WebGPU buffer manager
@@ -44,6 +43,9 @@ export class BufferManager {
 
   /**
    * create buffer with automatic resource registration
+   *
+   * this method will not be decorated with `@AutoRegisterResource`
+   *
    * @param descriptor buffer descriptor
    * @returns created GPU buffer
    */
@@ -89,42 +91,6 @@ export class BufferManager {
     );
 
     return buffer;
-  }
-
-  /**
-   * Auto-register buffer to resource manager
-   */
-  private autoRegisterBuffer(buffer: GPUBuffer, label: string, type: BufferType): void {
-    if (!this.resourceManager) {
-      console.warn(`Resource manager not set, skipping auto-registration for buffer: ${label}`);
-      return;
-    }
-
-    // Create resource descriptor
-    const resourceDescriptor = {
-      id: label,
-      type: ResourceType.BUFFER,
-      factory: async (): Promise<BufferResource> => ({
-        type: ResourceType.BUFFER,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {
-          this.destroyBuffer(buffer);
-        },
-        buffer,
-      }),
-      dependencies: [],
-      metadata: {
-        bufferType: type,
-        size: buffer.size,
-        usage: buffer.usage,
-      },
-    };
-
-    // Register resource
-    this.resourceManager.createResource(resourceDescriptor).catch((error) => {
-      console.error(`Failed to auto-register buffer ${label}:`, error);
-    });
   }
 
   /**
