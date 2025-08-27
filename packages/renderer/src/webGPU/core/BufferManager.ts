@@ -1,5 +1,6 @@
 import { AutoRegisterResource, Injectable, SmartResource } from './decorators';
-import { globalContainer, ServiceTokens } from './decorators/DIContainer';
+import { DIContainer, globalContainer, ServiceTokens } from './decorators/DIContainer';
+import { InjectableClass } from './decorators/types';
 import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
 import { ResourceType } from './types/constant';
@@ -9,8 +10,15 @@ import { ResourceType } from './types/constant';
  * responsible for creating, managing, and updating various types of GPU buffer
  */
 @Injectable()
-export class BufferManager {
-  private resourceManager: WebGPUResourceManager;
+export class BufferManager implements InjectableClass {
+  resourceLifecycles?: Map<string, string> | undefined;
+  resourceCache?: Map<string, any> | undefined;
+  resourcePool?: Map<string, any> | undefined;
+
+  container?: DIContainer | undefined;
+
+  resourceManager: WebGPUResourceManager;
+
   private device: GPUDevice;
   private bufferPools: Map<BufferType, BufferPoolItem[]> = new Map();
   private activeBuffers: Set<GPUBuffer> = new Set();
@@ -525,5 +533,36 @@ export class BufferManager {
   cleanupFrameResources(): void {
     // clean up unused buffers
     this.cleanupUnusedBuffers();
+  }
+
+  setContainer(container: DIContainer): void {
+    throw new Error('Method not implemented.');
+  }
+  getContainer(): DIContainer | undefined {
+    throw new Error('Method not implemented.');
+  }
+  setResourceManager(manager: WebGPUResourceManager): void {
+    throw new Error('Method not implemented.');
+  }
+  getResourceManager(): WebGPUResourceManager | undefined {
+    throw new Error('Method not implemented.');
+  }
+  generateResourceId(methodName: string, args: any[]): string {
+    throw new Error('Method not implemented.');
+  }
+  registerResource(id: string, resource: any, type: ResourceType, options?: any): void {
+    throw new Error('Method not implemented.');
+  }
+  createResourceWrapper(type: ResourceType, resource: any) {
+    throw new Error('Method not implemented.');
+  }
+  destroyResource(resource: any): void {
+    throw new Error('Method not implemented.');
+  }
+  setResourceLifecycle?(resourceId: string, lifecycle: string): void {
+    throw new Error('Method not implemented.');
+  }
+  cleanupResources?(lifecycle: string): void {
+    throw new Error('Method not implemented.');
   }
 }

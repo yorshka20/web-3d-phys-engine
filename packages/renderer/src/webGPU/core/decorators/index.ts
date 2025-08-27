@@ -174,7 +174,3 @@ export type DecoratedClass<T = any> = {
     getPerformanceMetrics?(): Map<string, number[]>;
   };
 };
-
-export type InjectableClass<T = any> = DecoratedClass<T>;
-export type SmartResourceClass<T = any> = DecoratedClass<T>;
-export type MonitoredClass<T = any> = DecoratedClass<T>;

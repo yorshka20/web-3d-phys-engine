@@ -1,5 +1,5 @@
-import { AutoRegisterResource, Injectable, SmartResource } from './decorators';
-import { globalContainer, ServiceTokens } from './decorators/DIContainer';
+import { AutoRegisterResource, Injectable, InjectableClass, SmartResource } from './decorators';
+import { DIContainer, globalContainer, ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import {
   BindGroupDescriptor,
@@ -16,8 +16,14 @@ import { ResourceType } from './types/constant';
  * manage shader modules and render pipelines
  */
 @Injectable()
-export class ShaderManager {
-  private resourceManager: WebGPUResourceManager;
+export class ShaderManager implements InjectableClass {
+  resourceLifecycles?: Map<string, string> | undefined;
+  resourceCache?: Map<string, any> | undefined;
+  resourcePool?: Map<string, any> | undefined;
+
+  resourceManager: WebGPUResourceManager;
+  container?: DIContainer | undefined;
+
   private device: GPUDevice;
   private shaderModules: Map<string, GPUShaderModule> = new Map();
   private renderPipelines: Map<string, GPURenderPipeline> = new Map();
@@ -438,5 +444,36 @@ export class ShaderManager {
 
     // clean bind groups (frame-level cleanup)
     this.bindGroups.clear();
+  }
+
+  setContainer(container: DIContainer): void {
+    throw new Error('Method not implemented.');
+  }
+  getContainer(): DIContainer | undefined {
+    throw new Error('Method not implemented.');
+  }
+  setResourceManager(manager: WebGPUResourceManager): void {
+    throw new Error('Method not implemented.');
+  }
+  getResourceManager(): WebGPUResourceManager | undefined {
+    throw new Error('Method not implemented.');
+  }
+  generateResourceId(methodName: string, args: any[]): string {
+    throw new Error('Method not implemented.');
+  }
+  registerResource(id: string, resource: any, type: ResourceType, options?: any): void {
+    throw new Error('Method not implemented.');
+  }
+  createResourceWrapper(type: ResourceType, resource: any) {
+    throw new Error('Method not implemented.');
+  }
+  destroyResource(resource: any): void {
+    throw new Error('Method not implemented.');
+  }
+  setResourceLifecycle?(resourceId: string, lifecycle: string): void {
+    throw new Error('Method not implemented.');
+  }
+  cleanupResources?(lifecycle: string): void {
+    throw new Error('Method not implemented.');
   }
 }

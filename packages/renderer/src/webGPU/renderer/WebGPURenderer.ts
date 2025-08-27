@@ -56,8 +56,6 @@ import {
  * - Management of render pipelines and shaders
  */
 export class WebGPURenderer implements IWebGPURenderer {
-  enabled = true;
-  debug = false;
   priority = SystemPriorities.RENDER;
 
   private initialized = false;
@@ -272,10 +270,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       },
     };
   }
-  setDebugMode(enabled: boolean): void {
-    this.debug = enabled;
-    console.log(`Debug mode ${enabled ? 'enabled' : 'disabled'}`);
-  }
+
   getDebugInfo(): {
     deviceInfo: GPUAdapterInfo;
     supportedFeatures: string[];
@@ -598,7 +593,7 @@ export class WebGPURenderer implements IWebGPURenderer {
    * Create geometry instances from descriptors in batch
    * @param descriptors Array of geometry instance descriptors
    */
-  createGeometryInstances(descriptors: GeometryInstanceDescriptor[]): void {
+  private createGeometryInstances(descriptors: GeometryInstanceDescriptor[]): void {
     if (!this.geometryManager) {
       throw new Error('Geometry manager not initialized');
     }

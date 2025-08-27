@@ -290,12 +290,4 @@ export abstract class IWebGPURenderer implements IRenderer, IRenderBackend {
       total: number;
     };
   };
-
-  // ===== Debug Support =====
-  abstract setDebugMode(enabled: boolean): void;
-  abstract getDebugInfo(): {
-    deviceInfo: GPUAdapterInfo;
-    supportedFeatures: string[];
-    limits: Record<string, number>;
-  };
 }
