@@ -6,6 +6,12 @@ import {
   RenderPipelineResource,
   ShaderResource,
 } from '../types/resource';
+import {
+  AutoRegisterOptions,
+  ResourceFactoryOptions,
+  ResourceLifecycle,
+  SmartResourceOptions,
+} from './types';
 
 /**
  * Resource metadata for decorators
@@ -13,7 +19,7 @@ import {
 export interface ResourceMetadata {
   id: string;
   type: ResourceType;
-  lifecycle?: 'frame' | 'scene' | 'persistent';
+  lifecycle?: ResourceLifecycle;
   cache?: boolean;
   pool?: boolean;
   dependencies?: string[];
@@ -25,14 +31,9 @@ export interface ResourceMetadata {
  */
 export function AutoRegisterResource<T extends ResourceType>(
   type: T,
-  options: {
-    lifecycle?: 'frame' | 'scene' | 'persistent';
-    cache?: boolean;
-    pool?: boolean;
-    dependencies?: string[];
-  } = {},
+  options: AutoRegisterOptions = {},
 ) {
-  return function (target: any, context: ClassMethodDecoratorContext) {
+  return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
     return function (this: any, ...args: any[]) {
@@ -42,7 +43,10 @@ export function AutoRegisterResource<T extends ResourceType>(
       // Auto-register resource if resource manager is available
       if (this.resourceManager && result) {
         const resourceId = this.generateResourceId(String(context.name), args);
+        console.log(`[AutoRegisterResource] Registering resource: ${resourceId}, type: ${type}`);
         this.registerResource(resourceId, result, type, options);
+      } else if (!this.resourceManager) {
+        console.warn(`[AutoRegisterResource] No resource manager set`);
       }
 
       return result;
@@ -114,9 +118,14 @@ export function Injectable() {
           },
         };
 
-        this.resourceManager.createResource(resourceDescriptor).catch((error: any) => {
-          console.error(`Failed to auto-register ${type} ${id}:`, error);
-        });
+        this.resourceManager
+          .createResource(resourceDescriptor)
+          .then(() => {
+            console.log(`[ResourceManager] Successfully registered resource: ${id}, type: ${type}`);
+          })
+          .catch((error: any) => {
+            console.error(`[ResourceManager] Failed to auto-register ${type} ${id}:`, error);
+          });
       };
     }
 
@@ -216,17 +225,8 @@ export function Injectable() {
  * Smart resource decorator with advanced features
  * Combines caching, pooling, and lifecycle management
  */
-export function SmartResource<T extends ResourceType>(
-  type: T,
-  options: {
-    lifecycle?: 'frame' | 'scene' | 'persistent';
-    cache?: boolean;
-    pool?: boolean;
-    dependencies?: string[];
-    maxCacheSize?: number;
-  } = {},
-) {
-  return function (target: any, context: ClassMethodDecoratorContext) {
+export function SmartResource<T extends ResourceType>(type: T, options: SmartResourceOptions = {}) {
+  return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
     return function (this: any, ...args: any[]) {
@@ -281,7 +281,10 @@ export function SmartResource<T extends ResourceType>(
 
       // Auto-register
       if (this.resourceManager) {
+        console.log(`[SmartResource] Registering resource: ${resourceId}, type: ${type}`);
         this.registerResource(resourceId, resource, type, options);
+      } else {
+        console.warn(`[SmartResource] No resource manager set for resource: ${resourceId}`);
       }
 
       return resource;
@@ -298,7 +301,7 @@ export function Inject(token: string) {
     return function (this: any, initialValue: any) {
       // Store initial value
       let value = initialValue;
-      
+
       // Define the property on the instance during initialization
       Object.defineProperty(this, context.name as string, {
         get() {
@@ -314,7 +317,7 @@ export function Inject(token: string) {
         enumerable: true,
         configurable: true,
       });
-      
+
       return value;
     };
   };
@@ -326,13 +329,9 @@ export function Inject(token: string) {
  */
 export function ResourceFactory<T extends ResourceType>(
   type: T,
-  factoryOptions: {
-    validate?: (args: any[]) => boolean;
-    transform?: (result: any) => any;
-    metadata?: (args: any[]) => Record<string, any>;
-  } = {},
+  factoryOptions: ResourceFactoryOptions = {},
 ) {
-  return function (target: any, context: ClassMethodDecoratorContext) {
+  return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
     return function (this: any, ...args: any[]) {

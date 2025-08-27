@@ -40,4 +40,9 @@ export class TextureManager {
     this.textures.set(descriptor.id, texture);
     return texture;
   }
+
+  onDestroy(): void {
+    this.textures.clear();
+    this.samplers.clear();
+  }
 }

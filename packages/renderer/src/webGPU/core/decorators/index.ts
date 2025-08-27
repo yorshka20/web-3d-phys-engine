@@ -33,7 +33,6 @@
 import {
   AutoRegisterResource,
   Injectable,
-  MonitorPerformance,
   SmartResource,
 } from './ResourceDecorators';
 
@@ -42,11 +41,13 @@ export {
   AutoRegisterResource,
   Inject,
   Injectable,
-  MonitorPerformance,
   ResourceFactory,
   SmartResource,
   type ResourceMetadata,
 } from './ResourceDecorators';
+
+// Enhanced type definitions
+export * from './types';
 
 // Dependency injection
 export { DIContainer, globalContainer, ServiceTokens, type ServiceToken } from './DIContainer';
@@ -159,20 +160,10 @@ export const DecoratorPresets = {
   ],
 
   /**
-   * Performance monitored preset
+   * Smart resource preset
    */
-  monitored: (resourceType: any) => [
+  smart: (resourceType: any) => [
     Injectable(),
-    MonitorPerformance(),
-    AutoRegisterResource(resourceType),
-  ],
-
-  /**
-   * Full-featured preset with all optimizations
-   */
-  ultimate: (resourceType: any) => [
-    Injectable(),
-    MonitorPerformance(),
     SmartResource(resourceType, {
       cache: true,
       lifecycle: 'persistent',

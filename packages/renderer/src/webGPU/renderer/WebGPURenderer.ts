@@ -106,34 +106,54 @@ export class WebGPURenderer implements IWebGPURenderer {
     // this.updateContextConfig({ width, height, dpr });
   }
   destroy(): void {
-    throw new Error('Method not implemented.');
+    // Clean up all managers
+    if (this.bufferManager) {
+      this.bufferManager.onDestroy();
+    }
+    if (this.shaderManager) {
+      this.shaderManager.onDestroy();
+    }
+    if (this.textureManager) {
+      this.textureManager.onDestroy();
+    }
+    if (this.context) {
+      this.context.destroy();
+    }
+
+    console.log('WebGPURenderer destroyed');
   }
   getContext(): GPUCanvasContext {
-    throw new Error('Method not implemented.');
+    return this.context.getContext();
   }
   getAdapter(): GPUAdapter {
-    throw new Error('Method not implemented.');
+    return this.context.getAdapter();
   }
   createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline {
-    throw new Error('Method not implemented.');
+    return this.device.createRenderPipeline(descriptor);
   }
   createComputePipeline(descriptor: GPUComputePipelineDescriptor): GPUComputePipeline {
-    throw new Error('Method not implemented.');
+    return this.device.createComputePipeline(descriptor);
   }
   createBindGroupLayout(descriptor: GPUBindGroupLayoutDescriptor): GPUBindGroupLayout {
-    throw new Error('Method not implemented.');
+    return this.device.createBindGroupLayout(descriptor);
   }
   createBindGroup(descriptor: GPUBindGroupDescriptor): GPUBindGroup {
-    throw new Error('Method not implemented.');
+    return this.device.createBindGroup(descriptor);
   }
   destroyBuffer(bufferId: string): void {
-    throw new Error('Method not implemented.');
+    const buffer = this.bufferManager.getBufferByLabel(bufferId);
+    if (buffer) {
+      this.bufferManager.destroyBuffer(buffer);
+    } else {
+      console.warn(`Buffer not found: ${bufferId}`);
+    }
   }
   destroyTexture(textureId: string): void {
-    throw new Error('Method not implemented.');
+    // Texture destruction handled by TextureManager
+    console.warn('Texture destruction not implemented yet');
   }
   destroyShader(shaderId: string): void {
-    throw new Error('Method not implemented.');
+    this.shaderManager.reloadShader(shaderId, '');
   }
   renderScene(scene: Scene, camera: Camera): void {
     throw new Error('Method not implemented.');
@@ -157,10 +177,22 @@ export class WebGPURenderer implements IWebGPURenderer {
     throw new Error('Method not implemented.');
   }
   beginFrame(): void {
-    throw new Error('Method not implemented.');
+    // Update time manager
+    this.timeManager.updateTime();
+
+    // Begin frame for buffer manager
+    this.bufferManager.beginFrame();
+
+    // Clean up frame resources
+    this.bufferManager.cleanupFrameResources();
+    this.shaderManager.cleanupFrameResources();
   }
   endFrame(): void {
-    throw new Error('Method not implemented.');
+    // End frame for buffer manager
+    this.bufferManager.endFrame();
+
+    // Increment frame counter
+    this.frameCount++;
   }
   destroyMaterial(materialId: string): void {
     throw new Error('Method not implemented.');
@@ -218,17 +250,37 @@ export class WebGPURenderer implements IWebGPURenderer {
     triangles: number;
     memoryUsage: { buffers: number; textures: number; total: number };
   } {
-    throw new Error('Method not implemented.');
+    const bufferStats = this.bufferManager.getMemoryUsage();
+    const shaderStats = this.shaderManager.getShaderStats();
+
+    return {
+      frameTime: 0, // TODO: implement frame time tracking
+      drawCalls: this.geometryInstances.length,
+      triangles: this.geometryInstances.length * 12, // 12 triangles per cube
+      memoryUsage: {
+        buffers: Object.values(bufferStats).reduce((a, b) => a + b, 0),
+        textures: 0, // TODO: implement texture memory tracking
+        total: Object.values(bufferStats).reduce((a, b) => a + b, 0),
+      },
+    };
   }
   setDebugMode(enabled: boolean): void {
-    throw new Error('Method not implemented.');
+    this.debug = enabled;
+    console.log(`Debug mode ${enabled ? 'enabled' : 'disabled'}`);
   }
   getDebugInfo(): {
     deviceInfo: GPUAdapterInfo;
     supportedFeatures: string[];
     limits: Record<string, number>;
   } {
-    throw new Error('Method not implemented.');
+    const adapter = this.context.getAdapter();
+    return {
+      deviceInfo: adapter.info,
+      supportedFeatures: Array.from(this.device.features),
+      limits: Object.fromEntries(
+        Object.entries(this.device.limits).map(([key, value]) => [key, Number(value)]),
+      ),
+    };
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
@@ -238,20 +290,24 @@ export class WebGPURenderer implements IWebGPURenderer {
     await this.initializeWebGPU();
 
     // init resource managers
+    this.resourceManager = new WebGPUResourceManager();
     this.bufferManager = new BufferManager(this.device);
     this.textureManager = new TextureManager(this.device);
     this.shaderManager = new ShaderManager(this.device);
-    this.resourceManager = new WebGPUResourceManager();
     this.timeManager = new TimeManager(this.device, this.bufferManager);
     this.geometryManager = new GeometryManager(this.bufferManager);
 
-    await this.setupScene();
+    // Set resource manager references for auto-registration
+    this.bufferManager.setResourceManager(this.resourceManager);
+    this.shaderManager.setResourceManager(this.resourceManager);
 
-    // create render pipelines
-    await this.createRenderPipelines();
+    await this.setupScene();
 
     // setup multiple geometry instances
     this.setupGeometryInstances();
+
+    // create render pipelines
+    await this.createRenderPipelines();
   }
 
   private async setupScene(): Promise<void> {
@@ -264,9 +320,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     if (!this.context || !this.bufferManager) {
       throw new Error('WebGPU context or buffer manager not initialized');
     }
-    if (!this.resourceManager) {
-      throw new Error('WebGPU resource manager not initialized');
-    }
     if (!this.geometryManager) {
       throw new Error('Geometry manager not initialized');
     }
@@ -276,37 +329,15 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Use geometry manager to create unit cube data
     const cubeGeometry = this.geometryManager.createCube();
 
-    // Register vertex buffer
-    this.resourceManager.createResource({
-      id: 'Cube Vertices',
-      type: ResourceType.BUFFER,
-      factory: async () => ({
-        type: ResourceType.BUFFER,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        buffer: cubeGeometry.vertexBuffer,
-      }),
-      dependencies: [],
-    });
-    console.log('Registered resource: Cube Vertices');
+    // Create vertex buffer (auto-registered to resource manager)
+    this.bufferManager.createVertexBuffer(cubeGeometry.geometry.vertices.buffer, 'Cube Vertices');
+    console.log('Created and auto-registered: Cube Vertices');
 
-    // Register index buffer
-    this.resourceManager.createResource({
-      id: 'Cube Indices',
-      type: ResourceType.BUFFER,
-      factory: async () => ({
-        type: ResourceType.BUFFER,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        buffer: cubeGeometry.indexBuffer,
-      }),
-      dependencies: [],
-    });
-    console.log('Registered resource: Cube Indices');
+    // Create index buffer (auto-registered to resource manager)
+    this.bufferManager.createIndexBuffer(cubeGeometry.geometry.indices.buffer, 'Cube Indices');
+    console.log('Created and auto-registered: Cube Indices');
 
-    // uniform buffer for MVP matrix
+    // Create uniform buffer for MVP matrix (auto-registered to resource manager)
     // 4x4 matrix, 16 floats. Initialized to identity.
     // prettier-ignore
     const mvpMatrixData = new Float32Array([
@@ -316,23 +347,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       0.0, 0.0, 0.0, 1.0,
     ]);
 
-    const mvpUniformBuffer = this.bufferManager.createUniformBuffer(
-      mvpMatrixData.buffer,
-      'MVP Matrix Uniforms',
-    );
-    this.resourceManager.createResource({
-      id: 'MVP Matrix Uniforms',
-      type: ResourceType.BUFFER,
-      factory: async () => ({
-        type: ResourceType.BUFFER,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        buffer: mvpUniformBuffer,
-      }),
-      dependencies: [],
-    });
-    console.log('Registered resource: MVP Matrix Uniforms');
+    this.bufferManager.createUniformBuffer(mvpMatrixData.buffer, 'MVP Matrix Uniforms');
+    console.log('Created and auto-registered: MVP Matrix Uniforms');
   }
 
   private async createBindGroups(): Promise<void> {
@@ -441,9 +457,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     if (!this.context || !this.shaderManager) {
       throw new Error('WebGPU context or shader manager not initialized');
     }
-    if (!this.resourceManager) {
-      throw new Error('WebGPU resource manager not initialized');
-    }
 
     const shaderCode = `
       struct TimeUniforms {
@@ -514,44 +527,24 @@ export class WebGPURenderer implements IWebGPURenderer {
       }
     `;
 
-    // Create shader modules
-    const vertexShader = this.shaderManager.createShaderModule('exampleVertex', {
+    // Create shader modules (auto-registered to resource manager)
+    this.shaderManager.createShaderModule('exampleVertex', {
       id: 'exampleVertex',
       code: shaderCode,
       type: ShaderType.VERTEX,
       entryPoint: 'vs_main',
       label: 'Example Vertex Shader',
     });
-    this.resourceManager.createResource({
-      id: 'exampleVertex',
-      type: ResourceType.SHADER,
-      factory: async () => ({
-        type: ResourceType.SHADER,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        shader: vertexShader,
-      }),
-    });
+    console.log('Created and auto-registered: exampleVertex shader');
 
-    const fragmentShader = this.shaderManager.createShaderModule('exampleFragment', {
+    this.shaderManager.createShaderModule('exampleFragment', {
       id: 'exampleFragment',
       code: shaderCode,
       type: ShaderType.FRAGMENT,
       entryPoint: 'fs_main',
       label: 'Example Fragment Shader',
     });
-    this.resourceManager.createResource({
-      id: 'exampleFragment',
-      type: ResourceType.SHADER,
-      factory: async () => ({
-        type: ResourceType.SHADER,
-        state: ResourceState.READY,
-        dependencies: [],
-        destroy: () => {},
-        shader: fragmentShader,
-      }),
-    });
+    console.log('Created and auto-registered: exampleFragment shader');
   }
 
   private async createRenderPipelines(): Promise<void> {
@@ -566,8 +559,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     const vertexShader = this.resourceManager.getShaderResource('exampleVertex');
     const fragmentShader = this.resourceManager.getShaderResource('exampleFragment');
 
-    // create render pipeline. pipeline is a template for rendering. render pass is the actual rendering.
-    const renderPipeline = this.shaderManager.createRenderPipeline('example', {
+    // Create render pipeline (auto-registered to resource manager)
+    this.shaderManager.createRenderPipeline('example', {
       layout: renderPipelineLayout, // declare bind group layout
       vertex: {
         module: vertexShader.shader,
@@ -601,20 +594,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       },
       label: 'example_render_pipeline',
     });
-    if (renderPipeline) {
-      this.resourceManager.createResource({
-        id: 'example_render_pipeline',
-        type: ResourceType.PIPELINE,
-        factory: async () => ({
-          type: ResourceType.PIPELINE,
-          state: ResourceState.READY,
-          dependencies: [],
-          destroy: () => {},
-          pipeline: renderPipeline,
-        }),
-      });
-      console.log('Registered resource: example_render_pipeline');
-    }
+    console.log('Created and auto-registered: example_render_pipeline');
   }
 
   /**
@@ -724,15 +704,21 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     try {
+      // Begin frame
+      this.beginFrame();
+
+      // Render frame
       this.renderTick(deltaTime, context);
+
+      // End frame
+      this.endFrame();
     } catch (error) {
       console.error('Render loop error:', error);
     }
   }
 
   private renderTick(deltaTime: number, context: RenderContext): void {
-    // update time
-    this.timeManager.updateTime();
+    // Note: Time is already updated in beginFrame()
 
     // create time bind group
     const timeBuffer = this.timeManager.getBuffer();
@@ -772,9 +758,15 @@ export class WebGPURenderer implements IWebGPURenderer {
       ],
     });
 
+    // Debug: List all available resources
+    if (this.frameCount % 60 === 0) {
+      const resourceStats = this.resourceManager.getResourceStats();
+      // Only log every 60 frames to reduce spam
+      // console.log('[WebGPURenderer] Available resources:', resourceStats);
+    }
+
     // set render pipeline
-    const renderPipeline =
-      this.resourceManager.getRenderPipelineResource('example_render_pipeline');
+    const renderPipeline = this.resourceManager.getRenderPipelineResource('example');
     if (renderPipeline) {
       renderPass.setPipeline(renderPipeline.pipeline);
 
@@ -850,11 +842,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     //   this.readComputeResults();
     // }
 
-    // Increment frame counter
-    this.frameCount++;
-
-    // Continue the loop
-    requestAnimationFrame(() => this.render(deltaTime, context));
+    // Note: Frame counter is incremented in endFrame()
+    // Render loop continuation is handled by external system
   }
 
   getDevice(): GPUDevice {

@@ -1,3 +1,4 @@
+import { Injectable, SmartResource } from './decorators';
 import { WebGPUResourceManager } from './ResourceManager';
 import {
   BindGroupLayoutDescriptor,
@@ -13,6 +14,7 @@ import { ComputePipelineResource, RenderPipelineResource, ShaderResource } from 
  * WebGPU shader manager
  * manage shader modules and render pipelines
  */
+@Injectable()
 export class ShaderManager {
   private device: GPUDevice;
   private shaderModules: Map<string, GPUShaderModule> = new Map();
@@ -38,6 +40,11 @@ export class ShaderManager {
    * @param descriptor shader descriptor
    * @returns created shader module
    */
+  @SmartResource(ResourceType.SHADER, {
+    cache: true,
+    lifecycle: 'persistent',
+    maxCacheSize: 50,
+  })
   createShaderModule(id: string, descriptor: ShaderDescriptor): GPUShaderModule {
     // check cache
     if (this.shaderModules.has(id)) {
@@ -53,8 +60,7 @@ export class ShaderManager {
     // cache shader module
     this.shaderModules.set(id, shaderModule);
 
-    // Auto-register to resource manager if available
-    this.autoRegisterShader(shaderModule, id, descriptor);
+    // Note: Auto-registration is now handled by decorators
 
     console.log(`Created shader module: ${id}`);
 
@@ -108,6 +114,11 @@ export class ShaderManager {
    * @param descriptor pipeline descriptor
    * @returns created render pipeline
    */
+  @SmartResource(ResourceType.PIPELINE, {
+    cache: true,
+    lifecycle: 'scene',
+    maxCacheSize: 30,
+  })
   createRenderPipeline(id: string, descriptor: RenderPipelineDescriptor): GPURenderPipeline {
     // check cache
     if (this.renderPipelines.has(id)) {
@@ -138,8 +149,7 @@ export class ShaderManager {
     // cache render pipeline
     this.renderPipelines.set(id, pipeline);
 
-    // Auto-register to resource manager if available
-    this.autoRegisterRenderPipeline(pipeline, id, descriptor);
+    // Note: Auto-registration is now handled by decorators
 
     console.log(`Created render pipeline: ${id}`);
 
@@ -195,6 +205,11 @@ export class ShaderManager {
    * @param descriptor pipeline descriptor
    * @returns created compute pipeline
    */
+  @SmartResource(ResourceType.PIPELINE, {
+    cache: true,
+    lifecycle: 'scene',
+    maxCacheSize: 20,
+  })
   createComputePipeline(id: string, descriptor: ComputePipelineDescriptor): GPUComputePipeline {
     // check cache
     if (this.computePipelines.has(id)) {
@@ -221,8 +236,7 @@ export class ShaderManager {
     // cache compute pipeline
     this.computePipelines.set(id, pipeline);
 
-    // Auto-register to resource manager if available
-    this.autoRegisterComputePipeline(pipeline, id, descriptor);
+    // Note: Auto-registration is now handled by decorators
 
     console.log(`Created compute pipeline: ${id}`);
 
@@ -490,5 +504,17 @@ export class ShaderManager {
 
     // clean bind group layouts
     this.bindGroupLayouts.clear();
+  }
+
+  /**
+   * clean frame resources
+   */
+  cleanupFrameResources(): void {
+    // clean shader modules - GPUShaderModule doesn't have destroy method
+    this.shaderModules.clear();
+
+    // clean pipelines
+    this.renderPipelines.clear();
+    this.computePipelines.clear();
   }
 }

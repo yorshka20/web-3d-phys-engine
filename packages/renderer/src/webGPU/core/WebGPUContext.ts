@@ -171,6 +171,16 @@ export class WebGPUContext {
   }
 
   /**
+   * get GPU adapter
+   */
+  getAdapter(): GPUAdapter {
+    if (!this.adapter) {
+      throw new Error('WebGPU adapter not initialized');
+    }
+    return this.adapter;
+  }
+
+  /**
    * get canvas context
    */
   getContext(): GPUCanvasContext {
