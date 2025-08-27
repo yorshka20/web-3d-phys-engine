@@ -11,9 +11,9 @@
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
-    "@web-3d-phys-engine/ecs": "workspace:*"
+    "@web-3d-phys-engine/ecs": "workspace:*",
+    "chroma-js": "3.1.2"
   },
-  "devDependencies": {},
   "files": [
     "dist"
   ],

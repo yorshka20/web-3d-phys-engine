@@ -96,6 +96,9 @@ importers:
       '@web-3d-phys-engine/ecs':
         specifier: workspace:*
         version: link:../ecs
+      chroma-js:
+        specifier: 3.1.2
+        version: 3.1.2
 
   packages/web-client:
     dependencies:
@@ -1537,6 +1540,9 @@ packages:
   check-error@2.1.1:
     resolution: {integrity: sha512-OAlb+T7V4Op9OwdkjmguYRqncdlx5JiofwOAUkmTF+jNdHwzTaTs4sRAGpzLF3oOz5xAyDGrPgeIDFQmDOTiJw==}
     engines: {node: '>= 16'}
+
+  chroma-js@3.1.2:
+    resolution: {integrity: sha512-IJnETTalXbsLx1eKEgx19d5L6SRM7cH4vINw/99p/M11HCuXGRWL+6YmCm7FWFGIo6dtWuQoQi1dc5yQ7ESIHg==}
 
   ci-info@3.9.0:
     resolution: {integrity: sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==}
@@ -4856,6 +4862,8 @@ snapshots:
   char-regex@1.0.2: {}
 
   check-error@2.1.1: {}
+
+  chroma-js@3.1.2: {}
 
   ci-info@3.9.0: {}
 
