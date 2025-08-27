@@ -438,27 +438,39 @@ export class WebGPURenderer implements IWebGPURenderer {
       }
 
       struct VertexInput {
-        @location(0) position: vec3<f32>
+        @location(0) position: vec3<f32>,
+        @location(1) normal: vec3<f32>,
+        @location(2) uv: vec2<f32>
       }
 
       struct VertexOutput {
         @builtin(position) position: vec4<f32>,
-        @location(0) color: vec4<f32>
+        @location(0) color: vec4<f32>,
+        @location(1) normal: vec3<f32>,
+        @location(2) uv: vec2<f32>
       }
 
       @group(0) @binding(0) var<uniform> timeData: TimeUniforms;
       @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
 
+      // Vertex shader for full geometry (pos+normal+uv)
       @vertex
-      fn vs_main(@location(0) position: vec3<f32>) -> VertexOutput {
+      fn vs_main(@location(0) position: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) uv: vec2<f32>) -> VertexOutput {
         var out: VertexOutput;
         out.position = mvp.mvpMatrix * vec4<f32>(position, 1.0);
-        out.color = vec4<f32>(position + 0.5, 1.0);
+        
+        // Use normal for better lighting/coloring
+        let lightDir = normalize(vec3<f32>(1.0, 1.0, 1.0));
+        let lightAmount = max(dot(normal, lightDir), 0.2);
+        out.color = vec4<f32>(normal * 0.5 + 0.5, 1.0) * lightAmount;
+        
+        out.normal = normal;
+        out.uv = uv;
         return out;
       }
 
       @fragment
-      fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
+      fn fs_main(@location(0) color: vec4<f32>, @location(1) normal: vec3<f32>, @location(2) uv: vec2<f32>) -> @location(0) vec4<f32> {
         let t = timeData.time;
         
         let pulse = sin(t * 2.0) * 0.2 + 0.8;  // more stable pulse
@@ -497,23 +509,23 @@ export class WebGPURenderer implements IWebGPURenderer {
     `;
 
     // Create shader modules (auto-registered to resource manager)
-    this.shaderManager.createShaderModule('exampleVertex', {
-      id: 'exampleVertex',
+    this.shaderManager.createShaderModule('mainVertex', {
+      id: 'mainVertex',
       code: shaderCode,
       type: ShaderType.VERTEX,
       entryPoint: 'vs_main',
       label: 'Example Vertex Shader',
     });
-    console.log('Created and auto-registered: exampleVertex shader');
+    console.log('Created and auto-registered: mainVertex shader');
 
-    this.shaderManager.createShaderModule('exampleFragment', {
-      id: 'exampleFragment',
+    this.shaderManager.createShaderModule('mainFragment', {
+      id: 'mainFragment',
       code: shaderCode,
       type: ShaderType.FRAGMENT,
       entryPoint: 'fs_main',
       label: 'Example Fragment Shader',
     });
-    console.log('Created and auto-registered: exampleFragment shader');
+    console.log('Created and auto-registered: mainFragment shader');
   }
 
   private async createRenderPipelines(): Promise<void> {
@@ -525,23 +537,33 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'render_pipeline_layout',
     });
 
-    const vertexShader = this.resourceManager.getShaderResource('exampleVertex');
-    const fragmentShader = this.resourceManager.getShaderResource('exampleFragment');
+    const vertexShader = this.resourceManager.getShaderResource('mainVertex');
+    const fragmentShader = this.resourceManager.getShaderResource('mainFragment');
 
-    // Create render pipeline (auto-registered to resource manager)
-    this.shaderManager.createRenderPipeline('example', {
-      layout: renderPipelineLayout, // declare bind group layout
+    // Create simple vertex format pipeline (position only - for cubes)
+    this.shaderManager.createRenderPipeline('main_pipeline', {
+      layout: renderPipelineLayout,
       vertex: {
         module: vertexShader.shader,
         entryPoint: 'vs_main',
         buffers: [
           {
-            arrayStride: 12, // 3 floats * 4 bytes per float
+            arrayStride: 32, // 8 floats * 4 bytes per float
             attributes: [
               {
                 format: 'float32x3',
-                offset: 0,
+                offset: 0, // position
                 shaderLocation: 0,
+              },
+              {
+                format: 'float32x3',
+                offset: 12, // normal
+                shaderLocation: 1,
+              },
+              {
+                format: 'float32x2',
+                offset: 24, // uv
+                shaderLocation: 2,
               },
             ],
           },
@@ -561,9 +583,9 @@ export class WebGPURenderer implements IWebGPURenderer {
       primitive: {
         topology: 'triangle-list',
       },
-      label: 'example_render_pipeline',
+      label: 'main_render_pipeline',
     });
-    console.log('Created and auto-registered: example_render_pipeline');
+    console.log('Created and auto-registered: render_pipeline');
   }
 
   /**
@@ -739,54 +761,49 @@ export class WebGPURenderer implements IWebGPURenderer {
       // console.log('[WebGPURenderer] Available resources:', resourceStats);
     }
 
-    // set render pipeline
-    const renderPipeline = this.resourceManager.getRenderPipelineResource('example');
-    if (renderPipeline) {
-      renderPass.setPipeline(renderPipeline.pipeline);
+    renderPass.setBindGroup(0, timeBindGroup.bindGroup); // binding actual bind group
 
-      renderPass.setBindGroup(0, timeBindGroup.bindGroup); // binding actual bind group
+    // Render geometry instances
+    const mainPipeline = this.resourceManager.getRenderPipelineResource('main_pipeline');
+    if (!mainPipeline) {
+      throw new Error('Main pipeline not found');
+    }
 
-      // Render each geometry instance
-      for (const instance of this.geometryInstances) {
-        // Update model matrix for this instance
-        const modelMatrix = mat4.create();
+    renderPass.setPipeline(mainPipeline.pipeline);
 
-        // Apply scale
-        mat4.scale(modelMatrix, modelMatrix, instance.scale);
+    for (const instance of this.geometryInstances) {
+      // Update model matrix for this instance
+      const modelMatrix = mat4.create();
 
-        // Apply rotation
-        mat4.rotateY(modelMatrix, modelMatrix, now * 0.5 + instance.rotation[1]);
-        mat4.rotateX(modelMatrix, modelMatrix, now * 0.3 + instance.rotation[0]);
-        mat4.rotateZ(modelMatrix, modelMatrix, instance.rotation[2]);
+      // Apply scale
+      mat4.scale(modelMatrix, modelMatrix, instance.scale);
 
-        // Apply position
-        mat4.translate(modelMatrix, modelMatrix, instance.position);
+      // Apply rotation
+      mat4.rotateY(modelMatrix, modelMatrix, now * 0.5 + instance.rotation[1]);
+      mat4.rotateX(modelMatrix, modelMatrix, now * 0.3 + instance.rotation[0]);
+      mat4.rotateZ(modelMatrix, modelMatrix, instance.rotation[2]);
 
-        // Calculate MVP matrix for this instance
-        const mvpMatrix = mat4.create();
-        mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
-        mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
+      // Apply position
+      mat4.translate(modelMatrix, modelMatrix, instance.position);
 
-        // Update this instance's MVP uniform buffer
-        this.device.queue.writeBuffer(instance.mvpBuffer, 0, new Float32Array(mvpMatrix));
+      // Calculate MVP matrix for this instance
+      const mvpMatrix = mat4.create();
+      mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
+      mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
 
-        // Use this instance's MVPBindGroup
-        renderPass.setBindGroup(1, instance.mvpBindGroup);
+      // Update this instance's MVP uniform buffer
+      this.device.queue.writeBuffer(instance.mvpBuffer, 0, new Float32Array(mvpMatrix));
 
-        // set vertex buffer
-        renderPass.setVertexBuffer(0, instance.geometry.vertexBuffer); // binding actual vertex buffer
-        // set index buffer
-        renderPass.setIndexBuffer(instance.geometry.indexBuffer, 'uint16'); // binding actual index buffer
+      // Use this instance's MVPBindGroup
+      renderPass.setBindGroup(1, instance.mvpBindGroup);
 
-        // Draw this instance
-        renderPass.drawIndexed(instance.geometry.indexCount);
+      // set vertex buffer
+      renderPass.setVertexBuffer(0, instance.geometry.vertexBuffer);
+      // set index buffer
+      renderPass.setIndexBuffer(instance.geometry.indexBuffer, 'uint16');
 
-        console.log('current vertices:', instance.geometry.vertexCount);
-        console.log('current indices:', instance.geometry.indexCount);
-        console.log('Current vertex buffer:', instance.geometry.vertexBuffer);
-        console.log('Current index buffer:', instance.geometry.indexBuffer);
-        console.log('---');
-      }
+      // Draw this instance
+      renderPass.drawIndexed(instance.geometry.indexCount);
     }
 
     renderPass.end();

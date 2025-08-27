@@ -11,6 +11,13 @@ export interface Vertex3D {
 }
 
 /**
+ * Vertex format types.
+ * - simple: position only
+ * - full: position + normal + uv
+ */
+export type VertexFormat = 'simple' | 'full';
+
+/**
  * Geometry data
  */
 export interface GeometryData {
@@ -18,6 +25,7 @@ export interface GeometryData {
   indices: Uint16Array;
   vertexCount: number;
   indexCount: number;
+  vertexFormat: VertexFormat; // 'simple' for position only, 'full' for pos+normal+uv
   bounds: {
     min: Vec3;
     max: Vec3;
@@ -38,61 +46,63 @@ export class GeometryFactory {
     const halfSize = 0.5;
 
     // Vertex data: 24 vertices (4 vertices per face)
+    // Format: [x, y, z, nx, ny, nz, u, v] - 8 floats per vertex
     // prettier-ignore
     const vertices = new Float32Array([
-      // Front face (Z+)
-      -halfSize, -halfSize,  halfSize,  // 0
-       halfSize, -halfSize,  halfSize,  // 1
-       halfSize,  halfSize,  halfSize,  // 2
-      -halfSize,  halfSize,  halfSize,  // 3
+    // Front face (Z+) - normal: (0, 0, 1)
+    -halfSize, -halfSize,  halfSize,  0, 0, 1,  0, 0,  // 0: left bottom
+     halfSize, -halfSize,  halfSize,  0, 0, 1,  1, 0,  // 1: right bottom
+     halfSize,  halfSize,  halfSize,  0, 0, 1,  1, 1,  // 2: right top
+    -halfSize,  halfSize,  halfSize,  0, 0, 1,  0, 1,  // 3: left top
 
-      // Back face (Z-)
-      -halfSize, -halfSize, -halfSize,  // 4
-      -halfSize,  halfSize, -halfSize,  // 5
-       halfSize,  halfSize, -halfSize,  // 6
-       halfSize, -halfSize, -halfSize,  // 7
+    // Back face (Z-) - normal: (0, 0, -1)
+    -halfSize, -halfSize, -halfSize,  0, 0, -1,  1, 0,  // 4: left bottom
+    -halfSize,  halfSize, -halfSize,  0, 0, -1,  1, 1,  // 5: left top
+     halfSize,  halfSize, -halfSize,  0, 0, -1,  0, 1,  // 6: right top
+     halfSize, -halfSize, -halfSize,  0, 0, -1,  0, 0,  // 7: right bottom
 
-      // Top face (Y+)
-      -halfSize,  halfSize, -halfSize,  // 8
-      -halfSize,  halfSize,  halfSize,  // 9
-       halfSize,  halfSize,  halfSize,  // 10
-       halfSize,  halfSize, -halfSize,  // 11
+    // Top face (Y+) - normal: (0, 1, 0)
+    -halfSize,  halfSize, -halfSize,  0, 1, 0,  0, 1,   // 8: left back
+    -halfSize,  halfSize,  halfSize,  0, 1, 0,  0, 0,   // 9: left front
+     halfSize,  halfSize,  halfSize,  0, 1, 0,  1, 0,   // 10: right front
+     halfSize,  halfSize, -halfSize,  0, 1, 0,  1, 1,   // 11: right back
 
-      // Bottom face (Y-)
-      -halfSize, -halfSize, -halfSize,  // 12
-       halfSize, -halfSize, -halfSize,  // 13
-       halfSize, -halfSize,  halfSize,  // 14
-      -halfSize, -halfSize,  halfSize,  // 15
+    // Bottom face (Y-) - normal: (0, -1, 0)
+    -halfSize, -halfSize, -halfSize,  0, -1, 0,  0, 0,  // 12: left back
+     halfSize, -halfSize, -halfSize,  0, -1, 0,  1, 0,  // 13: right back
+     halfSize, -halfSize,  halfSize,  0, -1, 0,  1, 1,  // 14: right front
+    -halfSize, -halfSize,  halfSize,  0, -1, 0,  0, 1,  // 15: left front
 
-      // Right face (X+)
-       halfSize, -halfSize, -halfSize,  // 16
-       halfSize,  halfSize, -halfSize,  // 17
-       halfSize,  halfSize,  halfSize,  // 18
-       halfSize, -halfSize,  halfSize,  // 19
+    // Right face (X+) - normal: (1, 0, 0)
+     halfSize, -halfSize, -halfSize,  1, 0, 0,  0, 0,   // 16: bottom back
+     halfSize,  halfSize, -halfSize,  1, 0, 0,  0, 1,   // 17: top back
+     halfSize,  halfSize,  halfSize,  1, 0, 0,  1, 1,   // 18: top front
+     halfSize, -halfSize,  halfSize,  1, 0, 0,  1, 0,   // 19: bottom front
 
-      // Left face (X-)
-      -halfSize, -halfSize, -halfSize,  // 20
-      -halfSize, -halfSize,  halfSize,  // 21
-      -halfSize,  halfSize,  halfSize,  // 22
-      -halfSize,  halfSize, -halfSize,  // 23
-    ]);
+    // Left face (X-) - normal: (-1, 0, 0)
+    -halfSize, -halfSize, -halfSize,  -1, 0, 0,  1, 0,  // 20: bottom back
+    -halfSize, -halfSize,  halfSize,  -1, 0, 0,  0, 0,  // 21: bottom front
+    -halfSize,  halfSize,  halfSize,  -1, 0, 0,  0, 1,  // 22: top front
+    -halfSize,  halfSize, -halfSize,  -1, 0, 0,  1, 1,  // 23: top back
+  ]);
 
     // Index data: 36 indices (6 faces, 2 triangles per face)
     // prettier-ignore
     const indices = new Uint16Array([
-      0,  1,  2,   2,  3,  0,   // Front face
-      4,  5,  6,   6,  7,  4,   // Back face
-      8,  9,  10,  10, 11, 8,   // Top face
-      12, 13, 14,  14, 15, 12,  // Bottom face
-      16, 17, 18,  18, 19, 16,  // Right face
-      20, 21, 22,  22, 23, 20,  // Left face
-    ]);
+    0,  1,  2,   2,  3,  0,   // Front face
+    4,  5,  6,   6,  7,  4,   // Back face
+    8,  9,  10,  10, 11, 8,   // Top face
+    12, 13, 14,  14, 15, 12,  // Bottom face
+    16, 17, 18,  18, 19, 16,  // Right face
+    20, 21, 22,  22, 23, 20,  // Left face
+  ]);
 
     return {
       vertices,
       indices,
       vertexCount: 24,
       indexCount: 36,
+      vertexFormat: 'full' as VertexFormat, // position + normal + uv (8 floats)
       bounds: {
         min: [-halfSize, -halfSize, -halfSize],
         max: [halfSize, halfSize, halfSize],
@@ -154,6 +164,7 @@ export class GeometryFactory {
       indices: new Uint16Array(indices),
       vertexCount: vertices.length / 8, // 8 floats per vertex (pos + normal + uv)
       indexCount: indices.length,
+      vertexFormat: 'full' as VertexFormat, // pos + normal + uv
       bounds: {
         min: [-radius, -radius, -radius],
         max: [radius, radius, radius],
@@ -208,8 +219,9 @@ export class GeometryFactory {
     return {
       vertices: new Float32Array(vertices),
       indices: new Uint16Array(indices),
-      vertexCount: vertices.length / 8,
+      vertexCount: vertices.length / 8, // 8 floats per vertex (pos + normal + uv)
       indexCount: indices.length,
+      vertexFormat: 'full' as VertexFormat, // pos + normal + uv
       bounds: {
         min: [-halfWidth, 0, -halfHeight],
         max: [halfWidth, 0, halfHeight],
@@ -295,8 +307,9 @@ export class GeometryFactory {
     return {
       vertices: new Float32Array(vertices),
       indices: new Uint16Array(indices),
-      vertexCount: vertices.length / 8,
+      vertexCount: vertices.length / 8, // 8 floats per vertex (pos + normal + uv)
       indexCount: indices.length,
+      vertexFormat: 'full' as VertexFormat, // pos + normal + uv
       bounds: {
         min: [-radius, -halfHeight, -radius],
         max: [radius, halfHeight, radius],
@@ -347,8 +360,9 @@ export class GeometryFactory {
     return {
       vertices: new Float32Array(vertices),
       indices: new Uint16Array(indices),
-      vertexCount: vertices.length / 8,
+      vertexCount: vertices.length / 8, // 8 floats per vertex (pos + normal + uv)
       indexCount: indices.length,
+      vertexFormat: 'full' as VertexFormat, // pos + normal + uv
       bounds: {
         min: [-radius, -halfHeight, -radius],
         max: [radius, halfHeight, radius],
