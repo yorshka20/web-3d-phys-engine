@@ -6,7 +6,7 @@ export interface BaseShapeDescriptor {
 }
 
 // Basic geometric shape descriptor
-export interface CircleDescriptor extends BaseShapeDescriptor {
+export interface CircleShapeDescriptor extends BaseShapeDescriptor {
   type: 'circle';
   radius: number;
 }
@@ -89,7 +89,7 @@ export interface PatternDescriptor extends BaseShapeDescriptor {
 }
 
 export type ShapeDescriptor =
-  | CircleDescriptor
+  | CircleShapeDescriptor
   | RectDescriptor
   | PolygonDescriptor
   | BezierDescriptor
@@ -108,7 +108,7 @@ export type ShapeDescriptor =
  * @template T - The shape type name
  */
 type ShapeDescriptorTypeMap = {
-  circle: CircleDescriptor;
+  circle: CircleShapeDescriptor;
   rect: RectDescriptor;
   polygon: PolygonDescriptor;
   bezier: BezierDescriptor;

@@ -5,7 +5,12 @@ import {
   PatternEffect,
   PatternState,
 } from '@renderer/canvas2d/resource/PatternAssetManager';
-import { CircleDescriptor, PatternDescriptor, RenderPatternType, ShapeDescriptor } from './types';
+import {
+  CircleShapeDescriptor,
+  PatternDescriptor,
+  RenderPatternType,
+  ShapeDescriptor,
+} from './types';
 
 interface ShapeProps {
   descriptor: ShapeDescriptor;
@@ -214,7 +219,7 @@ export class ShapeComponent extends Component {
     this.tessellated = [];
     this.bounds = null;
     this.dirty = true;
-    this.descriptor = { type: 'circle', radius: 1 } as CircleDescriptor;
+    this.descriptor = { type: 'circle', radius: 1 } as CircleShapeDescriptor;
   }
 
   /**

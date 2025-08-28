@@ -1,4 +1,4 @@
-import { Vec2, Vec3 } from '@ecs/types/types';
+import { Vec3 } from '@ecs/types/types';
 import {
   box,
   capsule,
@@ -22,17 +22,7 @@ import {
   tetrahedron,
   torus,
 } from 'primitive-geometry';
-import { GeometryPrimitiveOptions } from './GeometryManager';
-
-/**
- * 3D vertex data structure
- */
-export interface Vertex3D {
-  position: Vec3; // Position [x, y, z]
-  normal?: Vec3; // Normal vector [nx, ny, nz]
-  uv?: Vec2; // UV coordinates [u, v]
-  color?: Vec3; // Vertex color [r, g, b]
-}
+import { GeometryPrimitiveOptions } from './types';
 
 /**
  * Vertex format types.

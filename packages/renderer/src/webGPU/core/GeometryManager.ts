@@ -1,23 +1,9 @@
-import { BoxOptions } from 'primitive-geometry/types/src/box';
-import { CapsuleOptions } from 'primitive-geometry/types/src/capsule';
-import { CircleOptions } from 'primitive-geometry/types/src/circle';
-import { ConeOptions } from 'primitive-geometry/types/src/cone';
-import { CubeOptions } from 'primitive-geometry/types/src/cube';
-import { CylinderOptions } from 'primitive-geometry/types/src/cylinder';
-import { DiscOptions } from 'primitive-geometry/types/src/disc';
-import { EllipseOptions } from 'primitive-geometry/types/src/ellipse';
-import { EllipsoidOptions } from 'primitive-geometry/types/src/ellipsoid';
-import { IcosahedronOptions } from 'primitive-geometry/types/src/icosahedron';
-import { IcosphereOptions } from 'primitive-geometry/types/src/icosphere';
-import { PlaneOptions } from 'primitive-geometry/types/src/plane';
-import { QuadOptions } from 'primitive-geometry/types/src/quad';
-import { RoundedCubeOptions } from 'primitive-geometry/types/src/rounded-cube';
-import { SphereOptions } from 'primitive-geometry/types/src/sphere';
-import { StadiumOptions } from 'primitive-geometry/types/src/stadium';
-import { TetrahedronOptions } from 'primitive-geometry/types/src/tetrahedron';
-import { TorusOptions } from 'primitive-geometry/types/src/torus';
+import {
+  GeometryData,
+  GeometryFactory,
+  GeometryPrimitiveOptions,
+} from '@ecs/components/physics/mesh';
 import { BufferManager } from './BufferManager';
-import { GeometryData, GeometryFactory } from './GeometryFactory';
 
 /**
  * Geometry cache item
@@ -60,28 +46,6 @@ export type GeometryType =
   | 'ellipse'
   | 'disc'
   | 'circle';
-
-export type GeometryPrimitiveOptions = {
-  cube: CubeOptions;
-  sphere: SphereOptions;
-  plane: PlaneOptions;
-  cylinder: CylinderOptions;
-  cone: ConeOptions;
-  box: BoxOptions;
-  roundedCube: RoundedCubeOptions;
-  icosphere: IcosphereOptions;
-  ellipsoid: EllipsoidOptions;
-  capsule: CapsuleOptions;
-  torus: TorusOptions;
-  tetrahedron: TetrahedronOptions;
-  icosahedron: IcosahedronOptions;
-  quad: QuadOptions;
-  roundedRectangle: RoundedCubeOptions;
-  stadium: StadiumOptions;
-  ellipse: EllipseOptions;
-  disc: DiscOptions;
-  circle: CircleOptions;
-};
 
 /**
  * Geometry parameters
