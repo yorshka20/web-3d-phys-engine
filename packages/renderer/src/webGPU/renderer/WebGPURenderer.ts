@@ -688,7 +688,7 @@ export class WebGPURenderer implements IWebGPURenderer {
         transform: {
           position: [0, 2, 0],
           rotation: [Math.PI / 6, 0, Math.PI / 6],
-          scale: [2, 2, 2],
+          scale: [5, 5, 5],
         },
         name: 'Sphere',
       },
@@ -770,7 +770,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       colorAttachments: [
         {
           view: this.context.getContext().getCurrentTexture().createView(),
-          clearValue: chroma('#f8f8f8').gl(),
+          clearValue: chroma('#000000').gl(),
           loadOp: 'clear',
           storeOp: 'store',
         },
@@ -1015,14 +1015,8 @@ export class WebGPURenderer implements IWebGPURenderer {
   setBackgroundImage(image: HTMLImageElement): void {
     return;
   }
-  clear(): void {
-    // do nothing
-  }
 
   onResize(): void {
     throw new Error('Method not implemented.');
-  }
-  onDestroy(): void {
-    this.context.destroy();
   }
 }
