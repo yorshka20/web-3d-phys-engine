@@ -749,6 +749,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     const timeBindGroup = this.resourceManager.getBindGroupResource('TimeBindGroup');
     // Update projection and view matrices (same for all cubes)
     const now = performance.now() / 1000;
+    this.timeManager.updateTime();
 
     // Use camera data from render context
     const projectionMatrix = mat4.create();
@@ -1007,6 +1008,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       alphaMode: 'opaque',
     });
   }
+
   setBackgroundImage(image: HTMLImageElement): void {
     return;
   }

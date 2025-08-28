@@ -58,6 +58,14 @@ export class Camera3DComponent extends Component {
   target: Vec3 = [0, 0, 0];
   up: Vec3 = [0, 1, 0];
 
+  projectionMatrix: Float32Array = new Float32Array([
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+  ]);
+  viewMatrix: Float32Array = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  viewProjectionMatrix: Float32Array = new Float32Array([
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+  ]);
+
   constructor(props: Camera3DProps = {}) {
     super('Camera');
 
@@ -300,12 +308,17 @@ export class Camera3DComponent extends Component {
   }
 
   /**
-   * Get projection matrix for WebGPU rendering
-   * This would be calculated by the rendering system
+   * Get the projection matrix for 3D camera
    */
   getProjectionMatrix(): Float32Array {
-    // Placeholder - should be calculated by rendering system
-    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    return this.projectionMatrix;
+  }
+
+  /**
+   * Set the projection matrix for 3D camera
+   */
+  setProjectionMatrix(projectionMatrix: Float32Array): void {
+    this.projectionMatrix = projectionMatrix;
   }
 
   /**
@@ -313,8 +326,14 @@ export class Camera3DComponent extends Component {
    * This would be calculated by the rendering system
    */
   getViewMatrix(): Float32Array {
-    // Placeholder - should be calculated by rendering system
-    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    return this.viewMatrix;
+  }
+
+  /**
+   * Set the view matrix for 3D camera
+   */
+  setViewMatrix(viewMatrix: Float32Array): void {
+    this.viewMatrix = viewMatrix;
   }
 
   /**
@@ -322,11 +341,14 @@ export class Camera3DComponent extends Component {
    * This would be calculated by multiplying projection and view matrices.
    */
   getViewProjectionMatrix(): Float32Array {
-    // Placeholder - should be calculated by rendering system
-    const viewMatrix = this.getViewMatrix();
-    const projectionMatrix = this.getProjectionMatrix();
-    // For now, return an identity matrix. Actual multiplication will be done in the renderer.
-    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    return this.viewProjectionMatrix;
+  }
+
+  /**
+   * Set the view projection matrix for 3D camera
+   */
+  setViewProjectionMatrix(viewProjectionMatrix: Float32Array): void {
+    this.viewProjectionMatrix = viewProjectionMatrix;
   }
 
   /**
@@ -335,27 +357,6 @@ export class Camera3DComponent extends Component {
   lookAt(target: Vec3, up: Vec3 = [0, 1, 0]): void {
     this.target = target;
     this.up = up;
-  }
-
-  /**
-   * Move camera by a given offset
-   * Note: This should be handled by Transform3DComponent
-   * @deprecated Use Transform3DComponent.move() instead
-   */
-  moveBy(offset: Vec3): void {
-    console.warn(
-      'Camera3DComponent.moveBy() is deprecated. Use Transform3DComponent.move() instead.',
-    );
-  }
-
-  /**
-   * Rotate camera around a target point.
-   * This is a simplified placeholder. Actual rotation would involve matrix operations.
-   */
-  rotateAround(target: Vec3, axis: Vec3, angle: number): void {
-    // Placeholder implementation - actual rotation would use a math library
-    // For now, we'll just log a message.
-    console.log(`Rotating camera around target ${target} by angle ${angle} along axis ${axis}`);
   }
 
   /**

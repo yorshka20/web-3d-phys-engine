@@ -362,6 +362,10 @@ export class WebGPURenderSystem extends System {
       direction[2] /= length;
     }
 
+    cameraComponent.setViewMatrix(new Float32Array(viewMatrix));
+    cameraComponent.setProjectionMatrix(new Float32Array(projectionMatrix));
+    cameraComponent.setViewProjectionMatrix(new Float32Array(viewProjectionMatrix));
+
     return {
       viewMatrix: new Float32Array(viewMatrix),
       projectionMatrix: new Float32Array(projectionMatrix),
