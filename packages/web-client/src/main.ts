@@ -5,6 +5,7 @@ import {
   Input3DSystem,
   Mesh3DComponent,
   PhysicsComponent,
+  PhysicsSystem,
   StatsComponent,
   Transform3DComponent,
   Transform3DSystem,
@@ -29,6 +30,7 @@ async function main() {
 
   world.addSystem(new Input3DSystem(rootElement));
   world.addSystem(new Transform3DSystem());
+  world.addSystem(new PhysicsSystem());
   world.addSystem(new WebGPURenderSystem(rootElement));
 
   create3DCamera(world);
