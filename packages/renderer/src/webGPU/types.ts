@@ -1,4 +1,4 @@
-import { Camera3DComponent } from '@ecs/components/rendering/Camera3DComponent';
+import { Entity } from '@ecs/core/ecs/Entity';
 
 export type BufferUsage = number; // Placeholder for GPUBufferUsageFlags
 export type ShaderStage = number; // Placeholder for GPUShaderStageFlags
@@ -32,7 +32,7 @@ export interface GlobalUniforms {
 }
 
 export interface RenderContext {
-  camera: Camera3DComponent;
+  camera: Entity | undefined;
   viewport: ViewportData;
   globalUniforms: GlobalUniforms;
   renderMode: 'AUTO' | '2D' | '3D' | 'MIXED';

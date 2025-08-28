@@ -57,6 +57,7 @@ export class Transform3DComponent extends Component {
     this.position[0] = position[0];
     this.position[1] = position[1];
     this.position[2] = position[2];
+    console.log('Transform3DComponent setPosition', JSON.stringify(this.position, null, 2));
   }
 
   move(dx: number, dy: number, dz: number): void {

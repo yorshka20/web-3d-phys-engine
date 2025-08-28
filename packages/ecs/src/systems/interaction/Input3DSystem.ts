@@ -128,7 +128,7 @@ export class Input3DSystem extends System {
 
   private handleCanvasClick = () => {
     if (!this.isPointerLocked) {
-      // this.rootElement.requestPointerLock();
+      this.rootElement.requestPointerLock();
     }
   };
 
