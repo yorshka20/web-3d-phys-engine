@@ -76,7 +76,7 @@ export class Transform3DComponent extends Component {
     this.rotation[0] = rotation[0];
     this.rotation[1] = rotation[1];
     this.rotation[2] = rotation[2];
-    console.log('Transform3DComponent setRotation', JSON.stringify(this.rotation, null, 2));
+    // console.log('Transform3DComponent setRotation', JSON.stringify(this.rotation, null, 2));
   }
 
   rotate(dx: number, dy: number, dz: number): void {

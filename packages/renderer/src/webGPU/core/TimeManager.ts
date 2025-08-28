@@ -31,8 +31,7 @@ export class TimeManager {
     return buffer;
   }
 
-  updateTime() {
-    const now = performance.now();
+  updateTime(now: number) {
     const time = (now - this.startTime) * 0.001; // convert to seconds
     const deltaTime = (now - this.lastTime) * 0.001;
 

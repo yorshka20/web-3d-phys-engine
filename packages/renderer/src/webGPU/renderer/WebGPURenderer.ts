@@ -17,6 +17,13 @@ import {
   GeometryType,
 } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
+import {
+  createGeometryBindGroup,
+  createGeometryBuffer,
+  createGeometryRenderPipeline,
+  createGeometryShader,
+} from '../core/pipeline/geometry';
+import { createGeometryRenderPass } from '../core/pipeline/geometry/renderPass';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
 import {
@@ -45,6 +52,16 @@ import {
   Scene,
   Texture,
 } from './types/IWebGPURenderer';
+
+export interface GeometryInstance {
+  geometry: GeometryCacheItem;
+  transform: mat4;
+  scale: [number, number, number];
+  position: [number, number, number];
+  rotation: [number, number, number];
+  mvpBuffer: GPUBuffer;
+  mvpBindGroup: GPUBindGroup;
+}
 
 /**
  * WebGPU Renderer
@@ -86,15 +103,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private instanceManager!: InstanceManager;
 
   // Multiple geometry instances
-  private geometryInstances: Array<{
-    geometry: GeometryCacheItem;
-    transform: mat4;
-    scale: [number, number, number];
-    position: [number, number, number];
-    rotation: [number, number, number];
-    mvpBuffer: GPUBuffer;
-    mvpBindGroup: GPUBindGroup;
-  }> = [];
+  private geometryInstances: Array<GeometryInstance> = [];
 
   private get device(): GPUDevice {
     return this.context.getDevice();
@@ -184,7 +193,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
   beginFrame(): void {
     // Update time manager
-    this.timeManager.updateTime();
+    this.timeManager.updateTime(performance.now());
 
     // Begin frame for buffer manager
     this.bufferManager.beginFrame();
@@ -338,29 +347,33 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     console.log('Creating example buffers...');
 
-    // Use geometry manager to create unit cube data
-    const cubeGeometry = this.geometryManager.getGeometry('cube');
+    // geometry buffers
+    createGeometryBuffer(this.bufferManager, this.geometryManager);
 
-    // Create vertex buffer (auto-registered to resource manager)
-    this.bufferManager.createVertexBuffer('Cube Vertices', cubeGeometry.geometry.vertices.buffer);
-    console.log('Created and auto-registered: Cube Vertices');
-
-    // Create index buffer (auto-registered to resource manager)
-    this.bufferManager.createIndexBuffer('Cube Indices', cubeGeometry.geometry.indices.buffer);
-    console.log('Created and auto-registered: Cube Indices');
-
-    // Create uniform buffer for MVP matrix (auto-registered to resource manager)
-    // 4x4 matrix, 16 floats. Initialized to identity.
     // prettier-ignore
-    const mvpMatrixData = new Float32Array([
-      1.0, 0.0, 0.0, 0.0,
-      0.0, 1.0, 0.0, 0.0,
-      0.0, 0.0, 1.0, 0.0,
-      0.0, 0.0, 0.0, 1.0,
+    const axesVertices = new Float32Array([
+    // x axis - red
+    0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  // start, red
+    1.0, 0.0, 0.0,  1.0, 0.0, 0.0,  // end, red
+    // y axis - green  
+    0.0, 0.0, 0.0,  0.0, 1.0, 0.0,  // start, green
+    0.0, 1.0, 0.0,  0.0, 1.0, 0.0,  // end, green
+    // z axis - blue
+    0.0, 0.0, 0.0,  0.0, 0.0, 1.0,  // start, blue
+    0.0, 0.0, 1.0,  0.0, 0.0, 1.0,  // end, blue
     ]);
 
-    this.bufferManager.createUniformBuffer('MVP Matrix Uniforms', mvpMatrixData.buffer);
-    console.log('Created and auto-registered: MVP Matrix Uniforms');
+    // create coordinate buffer
+    this.bufferManager.createBuffer({
+      type: BufferType.VERTEX,
+      size: axesVertices.byteLength,
+      usage: GPUBufferUsage.VERTEX,
+      label: 'Coordinate Buffer',
+    });
+
+    // create coordinate vertices buffer
+    this.bufferManager.createVertexBuffer('Coordinate Vertices', axesVertices.buffer);
+    console.log('Created and auto-registered: Coordinate Vertices');
   }
 
   private async createBindGroups(): Promise<void> {
@@ -368,57 +381,37 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('WebGPU context or resource manager or time manager not initialized');
     }
 
-    // Create TimeBindGroup layout using shader manager
-    const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout('timeBindGroup', {
-      entries: [
-        {
-          binding: 0,
-          visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
-          buffer: { type: 'uniform' },
-        },
-      ],
-      label: 'TimeBindGroup Layout',
-    });
+    createGeometryBindGroup(this.shaderManager, this.resourceManager, this.timeManager);
 
-    this.shaderManager.createBindGroup('TimeBindGroup', {
-      layout: timeBindGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: { buffer: this.timeManager.getBuffer() },
-        },
-      ],
-      label: 'TimeBindGroup',
-    });
+    // Create coordinate bind group layout
+    const coordinateBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+      'coordinateBindGroup',
+      {
+        entries: [
+          {
+            binding: 0,
+            visibility: BindGroupLayoutVisibility.VERTEX,
+            buffer: { type: 'uniform' },
+          },
+        ],
+        label: 'CoordinateBindGroup Layout',
+      },
+    );
 
-    console.log('Created and auto-registered: TimeBindGroup');
-
-    // Create MVP matrix bind group layout
-    const mvpBindGroupLayout = this.shaderManager.createCustomBindGroupLayout('mvpBindGroup', {
-      entries: [
-        {
-          binding: 0,
-          visibility: BindGroupLayoutVisibility.VERTEX,
-          buffer: { type: 'uniform' },
-        },
-      ],
-      label: 'MVPBindGroup Layout',
-    });
-
-    this.shaderManager.createBindGroup('MVPBindGroup', {
-      layout: mvpBindGroupLayout,
+    this.shaderManager.createBindGroup('CoordinateBindGroup', {
+      layout: coordinateBindGroupLayout,
       entries: [
         {
           binding: 0,
           resource: {
-            buffer: this.resourceManager.getBufferResource('MVP Matrix Uniforms').buffer,
+            buffer: this.resourceManager.getBufferResource('Coordinate Vertices').buffer,
           },
         },
       ],
-      label: 'MVPBindGroup',
+      label: 'CoordinateBindGroup',
     });
 
-    console.log('Created and auto-registered: MVPBindGroup');
+    console.log('Created and auto-registered: CoordinateBindGroup');
   }
 
   private async compileShaders(): Promise<void> {
@@ -426,167 +419,103 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('WebGPU context or shader manager not initialized');
     }
 
-    const shaderCode = `
-      struct TimeUniforms {
-        time: f32,
-        deltaTime: f32,
-        frameCount: u32,
-        padding: u32,
+    // geometry shaders
+    createGeometryShader(this.shaderManager);
+
+    const coordinateShaderCode = `
+      struct VertexInput {
+          @location(0) position: vec3<f32>,
+          @location(1) color: vec3<f32>,
       }
       
-      struct MVPUniforms {
-        mvpMatrix: mat4x4<f32>,
-      }
-
-      struct VertexInput {
-        @location(0) position: vec3<f32>,
-        @location(1) normal: vec3<f32>,
-        @location(2) uv: vec2<f32>
-      }
-
       struct VertexOutput {
-        @builtin(position) position: vec4<f32>,
-        @location(0) color: vec4<f32>,
-        @location(1) normal: vec3<f32>,
-        @location(2) uv: vec2<f32>
+          @builtin(position) clip_position: vec4<f32>,
+          @location(0) color: vec3<f32>,
       }
 
-      @group(0) @binding(0) var<uniform> timeData: TimeUniforms;
-      @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
+      struct Uniforms {
+          mvp_matrix: mat4x4<f32>,
+      }
 
-      // Vertex shader for full geometry (pos+normal+uv)
+      @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
       @vertex
-      fn vs_main(@location(0) position: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) uv: vec2<f32>) -> VertexOutput {
+      fn vs_main(@location(0) position: vec3<f32>, @location(1) color: vec3<f32>) -> VertexOutput {
         var out: VertexOutput;
-        out.position = mvp.mvpMatrix * vec4<f32>(position, 1.0);
-        
-        // Use normal for better lighting/coloring
-        let lightDir = normalize(vec3<f32>(1.0, 1.0, 1.0));
-        let lightAmount = max(dot(normal, lightDir), 0.2);
-        out.color = vec4<f32>(normal * 0.5 + 0.5, 1.0) * lightAmount;
-        
-        out.normal = normal;
-        out.uv = uv;
+        out.clip_position = uniforms.mvp_matrix * vec4<f32>(position, 1.0);
+        out.color = color;
         return out;
       }
 
       @fragment
-      fn fs_main(@location(0) color: vec4<f32>, @location(1) normal: vec3<f32>, @location(2) uv: vec2<f32>) -> @location(0) vec4<f32> {
-        let t = timeData.time;
-        
-        let pulse = sin(t * 2.0) * 0.2 + 0.8;  // more stable pulse
-        
-        let hue = (t * 0.5) % 1.0;
-        let animatedColor = hsv_to_rgb(vec3<f32>(hue, 0.8, 1.0));  // slightly lower saturation
-        
-        let dist = length(color.xy - vec2<f32>(0.5));
-        let wave = sin(dist * 10.0 - t * 5.0) * 0.25 + 0.75;  // brighter wave
-        
-        // add ambient light and brightness
-        let ambient = 0.15;
-        let brightness = 1.0;
-        
-        let finalColor = (animatedColor * wave * pulse + ambient) * brightness;
-        
-        return vec4<f32>(finalColor, color.w);
-      }
-
-      // HSV to RGB helper function
-      fn hsv_to_rgb(hsv: vec3<f32>) -> vec3<f32> {
-        let c = hsv.z * hsv.y;
-        let x = c * (1.0 - abs((hsv.x * 6.0) % 2.0 - 1.0));
-        let m = hsv.z - c;
-        
-        var rgb: vec3<f32>;
-        if (hsv.x < 1.0/6.0) { rgb = vec3<f32>(c, x, 0.0); }
-        else if (hsv.x < 2.0/6.0) { rgb = vec3<f32>(x, c, 0.0); }
-        else if (hsv.x < 3.0/6.0) { rgb = vec3<f32>(0.0, c, x); }
-        else if (hsv.x < 4.0/6.0) { rgb = vec3<f32>(0.0, x, c); }
-        else if (hsv.x < 5.0/6.0) { rgb = vec3<f32>(x, 0.0, c); }
-        else { rgb = vec3<f32>(c, 0.0, x); }
-        
-        return rgb + vec3<f32>(m);
+      fn fs_main(@location(0) color: vec3<f32>) -> @location(0) vec4<f32> {
+        return vec4<f32>(color, 1.0);
       }
     `;
 
-    // Create shader modules (auto-registered to resource manager)
-    this.shaderManager.createShaderModule('mainVertex', {
-      id: 'mainVertex',
-      code: shaderCode,
+    // coordinate shader
+    this.shaderManager.createShaderModule('coordinateVertex', {
+      id: 'coordinateVertex',
+      code: coordinateShaderCode,
       type: ShaderType.VERTEX,
       entryPoint: 'vs_main',
-      label: 'Example Vertex Shader',
+      label: 'Coordinate Vertex Shader',
     });
-    console.log('Created and auto-registered: mainVertex shader');
+    console.log('Created and auto-registered: coordinateVertex shader');
 
-    this.shaderManager.createShaderModule('mainFragment', {
-      id: 'mainFragment',
-      code: shaderCode,
+    this.shaderManager.createShaderModule('coordinateFragment', {
+      id: 'coordinateFragment',
+      code: coordinateShaderCode,
       type: ShaderType.FRAGMENT,
       entryPoint: 'fs_main',
-      label: 'Example Fragment Shader',
+      label: 'Coordinate Fragment Shader',
     });
-    console.log('Created and auto-registered: mainFragment shader');
+    console.log('Created and auto-registered: coordinateFragment shader');
   }
 
   private async createRenderPipelines(): Promise<void> {
-    const timeBindGroupLayout = this.resourceManager.getBindGroupLayoutResource('timeBindGroup');
-    const mvpBindGroupLayout = this.resourceManager.getBindGroupLayoutResource('mvpBindGroup');
+    createGeometryRenderPipeline(
+      this.resourceManager,
+      this.shaderManager,
+      this.device,
+      this.context,
+    );
 
-    const renderPipelineLayout = this.device.createPipelineLayout({
-      bindGroupLayouts: [timeBindGroupLayout.layout, mvpBindGroupLayout.layout],
-      label: 'render_pipeline_layout',
-    });
-
-    const vertexShader = this.resourceManager.getShaderResource('mainVertex');
-    const fragmentShader = this.resourceManager.getShaderResource('mainFragment');
-
-    // Create simple vertex format pipeline (position only - for cubes)
-    this.shaderManager.createRenderPipeline('main_pipeline', {
-      layout: renderPipelineLayout,
-      vertex: {
-        module: vertexShader.shader,
-        entryPoint: 'vs_main',
-        buffers: [
-          {
-            arrayStride: 32, // 8 floats * 4 bytes per float
-            attributes: [
-              {
-                format: 'float32x3',
-                offset: 0, // position
-                shaderLocation: 0,
-              },
-              {
-                format: 'float32x3',
-                offset: 12, // normal
-                shaderLocation: 1,
-              },
-              {
-                format: 'float32x2',
-                offset: 24, // uv
-                shaderLocation: 2,
-              },
-            ],
-          },
-        ],
-        constants: {},
-      },
-      fragment: {
-        module: fragmentShader.shader,
-        entryPoint: 'fs_main',
-        targets: [
-          {
-            format: this.context.getPreferredFormat(),
-          },
-        ],
-        constants: {},
-      },
-      primitive: {
-        topology: 'triangle-list',
-      },
-      label: 'main_render_pipeline',
-    });
-    console.log('Created and auto-registered: render_pipeline');
+    // coordinate pipeline
+    // this.shaderManager.createRenderPipeline('coordinate_pipeline', {
+    //   layout: renderPipelineLayout,
+    //   vertex: {
+    //     module: this.resourceManager.getShaderResource('coordinateVertex').shader,
+    //     entryPoint: 'vs_main',
+    //     buffers: [
+    //       {
+    //         arrayStride: 16, // 4 floats * 4 bytes per float
+    //         attributes: [
+    //           {
+    //             format: 'float32x3',
+    //             offset: 0, // position
+    //             shaderLocation: 0,
+    //           },
+    //         ],
+    //       },
+    //     ],
+    //     constants: {},
+    //   },
+    //   fragment: {
+    //     module: this.resourceManager.getShaderResource('coordinateFragment').shader,
+    //     entryPoint: 'fs_main',
+    //     targets: [
+    //       {
+    //         format: this.context.getPreferredFormat(),
+    //       },
+    //     ],
+    //     constants: {},
+    //   },
+    //   primitive: {
+    //     topology: 'line-list',
+    //   },
+    //   label: 'coordinate_render_pipeline',
+    // });
   }
 
   /**
@@ -749,7 +678,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     const timeBindGroup = this.resourceManager.getBindGroupResource('TimeBindGroup');
     // Update projection and view matrices (same for all cubes)
     const now = performance.now() / 1000;
-    this.timeManager.updateTime();
+    this.timeManager.updateTime(now * 1000);
 
     // Use camera data from render context
     const projectionMatrix = mat4.create();
@@ -783,47 +712,32 @@ export class WebGPURenderer implements IWebGPURenderer {
     renderPass.setBindGroup(0, timeBindGroup.bindGroup); // binding actual bind group
 
     // Render geometry instances
-    const mainPipeline = this.resourceManager.getRenderPipelineResource('main_pipeline');
-    if (!mainPipeline) {
-      throw new Error('Main pipeline not found');
-    }
+    createGeometryRenderPass(
+      renderPass,
+      context,
+      this.resourceManager,
+      this.device,
+      this.geometryInstances,
+    );
 
-    renderPass.setPipeline(mainPipeline.pipeline);
+    // const coordinatePipeline =
+    //   this.resourceManager.getRenderPipelineResource('coordinate_pipeline');
+    // if (coordinatePipeline) {
+    //   renderPass.setPipeline(coordinatePipeline.pipeline);
 
-    for (const instance of this.geometryInstances) {
-      // Update model matrix for this instance
-      const modelMatrix = mat4.create();
+    //   // use universal mvp bind group
+    //   renderPass.setBindGroup(
+    //     1,
+    //     this.resourceManager.getBindGroupResource('mvpBindGroup').bindGroup,
+    //   );
 
-      // Apply scale
-      mat4.scale(modelMatrix, modelMatrix, instance.scale);
+    //   // set coordinate vertices buffer
+    //   const coordinateVertexBuffer = this.resourceManager.getBufferResource('Coordinate Vertices');
+    //   renderPass.setVertexBuffer(0, coordinateVertexBuffer.buffer);
 
-      // Apply rotation
-      mat4.rotateY(modelMatrix, modelMatrix, now * 0.5 + instance.rotation[1]);
-      mat4.rotateX(modelMatrix, modelMatrix, now * 0.3 + instance.rotation[0]);
-      mat4.rotateZ(modelMatrix, modelMatrix, instance.rotation[2]);
-
-      // Apply position
-      mat4.translate(modelMatrix, modelMatrix, instance.position);
-
-      // Calculate MVP matrix for this instance
-      const mvpMatrix = mat4.create();
-      mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
-      mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
-
-      // Update this instance's MVP uniform buffer
-      this.device.queue.writeBuffer(instance.mvpBuffer, 0, new Float32Array(mvpMatrix));
-
-      // Use this instance's MVPBindGroup
-      renderPass.setBindGroup(1, instance.mvpBindGroup);
-
-      // set vertex buffer
-      renderPass.setVertexBuffer(0, instance.geometry.vertexBuffer);
-      // set index buffer
-      renderPass.setIndexBuffer(instance.geometry.indexBuffer, 'uint16');
-
-      // Draw this instance
-      renderPass.drawIndexed(instance.geometry.indexCount);
-    }
+    //   // draw 6 vertices, 3 lines
+    //   renderPass.draw(6, 1, 0, 0);
+    // }
 
     renderPass.end();
 

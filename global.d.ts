@@ -9,3 +9,8 @@ interface ImportMeta {
 }
 
 type Any = any;
+
+declare module '*.wgsl' {
+  const content: string;
+  export default content;
+}
