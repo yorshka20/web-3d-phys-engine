@@ -4,6 +4,7 @@ import {
   GeometryPrimitiveOptions,
 } from '@ecs/components/physics/mesh';
 import { BufferManager } from './BufferManager';
+import { Injectable } from './decorators/ResourceDecorators';
 
 /**
  * Geometry cache item
@@ -81,6 +82,7 @@ export interface GeometryParams {
  * Geometry Manager
  * Manages different types of geometries, including caching and resource management
  */
+@Injectable()
 export class GeometryManager {
   private geometryCache: Map<string, GeometryCacheItem> = new Map();
 

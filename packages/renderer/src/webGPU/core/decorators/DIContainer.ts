@@ -121,6 +121,7 @@ export const ServiceTokens = {
   TEXTURE_MANAGER: 'TextureManager',
   GEOMETRY_MANAGER: 'GeometryManager',
   TIME_MANAGER: 'TimeManager',
+  RENDER_PIPELINE_MANAGER: 'RenderPipelineManager',
   WEBGPU_DEVICE: 'WebGPUDevice',
   WEBGPU_CONTEXT: 'WebGPUContext',
 } as const;

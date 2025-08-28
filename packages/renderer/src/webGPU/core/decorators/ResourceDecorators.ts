@@ -14,21 +14,8 @@ import {
   AutoRegisterOptions,
   InjectableClass,
   ResourceFactoryOptions,
-  ResourceLifecycle,
   SmartResourceOptions,
 } from './types';
-
-/**
- * Resource metadata for decorators
- */
-export interface ResourceMetadata {
-  id: string;
-  type: ResourceType;
-  lifecycle?: ResourceLifecycle;
-  cache?: boolean;
-  pool?: boolean;
-  dependencies?: string[];
-}
 
 /**
  * Auto-register resource decorator for TypeScript 5.0

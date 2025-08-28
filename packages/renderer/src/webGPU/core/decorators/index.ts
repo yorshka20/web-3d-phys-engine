@@ -31,9 +31,13 @@
  */
 
 import { BufferManager } from '../BufferManager';
+import { GeometryManager } from '../GeometryManager';
+import { RenderPipelineManager } from '../RenderPipelineManager';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
 import { TextureManager } from '../TextureManager';
+import { TimeManager } from '../TimeManager';
+import { WebGPUContext } from '../WebGPUContext';
 import { globalContainer, ServiceTokens } from './DIContainer';
 import { AutoRegisterResource, Injectable, SmartResource } from './ResourceDecorators';
 
@@ -45,7 +49,6 @@ export {
   MonitorPerformance,
   ResourceFactory,
   SmartResource,
-  type ResourceMetadata,
 } from './ResourceDecorators';
 
 // Enhanced type definitions
@@ -60,39 +63,62 @@ export { DIContainer, globalContainer, ServiceTokens, type ServiceToken } from '
 export function initContainer(device: GPUDevice) {
   // Register all services in DI container
   globalContainer.registerInstance(ServiceTokens.WEBGPU_DEVICE, device);
-  globalContainer.registerInstance(ServiceTokens.RESOURCE_MANAGER, new WebGPUResourceManager());
+  // WebGPUContext will be created later in WebGPURenderer, so register a factory
+  globalContainer.registerSingleton(ServiceTokens.WEBGPU_CONTEXT, () => new WebGPUContext());
+  globalContainer.registerSingleton(
+    ServiceTokens.RESOURCE_MANAGER,
+    () => new WebGPUResourceManager(),
+  );
 
-  // Create a factory function that sets container BEFORE the manager is used
-  const createManagerWithContainer = <T>(
-    ManagerClass: new (device: GPUDevice) => T,
-    device: GPUDevice,
-  ): T => {
-    const manager = new ManagerClass(device);
-    // This ensures @Inject decorators can resolve dependencies
-    if (typeof (manager as any).setContainer === 'function') {
-      (manager as any).setContainer(globalContainer);
-    }
-    return manager;
-  };
-
-  globalContainer.register(ServiceTokens.BUFFER_MANAGER, (device: GPUDevice) => {
-    return createManagerWithContainer(BufferManager, device);
+  globalContainer.registerSingleton(ServiceTokens.BUFFER_MANAGER, () => {
+    // BufferManager needs the device, which is already registered
+    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+    return new BufferManager(device);
   });
 
-  globalContainer.register(ServiceTokens.SHADER_MANAGER, (device: GPUDevice) => {
-    return createManagerWithContainer(ShaderManager, device);
+  globalContainer.registerSingleton(ServiceTokens.SHADER_MANAGER, () => {
+    // ShaderManager needs the device, which is already registered
+    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+    return new ShaderManager(device);
   });
 
-  globalContainer.register(ServiceTokens.TEXTURE_MANAGER, (device: GPUDevice) => {
-    return createManagerWithContainer(TextureManager, device);
+  globalContainer.registerSingleton(ServiceTokens.TEXTURE_MANAGER, () => {
+    // TextureManager needs the device, which is already registered
+    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+    return new TextureManager(device);
+  });
+
+  globalContainer.registerSingleton(ServiceTokens.TIME_MANAGER, () => {
+    // TimeManager needs device and BufferManager
+    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+    const bufferManager = globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER);
+    return new TimeManager(device, bufferManager);
+  });
+
+  globalContainer.registerSingleton(ServiceTokens.GEOMETRY_MANAGER, () => {
+    // GeometryManager needs BufferManager
+    const bufferManager = globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER);
+    return new GeometryManager(bufferManager);
+  });
+
+  globalContainer.registerSingleton(ServiceTokens.RENDER_PIPELINE_MANAGER, () => {
+    // RenderPipelineManager needs device and ShaderManager
+    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+    const shaderManager = globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER);
+    return new RenderPipelineManager(device, shaderManager);
   });
 
   return {
     container: globalContainer,
     resourceManager: globalContainer.resolve<WebGPUResourceManager>(ServiceTokens.RESOURCE_MANAGER),
-    bufferManager: globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER, device),
-    shaderManager: globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER, device),
-    textureManager: globalContainer.resolve<TextureManager>(ServiceTokens.TEXTURE_MANAGER, device),
+    bufferManager: globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER),
+    shaderManager: globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER),
+    textureManager: globalContainer.resolve<TextureManager>(ServiceTokens.TEXTURE_MANAGER),
+    timeManager: globalContainer.resolve<TimeManager>(ServiceTokens.TIME_MANAGER),
+    geometryManager: globalContainer.resolve<GeometryManager>(ServiceTokens.GEOMETRY_MANAGER),
+    renderPipelineManager: globalContainer.resolve<RenderPipelineManager>(
+      ServiceTokens.RENDER_PIPELINE_MANAGER,
+    ),
   };
 }
 
