@@ -1,28 +1,17 @@
 import fs from 'fs-extra';
 import { resolve } from 'path';
 import { defineConfig } from 'vite';
-import swc from 'vite-plugin-swc-transform';
 
 const packageJson = fs.readJSONSync(resolve(__dirname, '../../package.json'));
 
 export default defineConfig(({ mode }) => {
   return {
     base: '/',
-    plugins: [
-      swc({
-        swcOptions: {
-          jsc: {
-            parser: {
-              syntax: 'typescript',
-              decorators: true,
-            },
-            transform: {
-              decoratorVersion: '2022-03',
-            },
-          },
-        },
-      }),
-    ],
+    plugins: [],
+    esbuild: {
+      target: 'es2022',
+      keepNames: true,
+    },
     publicDir: 'public',
     build: {
       outDir: resolve(__dirname, './dist'),

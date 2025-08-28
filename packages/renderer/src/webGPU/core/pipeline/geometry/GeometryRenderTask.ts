@@ -1,7 +1,7 @@
 import { mat4 } from 'gl-matrix';
 import { RenderContext } from '../../../types';
 import { RenderPipelineManager } from '../../RenderPipelineManager';
-import { Inject, Injectable, ServiceTokens } from '../../decorators';
+import { Injectable, ServiceTokens, Inject } from '../../decorators';
 import {
   BufferManager,
   GeometryManager,
@@ -39,8 +39,8 @@ export class GeometryRenderTask {
   @Inject(ServiceTokens.SHADER_MANAGER)
   private shaderManager!: ShaderManager;
 
-  // resourceManager will be set by setResourceManager from InjectableClass
-  public resourceManager!: WebGPUResourceManager;
+  @Inject(ServiceTokens.RESOURCE_MANAGER)
+  private resourceManager!: WebGPUResourceManager;
 
   @Inject(ServiceTokens.TIME_MANAGER)
   private timeManager!: TimeManager;
@@ -63,7 +63,49 @@ export class GeometryRenderTask {
     await this.compileShaders();
     await this.createRenderPipelines();
 
-    this.setupGeometryInstances(geometryDescriptors);
+    // Setup default geometry instances
+    this.setupGeometryInstances(this.getDefaultGeometryDescriptors());
+  }
+
+  private getDefaultGeometryDescriptors(): GeometryInstanceDescriptor[] {
+    return [
+      {
+        type: 'cube',
+        transform: {
+          position: [-2, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [0.5, 0.5, 0.5],
+        },
+        name: 'SmallCube',
+      },
+      {
+        type: 'cube',
+        transform: {
+          position: [0, 0, 0],
+          rotation: [0, Math.PI / 4, 0],
+          scale: [1.0, 1.0, 1.0],
+        },
+        name: 'MediumCube',
+      },
+      {
+        type: 'cylinder',
+        transform: {
+          position: [2, 0, 0],
+          rotation: [Math.PI / 6, 0, Math.PI / 6],
+          scale: [1.5, 1.5, 1.5],
+        },
+        name: 'Cylinder',
+      },
+      {
+        type: 'sphere',
+        transform: {
+          position: [0, 2, 0],
+          rotation: [Math.PI / 6, 0, Math.PI / 6],
+          scale: [5, 5, 5],
+        },
+        name: 'Sphere',
+      },
+    ];
   }
 
   private async createBuffers(): Promise<void> {
@@ -434,43 +476,3 @@ export class GeometryRenderTask {
     console.log('[GeometryRenderTask] Destroyed and cleared all geometry instances.');
   }
 }
-
-// Define geometry instances using the new unified API
-const geometryDescriptors: GeometryInstanceDescriptor[] = [
-  {
-    type: 'cube',
-    transform: {
-      position: [-2, 0, 0],
-      rotation: [0, 0, 0],
-      scale: [0.5, 0.5, 0.5],
-    },
-    name: 'SmallCube',
-  },
-  {
-    type: 'cube',
-    transform: {
-      position: [0, 0, 0],
-      rotation: [0, Math.PI / 4, 0],
-      scale: [1.0, 1.0, 1.0],
-    },
-    name: 'MediumCube',
-  },
-  {
-    type: 'cylinder',
-    transform: {
-      position: [2, 0, 0],
-      rotation: [Math.PI / 6, 0, Math.PI / 6],
-      scale: [1.5, 1.5, 1.5],
-    },
-    name: 'Cylinder',
-  },
-  {
-    type: 'sphere',
-    transform: {
-      position: [0, 2, 0],
-      rotation: [Math.PI / 6, 0, Math.PI / 6],
-      scale: [5, 5, 5],
-    },
-    name: 'Sphere',
-  },
-];

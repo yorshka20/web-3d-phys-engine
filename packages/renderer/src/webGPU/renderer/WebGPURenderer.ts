@@ -290,7 +290,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     await this.initializeWebGPU();
 
     // init resource managers using DI container
-    // This calls initContainer which registers basic managers.
+    // Pass the already initialized context to ensure single device instance
     const {
       container,
       resourceManager,
@@ -300,7 +300,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       timeManager,
       geometryManager,
       renderPipelineManager,
-    } = initContainer(this.device);
+      geometryRenderTask,
+    } = initContainer(this.device, this.context);
     this.container = container;
     this.resourceManager = resourceManager;
     this.bufferManager = bufferManager;
@@ -309,19 +310,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.timeManager = timeManager;
     this.geometryManager = geometryManager;
     this.renderPipelineManager = renderPipelineManager;
-
-    this.geometryRenderTask = new GeometryRenderTask();
-
-    // Initialize WebGPUContext separately as it needs canvas and options
-    this.context = this.container.resolve<WebGPUContext>(ServiceTokens.WEBGPU_CONTEXT);
-    await this.context.initialize(this.canvas, {
-      powerPreference: 'high-performance',
-      requiredFeatures: ['timestamp-query'],
-      requiredLimits: {
-        maxStorageBufferBindingSize: 1024 * 1024 * 64, // 64MB
-        maxComputeWorkgroupStorageSize: 32768,
-      },
-    });
+    this.geometryRenderTask = geometryRenderTask;
 
     // Initialize render tasks
     await this.geometryRenderTask.initialize();

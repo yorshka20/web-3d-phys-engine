@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc:*)",
-      "Bash(pnpm --filter @web-3d-phys-engine/renderer run build)"
+      "Bash(pnpm --filter @web-3d-phys-engine/renderer run build)",
+      "Bash(cat:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": []
   }

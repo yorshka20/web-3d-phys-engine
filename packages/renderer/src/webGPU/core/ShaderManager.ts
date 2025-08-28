@@ -1,5 +1,5 @@
-import { AutoRegisterResource, Injectable, SmartResource } from './decorators';
-import { globalContainer, ServiceTokens } from './decorators/DIContainer';
+import { AutoRegisterResource, Injectable, SmartResource, Inject } from './decorators';
+import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import {
   BindGroupDescriptor,
@@ -17,7 +17,9 @@ import { ResourceType } from './types/constant';
  */
 @Injectable()
 export class ShaderManager {
-  private resourceManager: WebGPUResourceManager;
+  @Inject(ServiceTokens.RESOURCE_MANAGER)
+  private resourceManager!: WebGPUResourceManager;
+  
   private device: GPUDevice;
   private shaderModules: Map<string, GPUShaderModule> = new Map();
   private renderPipelines: Map<string, GPURenderPipeline> = new Map();
@@ -27,7 +29,13 @@ export class ShaderManager {
 
   constructor(device: GPUDevice) {
     this.device = device;
-    this.resourceManager = globalContainer.resolve(ServiceTokens.RESOURCE_MANAGER);
+  }
+
+  /**
+   * Get resource manager
+   */
+  getResourceManager(): WebGPUResourceManager | undefined {
+    return this.resourceManager;
   }
 
   /**

@@ -32,6 +32,7 @@
 
 import { BufferManager } from '../BufferManager';
 import { GeometryManager } from '../GeometryManager';
+import { GeometryRenderTask } from '../pipeline/geometry/GeometryRenderTask';
 import { RenderPipelineManager } from '../RenderPipelineManager';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
@@ -60,11 +61,11 @@ export { DIContainer, globalContainer, ServiceTokens, type ServiceToken } from '
 /**
  * Advanced setup function with full DI container configuration
  */
-export function initContainer(device: GPUDevice) {
+export function initContainer(device: GPUDevice, context: WebGPUContext) {
   // Register all services in DI container
   globalContainer.registerInstance(ServiceTokens.WEBGPU_DEVICE, device);
-  // WebGPUContext will be created later in WebGPURenderer, so register a factory
-  globalContainer.registerSingleton(ServiceTokens.WEBGPU_CONTEXT, () => new WebGPUContext());
+  // Register the already initialized WebGPUContext instance
+  globalContainer.registerInstance(ServiceTokens.WEBGPU_CONTEXT, context);
   globalContainer.registerSingleton(
     ServiceTokens.RESOURCE_MANAGER,
     () => new WebGPUResourceManager(),
@@ -108,17 +109,35 @@ export function initContainer(device: GPUDevice) {
     return new RenderPipelineManager(device, shaderManager);
   });
 
+  globalContainer.registerSingleton(ServiceTokens.GEOMETRY_RENDER_TASK, () => {
+    // GeometryRenderTask dependencies will be auto-injected via @Inject decorators
+    return new GeometryRenderTask();
+  });
+
+  // Resolve all services - dependencies will be auto-injected via @Inject decorators
+  const resourceManager = globalContainer.resolve<WebGPUResourceManager>(ServiceTokens.RESOURCE_MANAGER);
+  const bufferManager = globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER);
+  const shaderManager = globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER);
+  const textureManager = globalContainer.resolve<TextureManager>(ServiceTokens.TEXTURE_MANAGER);
+  const timeManager = globalContainer.resolve<TimeManager>(ServiceTokens.TIME_MANAGER);
+  const geometryManager = globalContainer.resolve<GeometryManager>(ServiceTokens.GEOMETRY_MANAGER);
+  const renderPipelineManager = globalContainer.resolve<RenderPipelineManager>(
+    ServiceTokens.RENDER_PIPELINE_MANAGER,
+  );
+  const geometryRenderTask = globalContainer.resolve<GeometryRenderTask>(ServiceTokens.GEOMETRY_RENDER_TASK);
+
+  console.log('All services initialized with auto dependency injection');
+
   return {
     container: globalContainer,
-    resourceManager: globalContainer.resolve<WebGPUResourceManager>(ServiceTokens.RESOURCE_MANAGER),
-    bufferManager: globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER),
-    shaderManager: globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER),
-    textureManager: globalContainer.resolve<TextureManager>(ServiceTokens.TEXTURE_MANAGER),
-    timeManager: globalContainer.resolve<TimeManager>(ServiceTokens.TIME_MANAGER),
-    geometryManager: globalContainer.resolve<GeometryManager>(ServiceTokens.GEOMETRY_MANAGER),
-    renderPipelineManager: globalContainer.resolve<RenderPipelineManager>(
-      ServiceTokens.RENDER_PIPELINE_MANAGER,
-    ),
+    resourceManager,
+    bufferManager,
+    shaderManager,
+    textureManager,
+    timeManager,
+    geometryManager,
+    renderPipelineManager,
+    geometryRenderTask,
   };
 }
 
