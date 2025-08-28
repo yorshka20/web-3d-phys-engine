@@ -10,6 +10,7 @@ import {
   ShaderResource,
   TextureResource,
 } from '../types/resource';
+import { globalContainer } from './DIContainer';
 import {
   AutoRegisterOptions,
   InjectableClass,
@@ -28,12 +29,15 @@ export function AutoRegisterResource<T extends ResourceType>(
   return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: InjectableClass, ...args: [string, Any]) {
+    return function (this: InjectableClass, ...args: [string, ...any[]]) {
       // Execute original method
       const result = originalMethod.apply(this, args);
 
       // Auto-register resource if resource manager is available
-      if (this.resourceManager && result) {
+      const resourceManager = this.getResourceManager
+        ? this.getResourceManager()
+        : this.resourceManager;
+      if (resourceManager && result) {
         // Use first argument as resource ID if it's a string, otherwise generate one
         const resourceId =
           typeof args[0] === 'string'
@@ -44,8 +48,10 @@ export function AutoRegisterResource<T extends ResourceType>(
         );
 
         this.registerResource(resourceId, result, type, options);
-      } else if (!this.resourceManager) {
-        console.warn(`[Decorator:AutoRegisterResource] No resource manager set`);
+      } else if (!resourceManager) {
+        console.warn(
+          `[Decorator:AutoRegisterResource] No resource manager available - resource registration skipped for ${String(context.name)}`,
+        );
       }
 
       return result;
@@ -62,13 +68,14 @@ export function Injectable() {
     // Add resource manager property and methods to prototype
     const proto = target.prototype as InjectableClass;
 
+    // Initialize properties with proper types
     if (!proto.hasOwnProperty('resourceManager')) {
-      proto.resourceManager = undefined;
+      proto.resourceManager = undefined as WebGPUResourceManager | undefined;
     }
 
     // Add container property for @Inject decorator support
     if (!proto.hasOwnProperty('container')) {
-      proto.container = undefined;
+      proto.container = undefined as any;
     }
 
     if (!proto.hasOwnProperty('setContainer')) {
@@ -109,7 +116,7 @@ export function Injectable() {
       };
     }
 
-    // Helper method to register resource
+    // Helper method to register resource with improved error handling
     if (!proto.hasOwnProperty('registerResource')) {
       proto.registerResource = function (
         id: string,
@@ -117,31 +124,51 @@ export function Injectable() {
         type: ResourceType,
         options: any = {},
       ) {
-        if (!this.resourceManager) {
-          console.warn(`Resource manager not set, skipping auto-registration for ${type}: ${id}`);
+        // Validate inputs
+        if (!id || typeof id !== 'string') {
+          console.error('[Injectable] Invalid resource ID provided');
           return;
         }
 
-        const resourceDescriptor = {
-          id,
-          type,
-          factory: async () => this.createResourceWrapper(type, resource),
-          dependencies: options.dependencies || [],
-          metadata: {
-            ...options,
-            resourceType: type,
-            createdAt: Date.now(),
-          },
-        };
+        if (!resource) {
+          console.error(`[Injectable] No resource provided for ${id}`);
+          return;
+        }
 
-        this.resourceManager
-          .createResource(resourceDescriptor)
-          .then(() => {
-            console.log(`[ResourceManager] Successfully registered resource: ${id}, type: ${type}`);
-          })
-          .catch((error: any) => {
-            console.error(`[ResourceManager] Failed to auto-register ${type} ${id}:`, error);
-          });
+        const resourceManager = this.getResourceManager
+          ? this.getResourceManager()
+          : this.resourceManager;
+        if (!resourceManager) {
+          console.warn(
+            `[Injectable] Resource manager not available, skipping auto-registration for ${type}: ${id}`,
+          );
+          return;
+        }
+
+        try {
+          const resourceDescriptor = {
+            id,
+            type,
+            factory: async () => this.createResourceWrapper(type, resource),
+            dependencies: options.dependencies || [],
+            metadata: {
+              ...options,
+              resourceType: type,
+              createdAt: Date.now(),
+            },
+          };
+
+          resourceManager
+            .createResource(resourceDescriptor)
+            .then(() => {
+              console.log(`[Injectable] Successfully registered resource: ${id}, type: ${type}`);
+            })
+            .catch((error: any) => {
+              console.error(`[Injectable] Failed to auto-register ${type} ${id}:`, error);
+            });
+        } catch (error) {
+          console.error(`[Injectable] Error creating resource descriptor for ${id}:`, error);
+        }
       };
     }
 
@@ -256,48 +283,85 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
   return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: InjectableClass, ...args: [string, Any]) {
-      // Initialize resource cache and pool on instance
+    return function (this: InjectableClass, ...args: [string, ...any[]]) {
+      // Initialize resource cache and pool on instance with proper typing
       if (!this.resourceCache) {
-        this.resourceCache = new Map();
+        this.resourceCache = new Map<string, any>();
       }
       if (!this.resourcePool) {
-        this.resourcePool = new Map();
+        this.resourcePool = new Map<string, any>();
       }
       if (!this.resourceLifecycles) {
-        this.resourceLifecycles = new Map();
+        this.resourceLifecycles = new Map<string, string>();
       }
 
       // Use first argument as resource ID if it's a string, otherwise generate one
       const resourceId =
         typeof args[0] === 'string' ? args[0] : this.generateResourceId(String(context.name), args);
-      console.log(`[Decorator:SmartResource] Registering resource: ${resourceId}, type: ${type}`);
 
-      // Check cache first
+      // Validate resource ID
+      if (!resourceId || typeof resourceId !== 'string') {
+        console.error('[SmartResource] Invalid resource ID generated');
+        throw new Error('Invalid resource ID');
+      }
+
+      console.log(`[SmartResource] Processing resource: ${resourceId}, type: ${type}`);
+
+      // Check cache first with validation
       if (options.cache && this.resourceCache.has(resourceId)) {
-        console.log(`Using cached resource: ${resourceId}`);
-        return this.resourceCache.get(resourceId);
+        const cachedResource = this.resourceCache.get(resourceId);
+        if (cachedResource) {
+          console.log(`[SmartResource] Using cached resource: ${resourceId}`);
+          return cachedResource;
+        } else {
+          // Remove invalid cache entry
+          this.resourceCache.delete(resourceId);
+        }
       }
 
-      // Check pool
+      // Check pool with validation
       if (options.pool && this.resourcePool.has(resourceId)) {
-        console.log(`Using pooled resource: ${resourceId}`);
-        return this.resourcePool.get(resourceId);
+        const pooledResource = this.resourcePool.get(resourceId);
+        if (pooledResource) {
+          console.log(`[SmartResource] Using pooled resource: ${resourceId}`);
+          return pooledResource;
+        } else {
+          // Remove invalid pool entry
+          this.resourcePool.delete(resourceId);
+        }
       }
 
-      // Create new resource
-      const resource = originalMethod.apply(this, args);
+      // Create new resource with error handling
+      let resource: any;
+      try {
+        resource = originalMethod.apply(this, args);
+        if (!resource) {
+          throw new Error('Resource creation returned null/undefined');
+        }
+      } catch (error) {
+        console.error(`[SmartResource] Failed to create resource ${resourceId}:`, error);
+        throw error;
+      }
 
       // Cache resource
       if (options.cache) {
         this.resourceCache.set(resourceId, resource);
 
-        // Implement cache size limit
+        // Implement cache size limit with LRU eviction
         if (options.maxCacheSize && this.resourceCache.size > options.maxCacheSize) {
-          const firstKey = this.resourceCache.keys().next().value;
-          if (firstKey) {
-            this.resourceCache.delete(firstKey);
-          }
+          // Remove oldest entries (simple FIFO for now, could be enhanced with LRU)
+          const entriesToRemove = this.resourceCache.size - options.maxCacheSize;
+          const keysToRemove = Array.from(this.resourceCache.keys()).slice(0, entriesToRemove);
+          keysToRemove.forEach((key) => {
+            const resource = this.resourceCache?.get(key);
+            if (resource && typeof resource.destroy === 'function') {
+              resource.destroy();
+            }
+            this.resourceCache?.delete(key);
+          });
+          console.log(
+            `[SmartResource] Evicted ${entriesToRemove} cached resources to maintain size limit`,
+          );
         }
       }
 
@@ -307,19 +371,20 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
       }
 
       // Set lifecycle
-      if (options.lifecycle) {
-        if (this.setResourceLifecycle) {
-          this.setResourceLifecycle(resourceId, options.lifecycle);
-        }
+      if (options.lifecycle && this.setResourceLifecycle) {
+        this.setResourceLifecycle(resourceId, options.lifecycle);
       }
 
       // Auto-register
-      if (this.resourceManager) {
+      const resourceManager = this.getResourceManager
+        ? this.getResourceManager()
+        : this.resourceManager;
+      if (resourceManager) {
         console.log(`[Decorator:SmartResource] Registering resource: ${resourceId}, type: ${type}`);
         this.registerResource(resourceId, resource, type, options);
       } else {
         console.warn(
-          `[Decorator:SmartResource] No resource manager set for resource: ${resourceId}`,
+          `[Decorator:SmartResource] No resource manager available - registration skipped for resource: ${resourceId}`,
         );
       }
 
@@ -330,31 +395,81 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
 
 /**
  * Dependency injection decorator for properties
- * Automatically injects dependencies from a container
+ * Automatically injects dependencies from the global container
+ * Compatible with TypeScript 5.0+ decorators
  */
 export function Inject(token: string) {
   return function (target: any, context: ClassFieldDecoratorContext) {
-    return function (this: any, initialValue: any) {
-      let value = initialValue;
+    // Validate token
+    if (!token || typeof token !== 'string') {
+      console.error('[Inject] Invalid token provided for dependency injection');
+      return undefined;
+    }
 
-      Object.defineProperty(this, context.name as string, {
+    // Use addInitializer to set up the property after class definition
+    context.addInitializer(function (this: any) {
+      const propertyName = context.name as string;
+      const privateProp = `__${propertyName}_cached`;
+      const errorProp = `__${propertyName}_error`;
+
+      // Define getter/setter on the instance
+      Object.defineProperty(this, propertyName, {
         get() {
-          // If container is available, resolve now
-          if (this.container) {
-            return this.container.resolve(token);
+          // Return cached value if available
+          if (this[privateProp] !== undefined) {
+            return this[privateProp];
           }
 
-          return value;
+          // Return cached error if previous resolution failed
+          if (this[errorProp]) {
+            console.warn(
+              `[Inject] Previous injection failed for ${token} in ${propertyName}:`,
+              this[errorProp],
+            );
+            return undefined;
+          }
+
+          try {
+            // Validate global container is available
+            if (!globalContainer) {
+              throw new Error('Global container not available');
+            }
+
+            const resolved = globalContainer.resolve(token);
+
+            // Validate resolved dependency
+            if (resolved === undefined || resolved === null) {
+              throw new Error(`Dependency ${token} resolved to null/undefined`);
+            }
+
+            // Cache the resolved value
+            this[privateProp] = resolved;
+            console.log(`[Inject] Successfully injected ${token} into ${propertyName}`);
+            return resolved;
+          } catch (error) {
+            // Cache the error to avoid repeated resolution attempts
+            this[errorProp] = error;
+            console.error(
+              `[Inject] Failed to inject dependency: ${token} for field ${propertyName}`,
+              error,
+            );
+            return undefined;
+          }
         },
+
         set(newValue: any) {
-          value = newValue;
+          // Clear cached error when manually setting value
+          delete this[errorProp];
+          this[privateProp] = newValue;
         },
+
         enumerable: true,
         configurable: true,
       });
+    });
 
-      return value;
-    };
+    // Field decorators must return void or a function
+    return undefined;
   };
 }
 
@@ -403,14 +518,27 @@ export function ResourceFactory<T extends ResourceType>(
  * Performance monitoring decorator
  * Tracks resource creation performance
  */
-export function MonitorPerformance() {
+export function MonitorPerformance(
+  options: {
+    logThreshold?: number;
+    maxSamples?: number;
+    enableLogging?: boolean;
+  } = {},
+) {
+  const {
+    logThreshold = 1, // Only log if execution takes more than 1ms
+    maxSamples = 100, // Keep only last 100 samples per method
+    enableLogging = true,
+  } = options;
+
   return function (target: any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
+    const methodName = String(context.name);
 
     return function (this: any, ...args: any[]) {
       // Initialize performance metrics on instance
       if (!this.performanceMetrics) {
-        this.performanceMetrics = new Map();
+        this.performanceMetrics = new Map<string, number[]>();
       }
 
       // Add helper methods if they don't exist
@@ -422,6 +550,10 @@ export function MonitorPerformance() {
           }
 
           const times = metrics.get(methodName);
+          if (!times || times.length === 0) {
+            return 0;
+          }
+
           return times.reduce((a: number, b: number) => a + b, 0) / times.length;
         };
       }
@@ -432,28 +564,59 @@ export function MonitorPerformance() {
         };
       }
 
+      if (!this.getPerformanceStats) {
+        this.getPerformanceStats = function (methodName: string) {
+          const metrics = this.performanceMetrics;
+          if (!metrics || !metrics.has(methodName)) {
+            return { count: 0, average: 0, min: 0, max: 0, total: 0 };
+          }
+
+          const times = metrics.get(methodName);
+          if (!times || times.length === 0) {
+            return { count: 0, average: 0, min: 0, max: 0, total: 0 };
+          }
+
+          const total = times.reduce((a, b) => a + b, 0);
+          const average = total / times.length;
+          const min = Math.min(...times);
+          const max = Math.max(...times);
+
+          return { count: times.length, average, min, max, total };
+        };
+      }
+
       const startTime = performance.now();
 
       try {
         const result = originalMethod.apply(this, args);
         const endTime = performance.now();
-
-        // Log performance metrics
-        console.log(`${String(context.name)} took ${(endTime - startTime).toFixed(2)}ms`);
+        const executionTime = endTime - startTime;
 
         // Store performance data
-        const methodName = String(context.name);
         if (!this.performanceMetrics.has(methodName)) {
           this.performanceMetrics.set(methodName, []);
         }
 
-        this.performanceMetrics.get(methodName).push(endTime - startTime);
+        const times = this.performanceMetrics.get(methodName)!;
+        times.push(executionTime);
+
+        // Maintain max samples limit
+        if (times.length > maxSamples) {
+          times.shift(); // Remove oldest sample
+        }
+
+        // Log performance metrics if enabled and above threshold
+        if (enableLogging && executionTime >= logThreshold) {
+          console.log(`[Performance] ${methodName} took ${executionTime.toFixed(2)}ms`);
+        }
 
         return result;
       } catch (error) {
         const endTime = performance.now();
+        const executionTime = endTime - startTime;
+
         console.error(
-          `${String(context.name)} failed after ${(endTime - startTime).toFixed(2)}ms:`,
+          `[Performance] ${methodName} failed after ${executionTime.toFixed(2)}ms:`,
           error,
         );
         throw error;
@@ -461,3 +624,92 @@ export function MonitorPerformance() {
     };
   };
 }
+
+/**
+ * Validation utilities for decorators
+ */
+export const DecoratorValidation = {
+  /**
+   * Validates that a resource type is valid
+   */
+  validateResourceType(type: any): type is ResourceType {
+    return Object.values(ResourceType).includes(type);
+  },
+
+  /**
+   * Validates that a resource ID is valid
+   */
+  validateResourceId(id: any): id is string {
+    return typeof id === 'string' && id.length > 0;
+  },
+
+  /**
+   * Validates that a resource manager is available
+   */
+  validateResourceManager(manager: any): manager is WebGPUResourceManager {
+    return manager && typeof manager.createResource === 'function';
+  },
+
+  /**
+   * Creates a standardized error message for decorator validation failures
+   */
+  createValidationError(decoratorName: string, field: string, value: any, expected: string): Error {
+    return new Error(
+      `[${decoratorName}] Invalid ${field}: expected ${expected}, got ${typeof value} (${value})`,
+    );
+  },
+
+  /**
+   * Validates decorator options
+   */
+  validateOptions(options: any, allowedKeys: string[]): void {
+    if (options && typeof options === 'object') {
+      const invalidKeys = Object.keys(options).filter((key) => !allowedKeys.includes(key));
+      if (invalidKeys.length > 0) {
+        console.warn(
+          `[DecoratorValidation] Unknown option keys: ${invalidKeys.join(', ')}. Allowed keys: ${allowedKeys.join(', ')}`,
+        );
+      }
+    }
+  },
+};
+
+/**
+ * Enhanced error handling for decorators
+ */
+export const DecoratorErrorHandler = {
+  /**
+   * Wraps a function with error handling and logging
+   */
+  wrapWithErrorHandling<T extends (...args: any[]) => any>(
+    fn: T,
+    decoratorName: string,
+    context: string,
+  ): T {
+    return ((...args: any[]) => {
+      try {
+        return fn(...args);
+      } catch (error) {
+        console.error(`[${decoratorName}] Error in ${context}:`, error);
+        throw error;
+      }
+    }) as T;
+  },
+
+  /**
+   * Creates a safe async wrapper for resource operations
+   */
+  wrapAsyncResourceOperation<T>(
+    operation: () => Promise<T>,
+    resourceId: string,
+    operationName: string,
+  ): Promise<T> {
+    return operation().catch((error) => {
+      console.error(
+        `[ResourceOperation] Failed to ${operationName} resource ${resourceId}:`,
+        error,
+      );
+      throw error;
+    });
+  },
+};

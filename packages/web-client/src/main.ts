@@ -1,6 +1,7 @@
 import {
   ActiveCameraTag,
   Camera3DComponent,
+  Entity,
   Input3DComponent,
   Input3DSystem,
   Mesh3DComponent,
@@ -33,11 +34,14 @@ async function main() {
   world.addSystem(new PhysicsSystem());
   world.addSystem(new WebGPURenderSystem(rootElement));
 
-  create3DCamera(world);
+  const camera = create3DCamera(world);
   cretePlane(world);
 
   // Initialize the game
   await game.initialize();
+
+  // Create camera debug panel
+  createCameraDebugPanel(camera);
 
   game.start();
 
@@ -63,7 +67,8 @@ function create3DCamera(world: World) {
   // Add transform component for position/rotation
   camera.addComponent(
     world.createComponent(Transform3DComponent, {
-      position: [0, 5, 10], // Start camera at a better position
+      position: [0, 3, -10], // Position to see all geometry objects
+      rotation: [0, 0, 0], // Look straight ahead towards the objects
     }),
   );
 
@@ -73,15 +78,7 @@ function create3DCamera(world: World) {
   camera.addComponent(world.createComponent(PhysicsComponent, { velocity: [0, 0, 0] }));
 
   // Add input component for camera control
-  camera.addComponent(
-    world.createComponent(Input3DComponent, {
-      mouseSensitivity: 0.1,
-      moveSpeed: 1,
-      sprintSpeed: 5,
-      jumpForce: 3,
-      gravity: 9.81,
-    }),
-  );
+  camera.addComponent(world.createComponent(Input3DComponent, {}));
 
   camera.addComponent(world.createComponent(StatsComponent, { moveSpeedMultiplier: 1 }));
 
@@ -111,4 +108,79 @@ function cretePlane(world: World) {
 
   world.addEntity(plane);
   return plane;
+}
+
+// Create camera debug panel
+function createCameraDebugPanel(camera: Entity) {
+  const debugPanel = document.createElement('div');
+  debugPanel.id = 'camera-debug-panel';
+  debugPanel.style.cssText = `
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    z-index: 1000;
+    min-width: 300px;
+    border: 1px solid #333;
+  `;
+
+  const title = document.createElement('div');
+  title.textContent = 'Camera Parameters';
+  title.style.cssText = `
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #00ff00;
+    border-bottom: 1px solid #333;
+    padding-bottom: 5px;
+  `;
+
+  const positionDiv = document.createElement('div');
+  positionDiv.id = 'camera-position';
+  positionDiv.style.marginBottom = '5px';
+
+  const rotationDiv = document.createElement('div');
+  rotationDiv.id = 'camera-rotation';
+  rotationDiv.style.marginBottom = '5px';
+
+  const fovDiv = document.createElement('div');
+  fovDiv.id = 'camera-fov';
+  fovDiv.style.marginBottom = '5px';
+
+  debugPanel.appendChild(title);
+  debugPanel.appendChild(positionDiv);
+  debugPanel.appendChild(rotationDiv);
+  debugPanel.appendChild(fovDiv);
+
+  document.body.appendChild(debugPanel);
+
+  // Update function
+  function updateCameraInfo() {
+    if (
+      !camera.hasComponent(Transform3DComponent.componentName) ||
+      !camera.hasComponent(Camera3DComponent.componentName)
+    ) {
+      return;
+    }
+
+    const transform = camera.getComponent<Transform3DComponent>(Transform3DComponent.componentName);
+    const cameraComp = camera.getComponent<Camera3DComponent>(Camera3DComponent.componentName);
+
+    if (transform && cameraComp) {
+      const pos = transform.getPosition();
+      const rot = transform.getRotation();
+
+      positionDiv.innerHTML = `Position: [${pos[0].toFixed(2)}, ${pos[1].toFixed(2)}, ${pos[2].toFixed(2)}]`;
+      rotationDiv.innerHTML = `Rotation: [${((rot[0] * 180) / Math.PI).toFixed(1)}°, ${((rot[1] * 180) / Math.PI).toFixed(1)}°, ${((rot[2] * 180) / Math.PI).toFixed(1)}°]`;
+      fovDiv.innerHTML = `FOV: ${cameraComp.fov}° | Mode: ${cameraComp.projectionMode}`;
+    }
+
+    requestAnimationFrame(updateCameraInfo);
+  }
+
+  updateCameraInfo();
 }

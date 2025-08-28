@@ -1,7 +1,7 @@
 import { mat4 } from 'gl-matrix';
 import { RenderContext } from '../../../types';
 import { RenderPipelineManager } from '../../RenderPipelineManager';
-import { Injectable, ServiceTokens, Inject } from '../../decorators';
+import { Inject, Injectable, ServiceTokens } from '../../decorators';
 import {
   BufferManager,
   GeometryManager,
@@ -436,8 +436,11 @@ export class GeometryRenderTask {
       mat4.scale(modelMatrix, modelMatrix, instance.scale);
 
       // Apply rotation
-      mat4.rotateY(modelMatrix, modelMatrix, now * 0.5 + instance.rotation[1]);
-      mat4.rotateX(modelMatrix, modelMatrix, now * 0.3 + instance.rotation[0]);
+      // mat4.rotateY(modelMatrix, modelMatrix, now * 0.5 + instance.rotation[1]);
+      // mat4.rotateX(modelMatrix, modelMatrix, now * 0.3 + instance.rotation[0]);
+      // Apply rotation (static, no animation)
+      mat4.rotateY(modelMatrix, modelMatrix, instance.rotation[1]);
+      mat4.rotateX(modelMatrix, modelMatrix, instance.rotation[0]);
       mat4.rotateZ(modelMatrix, modelMatrix, instance.rotation[2]);
 
       // Apply position

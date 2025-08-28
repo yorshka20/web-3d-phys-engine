@@ -226,17 +226,19 @@ export class Transform3DSystem extends System {
    * Get camera-relative direction vectors
    */
   private getCameraRelativeDirections(): [Vec3, Vec3, Vec3] {
-    // Right vector (X axis in camera space)
-    const right: Vec3 = [Math.cos(this.cameraYaw), 0, Math.sin(this.cameraYaw)];
-
-    // Up vector (Y axis in camera space)
-    const up: Vec3 = [0, 1, 0];
-
-    // Forward vector (Z axis in camera space, negative for forward)
+    // Forward vector (camera's look direction)
     const forward: Vec3 = [
-      -Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch),
-      Math.sin(this.cameraPitch),
-      -Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch),
+      Math.cos(this.cameraPitch) * Math.sin(this.cameraYaw),
+      -Math.sin(this.cameraPitch),
+      Math.cos(this.cameraPitch) * Math.cos(this.cameraYaw),
+    ];
+
+    // Right vector (perpendicular to forward and up)
+    const up: Vec3 = [0, 1, 0];
+    const right: Vec3 = [
+      Math.sin(this.cameraYaw - Math.PI / 2),
+      0,
+      Math.cos(this.cameraYaw - Math.PI / 2),
     ];
 
     return [right, up, forward];
