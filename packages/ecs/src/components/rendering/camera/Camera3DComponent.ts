@@ -8,7 +8,6 @@ export type CameraMode = 'topdown' | 'sideview' | 'custom';
 export interface Camera3DProps {
   fov?: number;
   facing?: number;
-  position?: Vec3;
   height?: number;
   pitch?: number;
   projectionMode?: ProjectionMode;
@@ -30,10 +29,8 @@ export class Camera3DComponent extends Component {
 
   fov = 90; // Field of view in degrees
   facing = 0; // Angle in degrees (yaw rotation)
-  position: Vec3 = [0, 0, 0]; // [x, y, z] 3D position
 
   // 3d properties
-  // height is now part of position
   pitch = 0; // pitch angle (up and down)
   roll = 0; // roll angle (rarely used)
 
@@ -67,7 +64,6 @@ export class Camera3DComponent extends Component {
     // use provided values or defaults
     this.fov = props.fov ?? 90;
     this.facing = props.facing ?? 0;
-    this.position = props.position ?? [0, 0, 0];
     this.pitch = props.pitch ?? 0;
     this.projectionMode = props.projectionMode ?? 'perspective';
     this.cameraMode = props.cameraMode ?? 'sideview';
@@ -81,15 +77,8 @@ export class Camera3DComponent extends Component {
     this.isActive = props.isActive ?? true;
   }
 
-  // get 3D position
-  get position3D(): Vec3 {
-    return this.position;
-  }
-
-  // set 3D position
-  setPosition3D(pos: Vec3): void {
-    this.position = pos;
-  }
+  // Note: Position is now managed by Transform3DComponent
+  // Use entity.getComponent(Transform3DComponent) to access position
 
   // get forward vector
   get forwardVector(): Vec3 {
@@ -104,16 +93,14 @@ export class Camera3DComponent extends Component {
   }
 
   // quick set preset mode
-  setTopDownMode(height = 10): void {
+  setTopDownMode(): void {
     this.cameraMode = 'topdown';
-    this.position[2] = height;
     this.pitch = -90; // look down
     this.projectionMode = 'orthographic';
   }
 
   setSideViewMode(): void {
     this.cameraMode = 'sideview';
-    this.position[2] = 0;
     this.pitch = 0; // look horizontal
     this.projectionMode = 'perspective';
   }
@@ -255,15 +242,16 @@ export class Camera3DComponent extends Component {
   }
 
   // update view bounds (based on camera position and zoom)
-  updateViewBounds(): void {
+  // Note: position parameter should be passed from Transform3DComponent
+  updateViewBounds(position: Vec3): void {
     const halfWidth = ((this.viewBounds.right - this.viewBounds.left) / 2) * this.zoom;
     const halfHeight = ((this.viewBounds.top - this.viewBounds.bottom) / 2) * this.zoom;
 
     this.viewBounds = {
-      left: this.position[0] - halfWidth,
-      right: this.position[0] + halfWidth,
-      top: this.position[1] + halfHeight,
-      bottom: this.position[1] - halfHeight,
+      left: position[0] - halfWidth,
+      right: position[0] + halfWidth,
+      top: position[1] + halfHeight,
+      bottom: position[1] - halfHeight,
     };
   }
 
@@ -351,11 +339,13 @@ export class Camera3DComponent extends Component {
 
   /**
    * Move camera by a given offset
+   * Note: This should be handled by Transform3DComponent
+   * @deprecated Use Transform3DComponent.move() instead
    */
   moveBy(offset: Vec3): void {
-    this.position[0] += offset[0];
-    this.position[1] += offset[1];
-    this.position[2] += offset[2];
+    console.warn(
+      'Camera3DComponent.moveBy() is deprecated. Use Transform3DComponent.move() instead.',
+    );
   }
 
   /**
