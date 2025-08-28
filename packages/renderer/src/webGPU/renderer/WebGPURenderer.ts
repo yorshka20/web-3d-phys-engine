@@ -723,6 +723,11 @@ export class WebGPURenderer implements IWebGPURenderer {
       return;
     }
 
+    if (!context.camera) {
+      console.warn('No camera entity provided in render context');
+      return;
+    }
+
     try {
       // Begin frame
       this.beginFrame();
@@ -742,25 +747,15 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // create TimeBindGroup
     const timeBindGroup = this.resourceManager.getBindGroupResource('TimeBindGroup');
-
     // Update projection and view matrices (same for all cubes)
     const now = performance.now() / 1000;
 
+    // Use camera data from render context
     const projectionMatrix = mat4.create();
-    mat4.perspective(
-      projectionMatrix,
-      (2 * Math.PI) / 5, // fovy
-      this.aspectRatio,
-      0.1,
-      100.0,
-    );
+    mat4.copy(projectionMatrix, context.globalUniforms.projectionMatrix);
+
     const viewMatrix = mat4.create();
-    mat4.lookAt(
-      viewMatrix,
-      [0, 0, -15], // eye - moved back to see all cubes
-      [0, 0, 0], // center
-      [0, 1, 0], // up
-    );
+    mat4.copy(viewMatrix, context.globalUniforms.viewMatrix);
 
     // create command encoder
     const commandEncoder = this.device.createCommandEncoder();

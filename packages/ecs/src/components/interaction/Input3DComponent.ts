@@ -52,6 +52,7 @@ export class Input3DComponent extends Component {
 
   setState(newState: Partial<Input3DState>): void {
     this.state = { ...this.state, ...newState };
+    // console.log('Input3DComponent setState', JSON.stringify(this.state, null, 2));
   }
 
   isMoving(): boolean {
