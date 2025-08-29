@@ -3,9 +3,9 @@
  * Provides service registration and resolution with automatic dependency injection
  */
 export class DIContainer {
-  private services = new Map<string, any>();
+  private instances = new Map<string, any>();
   private factories = new Map<string, (...args: any[]) => any>();
-  private singletons = new Map<string, any>();
+  private serviceMetadata = new Map<string, ServiceMetadata>();
 
   /**
    * Register a service factory
@@ -23,10 +23,12 @@ export class DIContainer {
    */
   registerSingleton<T>(token: string, factory: (...args: any[]) => T): void {
     this.factories.set(token, (...args: any[]) => {
-      if (!this.singletons.has(token)) {
-        this.singletons.set(token, factory(...args));
+      if (!this.instances.has(token)) {
+        const instance = factory(...args);
+        this.instances.set(token, instance);
+        console.log(`[DIContainer] Created singleton: ${token}`);
       }
-      return this.singletons.get(token);
+      return this.instances.get(token);
     });
   }
 
@@ -36,7 +38,8 @@ export class DIContainer {
    * @param instance Service instance
    */
   registerInstance<T>(token: string, instance: T): void {
-    this.services.set(token, instance);
+    this.instances.set(token, instance);
+    console.log(`[DIContainer] Registered instance: ${token}`);
   }
 
   /**
@@ -46,9 +49,9 @@ export class DIContainer {
    * @returns Service instance
    */
   resolve<T>(token: string, ...args: any[]): T {
-    // Check for direct instance first
-    if (this.services.has(token)) {
-      return this.services.get(token) as T;
+    // Check for existing instance first
+    if (this.instances.has(token)) {
+      return this.instances.get(token) as T;
     }
 
     // Check for factory
@@ -66,16 +69,55 @@ export class DIContainer {
    * @returns True if service is registered
    */
   has(token: string): boolean {
-    return this.services.has(token) || this.factories.has(token);
+    return this.instances.has(token) || this.factories.has(token);
   }
 
   /**
    * Clear all services
    */
   clear(): void {
-    this.services.clear();
+    this.instances.clear();
     this.factories.clear();
-    this.singletons.clear();
+    this.serviceMetadata.clear();
+  }
+
+  /**
+   * Register an instance with the container (unified method for both manual and auto registration)
+   * @param token Service token/identifier
+   * @param instance Service instance
+   * @param options Service options
+   */
+  registerInstanceWithOptions<T>(token: string, instance: T, options: ServiceOptions = {}): void {
+    if (options.lifecycle === 'singleton') {
+      // Check if singleton already exists
+      if (this.instances.has(token)) {
+        console.warn(`[DIContainer] Singleton ${token} already exists, skipping registration`);
+        return;
+      }
+    }
+
+    this.instances.set(token, instance);
+    console.log(
+      `[DIContainer] Registered instance: ${token} (${options.lifecycle || 'transient'})`,
+    );
+  }
+
+  /**
+   * Register service metadata
+   * @param token Service token/identifier
+   * @param metadata Service metadata
+   */
+  registerServiceMetadata(token: string, metadata: ServiceMetadata): void {
+    this.serviceMetadata.set(token, metadata);
+  }
+
+  /**
+   * Get service metadata
+   * @param token Service token/identifier
+   * @returns Service metadata or undefined
+   */
+  getServiceMetadata(token: string): ServiceMetadata | undefined {
+    return this.serviceMetadata.get(token);
   }
 
   /**
@@ -83,7 +125,7 @@ export class DIContainer {
    * @returns Array of service tokens
    */
   getRegisteredTokens(): string[] {
-    return [...new Set([...this.services.keys(), ...this.factories.keys()])];
+    return [...new Set([...this.instances.keys(), ...this.factories.keys()])];
   }
 
   /**
@@ -93,9 +135,9 @@ export class DIContainer {
   createChild(): DIContainer {
     const child = new DIContainer();
 
-    // Copy services and factories to child
-    for (const [token, service] of this.services) {
-      child.services.set(token, service);
+    // Copy instances and factories to child
+    for (const [token, instance] of this.instances) {
+      child.instances.set(token, instance);
     }
 
     for (const [token, factory] of this.factories) {
@@ -121,6 +163,7 @@ export const ServiceTokens = {
   TEXTURE_MANAGER: 'TextureManager',
   GEOMETRY_MANAGER: 'GeometryManager',
   TIME_MANAGER: 'TimeManager',
+  UNIFORM_MANAGER: 'UniformManager',
   RENDER_PIPELINE_MANAGER: 'RenderPipelineManager',
   GEOMETRY_RENDER_TASK: 'GeometryRenderTask',
   WEBGPU_DEVICE: 'WebGPUDevice',
@@ -128,3 +171,28 @@ export const ServiceTokens = {
 } as const;
 
 export type ServiceToken = (typeof ServiceTokens)[keyof typeof ServiceTokens];
+
+/**
+ * Service lifecycle types
+ */
+export type ServiceLifecycle = 'singleton' | 'transient';
+
+/**
+ * Service options for auto-registration
+ */
+export interface ServiceOptions {
+  lifecycle?: ServiceLifecycle;
+  dependencies?: string[];
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Service metadata for tracking registered services
+ */
+export interface ServiceMetadata {
+  token: string;
+  lifecycle: ServiceLifecycle;
+  dependencies: string[];
+  metadata: Record<string, any>;
+  registeredAt: number;
+}

@@ -1,4 +1,4 @@
-import { AutoRegisterResource, Injectable, SmartResource, Inject } from './decorators';
+import { AutoRegisterResource, Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
@@ -8,12 +8,16 @@ import { ResourceType } from './types/constant';
  * WebGPU buffer manager
  * responsible for creating, managing, and updating various types of GPU buffer
  */
-@Injectable()
+@Injectable(ServiceTokens.BUFFER_MANAGER, {
+  lifecycle: 'singleton',
+})
 export class BufferManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
   private resourceManager!: WebGPUResourceManager;
-  
-  private device: GPUDevice;
+
+  @Inject(ServiceTokens.WEBGPU_DEVICE)
+  private device!: GPUDevice;
+
   private bufferPools: Map<BufferType, BufferPoolItem[]> = new Map();
   private activeBuffers: Set<GPUBuffer> = new Set();
   private bufferLabels: Map<GPUBuffer, string> = new Map();
@@ -23,8 +27,7 @@ export class BufferManager {
   private totalAllocated: number = 0;
   private totalActive: number = 0;
 
-  constructor(device: GPUDevice) {
-    this.device = device;
+  constructor() {
     this.initializeBufferPools();
   }
 

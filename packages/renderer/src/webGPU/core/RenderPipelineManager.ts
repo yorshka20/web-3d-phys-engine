@@ -1,4 +1,4 @@
-import { Injectable } from './decorators';
+import { Inject, Injectable, ServiceTokens } from './decorators';
 import { ShaderManager } from './ShaderManager';
 
 /**
@@ -7,17 +7,17 @@ import { ShaderManager } from './ShaderManager';
  * different rendering tasks to register and retrieve their specific pipelines
  * by a unique identifier.
  */
-@Injectable()
+@Injectable(ServiceTokens.RENDER_PIPELINE_MANAGER, {
+  lifecycle: 'singleton',
+})
 export class RenderPipelineManager {
-  private pipelines: Map<string, GPURenderPipeline> = new Map();
-  private device: GPUDevice;
+  @Inject(ServiceTokens.SHADER_MANAGER)
+  private shaderManager!: ShaderManager;
 
-  constructor(
-    device: GPUDevice,
-    private shaderManager: ShaderManager,
-  ) {
-    this.device = device;
-  }
+  @Inject(ServiceTokens.WEBGPU_DEVICE)
+  private device!: GPUDevice;
+
+  private pipelines: Map<string, GPURenderPipeline> = new Map();
 
   /**
    * Registers a new render pipeline with a given ID.

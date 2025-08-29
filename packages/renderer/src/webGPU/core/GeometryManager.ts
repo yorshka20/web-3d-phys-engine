@@ -4,7 +4,8 @@ import {
   GeometryPrimitiveOptions,
 } from '@ecs/components/physics/mesh';
 import { BufferManager } from './BufferManager';
-import { Injectable } from './decorators/ResourceDecorators';
+import { ServiceTokens } from './decorators/DIContainer';
+import { Inject, Injectable } from './decorators/ResourceDecorators';
 
 /**
  * Geometry cache item
@@ -82,15 +83,14 @@ export interface GeometryParams {
  * Geometry Manager
  * Manages different types of geometries, including caching and resource management
  */
-@Injectable()
+@Injectable(ServiceTokens.GEOMETRY_MANAGER, {
+  lifecycle: 'singleton',
+})
 export class GeometryManager {
-  private geometryCache: Map<string, GeometryCacheItem> = new Map();
+  @Inject(ServiceTokens.BUFFER_MANAGER)
+  private bufferManager!: BufferManager;
 
-  constructor(private bufferManager: BufferManager) {
-    if (!bufferManager) {
-      throw new Error('Buffer manager is required');
-    }
-  }
+  private geometryCache: Map<string, GeometryCacheItem> = new Map();
 
   /**
    * Get or create geometry

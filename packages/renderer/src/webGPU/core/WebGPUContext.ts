@@ -1,9 +1,14 @@
+import { ServiceTokens } from './decorators/DIContainer';
+import { Injectable } from './decorators/ResourceDecorators';
 import { WebGPUContextOptions } from './types';
 
 /**
  * WebGPU context manager
  * manage GPU adapter, device and canvas context
  */
+@Injectable(ServiceTokens.WEBGPU_CONTEXT, {
+  lifecycle: 'singleton',
+})
 export class WebGPUContext {
   private device: GPUDevice | null = null;
   private adapter: GPUAdapter | null = null;

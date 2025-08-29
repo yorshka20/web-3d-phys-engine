@@ -1,4 +1,4 @@
-import { AutoRegisterResource, Injectable, SmartResource, Inject } from './decorators';
+import { AutoRegisterResource, Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import {
@@ -15,21 +15,21 @@ import { ResourceType } from './types/constant';
  * WebGPU shader manager
  * manage shader modules and render pipelines
  */
-@Injectable()
+@Injectable(ServiceTokens.SHADER_MANAGER, {
+  lifecycle: 'singleton',
+})
 export class ShaderManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
   private resourceManager!: WebGPUResourceManager;
-  
-  private device: GPUDevice;
+
+  @Inject(ServiceTokens.WEBGPU_DEVICE)
+  private device!: GPUDevice;
+
   private shaderModules: Map<string, GPUShaderModule> = new Map();
   private renderPipelines: Map<string, GPURenderPipeline> = new Map();
   private computePipelines: Map<string, GPUComputePipeline> = new Map();
   private bindGroupLayouts: Map<string, GPUBindGroupLayout> = new Map();
   private bindGroups: Map<string, GPUBindGroup> = new Map();
-
-  constructor(device: GPUDevice) {
-    this.device = device;
-  }
 
   /**
    * Get resource manager

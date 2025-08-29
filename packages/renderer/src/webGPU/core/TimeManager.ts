@@ -1,21 +1,25 @@
 import { BufferManager } from './BufferManager';
+import { ServiceTokens } from './decorators/DIContainer';
+import { Inject, Injectable } from './decorators/ResourceDecorators';
 import { BufferType } from './types';
 
+@Injectable(ServiceTokens.TIME_MANAGER, {
+  lifecycle: 'singleton',
+})
 export class TimeManager {
   static TimeBufferLabel = 'Time';
 
+  @Inject(ServiceTokens.WEBGPU_DEVICE)
+  private device!: GPUDevice;
+
+  @Inject(ServiceTokens.BUFFER_MANAGER)
+  private bufferManager!: BufferManager;
+
   private startTime = performance.now();
   private lastTime = 0;
-  private device: GPUDevice;
-  private bufferManager: BufferManager;
 
   // max frame count is 2^32 - 1
   private frameCount = 0;
-
-  constructor(device: GPUDevice, bufferManager: BufferManager) {
-    this.device = device;
-    this.bufferManager = bufferManager;
-  }
 
   getBuffer() {
     let buffer = this.bufferManager.getBufferByLabel(TimeManager.TimeBufferLabel);

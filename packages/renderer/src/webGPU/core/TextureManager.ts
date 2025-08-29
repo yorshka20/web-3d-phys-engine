@@ -1,18 +1,20 @@
-import { Injectable, Inject } from './decorators';
+import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import { SamplerDescriptor, TextureDescriptor } from './types';
 
-@Injectable()
+@Injectable(ServiceTokens.TEXTURE_MANAGER, {
+  lifecycle: 'singleton',
+})
 export class TextureManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
   private resourceManager!: WebGPUResourceManager;
 
+  @Inject(ServiceTokens.WEBGPU_DEVICE)
+  private device!: GPUDevice;
+
   private textures: Map<string, GPUTexture> = new Map();
   private samplers: Map<string, GPUSampler> = new Map();
-
-  constructor(private device: GPUDevice) {
-  }
 
   /**
    * Get resource manager

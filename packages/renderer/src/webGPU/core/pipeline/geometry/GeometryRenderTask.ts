@@ -28,7 +28,9 @@ export interface GeometryInstance {
   mvpBindGroup: GPUBindGroup;
 }
 
-@Injectable()
+@Injectable(ServiceTokens.GEOMETRY_RENDER_TASK, {
+  lifecycle: 'transient',
+})
 export class GeometryRenderTask {
   @Inject(ServiceTokens.BUFFER_MANAGER)
   private bufferManager!: BufferManager;

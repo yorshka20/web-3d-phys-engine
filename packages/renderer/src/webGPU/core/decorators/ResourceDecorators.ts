@@ -10,7 +10,7 @@ import {
   ShaderResource,
   TextureResource,
 } from '../types/resource';
-import { globalContainer } from './DIContainer';
+import { globalContainer, ServiceMetadata, ServiceOptions } from './DIContainer';
 import {
   AutoRegisterOptions,
   InjectableClass,
@@ -60,11 +60,29 @@ export function AutoRegisterResource<T extends ResourceType>(
 }
 
 /**
- * Injectable decorator for dependency injection
+ * Injectable decorator for dependency injection with auto-registration support
  * Automatically injects ResourceManager dependency and sets up DI container support
+ * @param token Optional service token for auto-registration
+ * @param options Service options including lifecycle and dependencies
  */
-export function Injectable() {
+export function Injectable(token?: string, options: ServiceOptions = {}) {
   return function (target: any, context: ClassDecoratorContext) {
+    const className = target.name;
+    const lifecycle = options.lifecycle || 'transient';
+
+    // Register service metadata if token is provided
+    if (token) {
+      const metadata: ServiceMetadata = {
+        token,
+        lifecycle,
+        dependencies: options.dependencies || [],
+        metadata: options.metadata || {},
+        registeredAt: Date.now(),
+      };
+      globalContainer.registerServiceMetadata(token, metadata);
+      console.log(`[Injectable] Registered service metadata for ${className} with token: ${token}`);
+    }
+
     // Add resource manager property and methods to prototype
     const proto = target.prototype as InjectableClass;
 
@@ -269,6 +287,47 @@ export function Injectable() {
           }
         }
       };
+    }
+
+    // Add auto-registration logic if token is provided
+    if (token) {
+      // Store original constructor
+      const originalConstructor = target;
+
+      // Create new constructor function that extends the original
+      const NewConstructor = class extends originalConstructor {
+        constructor(...args: any[]) {
+          // Call original constructor
+          super(...args);
+
+          // Auto-register instance to container
+          try {
+            globalContainer.registerInstanceWithOptions(token!, this, options);
+            console.log(
+              `[Injectable] Auto-registered instance of ${className} with token: ${token}`,
+            );
+          } catch (error) {
+            console.error(`[Injectable] Failed to auto-register ${className}:`, error);
+          }
+        }
+      };
+
+      // Copy static properties from original constructor
+      Object.setPrototypeOf(NewConstructor, originalConstructor);
+      Object.setPrototypeOf(NewConstructor.prototype, originalConstructor.prototype);
+
+      // Copy static properties
+      Object.getOwnPropertyNames(originalConstructor).forEach((name) => {
+        if (name !== 'prototype' && name !== 'length' && name !== 'name') {
+          Object.defineProperty(
+            NewConstructor,
+            name,
+            Object.getOwnPropertyDescriptor(originalConstructor, name)!,
+          );
+        }
+      });
+
+      return NewConstructor;
     }
 
     return target;

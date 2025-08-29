@@ -30,14 +30,7 @@
  * ```
  */
 
-import { BufferManager } from '../BufferManager';
-import { GeometryManager } from '../GeometryManager';
-import { GeometryRenderTask } from '../pipeline/geometry/GeometryRenderTask';
-import { RenderPipelineManager } from '../RenderPipelineManager';
 import { WebGPUResourceManager } from '../ResourceManager';
-import { ShaderManager } from '../ShaderManager';
-import { TextureManager } from '../TextureManager';
-import { TimeManager } from '../TimeManager';
 import { WebGPUContext } from '../WebGPUContext';
 import { globalContainer, ServiceTokens } from './DIContainer';
 import { AutoRegisterResource, Injectable, SmartResource } from './ResourceDecorators';
@@ -62,83 +55,61 @@ export { DIContainer, globalContainer, ServiceTokens, type ServiceToken } from '
  * Advanced setup function with full DI container configuration
  */
 export function initContainer(device: GPUDevice, context: WebGPUContext) {
-  // Register all services in DI container
+  // Register basic instances that are needed for dependency injection
   globalContainer.registerInstance(ServiceTokens.WEBGPU_DEVICE, device);
-  // Register the already initialized WebGPUContext instance
   globalContainer.registerInstance(ServiceTokens.WEBGPU_CONTEXT, context);
-  globalContainer.registerSingleton(
-    ServiceTokens.RESOURCE_MANAGER,
-    () => new WebGPUResourceManager(),
-  );
+  // globalContainer.registerSingleton(
+  //   ServiceTokens.RESOURCE_MANAGER,
+  //   () => new WebGPUResourceManager(),
+  // );
 
-  globalContainer.registerSingleton(ServiceTokens.BUFFER_MANAGER, () => {
-    // BufferManager needs the device, which is already registered
-    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
-    return new BufferManager(device);
-  });
+  // globalContainer.registerSingleton(ServiceTokens.BUFFER_MANAGER, () => {
+  //   // BufferManager needs the device, which is already registered
+  //   const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+  //   return new BufferManager(device);
+  // });
 
-  globalContainer.registerSingleton(ServiceTokens.SHADER_MANAGER, () => {
-    // ShaderManager needs the device, which is already registered
-    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
-    return new ShaderManager(device);
-  });
+  // globalContainer.registerSingleton(ServiceTokens.SHADER_MANAGER, () => {
+  //   // ShaderManager needs the device, which is already registered
+  //   const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+  //   return new ShaderManager(device);
+  // });
 
-  globalContainer.registerSingleton(ServiceTokens.TEXTURE_MANAGER, () => {
-    // TextureManager needs the device, which is already registered
-    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
-    return new TextureManager(device);
-  });
+  // globalContainer.registerSingleton(ServiceTokens.TEXTURE_MANAGER, () => {
+  //   // TextureManager needs the device, which is already registered
+  //   const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+  //   return new TextureManager(device);
+  // });
 
-  globalContainer.registerSingleton(ServiceTokens.TIME_MANAGER, () => {
-    // TimeManager needs device and BufferManager
-    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
-    const bufferManager = globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER);
-    return new TimeManager(device, bufferManager);
-  });
+  // globalContainer.registerSingleton(ServiceTokens.TIME_MANAGER, () => {
+  //   // TimeManager needs device and BufferManager
+  //   const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+  //   const bufferManager = globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER);
+  //   return new TimeManager(device, bufferManager);
+  // });
 
-  globalContainer.registerSingleton(ServiceTokens.GEOMETRY_MANAGER, () => {
-    // GeometryManager needs BufferManager
-    const bufferManager = globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER);
-    return new GeometryManager(bufferManager);
-  });
+  // globalContainer.registerSingleton(ServiceTokens.GEOMETRY_MANAGER, () => {
+  //   // GeometryManager needs BufferManager
+  //   const bufferManager = globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER);
+  //   return new GeometryManager(bufferManager);
+  // });
 
-  globalContainer.registerSingleton(ServiceTokens.RENDER_PIPELINE_MANAGER, () => {
-    // RenderPipelineManager needs device and ShaderManager
-    const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
-    const shaderManager = globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER);
-    return new RenderPipelineManager(device, shaderManager);
-  });
+  // globalContainer.registerSingleton(ServiceTokens.RENDER_PIPELINE_MANAGER, () => {
+  //   // RenderPipelineManager needs device and ShaderManager
+  //   const device = globalContainer.resolve<GPUDevice>(ServiceTokens.WEBGPU_DEVICE);
+  //   const shaderManager = globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER);
+  //   return new RenderPipelineManager(device, shaderManager);
+  // });
 
-  globalContainer.registerSingleton(ServiceTokens.GEOMETRY_RENDER_TASK, () => {
-    // GeometryRenderTask dependencies will be auto-injected via @Inject decorators
-    return new GeometryRenderTask();
-  });
+  // globalContainer.registerSingleton(ServiceTokens.GEOMETRY_RENDER_TASK, () => {
+  //   // GeometryRenderTask dependencies will be auto-injected via @Inject decorators
+  //   return new GeometryRenderTask();
+  // });
 
-  // Resolve all services - dependencies will be auto-injected via @Inject decorators
-  const resourceManager = globalContainer.resolve<WebGPUResourceManager>(ServiceTokens.RESOURCE_MANAGER);
-  const bufferManager = globalContainer.resolve<BufferManager>(ServiceTokens.BUFFER_MANAGER);
-  const shaderManager = globalContainer.resolve<ShaderManager>(ServiceTokens.SHADER_MANAGER);
-  const textureManager = globalContainer.resolve<TextureManager>(ServiceTokens.TEXTURE_MANAGER);
-  const timeManager = globalContainer.resolve<TimeManager>(ServiceTokens.TIME_MANAGER);
-  const geometryManager = globalContainer.resolve<GeometryManager>(ServiceTokens.GEOMETRY_MANAGER);
-  const renderPipelineManager = globalContainer.resolve<RenderPipelineManager>(
-    ServiceTokens.RENDER_PIPELINE_MANAGER,
-  );
-  const geometryRenderTask = globalContainer.resolve<GeometryRenderTask>(ServiceTokens.GEOMETRY_RENDER_TASK);
+  console.log('DI container initialized with auto-registration support');
+  console.log('Services will be created automatically when needed via new operator');
 
-  console.log('All services initialized with auto dependency injection');
-
-  return {
-    container: globalContainer,
-    resourceManager,
-    bufferManager,
-    shaderManager,
-    textureManager,
-    timeManager,
-    geometryManager,
-    renderPipelineManager,
-    geometryRenderTask,
-  };
+  return globalContainer;
 }
 
 /**

@@ -10,7 +10,6 @@ import {
 } from '../core';
 import { BufferManager } from '../core/BufferManager';
 import { initContainer } from '../core/decorators';
-import { DIContainer, ServiceTokens } from '../core/decorators/DIContainer';
 import { GeometryManager, GeometryParams, GeometryType } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
 import { GeometryRenderTask } from '../core/pipeline/geometry/GeometryRenderTask';
@@ -67,7 +66,6 @@ export class WebGPURenderer implements IWebGPURenderer {
   private renderContext!: RenderContext;
 
   // resource managers
-  private container!: DIContainer;
   private bufferManager!: BufferManager;
   private shaderManager!: ShaderManager;
   private textureManager!: TextureManager;
@@ -291,26 +289,17 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // init resource managers using DI container
     // Pass the already initialized context to ensure single device instance
-    const {
-      container,
-      resourceManager,
-      bufferManager,
-      shaderManager,
-      textureManager,
-      timeManager,
-      geometryManager,
-      renderPipelineManager,
-      geometryRenderTask,
-    } = initContainer(this.device, this.context);
-    this.container = container;
-    this.resourceManager = resourceManager;
-    this.bufferManager = bufferManager;
-    this.shaderManager = shaderManager;
-    this.textureManager = textureManager;
-    this.timeManager = timeManager;
-    this.geometryManager = geometryManager;
-    this.renderPipelineManager = renderPipelineManager;
-    this.geometryRenderTask = geometryRenderTask;
+    initContainer(this.device, this.context);
+
+    // Create services using new operator - they will be auto-registered
+    this.resourceManager = new WebGPUResourceManager();
+    this.bufferManager = new BufferManager();
+    this.shaderManager = new ShaderManager();
+    this.textureManager = new TextureManager();
+    this.timeManager = new TimeManager();
+    this.geometryManager = new GeometryManager();
+    this.renderPipelineManager = new RenderPipelineManager();
+    this.geometryRenderTask = new GeometryRenderTask();
 
     // Initialize render tasks
     await this.geometryRenderTask.initialize();

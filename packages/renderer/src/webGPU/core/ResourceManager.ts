@@ -1,3 +1,5 @@
+import { ServiceTokens } from './decorators/DIContainer';
+import { Injectable } from './decorators/ResourceDecorators';
 import { ResourceState, ResourceType } from './types/constant';
 import { ResourceDescriptor } from './types/descriptor';
 import {
@@ -28,6 +30,9 @@ export interface ResourceMetadata {
  * Unified WebGPU resource manager
  * Manages resource lifecycle, dependencies, and provides unified access
  */
+@Injectable(ServiceTokens.RESOURCE_MANAGER, {
+  lifecycle: 'singleton',
+})
 export class WebGPUResourceManager {
   private static instance: WebGPUResourceManager;
   private resources: Map<string, WebGPUResource> = new Map();

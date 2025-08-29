@@ -1,10 +1,18 @@
 import { GlobalUniforms } from '../types';
+import { ServiceTokens } from './decorators/DIContainer';
+import { Inject, Injectable } from './decorators/ResourceDecorators';
 
+@Injectable(ServiceTokens.UNIFORM_MANAGER, {
+  lifecycle: 'singleton',
+})
 export class UniformManager {
   private globalUniforms: GPUBuffer;
   private materialUniforms: Map<string, GPUBuffer> = new Map();
 
-  constructor(private device: GPUDevice) {
+  @Inject(ServiceTokens.WEBGPU_DEVICE)
+  private device!: GPUDevice;
+
+  constructor() {
     this.globalUniforms = this.device.createBuffer({
       size: 1024,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
