@@ -32,13 +32,6 @@ export class ShaderManager {
   private bindGroups: Map<string, GPUBindGroup> = new Map();
 
   /**
-   * Get resource manager
-   */
-  getResourceManager(): WebGPUResourceManager | undefined {
-    return this.resourceManager;
-  }
-
-  /**
    * create shader module with automatic resource registration
    * @param id shader id
    * @param descriptor shader descriptor
