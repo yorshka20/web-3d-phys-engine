@@ -107,6 +107,19 @@ export class Transform3DSystem extends System {
 
       // Update transform rotation to match camera rotation
       transform.setRotation([this.cameraPitch, this.cameraYaw, this.cameraRoll]);
+
+      // Calculate and update camera target based on rotation
+      const position = transform.getPosition();
+      const forward = this.getCameraForwardVector();
+      
+      // Calculate target position (camera position + forward direction)
+      const target: Vec3 = [
+        position[0] + forward[0],
+        position[1] + forward[1],
+        position[2] + forward[2],
+      ];
+      
+      camera.setTarget(target);
     }
   }
 
@@ -438,5 +451,18 @@ export class Transform3DSystem extends System {
     this.cameraYaw = yaw;
     this.cameraPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
     this.cameraRoll = roll;
+  }
+
+  /**
+   * Get camera forward vector based on current rotation
+   */
+  private getCameraForwardVector(): Vec3 {
+    // Calculate forward vector from yaw and pitch
+    const forward: Vec3 = [
+      Math.cos(this.cameraPitch) * Math.sin(this.cameraYaw),
+      -Math.sin(this.cameraPitch),
+      Math.cos(this.cameraPitch) * Math.cos(this.cameraYaw),
+    ];
+    return forward;
   }
 }

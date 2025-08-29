@@ -186,9 +186,11 @@ export class Input3DSystem extends System {
     for (const entity of this.inputEntities) {
       const inputComponent = entity.getComponent<Input3DComponent>(Input3DComponent.componentName);
       if (inputComponent) {
+        // Accumulate mouse delta instead of overwriting
+        const currentState = inputComponent.getState();
         inputComponent.setState({
-          mouseDeltaX: deltaX,
-          mouseDeltaY: deltaY,
+          mouseDeltaX: currentState.mouseDeltaX + deltaX,
+          mouseDeltaY: currentState.mouseDeltaY + deltaY,
         });
       }
     }
@@ -217,12 +219,7 @@ export class Input3DSystem extends System {
   }
 
   update(deltaTime: number): void {
-    // clear mouse delta every frame
-    for (const entity of this.inputEntities) {
-      const inputComponent = entity.getComponent<Input3DComponent>(Input3DComponent.componentName);
-      if (inputComponent) {
-        inputComponent.clearMouseDelta();
-      }
-    }
+    // Mouse delta clearing is now handled by Transform3DSystem after processing
+    // to avoid double clearing which was causing mouse rotation issues
   }
 }
