@@ -122,10 +122,14 @@ export class Transform3DSystem extends System {
     // Apply mouse sensitivity
     const sensitivity = 0.002; // Adjust as needed
     this.cameraYaw -= mouseDeltaX * sensitivity;
-    this.cameraPitch -= mouseDeltaY * sensitivity;
+    this.cameraPitch += mouseDeltaY * sensitivity;
 
-    // Clamp pitch to prevent over-rotation
-    const maxPitch = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
+    // Clamp yaw to prevent 360-degree rotation (limit to ±180 degrees)
+    const maxYaw = Math.PI; // 180 degrees
+    this.cameraYaw = Math.max(-maxYaw, Math.min(maxYaw, this.cameraYaw));
+
+    // Clamp pitch to prevent over-rotation (limit to ±85 degrees for better FPS feel)
+    const maxPitch = Math.PI / 2 - 0.087; // 85 degrees (slightly less than 90 degrees)
     this.cameraPitch = Math.max(-maxPitch, Math.min(maxPitch, this.cameraPitch));
 
     // Clear mouse delta after processing
