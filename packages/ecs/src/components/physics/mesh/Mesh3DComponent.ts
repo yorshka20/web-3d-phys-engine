@@ -1,10 +1,10 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Vec3 } from '@ecs/types/types';
 import { GeometryData } from './GeometryFactory';
-import { GeometryPrimitiveOptions, Mesh3DShapeDescriptor, Vertex3D } from './types';
+import { AnyMesh3DShapeDescriptor, GeometryPrimitiveOptions, Vertex3D } from './types';
 
 interface Mesh3DProps {
-  descriptor: Mesh3DShapeDescriptor;
+  descriptor: AnyMesh3DShapeDescriptor;
   vertices?: Vertex3D[]; // pre-calculated vertex cache
   indices?: number[]; // pre-calculated indices cache
   bounds?: { min: Vec3; max: Vec3 }; // bounding box cache
@@ -13,7 +13,7 @@ interface Mesh3DProps {
 export class Mesh3DComponent extends Component {
   static componentName = 'Mesh3D';
 
-  descriptor: Mesh3DShapeDescriptor;
+  descriptor: AnyMesh3DShapeDescriptor;
   geometryData?: GeometryData;
   vertices: Vertex3D[] = []; // vertex cache
   indices: number[] = []; // indices cache
@@ -43,7 +43,7 @@ export class Mesh3DComponent extends Component {
   /**
    * update mesh descriptor
    */
-  updateDescriptor(descriptor: Mesh3DShapeDescriptor): void {
+  updateDescriptor(descriptor: AnyMesh3DShapeDescriptor): void {
     this.descriptor = descriptor;
     this.dirty = true;
     this.vertices = [];

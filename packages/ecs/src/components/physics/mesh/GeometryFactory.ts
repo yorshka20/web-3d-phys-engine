@@ -22,7 +22,13 @@ import {
   tetrahedron,
   torus,
 } from 'primitive-geometry';
-import { GeometryPrimitiveOptions, Mesh3DDescriptor, Mesh3DShapeDescriptor } from './types';
+import {
+  AnyMesh3DShapeDescriptor,
+  GeometryPrimitiveOptions,
+  GeometryType,
+  Mesh3DDescriptor,
+  Mesh3DShapeDescriptor,
+} from './types';
 
 /**
  * Vertex format types.
@@ -140,7 +146,65 @@ export class GeometryFactory {
     };
   }
 
-  static createGeometryDataByDescriptor(descriptor: Mesh3DShapeDescriptor): GeometryData {
+  // Generic method for type-safe geometry creation
+  static createGeometryDataByDescriptorGeneric<T extends GeometryType>(
+    descriptor: Mesh3DShapeDescriptor<T>,
+  ): GeometryData {
+    return GeometryFactory.createGeometryByType(descriptor.type, descriptor.params);
+  }
+
+  // Type-safe geometry creation by type and params
+  static createGeometryByType<T extends GeometryType>(
+    type: T,
+    params: GeometryPrimitiveOptions[T],
+  ): GeometryData {
+    switch (type) {
+      case 'box':
+        return GeometryFactory.createBox(params as GeometryPrimitiveOptions['box']);
+      case 'sphere':
+        return GeometryFactory.createSphere(params as GeometryPrimitiveOptions['sphere']);
+      case 'cylinder':
+        return GeometryFactory.createCylinder(params as GeometryPrimitiveOptions['cylinder']);
+      case 'plane':
+        return GeometryFactory.createPlane(params as GeometryPrimitiveOptions['plane']);
+      case 'cone':
+        return GeometryFactory.createCone(params as GeometryPrimitiveOptions['cone']);
+      case 'cube':
+        return GeometryFactory.createCube(params as GeometryPrimitiveOptions['cube']);
+      case 'icosphere':
+        return GeometryFactory.createIcosphere(params as GeometryPrimitiveOptions['icosphere']);
+      case 'ellipsoid':
+        return GeometryFactory.createEllipsoid(params as GeometryPrimitiveOptions['ellipsoid']);
+      case 'capsule':
+        return GeometryFactory.createCapsule(params as GeometryPrimitiveOptions['capsule']);
+      case 'torus':
+        return GeometryFactory.createTorus(params as GeometryPrimitiveOptions['torus']);
+      case 'tetrahedron':
+        return GeometryFactory.createTetrahedron(params as GeometryPrimitiveOptions['tetrahedron']);
+      case 'icosahedron':
+        return GeometryFactory.createIcosahedron(params as GeometryPrimitiveOptions['icosahedron']);
+      case 'quad':
+        return GeometryFactory.createQuad(params as GeometryPrimitiveOptions['quad']);
+      case 'roundedCube':
+        return GeometryFactory.createRoundedCube(params as GeometryPrimitiveOptions['roundedCube']);
+      case 'ellipse':
+        return GeometryFactory.createEllipse(params as GeometryPrimitiveOptions['ellipse']);
+      case 'disc':
+        return GeometryFactory.createDisc(params as GeometryPrimitiveOptions['disc']);
+      case 'circle':
+        return GeometryFactory.createCircle(params as GeometryPrimitiveOptions['circle']);
+      case 'roundedRectangle':
+        return GeometryFactory.createRoundedRectangle(
+          params as GeometryPrimitiveOptions['roundedRectangle'],
+        );
+      case 'stadium':
+        return GeometryFactory.createStadium(params as GeometryPrimitiveOptions['stadium']);
+      default:
+        throw new Error(`Unsupported geometry type: ${type}`);
+    }
+  }
+
+  static createGeometryDataByDescriptor(descriptor: AnyMesh3DShapeDescriptor): GeometryData {
     // Handle unset descriptor
     if (descriptor.type === 'unset') {
       throw new Error('Cannot create geometry from unset descriptor');
@@ -151,47 +215,10 @@ export class GeometryFactory {
       return GeometryFactory.convertCustomMesh(descriptor);
     }
 
-    // Handle primitive geometry descriptors
-    switch (descriptor.type) {
-      case 'box':
-        return GeometryFactory.createBox(descriptor.params);
-      case 'sphere':
-        return GeometryFactory.createSphere(descriptor.params);
-      case 'cylinder':
-        return GeometryFactory.createCylinder(descriptor.params);
-      case 'plane':
-        return GeometryFactory.createPlane(descriptor.params);
-      case 'cone':
-        return GeometryFactory.createCone(descriptor.params);
-      case 'icosphere':
-        return GeometryFactory.createIcosphere(descriptor.params);
-      case 'ellipsoid':
-        return GeometryFactory.createEllipsoid(descriptor.params);
-      case 'capsule':
-        return GeometryFactory.createCapsule(descriptor.params);
-      case 'torus':
-        return GeometryFactory.createTorus(descriptor.params);
-      case 'tetrahedron':
-        return GeometryFactory.createTetrahedron(descriptor.params);
-      case 'icosahedron':
-        return GeometryFactory.createIcosahedron(descriptor.params);
-      case 'quad':
-        return GeometryFactory.createQuad(descriptor.params);
-      case 'roundedCube':
-        return GeometryFactory.createRoundedCube(descriptor.params);
-      case 'ellipse':
-        return GeometryFactory.createEllipse(descriptor.params);
-      case 'disc':
-        return GeometryFactory.createDisc(descriptor.params);
-      case 'circle':
-        return GeometryFactory.createCircle(descriptor.params);
-      case 'roundedRectangle':
-        return GeometryFactory.createRoundedRectangle(descriptor.params);
-      case 'stadium':
-        return GeometryFactory.createStadium(descriptor.params);
-      default:
-        throw new Error(`Unsupported geometry type: ${(descriptor as { type: string }).type}`);
-    }
+    // Handle primitive geometry descriptors using the new type-safe method
+    return GeometryFactory.createGeometryDataByDescriptorGeneric(
+      descriptor as Mesh3DShapeDescriptor,
+    );
   }
 
   /**

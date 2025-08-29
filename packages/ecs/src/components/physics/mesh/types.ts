@@ -50,6 +50,8 @@ export type GeometryPrimitiveOptions = {
   circle: CircleOptions;
 };
 
+export type GeometryType = keyof GeometryPrimitiveOptions;
+
 // base geometry descriptor
 export interface BoxDescriptor {
   type: 'box';
@@ -74,6 +76,11 @@ export interface PlaneDescriptor {
 export interface ConeDescriptor {
   type: 'cone';
   params: GeometryPrimitiveOptions['cone'];
+}
+
+export interface CubeDescriptor {
+  type: 'cube';
+  params: GeometryPrimitiveOptions['cube'];
 }
 
 export interface IcosphereDescriptor {
@@ -154,33 +161,30 @@ export interface Mesh3DDescriptor {
   params?: undefined;
 }
 
-export type Mesh3DShapeDescriptor =
-  | { type: 'unset'; params?: undefined }
-  | Mesh3DDescriptor
-  // geometry primitives
-  | BoxDescriptor
-  | SphereDescriptor
-  | CylinderDescriptor
-  | PlaneDescriptor
-  | ConeDescriptor
-  | IcosphereDescriptor
-  | EllipsoidDescriptor
-  | CapsuleDescriptor
-  | TorusDescriptor
-  | TetrahedronDescriptor
-  | IcosahedronDescriptor
-  | QuadDescriptor
-  | RoundedCubeDescriptor
-  | EllipseDescriptor
-  | DiscDescriptor
-  | CircleDescriptor
-  | RoundedRectangleDescriptor
-  | StadiumDescriptor
-  | EllipseDescriptor
-  | DiscDescriptor
-  | CircleDescriptor
-  | RoundedRectangleDescriptor
-  | StadiumDescriptor
-  | EllipseDescriptor
-  | DiscDescriptor
-  | CircleDescriptor;
+// Generic mesh descriptor that supports type-safe geometry parameters
+export interface Mesh3DShapeDescriptor<T extends GeometryType = GeometryType> {
+  type: T;
+  params: GeometryPrimitiveOptions[T];
+}
+
+// Special case for unset and custom mesh
+export type Mesh3DUnsetDescriptor = { type: 'unset'; params?: undefined };
+export type Mesh3DCustomDescriptor = Mesh3DDescriptor;
+
+// Union type for all possible mesh descriptors
+export type AnyMesh3DShapeDescriptor =
+  | Mesh3DUnsetDescriptor
+  | Mesh3DCustomDescriptor
+  | Mesh3DShapeDescriptor;
+
+// Type-safe geometry descriptor mapping
+export type GeometryDescriptorMap = {
+  [K in GeometryType]: Mesh3DShapeDescriptor<K>;
+};
+
+// Helper type to extract geometry type from descriptor
+export type ExtractGeometryType<T> = T extends Mesh3DShapeDescriptor<infer U> ? U : never;
+
+// Helper type to extract params type from descriptor
+export type ExtractParamsType<T> =
+  T extends Mesh3DShapeDescriptor<infer U> ? GeometryPrimitiveOptions[U] : never;

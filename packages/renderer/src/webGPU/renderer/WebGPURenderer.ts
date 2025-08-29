@@ -1,4 +1,4 @@
-import { SystemPriorities } from '@ecs';
+import { GeometryType, SystemPriorities } from '@ecs';
 import { FrameData } from '@ecs/systems/rendering/types';
 import { RectArea } from '@ecs/types/types';
 import chroma from 'chroma-js';
@@ -11,7 +11,7 @@ import {
 } from '../core';
 import { BufferManager } from '../core/BufferManager';
 import { initContainer } from '../core/decorators';
-import { GeometryManager, GeometryParams, GeometryType } from '../core/GeometryManager';
+import { GeometryManager } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
 import { GeometryRenderTask } from '../core/pipeline/geometry/GeometryRenderTask';
 import { RenderPipelineManager } from '../core/RenderPipelineManager';
@@ -21,6 +21,7 @@ import {
   BufferDescriptor,
   BufferType,
   GeometryInstanceDescriptor,
+  GeometryParams,
   RenderBatch,
   ShaderDescriptor,
 } from '../core/types';
@@ -628,7 +629,10 @@ export class WebGPURenderer implements IWebGPURenderer {
    * @param params Geometry parameters
    * @returns Geometry cache item
    */
-  createGeometry(type: GeometryType, params: GeometryParams = {}) {
+  createGeometry<T extends GeometryType>(
+    type: T,
+    params: GeometryParams<T> = {} as GeometryParams<T>,
+  ) {
     if (!this.geometryManager) {
       throw new Error('Geometry manager not initialized');
     }

@@ -14,6 +14,7 @@ import {
   WebGPURenderSystem,
   World,
 } from '@ecs';
+import { GeometryInstanceDescriptor } from '@renderer/webGPU/core/types';
 import chroma from 'chroma-js';
 import { Game } from './game/Game';
 
@@ -36,6 +37,7 @@ async function main() {
 
   const camera = create3DCamera(world);
   cretePlane(world);
+  createGeometryEntities(world);
 
   // Initialize the game
   await game.initialize();
@@ -108,6 +110,75 @@ function cretePlane(world: World) {
 
   world.addEntity(plane);
   return plane;
+}
+
+function createGeometryEntities(world: World) {
+  const geometries: GeometryInstanceDescriptor[] = [
+    {
+      type: 'cube',
+      transform: {
+        position: [-2, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [0.5, 0.5, 0.5],
+      },
+      name: 'SmallCube',
+    },
+    {
+      type: 'cube',
+      transform: {
+        position: [0, 0, 0],
+        rotation: [0, Math.PI / 4, 0],
+        scale: [1.0, 1.0, 1.0],
+      },
+      name: 'MediumCube',
+    },
+    {
+      type: 'cylinder',
+      transform: {
+        position: [2, 0, 0],
+        rotation: [Math.PI / 6, 0, Math.PI / 6],
+        scale: [1.5, 1.5, 1.5],
+      },
+      name: 'Cylinder',
+    },
+    {
+      type: 'sphere',
+      transform: {
+        position: [0, 2, 0],
+        rotation: [Math.PI / 6, 0, Math.PI / 6],
+        scale: [5, 5, 5],
+      },
+      name: 'Sphere',
+    },
+  ];
+
+  for (const geometry of geometries) {
+    const entity = world.createEntity('object');
+
+    entity.addComponent(
+      world.createComponent(Mesh3DComponent, {
+        descriptor: {
+          type: geometry.type,
+          params: geometry.params!,
+        },
+      }),
+    );
+    entity.addComponent(
+      world.createComponent(Transform3DComponent, { position: geometry.transform.position }),
+    );
+    entity.addComponent(
+      world.createComponent(WebGPU3DRenderComponent, {
+        material: {
+          albedo: chroma('#000000'),
+          metallic: 0,
+          roughness: 0.5,
+          emissive: chroma('#000000'),
+          emissiveIntensity: 0,
+        },
+      }),
+    );
+    world.addEntity(entity);
+  }
 }
 
 // Create camera debug panel
