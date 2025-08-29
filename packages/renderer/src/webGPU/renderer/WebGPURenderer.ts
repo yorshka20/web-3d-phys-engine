@@ -1,6 +1,6 @@
 import { RectArea, SystemPriorities } from '@ecs';
+import { FrameData } from '@ecs/systems/rendering/types';
 import chroma from 'chroma-js';
-import { mat4 } from 'gl-matrix';
 import {
   BindGroupLayoutVisibility,
   ShaderType,
@@ -23,7 +23,6 @@ import {
   RenderBatch,
   ShaderDescriptor,
 } from '../core/types';
-import { RenderContext } from '../types';
 import {
   BindGroup,
   Camera,
@@ -63,7 +62,6 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   private viewport!: RectArea;
   private frameCount = 0;
-  private renderContext!: RenderContext;
 
   // resource managers
   private bufferManager!: BufferManager;
@@ -503,13 +501,13 @@ export class WebGPURenderer implements IWebGPURenderer {
   /**
    * Main render loop
    */
-  render(deltaTime: number, context: RenderContext): void {
+  render(deltaTime: number, frameData: FrameData): void {
     if (!this.initialized) {
       console.warn('WebGPU not initialized');
       return;
     }
 
-    if (!context.camera) {
+    if (!frameData.scene.camera) {
       console.warn('No camera entity provided in render context');
       return;
     }
@@ -519,7 +517,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       this.beginFrame();
 
       // Render frame
-      this.renderTick(deltaTime, context);
+      this.renderTick(deltaTime, frameData);
 
       // End frame
       this.endFrame();
@@ -528,19 +526,12 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
   }
 
-  private renderTick(deltaTime: number, context: RenderContext): void {
+  private renderTick(deltaTime: number, frameData: FrameData): void {
     // Note: Time is already updated in beginFrame()
 
     // Update projection and view matrices (same for all cubes)
     const now = performance.now() / 1000;
     this.timeManager.updateTime(now * 1000);
-
-    // Use camera data from render context
-    const projectionMatrix = mat4.create();
-    mat4.copy(projectionMatrix, context.globalUniforms.projectionMatrix);
-
-    const viewMatrix = mat4.create();
-    mat4.copy(viewMatrix, context.globalUniforms.viewMatrix);
 
     // create command encoder
     const commandEncoder = this.device.createCommandEncoder();
@@ -565,7 +556,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Render geometry instances
-    this.geometryRenderTask.render(renderPass, context);
+    this.geometryRenderTask.render(renderPass, frameData);
 
     // const coordinatePipeline =
     //   this.resourceManager.getRenderPipelineResource('coordinate_pipeline');

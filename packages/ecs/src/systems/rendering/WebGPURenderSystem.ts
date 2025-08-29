@@ -1,12 +1,22 @@
-import { ActiveCameraTag, Camera3DComponent, Transform3DComponent } from '@ecs/components';
+import {
+  ActiveCameraTag,
+  Camera3DComponent,
+  CameraData,
+  GeometryData,
+  GeometryFactory,
+  Mesh3DComponent,
+  Render3DComponent,
+  Transform3DComponent,
+} from '@ecs/components';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
-import { RectArea } from '@ecs/types/types';
+import { RectArea, Vec3 } from '@ecs/types/types';
 import { createWebGPURenderer } from '@renderer/webGPU';
 import { IWebGPURenderer } from '@renderer/webGPU/renderer/types/IWebGPURenderer';
-import { GlobalUniforms, RenderContext, RenderStats, ViewportData } from '@renderer/webGPU/types';
-import { mat4 } from 'gl-matrix';
+import { GlobalUniforms, RenderStats, ViewportData } from '@renderer/webGPU/types';
+import { mat3, mat4 } from 'gl-matrix';
+import { FrameData, RenderData } from './types';
 
 /**
  * Responsibilities:
@@ -62,11 +72,6 @@ export class WebGPURenderSystem extends System {
 
     // Initialize global uniforms and render stats
     this.globalUniforms = {
-      viewMatrix: new Float32Array(16),
-      projectionMatrix: new Float32Array(16),
-      viewProjectionMatrix: new Float32Array(16),
-      cameraPosition: [0, 0, 0],
-      cameraDirection: [0, 0, 0],
       time: 0,
       deltaTime: 0,
       frameCount: 0,
@@ -119,20 +124,10 @@ export class WebGPURenderSystem extends System {
     return this.globalUniforms;
   }
 
-  updateGlobalUniforms(): void {
-    if (!this.activeCameraEntity) return;
-
-    const cameraData = this.prepareCameraData(this.activeCameraEntity);
-    if (!cameraData) return;
-
-    this.globalUniforms.viewMatrix = cameraData.viewMatrix;
-    this.globalUniforms.projectionMatrix = cameraData.projectionMatrix;
-    this.globalUniforms.viewProjectionMatrix = cameraData.viewProjectionMatrix;
-    this.globalUniforms.cameraPosition = cameraData.position;
-    this.globalUniforms.cameraDirection = cameraData.direction;
+  private updateGlobalUniforms(deltaTime?: number): void {
+    this.globalUniforms.deltaTime = deltaTime ?? this.globalUniforms.deltaTime;
     this.globalUniforms.time = performance.now() / 1000;
     this.globalUniforms.frameCount++;
-    this.globalUniforms.screenSize = [this.rootElement.clientWidth, this.rootElement.clientHeight];
     this.globalUniforms.pixelRatio = this.dpr;
   }
 
@@ -152,7 +147,7 @@ export class WebGPURenderSystem extends System {
   onResize(): void {
     this.renderer.onResize();
     this.setViewport([0, 0, window.innerWidth, window.innerHeight]);
-    this.updateGlobalUniforms(); // Update uniforms on resize
+    this.globalUniforms.screenSize = [this.rootElement.clientWidth, this.rootElement.clientHeight];
   }
 
   setCoarseMode(coarse: boolean): void {
@@ -163,7 +158,6 @@ export class WebGPURenderSystem extends System {
       width: this.rootElement.clientWidth,
       height: this.rootElement.clientHeight,
     });
-    this.updateGlobalUniforms(); // Update uniforms on DPR change
   }
 
   getViewport(): RectArea {
@@ -180,7 +174,6 @@ export class WebGPURenderSystem extends System {
     this.viewport[1] = viewport[1];
     this.viewport[2] = viewport[2];
     this.viewport[3] = viewport[3];
-    this.updateGlobalUniforms(); // Update uniforms on viewport change
   }
 
   setCameraTarget(entityId: string): void {
@@ -192,10 +185,18 @@ export class WebGPURenderSystem extends System {
     this.cameraFollow = true;
   }
 
+  private filterEntities(): Entity[] {
+    return this.world.getEntitiesByCondition((entity) => {
+      return (
+        entity.hasComponent(Render3DComponent.componentName) &&
+        entity.hasComponent(Mesh3DComponent.componentName) &&
+        entity.hasComponent(Transform3DComponent.componentName)
+      );
+    });
+  }
+
   update(deltaTime: number): void {
-    this.globalUniforms.deltaTime = deltaTime;
-    this.updateCamera(); // Unified camera update logic
-    this.updateGlobalUniforms();
+    this.updateGlobalUniforms(deltaTime);
 
     const viewportData: ViewportData = {
       x: this.viewport[0],
@@ -204,64 +205,119 @@ export class WebGPURenderSystem extends System {
       height: this.viewport[3],
     };
 
-    const renderContext: RenderContext = {
-      camera: this.activeCameraEntity, // Pass the camera entity
-      viewport: viewportData,
+    const frameData: FrameData = {
+      scene: {
+        camera: this.prepareCameraData(), // Pass the camera entity
+        lights: [], // all renderable entities
+        environment: {
+          ambientColor: [0, 0, 0],
+          ambientIntensity: 0,
+        },
+      },
+      renderables: this.generateRenderData(), // all renderable entities
+      config: {
+        viewport: viewportData,
+        renderMode: this.renderMode,
+        enableFrustumCulling: true,
+        enableOcclusion: false,
+        maxDrawCalls: 1000,
+      },
       globalUniforms: this.globalUniforms,
-      renderMode: this.renderMode,
-      enableFrustumCulling: true, // Placeholder
-      enableOcclusion: false, // Placeholder
-      maxDrawCalls: 1000, // Placeholder
     };
 
     // call renderer update, passing the new RenderContext
-    this.renderer.render(deltaTime, renderContext);
+    this.renderer.render(deltaTime, frameData);
   }
 
-  getPlayerPosition(): [number, number] | undefined {
-    // This method is likely 2D specific, might need to be removed or adapted for 3D
-    return undefined; // Or throw an error if not applicable
-  }
+  /**
+   * Generate render data from entities
+   */
+  private generateRenderData(): RenderData[] {
+    const entities = this.filterEntities();
+    const renderDataList: RenderData[] = [];
 
-  private updateCamera(): void {
-    // Find active camera if not set
-    if (!this.activeCameraEntity) {
-      this.activeCameraEntity = this.findActiveCamera();
-    }
-
-    // Update camera following logic if needed
-    if (this.cameraTargetId && this.activeCameraEntity) {
-      const targetEntity = this.world.getEntityById(this.cameraTargetId);
-      if (targetEntity) {
-        const targetTransform = targetEntity.getComponent<Transform3DComponent>(
-          Transform3DComponent.componentName,
-        );
-        const cameraTransform = this.activeCameraEntity.getComponent<Transform3DComponent>(
-          Transform3DComponent.componentName,
-        );
-        const cameraComponent = this.activeCameraEntity.getComponent<Camera3DComponent>(
-          Camera3DComponent.componentName,
-        );
-
-        if (targetTransform && cameraTransform && cameraComponent) {
-          // Update camera to look at target
-          cameraComponent.lookAt(targetTransform.position);
-
-          // Update camera position based on offset
-          const offset: [number, number, number] = [0, 5, 10]; // Example offset
-          cameraTransform.setPosition([
-            targetTransform.position[0] + offset[0],
-            targetTransform.position[1] + offset[1],
-            targetTransform.position[2] + offset[2],
-          ]);
-        }
+    for (const entity of entities) {
+      const renderData = this.extractEntityRenderData(entity);
+      if (renderData) {
+        renderDataList.push(renderData);
       }
     }
+
+    // Sort by render order for proper rendering sequence
+    return renderDataList.sort((a, b) => a.renderOrder - b.renderOrder);
   }
 
-  private updateCameraOffset(): void {
-    // This method is 2D specific and will not be used in WebGPURenderSystem
-    // Leaving it as a no-op for now to avoid compilation errors if called.
+  /**
+   * Extract render data from a single entity
+   */
+  private extractEntityRenderData(entity: Entity): RenderData | null {
+    const meshComponent = entity.getComponent<Mesh3DComponent>(Mesh3DComponent.componentName);
+    const transformComponent = entity.getComponent<Transform3DComponent>(
+      Transform3DComponent.componentName,
+    );
+    const renderComponent = entity.getComponent<Render3DComponent>(Render3DComponent.componentName);
+
+    if (!meshComponent || !transformComponent || !renderComponent) {
+      return null;
+    }
+
+    // Ensure geometry data is generated
+    if (!meshComponent.geometryData) {
+      meshComponent.geometryData = this.generateGeometryData(meshComponent);
+    }
+
+    // Generate unique geometry ID for caching
+    const geometryId = this.generateGeometryId(meshComponent);
+
+    // Get world matrix from transform
+    const worldMatrix = transformComponent.getWorldMatrix();
+
+    // Calculate normal matrix (inverse transpose of upper 3x3 world matrix)
+    const normalMatrix = this.calculateNormalMatrix(worldMatrix);
+
+    return {
+      geometryId,
+      geometryData: meshComponent.geometryData,
+      worldMatrix: new Float32Array(worldMatrix),
+      normalMatrix,
+      material: renderComponent.getMaterial(),
+      materialUniforms: renderComponent.getUniforms() || {},
+      renderOrder: renderComponent.getLayer() || 0,
+      castShadow: renderComponent.getCastShadow() ?? true,
+      receiveShadow: renderComponent.getReceiveShadow() ?? true,
+    };
+  }
+
+  /**
+   * Generate geometry data if not exists
+   */
+  private generateGeometryData(meshComponent: Mesh3DComponent): GeometryData {
+    return GeometryFactory.createGeometryDataByDescriptor(meshComponent.descriptor);
+  }
+
+  /**
+   * Generate unique geometry ID for resource caching
+   */
+  private generateGeometryId(meshComponent: Mesh3DComponent): string {
+    // Create hash based on geometry descriptor
+    const descriptor = meshComponent.descriptor;
+    return `${descriptor.type}_${JSON.stringify(descriptor.params)}`;
+  }
+
+  /**
+   * Calculate normal matrix from world matrix
+   */
+  private calculateNormalMatrix(worldMatrix: Float32Array): Float32Array {
+    // Extract upper 3x3 matrix
+    const matrix3x3 = mat3.create();
+    mat3.fromMat4(matrix3x3, worldMatrix);
+
+    // Calculate inverse transpose for normal transformation
+    const normalMatrix = mat3.create();
+    mat3.invert(normalMatrix, matrix3x3);
+    mat3.transpose(normalMatrix, normalMatrix);
+
+    return new Float32Array(normalMatrix);
   }
 
   onDestroy(): void {
@@ -294,74 +350,95 @@ export class WebGPURenderSystem extends System {
   /**
    * Prepare camera data for rendering
    */
-  private prepareCameraData(entity: Entity): {
-    viewMatrix: Float32Array;
-    projectionMatrix: Float32Array;
-    viewProjectionMatrix: Float32Array;
-    position: [number, number, number];
-    direction: [number, number, number];
-  } | null {
-    const cameraComponent = entity.getComponent<Camera3DComponent>(Camera3DComponent.componentName);
-    const transformComponent = entity.getComponent<Transform3DComponent>(
+  private prepareCameraData(): CameraData {
+    if (!this.activeCameraEntity) {
+      this.activeCameraEntity = this.findActiveCamera();
+    }
+
+    if (!this.activeCameraEntity) {
+      throw new Error('No active camera entity found');
+    }
+
+    const cameraComponent = this.activeCameraEntity.getComponent<Camera3DComponent>(
+      Camera3DComponent.componentName,
+    );
+    const transformComponent = this.activeCameraEntity.getComponent<Transform3DComponent>(
       Transform3DComponent.componentName,
     );
 
     if (!cameraComponent || !transformComponent) {
-      return null;
+      throw new Error('Camera or transform component not found');
     }
 
     const position = transformComponent.getPosition();
+    const target = cameraComponent.getTarget();
+    const up = cameraComponent.getUp();
     const aspectRatio = this.rootElement.clientWidth / this.rootElement.clientHeight;
+
+    // Calculate view matrix
+    const viewMatrix = mat4.create();
+    mat4.lookAt(viewMatrix, position, target, up);
 
     // Calculate projection matrix
     const projectionMatrix = mat4.create();
     if (cameraComponent.projectionMode === 'perspective') {
       mat4.perspective(
         projectionMatrix,
-        (cameraComponent.fov * Math.PI) / 180, // Convert to radians
+        (cameraComponent.fov * Math.PI) / 180,
         aspectRatio,
         cameraComponent.near,
         cameraComponent.far,
       );
     } else {
-      // Orthographic projection
-      const halfWidth = (cameraComponent.viewBounds.right - cameraComponent.viewBounds.left) / 2;
-      const halfHeight = (cameraComponent.viewBounds.top - cameraComponent.viewBounds.bottom) / 2;
+      const bounds = cameraComponent.viewBounds;
       mat4.ortho(
         projectionMatrix,
-        -halfWidth,
-        halfWidth,
-        -halfHeight,
-        halfHeight,
+        bounds.left,
+        bounds.right,
+        bounds.bottom,
+        bounds.top,
         cameraComponent.near,
         cameraComponent.far,
       );
     }
 
-    // Calculate view matrix
-    const viewMatrix = mat4.create();
-    const target = cameraComponent.getTarget();
-    const up = cameraComponent.getUp();
-
-    mat4.lookAt(viewMatrix, position, target, up);
-
-    // Calculate view-projection matrix
+    // Calculate combined matrices
     const viewProjectionMatrix = mat4.create();
     mat4.multiply(viewProjectionMatrix, projectionMatrix, viewMatrix);
 
-    // Calculate camera direction
-    const direction: [number, number, number] = [
+    const inverseViewMatrix = mat4.create();
+    mat4.invert(inverseViewMatrix, viewMatrix);
+
+    const inverseProjectionMatrix = mat4.create();
+    mat4.invert(inverseProjectionMatrix, projectionMatrix);
+
+    // Calculate camera vectors
+    const forward: Vec3 = [
       target[0] - position[0],
       target[1] - position[1],
       target[2] - position[2],
     ];
-    const length = Math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2);
-    if (length > 0) {
-      direction[0] /= length;
-      direction[1] /= length;
-      direction[2] /= length;
+    const forwardLength = Math.sqrt(forward[0] ** 2 + forward[1] ** 2 + forward[2] ** 2);
+    if (forwardLength > 0) {
+      forward[0] /= forwardLength;
+      forward[1] /= forwardLength;
+      forward[2] /= forwardLength;
     }
 
+    // Calculate right vector: right = forward × up
+    const right: Vec3 = [
+      forward[1] * up[2] - forward[2] * up[1],
+      forward[2] * up[0] - forward[0] * up[2],
+      forward[0] * up[1] - forward[1] * up[0],
+    ];
+    const rightLength = Math.sqrt(right[0] ** 2 + right[1] ** 2 + right[2] ** 2);
+    if (rightLength > 0) {
+      right[0] /= rightLength;
+      right[1] /= rightLength;
+      right[2] /= rightLength;
+    }
+
+    // Update camera component matrices (cache for shader)
     cameraComponent.setViewMatrix(new Float32Array(viewMatrix));
     cameraComponent.setProjectionMatrix(new Float32Array(projectionMatrix));
     cameraComponent.setViewProjectionMatrix(new Float32Array(viewProjectionMatrix));
@@ -370,8 +447,16 @@ export class WebGPURenderSystem extends System {
       viewMatrix: new Float32Array(viewMatrix),
       projectionMatrix: new Float32Array(projectionMatrix),
       viewProjectionMatrix: new Float32Array(viewProjectionMatrix),
+      inverseViewMatrix: new Float32Array(inverseViewMatrix),
+      inverseProjectionMatrix: new Float32Array(inverseProjectionMatrix),
       position: [position[0], position[1], position[2]],
-      direction,
+      forward,
+      up: [up[0], up[1], up[2]], // copy it
+      right,
+      fov: cameraComponent.projectionMode === 'perspective' ? cameraComponent.fov : undefined,
+      aspect: aspectRatio,
+      near: cameraComponent.near,
+      far: cameraComponent.far,
     };
   }
 }

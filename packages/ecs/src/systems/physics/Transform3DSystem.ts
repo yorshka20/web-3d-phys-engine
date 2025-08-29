@@ -111,14 +111,14 @@ export class Transform3DSystem extends System {
       // Calculate and update camera target based on rotation
       const position = transform.getPosition();
       const forward = this.getCameraForwardVector();
-      
+
       // Calculate target position (camera position + forward direction)
       const target: Vec3 = [
         position[0] + forward[0],
         position[1] + forward[1],
         position[2] + forward[2],
       ];
-      
+
       camera.setTarget(target);
     }
   }
@@ -164,7 +164,7 @@ export class Transform3DSystem extends System {
     // Apply camera-relative movement
     const [right, up, forward] = this.getCameraRelativeDirections();
 
-    let velocity: Vec3 = [0, 0, 0];
+    const velocity: Vec3 = [0, 0, 0];
 
     // Calculate movement in camera space
     velocity[0] = right[0] * moveDirection[0] + forward[0] * moveDirection[2];
@@ -205,7 +205,7 @@ export class Transform3DSystem extends System {
     // Apply camera-relative movement
     const [right, up, forward] = this.getCameraRelativeDirections();
 
-    let movement: Vec3 = [0, 0, 0];
+    const movement: Vec3 = [0, 0, 0];
 
     // Calculate movement in camera space
     movement[0] = right[0] * moveDirection[0] + forward[0] * moveDirection[2];
@@ -320,7 +320,7 @@ export class Transform3DSystem extends System {
       const targetRotation = data.targetRotation;
       const rotationSpeed = data.rotationSpeed * deltaTime;
 
-      let rotationDiff: Vec3 = [
+      const rotationDiff: Vec3 = [
         targetRotation[0] - currentRotation[0],
         targetRotation[1] - currentRotation[1],
         targetRotation[2] - currentRotation[2],

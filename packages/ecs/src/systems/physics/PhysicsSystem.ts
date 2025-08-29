@@ -1,5 +1,6 @@
 import {
   PhysicsComponent,
+  ShapeComponent,
   SpiralMovementComponent,
   Transform3DComponent,
   TransformComponent,
@@ -153,7 +154,7 @@ export class PhysicsSystem extends System {
       const viewport = renderSystem.getViewport(); // [x, y, w, h]
       let w = 0,
         h = 0;
-      const shape = entity.getComponent<any>('Shape');
+      const shape = entity.getComponent<ShapeComponent>(ShapeComponent.componentName);
       if (shape && shape.getSize) {
         [w, h] = shape.getSize();
       }
@@ -183,9 +184,9 @@ export class PhysicsSystem extends System {
     // Integrate position using 3D velocity in units/second and delta time in seconds
     const position = transform.getPosition();
     const [vx, vy, vz] = physics.getVelocity();
-    let newX = position[0] + vx * deltaTime;
-    let newY = position[1] + vy * deltaTime;
-    let newZ = position[2] + vz * deltaTime;
+    const newX = position[0] + vx * deltaTime;
+    const newY = position[1] + vy * deltaTime;
+    const newZ = position[2] + vz * deltaTime;
 
     // Note: 3D entities don't have viewport clamping like 2D entities
     // This could be added later if needed for 3D world bounds
