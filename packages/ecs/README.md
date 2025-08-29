@@ -66,7 +66,7 @@ src/
 
 ### Rendering Components
 
-- **Render3DComponent**: WebGPU rendering properties
+- **WebGPU3DRenderComponent**: WebGPU rendering properties
 - **Camera3DComponent**: 3D camera configuration
 - **LightSource3DComponent**: Lighting setup
 - **AnimationComponent**: Animation state and properties
@@ -154,7 +154,7 @@ The ECS framework includes a sophisticated object pooling system:
 
 1. **Mesh3DComponent**: Provides geometric data (vertices, indices)
 2. **Transform3DComponent**: Provides transformation matrices
-3. **Render3DComponent**: Provides material and rendering properties
+3. **WebGPU3DRenderComponent**: Provides material and rendering properties
 4. **Camera3DComponent**: Provides view and projection matrices
 5. **LightSource3DComponent**: Provides lighting information
 
@@ -172,7 +172,7 @@ The ECS framework includes a sophisticated object pooling system:
 import { World, SystemPriorities } from '@web-3d-phys-engine/ecs';
 import {
   Transform3DComponent,
-  Render3DComponent,
+  WebGPU3DRenderComponent,
   Mesh3DComponent,
 } from '@web-3d-phys-engine/ecs/components';
 import { WebGPURenderSystem } from '@web-3d-phys-engine/ecs/systems';
@@ -195,8 +195,8 @@ cubeEntity.addComponent(
   }),
 );
 cubeEntity.addComponent(
-  new Render3DComponent({
-    material: Render3DComponent.createBasicMaterial({ r: 1, g: 0, b: 0, a: 1 }),
+  new WebGPU3DRenderComponent({
+    material: WebGPU3DRenderComponent.createBasicMaterial({ r: 1, g: 0, b: 0, a: 1 }),
   }),
 );
 

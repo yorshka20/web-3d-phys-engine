@@ -1,7 +1,5 @@
 import { GeometryData } from '@ecs/components/physics/mesh';
-import { CameraData } from '@ecs/components/rendering/camera/Camera3DComponent';
-import { LightData } from '@ecs/components/rendering/LightSource3DComponent';
-import { Material3D } from '@ecs/components/rendering/render/Render3DComponent';
+import { CameraData, LightData, Material3D } from '@ecs/components/rendering';
 import { Vec3 } from '@ecs/types/types';
 import { GlobalUniforms, ViewportData } from '@renderer/webGPU/types';
 import { mat3, mat4 } from 'gl-matrix';

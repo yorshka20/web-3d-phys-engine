@@ -1,5 +1,6 @@
-import { RectArea, SystemPriorities } from '@ecs';
+import { SystemPriorities } from '@ecs';
 import { FrameData } from '@ecs/systems/rendering/types';
+import { RectArea } from '@ecs/types/types';
 import chroma from 'chroma-js';
 import {
   BindGroupLayoutVisibility,

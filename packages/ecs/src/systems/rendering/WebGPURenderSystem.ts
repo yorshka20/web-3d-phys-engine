@@ -5,8 +5,8 @@ import {
   GeometryData,
   GeometryFactory,
   Mesh3DComponent,
-  Render3DComponent,
   Transform3DComponent,
+  WebGPU3DRenderComponent,
 } from '@ecs/components';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
@@ -188,7 +188,7 @@ export class WebGPURenderSystem extends System {
   private filterEntities(): Entity[] {
     return this.world.getEntitiesByCondition((entity) => {
       return (
-        entity.hasComponent(Render3DComponent.componentName) &&
+        entity.hasComponent(WebGPU3DRenderComponent.componentName) &&
         entity.hasComponent(Mesh3DComponent.componentName) &&
         entity.hasComponent(Transform3DComponent.componentName)
       );
@@ -255,7 +255,9 @@ export class WebGPURenderSystem extends System {
     const transformComponent = entity.getComponent<Transform3DComponent>(
       Transform3DComponent.componentName,
     );
-    const renderComponent = entity.getComponent<Render3DComponent>(Render3DComponent.componentName);
+    const renderComponent = entity.getComponent<WebGPU3DRenderComponent>(
+      WebGPU3DRenderComponent.componentName,
+    );
 
     if (!meshComponent || !transformComponent || !renderComponent) {
       return null;

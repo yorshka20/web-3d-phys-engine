@@ -45,7 +45,7 @@ interface Camera {
 interface RenderableEntity {
   id: number;
   transform: Transform3DComponent;
-  render3D?: Render3DComponent;
+  render3D?: WebGPU3DRenderComponent;
   mesh3D?: Mesh3DComponent;
   camera3D?: Camera3DComponent;
   light3D?: LightSource3DComponent;
@@ -125,7 +125,7 @@ class ECSWebGPURenderSystem implements IECSRenderSystem {
   renderEntity(entity: Entity): void {
     // Process entity components and render
     const transform = entity.getComponent(Transform3DComponent);
-    const render = entity.getComponent(Render3DComponent);
+    const render = entity.getComponent(WebGPU3DRenderComponent);
     const mesh = entity.getComponent(Mesh3DComponent);
 
     if (transform && render && mesh) {
@@ -221,8 +221,8 @@ renderPass.end();
 ```typescript
 class ECSRenderQueries implements IECSRenderQueries {
   queryRenderableEntities(): Entity[] {
-    // Query entities with Transform3DComponent and Render3DComponent
-    return this.world.queryEntities([Transform3DComponent, Render3DComponent]);
+    // Query entities with Transform3DComponent and WebGPU3DRenderComponent
+    return this.world.queryEntities([Transform3DComponent, WebGPU3DRenderComponent]);
   }
 
   queryEntitiesInFrustum(camera: Camera3DComponent): Entity[] {
@@ -291,7 +291,7 @@ class RenderBatch {
   private material: Material;
 
   addEntity(entity: Entity): boolean {
-    const render = entity.getComponent(Render3DComponent);
+    const render = entity.getComponent(WebGPU3DRenderComponent);
     if (render.material.id === this.material.id) {
       this.entities.push(entity);
       return true;

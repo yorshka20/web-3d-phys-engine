@@ -49,11 +49,11 @@ const transform = new Transform3DComponent({
 });
 ```
 
-### 3. Render3DComponent
+### 3. WebGPU3DRenderComponent
 
-**Location**: `packages/ecs/src/components/rendering/Render3DComponent.ts`
+**Location**: `packages/ecs/src/components/rendering/render/WebGPU3DRenderComponent.ts`
 
-**Purpose**: Manages 3D rendering properties including materials, textures, and shaders.
+**Purpose**: Manages 3D rendering properties including materials, textures, and shaders for WebGPU backend.
 
 **Key Features**:
 
@@ -66,8 +66,8 @@ const transform = new Transform3DComponent({
 **Usage Example**:
 
 ```typescript
-const material = Render3DComponent.createBasicMaterial({ r: 1, g: 0, b: 0, a: 1 });
-const render3D = new Render3DComponent({
+const material = WebGPU3DRenderComponent.createBasicMaterial({ r: 1, g: 0, b: 0, a: 1 });
+const render3D = new WebGPU3DRenderComponent({
   material,
   castShadow: true,
   receiveShadow: true,
@@ -142,7 +142,7 @@ pointLight.setPosition3D([0, 5, 0]);
 
 1. **Mesh3DComponent** provides geometric data
 2. **Transform3DComponent** provides transformation matrices
-3. **Render3DComponent** provides material and rendering properties
+3. **WebGPU3DRenderComponent** provides material and rendering properties
 4. **Camera3DComponent** provides view and projection matrices
 5. **LightSourceComponent** provides lighting information
 
@@ -160,8 +160,8 @@ cubeEntity.addComponent(
   }),
 );
 cubeEntity.addComponent(
-  new Render3DComponent({
-    material: Render3DComponent.createBasicMaterial({ r: 1, g: 0, b: 0, a: 1 }),
+  new WebGPU3DRenderComponent({
+    material: WebGPU3DRenderComponent.createBasicMaterial({ r: 1, g: 0, b: 0, a: 1 }),
   }),
 );
 
@@ -193,7 +193,7 @@ All 3D components are designed to work seamlessly with WebGPU:
 
 - **Mesh3DComponent**: Provides vertex and index buffers for WebGPU
 - **Transform3DComponent**: Provides uniform buffer data for transformation matrices
-- **Render3DComponent**: Provides material uniforms and texture bindings
+- **WebGPU3DRenderComponent**: Provides material uniforms and texture bindings
 - **Camera3DComponent**: Provides view and projection matrices
 - **LightSourceComponent**: Provides light uniforms for shaders
 

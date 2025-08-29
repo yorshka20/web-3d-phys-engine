@@ -1,5 +1,5 @@
 import { Color } from '@ecs/types/types';
-import { WebGPUMaterialDescriptor } from './WebGPU3DRenderComponent';
+import { WebGPUMaterialDescriptor } from './types';
 
 /**
  * WebGPU Material Manager

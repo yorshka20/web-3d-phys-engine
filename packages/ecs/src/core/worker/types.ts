@@ -1,4 +1,4 @@
-import { RectArea } from '@ecs/utils';
+import { RectArea } from '@ecs/types/types';
 import { RayTracingWorkerData, RayTracingWorkerTask } from '@renderer';
 
 export interface SimpleEntity {
@@ -19,7 +19,7 @@ export interface WorkerMessage {
 }
 
 export interface BaseWorkerData {
-  [key: string]: any;
+  [key: string]: Any;
 }
 
 export interface GeneralWorkerTask<T extends WorkerTaskType> {
@@ -41,8 +41,8 @@ export type PickWorkerTaskType<T extends WorkerTaskType> = T extends 'collision'
 export interface CollisionWorkerTask {
   taskId: number;
   worker: Worker;
-  resolve: (value: any) => void;
-  reject: (reason?: any) => void;
+  resolve: (value: Any) => void;
+  reject: (reason?: Any) => void;
   priority: number;
   data: CollisionWorkerData;
 }
@@ -60,7 +60,7 @@ export interface CollisionWorkerData extends BaseWorkerData {
 // Worker result interfaces
 export interface WorkerResult {
   taskId: number;
-  result: any[];
+  result: Any[];
 }
 
 // Error handling

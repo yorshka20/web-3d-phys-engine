@@ -1,6 +1,7 @@
 import { ISpawnerEntity, SpawnerComponent, TransformComponent, World } from '@ecs';
 import { Entity } from '@ecs/core/ecs/Entity';
-import { generateEntityId, Point, randomRgb, Vec2 } from '@ecs/utils';
+import { Point, Vec2 } from '@ecs/types/types';
+import { generateEntityId, randomRgb } from '@ecs/utils';
 import { createBall } from './ball';
 import { createSquare } from './square';
 

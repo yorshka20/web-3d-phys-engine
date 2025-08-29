@@ -1,67 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Color } from '@ecs/types/types';
-import { Material3D } from './Render3DComponent';
-
-/**
- * WebGPU material descriptor for resource creation
- * This describes what resources need to be created, not the actual resources
- */
-export interface WebGPUMaterialDescriptor extends Material3D {
-  // Resource IDs (managed by renderer package)
-  shaderId?: string; // ID of shader in ShaderManager
-  uniformBufferId?: string; // ID of uniform buffer in BufferManager
-  bindGroupId?: string; // ID of bind group in ShaderManager
-  renderPipelineId?: string; // ID of render pipeline in ShaderManager
-
-  // Texture resource IDs
-  albedoTextureId?: string;
-  normalTextureId?: string;
-  metallicRoughnessTextureId?: string;
-  emissiveTextureId?: string;
-
-  // Render state configuration
-  depthStencilState?: GPUDepthStencilState;
-  blendState?: GPUBlendState;
-  cullMode?: GPUCullMode;
-  frontFace?: GPUFrontFace;
-  primitiveTopology?: GPUPrimitiveTopology;
-}
-
-/**
- * WebGPU-specific rendering properties
- */
-export interface WebGPU3DRenderProperties {
-  material: WebGPUMaterialDescriptor;
-  visible?: boolean;
-  castShadow?: boolean;
-  receiveShadow?: boolean;
-  layer?: number;
-
-  // WebGPU-specific rendering options
-  depthTest?: boolean;
-  depthWrite?: boolean;
-  depthCompare?: GPUCompareFunction;
-  stencilTest?: boolean;
-  stencilWrite?: boolean;
-
-  // Instancing support
-  instanceCount?: number;
-  instanceBufferId?: string; // ID of instance buffer in BufferManager
-
-  // LOD (Level of Detail) support
-  lodLevel?: number;
-  lodDistances?: number[];
-
-  // Frustum culling
-  frustumCulling?: boolean;
-
-  // Custom shader overrides
-  vertexShaderOverride?: string;
-  fragmentShaderOverride?: string;
-
-  // Uniform overrides
-  customUniforms?: Record<string, any>;
-}
+import { WebGPU3DRenderProperties, WebGPUMaterialDescriptor } from './types';
 
 /**
  * WebGPU 3D Render Component
@@ -85,6 +24,8 @@ export class WebGPU3DRenderComponent extends Component {
   private castShadow: boolean;
   private receiveShadow: boolean;
   private layer: number;
+  private customShader: string | undefined; // From Render3DComponent
+  private uniforms: Record<string, Any>; // From Render3DComponent
 
   // WebGPU-specific properties
   private depthTest: boolean;
@@ -109,7 +50,7 @@ export class WebGPU3DRenderComponent extends Component {
   private fragmentShaderOverride: string | undefined;
 
   // Custom uniforms
-  private customUniforms: Record<string, any>;
+  private customUniforms: Record<string, Any>;
 
   // Resource update tracking
   private needsResourceUpdate: boolean = true;
@@ -123,6 +64,8 @@ export class WebGPU3DRenderComponent extends Component {
     this.castShadow = properties.castShadow ?? true;
     this.receiveShadow = properties.receiveShadow ?? true;
     this.layer = properties.layer ?? 0;
+    this.customShader = properties.customShader;
+    this.uniforms = properties.uniforms ?? {};
 
     // WebGPU-specific defaults
     this.depthTest = properties.depthTest ?? true;
@@ -159,6 +102,8 @@ export class WebGPU3DRenderComponent extends Component {
     if (properties.castShadow !== undefined) this.castShadow = properties.castShadow;
     if (properties.receiveShadow !== undefined) this.receiveShadow = properties.receiveShadow;
     if (properties.layer !== undefined) this.layer = properties.layer;
+    if (properties.customShader !== undefined) this.customShader = properties.customShader;
+    if (properties.uniforms !== undefined) this.uniforms = properties.uniforms;
 
     if (properties.depthTest !== undefined) this.depthTest = properties.depthTest;
     if (properties.depthWrite !== undefined) this.depthWrite = properties.depthWrite;
@@ -200,6 +145,8 @@ export class WebGPU3DRenderComponent extends Component {
       castShadow: this.castShadow,
       receiveShadow: this.receiveShadow,
       layer: this.layer,
+      customShader: this.customShader,
+      uniforms: this.uniforms,
       depthTest: this.depthTest,
       depthWrite: this.depthWrite,
       depthCompare: this.depthCompare,
@@ -258,6 +205,43 @@ export class WebGPU3DRenderComponent extends Component {
     this.material.emissive = emissive;
     this.material.emissiveIntensity = intensity;
     this.needsResourceUpdate = true;
+  }
+
+  // ===== Material Property Getters (from Render3DComponent) =====
+
+  /**
+   * Get albedo color
+   */
+  getAlbedo(): Color {
+    return this.material.albedo;
+  }
+
+  /**
+   * Get metallic value
+   */
+  getMetallic(): number {
+    return this.material.metallic;
+  }
+
+  /**
+   * Get roughness value
+   */
+  getRoughness(): number {
+    return this.material.roughness;
+  }
+
+  /**
+   * Get emissive color
+   */
+  getEmissive(): Color {
+    return this.material.emissive;
+  }
+
+  /**
+   * Get emissive intensity
+   */
+  getEmissiveIntensity(): number {
+    return this.material.emissiveIntensity;
   }
 
   // ===== WebGPU Resource Management =====
@@ -453,14 +437,14 @@ export class WebGPU3DRenderComponent extends Component {
   /**
    * Get custom uniforms
    */
-  getCustomUniforms(): Record<string, any> {
+  getCustomUniforms(): Record<string, Any> {
     return this.customUniforms;
   }
 
   /**
    * Set custom uniform value
    */
-  setCustomUniform(name: string, value: any): void {
+  setCustomUniform(name: string, value: Any): void {
     this.customUniforms[name] = value;
     this.needsResourceUpdate = true;
   }
@@ -468,7 +452,7 @@ export class WebGPU3DRenderComponent extends Component {
   /**
    * Get custom uniform value
    */
-  getCustomUniform(name: string): any {
+  getCustomUniform(name: string): Any {
     return this.customUniforms[name];
   }
 
@@ -510,6 +494,20 @@ export class WebGPU3DRenderComponent extends Component {
   }
 
   /**
+   * Get custom shader (from Render3DComponent)
+   */
+  getCustomShader(): string | undefined {
+    return this.customShader;
+  }
+
+  /**
+   * Get uniforms (from Render3DComponent)
+   */
+  getUniforms(): Record<string, Any> {
+    return this.uniforms;
+  }
+
+  /**
    * Reset component to default state
    */
   reset(): void {
@@ -519,6 +517,8 @@ export class WebGPU3DRenderComponent extends Component {
     this.castShadow = true;
     this.receiveShadow = true;
     this.layer = 0;
+    this.customShader = undefined;
+    this.uniforms = {};
 
     this.depthTest = true;
     this.depthWrite = true;
@@ -655,5 +655,32 @@ export class WebGPU3DRenderComponent extends Component {
       material,
       ...options,
     });
+  }
+
+  // ===== Static Factory Methods (from Render3DComponent) =====
+
+  /**
+   * Create a basic material (from Render3DComponent)
+   */
+  static createBasicMaterial(albedo: Color): WebGPUMaterialDescriptor {
+    return this.createBasicWebGPUMaterialDescriptor(albedo);
+  }
+
+  /**
+   * Create a metallic material (from Render3DComponent)
+   */
+  static createMetallicMaterial(
+    albedo: Color,
+    metallic: number,
+    roughness: number,
+  ): WebGPUMaterialDescriptor {
+    return this.createMetallicWebGPUMaterialDescriptor(albedo, metallic, roughness);
+  }
+
+  /**
+   * Create an emissive material (from Render3DComponent)
+   */
+  static createEmissiveMaterial(emissive: Color, intensity: number): WebGPUMaterialDescriptor {
+    return this.createEmissiveWebGPUMaterialDescriptor(emissive, intensity);
   }
 }

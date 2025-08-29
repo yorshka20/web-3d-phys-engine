@@ -68,8 +68,8 @@ export class WebGPURayTracingLayer extends CanvasRenderLayer {
 
     // 初始化WebGPU组件
     this.webGPUContext = new WebGPUContext();
-    this.bufferManager = new BufferManager(this.webGPUContext.getDevice());
-    this.shaderManager = new ShaderManager(this.webGPUContext.getDevice());
+    this.bufferManager = new BufferManager();
+    this.shaderManager = new ShaderManager();
     this.progressiveRenderer = new WebGPUProgressiveRenderer(
       this.webGPUContext.getDevice(),
       this.mainCanvas.width,

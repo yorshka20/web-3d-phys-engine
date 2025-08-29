@@ -344,7 +344,7 @@ export class ParallelCollisionSystem extends System {
       if (entity) {
         const physics = entity.getComponent<PhysicsComponent>(PhysicsComponent.componentName);
         if (physics) {
-          physics.velocity = [0, 0];
+          physics.setVelocity([0, 0]);
           physics.isSleeping = true;
         }
       }

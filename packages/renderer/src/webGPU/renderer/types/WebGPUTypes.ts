@@ -1,19 +1,3 @@
-import { Camera3DComponent, Transform3DComponent } from '@ecs/components';
-
-// ===== ECS Integration Types =====
-
-/**
- * ECS Entity with rendering components
- */
-export interface RenderableEntity {
-  id: number;
-  transform: Transform3DComponent;
-  render3D?: Any; // Render3DComponent
-  mesh3D?: Any; // Mesh3DComponent
-  camera3D?: Camera3DComponent;
-  light3D?: Any; // LightSource3DComponent
-}
-
 /**
  * Scene representation for ECS
  */

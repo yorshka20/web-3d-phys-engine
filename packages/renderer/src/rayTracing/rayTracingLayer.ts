@@ -571,8 +571,9 @@ export class RayTracingLayer extends CanvasRenderLayer {
     if (!camera || !transform || !camera.isActive) {
       throw new Error('No active camera found');
     }
+    const position = transform.getPosition();
     return {
-      position: [transform.getPosition()[0], transform.getPosition()[1], camera.position[2]],
+      position: [position[0], position[1], 10], // TODO: fix height
       fov: camera.fov,
       facing: camera.facing,
       pitch: camera.pitch,

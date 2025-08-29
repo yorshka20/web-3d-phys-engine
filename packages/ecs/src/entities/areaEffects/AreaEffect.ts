@@ -11,7 +11,8 @@ import {
 } from '@ecs/components';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { World } from '@ecs/core/ecs/World';
-import { Color, Point, randomRgb } from '@ecs/utils';
+import { Color, Point } from '@ecs/types/types';
+import { randomRgb } from '@ecs/utils';
 import { RenderLayerIdentifier } from '@renderer/constant';
 
 export interface AreaEffectProps {

@@ -1,6 +1,6 @@
 import { Camera3DComponent, Transform3DComponent } from '@ecs/components';
+import { FrameData } from '@ecs/systems/rendering/types';
 import { BufferDescriptor, ShaderDescriptor } from '@renderer/webGPU/core/types';
-import { RenderContext } from '@renderer/webGPU/types';
 
 // ===== Core WebGPU Types =====
 
@@ -277,7 +277,7 @@ export abstract class IWebGPURenderer implements IRenderer, IRenderBackend {
   abstract submit(): void;
 
   // ===== Rendering =====
-  abstract render(deltaTime: number, context: RenderContext): void;
+  abstract render(deltaTime: number, frameData: FrameData): void;
 
   // ===== Performance Monitoring =====
   abstract getRenderStats(): {

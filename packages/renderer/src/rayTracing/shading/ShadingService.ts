@@ -1,5 +1,6 @@
 import { LightSource3DComponent } from '@ecs/components';
-import { RgbaColor, Vec3 } from '@ecs/utils';
+import { Vec3 } from '@ecs/types/types';
+import { RgbaColor } from '@ecs/utils';
 import {
   Intersection3D,
   Ray3D,
@@ -30,7 +31,7 @@ export class ShadingService {
     lights: SerializedLight[],
     camera: SerializedCamera,
   ): RgbaColor {
-    let finalColor: RgbaColor = { r: 0, g: 0, b: 0, a: ShadingService.opacity };
+    const finalColor: RgbaColor = { r: 0, g: 0, b: 0, a: ShadingService.opacity };
 
     // Get the actual entity color from material properties, fallback to default if not available
     const materialColor: RgbaColor = intersection.entity.material?.color || {
@@ -58,7 +59,7 @@ export class ShadingService {
         let distance: number;
 
         switch (light.type) {
-          case 'directional':
+          case 'directional': {
             // Ensure the light direction is normalized
             const dirLength = Math.sqrt(
               light.direction[0] ** 2 + light.direction[1] ** 2 + light.direction[2] ** 2,
@@ -78,17 +79,18 @@ export class ShadingService {
             ];
             distance = Infinity; // Directional lights have no distance falloff
             break;
-          case 'ambient':
+          }
+          case 'ambient': {
             // Ambient light contributes equally from all directions
             const ambientIntensity = light.intensity * 0.3; // Reduced ambient contribution
             finalColor.r += (materialColor.r * light.color.r * ambientIntensity) / 255;
             finalColor.g += (materialColor.g * light.color.g * ambientIntensity) / 255;
             finalColor.b += (materialColor.b * light.color.b * ambientIntensity) / 255;
             continue; // Skip further calculations for ambient light
-
+          }
           case 'point':
           case 'spot':
-          default:
+          default: {
             const dx = lightPos3D[0] - intersection.point[0];
             const dy = lightPos3D[1] - intersection.point[1];
             const dz = lightPos3D[2] - intersection.point[2];
@@ -97,6 +99,7 @@ export class ShadingService {
             if (distance === 0) lightDirection = [0, 0, 0];
             else lightDirection = [dx / distance, dy / distance, dz / distance];
             break;
+          }
         }
 
         const dotProd = Math.max(
@@ -165,7 +168,7 @@ export class ShadingService {
 
     // Calculate light direction and distance based on light type
     switch (light.type) {
-      case 'directional':
+      case 'directional': {
         // Ensure the light direction is normalized
         const dirLength = Math.sqrt(
           light.direction[0] ** 2 + light.direction[1] ** 2 + light.direction[2] ** 2,
@@ -181,8 +184,8 @@ export class ShadingService {
         lightDirection = [-normalizedLightDir[0], -normalizedLightDir[1], -normalizedLightDir[2]];
         distance = Infinity; // Directional lights have no distance falloff
         break;
-
-      case 'ambient':
+      }
+      case 'ambient': {
         // Ambient light contributes equally from all directions
         const ambientIntensity = light.intensity * 0.3; // Reduced ambient contribution
         return {
@@ -191,10 +194,10 @@ export class ShadingService {
           b: (materialColor.b * light.color.b * ambientIntensity) / 255,
           a: ShadingService.opacity,
         };
-
+      }
       case 'point':
       case 'spot':
-      default:
+      default: {
         const dx = lightPos3D[0] - intersection.point[0];
         const dy = lightPos3D[1] - intersection.point[1];
         const dz = lightPos3D[2] - intersection.point[2];
@@ -204,6 +207,7 @@ export class ShadingService {
 
         lightDirection = [dx / distance, dy / distance, dz / distance];
         break;
+      }
     }
 
     // Calculate light intensity with distance attenuation
@@ -268,7 +272,7 @@ export class ShadingService {
    * @returns The background color with ambient lighting applied, clamped to a valid RGBA range.
    */
   static applyAmbientLighting(backgroundColor: RgbaColor, lights: SerializedLight[]): RgbaColor {
-    let result = { ...backgroundColor };
+    const result = { ...backgroundColor };
 
     for (const light of lights) {
       if (light.enabled && light.type === 'ambient') {
