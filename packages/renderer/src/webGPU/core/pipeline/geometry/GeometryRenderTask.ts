@@ -1,5 +1,5 @@
+import { FrameData } from '@ecs/systems/rendering/types';
 import { mat4 } from 'gl-matrix';
-import { RenderContext } from '../../../types';
 import { RenderPipelineManager } from '../../RenderPipelineManager';
 import { Inject, Injectable, ServiceTokens } from '../../decorators';
 import {
@@ -19,7 +19,7 @@ import {
 import shaderCode from './shader.wgsl?raw';
 
 export interface GeometryInstance {
-  geometry: any; // GeometryCacheItem;
+  geometry: Any; // GeometryCacheItem;
   transform: mat4;
   scale: [number, number, number];
   position: [number, number, number];
@@ -412,7 +412,7 @@ export class GeometryRenderTask {
     );
   }
 
-  render(renderPassEncoder: GPURenderPassEncoder, context: RenderContext): void {
+  render(renderPassEncoder: GPURenderPassEncoder, frameData: FrameData): void {
     const mainPipeline = this.renderPipelineManager.getPipeline('geometryPipeline');
     if (!mainPipeline) {
       throw new Error('[GeometryRenderTask] Geometry pipeline not found');
@@ -424,11 +424,8 @@ export class GeometryRenderTask {
     renderPassEncoder.setBindGroup(0, timeBindGroup.bindGroup);
 
     const now = performance.now() / 1000;
-    const projectionMatrix = mat4.create();
-    mat4.copy(projectionMatrix, context.globalUniforms.projectionMatrix);
-
-    const viewMatrix = mat4.create();
-    mat4.copy(viewMatrix, context.globalUniforms.viewMatrix);
+    const projectionMatrix = frameData.scene.camera.projectionMatrix;
+    const viewMatrix = frameData.scene.camera.viewMatrix;
 
     for (const instance of this.geometryInstances) {
       // Update model matrix for this instance

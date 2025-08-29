@@ -84,7 +84,7 @@ export class Canvas2dRenderer implements IRenderer {
     });
   }
 
-  addRenderLayer(ctor: new (...args: any[]) => IRenderLayer): void {
+  addRenderLayer(ctor: new (...args: Any[]) => IRenderLayer): void {
     const layer = new ctor(this.mainCanvas, this.mainCtx);
     this.layers.push(layer);
 

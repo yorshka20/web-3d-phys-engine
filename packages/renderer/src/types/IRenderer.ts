@@ -17,8 +17,6 @@ export interface IRenderer {
   debug: boolean;
   priority: number;
 
-  updateContextConfig(config: GPUCanvasConfiguration): void;
-
   setBackgroundImage(image: HTMLImageElement): void;
 
   clear(): void;
@@ -32,6 +30,7 @@ export interface IRenderer {
 
 export interface I2DRenderer extends IRenderer {
   init(renderSystem: RenderSystem): void;
+  updateContextConfig(config: ContextConfig): void;
   addRenderLayer(ctor: new (...args: Any[]) => IRenderLayer): void;
   getLayers(): IRenderLayer[];
 }
