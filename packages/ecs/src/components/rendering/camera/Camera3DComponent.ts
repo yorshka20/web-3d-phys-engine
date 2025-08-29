@@ -24,6 +24,27 @@ export interface Camera3DProps {
   up?: Vec3; // Up vector for 3D camera
 }
 
+export interface CameraData {
+  // Transform matrices for vertex transformations
+  viewMatrix: Float32Array; // Transforms world space to camera/view space
+  projectionMatrix: Float32Array; // Transforms view space to clip space
+  viewProjectionMatrix: Float32Array; // Combined matrix: projection * view
+  inverseViewMatrix: Float32Array; // Transforms camera space back to world space
+  inverseProjectionMatrix: Float32Array; // Transforms clip space back to view space
+
+  // Camera spatial information
+  position: Vec3; // Camera position in world space
+  forward: Vec3; // Direction the camera is looking (normalized)
+  up: Vec3; // Camera's up direction (normalized)
+  right: Vec3; // Camera's right direction (normalized)
+
+  // Projection parameters
+  fov?: number; // Field of view in degrees (perspective only)
+  aspect: number; // Aspect ratio (width/height)
+  near: number; // Near clipping plane distance
+  far: number; // Far clipping plane distance
+}
+
 export class Camera3DComponent extends Component {
   static componentName = 'Camera';
 
@@ -203,7 +224,7 @@ export class Camera3DComponent extends Component {
    * @returns The rotated 3D direction vector in world space.
    */
   static applyCameraRotations(direction: Vec3, camera: SerializedCamera): Vec3 {
-    let result: Vec3 = [...direction];
+    const result: Vec3 = [...direction];
 
     // Apply pitch (rotation around X-axis)
     if (camera.pitch !== 0) {

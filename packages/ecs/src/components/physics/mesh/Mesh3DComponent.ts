@@ -1,5 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Vec3 } from '@ecs/types/types';
+import { GeometryData } from './GeometryFactory';
 import { GeometryPrimitiveOptions, Mesh3DShapeDescriptor, Vertex3D } from './types';
 
 interface Mesh3DProps {
@@ -13,6 +14,7 @@ export class Mesh3DComponent extends Component {
   static componentName = 'Mesh3D';
 
   descriptor: Mesh3DShapeDescriptor;
+  geometryData?: GeometryData;
   vertices: Vertex3D[] = []; // vertex cache
   indices: number[] = []; // indices cache
   bounds: { min: Vec3; max: Vec3 } | null = null;

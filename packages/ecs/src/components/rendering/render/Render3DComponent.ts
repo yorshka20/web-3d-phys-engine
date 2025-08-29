@@ -34,7 +34,7 @@ export interface Render3DProperties {
   receiveShadow?: boolean;
   layer?: number; // Render layer for sorting
   customShader?: string; // Custom shader path/ID
-  uniforms?: Record<string, any>; // Custom shader uniforms
+  uniforms?: Record<string, Any>; // Custom shader uniforms
 }
 
 /**
@@ -51,7 +51,7 @@ export class Render3DComponent extends Component {
   private receiveShadow: boolean;
   private layer: number;
   private customShader: string | undefined;
-  private uniforms: Record<string, any>;
+  private uniforms: Record<string, Any>;
   private material: Material3D;
 
   /**
@@ -117,7 +117,7 @@ export class Render3DComponent extends Component {
     return this.customShader;
   }
 
-  getUniforms(): Record<string, any> {
+  getUniforms(): Record<string, Any> {
     return this.uniforms;
   }
 

@@ -22,7 +22,7 @@ import {
   tetrahedron,
   torus,
 } from 'primitive-geometry';
-import { GeometryPrimitiveOptions } from './types';
+import { GeometryPrimitiveOptions, Mesh3DDescriptor, Mesh3DShapeDescriptor } from './types';
 
 /**
  * Vertex format types.
@@ -139,6 +139,142 @@ export class GeometryFactory {
       },
     };
   }
+
+  static createGeometryDataByDescriptor(descriptor: Mesh3DShapeDescriptor): GeometryData {
+    // Handle unset descriptor
+    if (descriptor.type === 'unset') {
+      throw new Error('Cannot create geometry from unset descriptor');
+    }
+
+    // Handle custom mesh descriptor
+    if (descriptor.type === 'mesh') {
+      return GeometryFactory.convertCustomMesh(descriptor);
+    }
+
+    // Handle primitive geometry descriptors
+    switch (descriptor.type) {
+      case 'box':
+        return GeometryFactory.createBox(descriptor.params);
+      case 'sphere':
+        return GeometryFactory.createSphere(descriptor.params);
+      case 'cylinder':
+        return GeometryFactory.createCylinder(descriptor.params);
+      case 'plane':
+        return GeometryFactory.createPlane(descriptor.params);
+      case 'cone':
+        return GeometryFactory.createCone(descriptor.params);
+      case 'icosphere':
+        return GeometryFactory.createIcosphere(descriptor.params);
+      case 'ellipsoid':
+        return GeometryFactory.createEllipsoid(descriptor.params);
+      case 'capsule':
+        return GeometryFactory.createCapsule(descriptor.params);
+      case 'torus':
+        return GeometryFactory.createTorus(descriptor.params);
+      case 'tetrahedron':
+        return GeometryFactory.createTetrahedron(descriptor.params);
+      case 'icosahedron':
+        return GeometryFactory.createIcosahedron(descriptor.params);
+      case 'quad':
+        return GeometryFactory.createQuad(descriptor.params);
+      case 'roundedCube':
+        return GeometryFactory.createRoundedCube(descriptor.params);
+      case 'ellipse':
+        return GeometryFactory.createEllipse(descriptor.params);
+      case 'disc':
+        return GeometryFactory.createDisc(descriptor.params);
+      case 'circle':
+        return GeometryFactory.createCircle(descriptor.params);
+      case 'roundedRectangle':
+        return GeometryFactory.createRoundedRectangle(descriptor.params);
+      case 'stadium':
+        return GeometryFactory.createStadium(descriptor.params);
+      default:
+        throw new Error(`Unsupported geometry type: ${(descriptor as { type: string }).type}`);
+    }
+  }
+
+  /**
+   * Convert custom mesh descriptor to GeometryData
+   * @param descriptor Custom mesh descriptor with vertices
+   * @returns Converted geometry data
+   */
+  private static convertCustomMesh(descriptor: Mesh3DDescriptor): GeometryData {
+    const { vertices, indices = [], bounds } = descriptor;
+
+    // Convert Vertex3D[] to interleaved Float32Array
+    const vertexCount = vertices.length;
+    const vertexArray = new Float32Array(vertexCount * 8); // 8 floats per vertex: pos(3) + normal(3) + uv(2)
+
+    for (let i = 0; i < vertexCount; i++) {
+      const vertex = vertices[i];
+      const baseIndex = i * 8;
+
+      // Position (x, y, z)
+      vertexArray[baseIndex] = vertex.position[0];
+      vertexArray[baseIndex + 1] = vertex.position[1];
+      vertexArray[baseIndex + 2] = vertex.position[2];
+
+      // Normal (nx, ny, nz) - use provided normal or default up vector
+      if (vertex.normal) {
+        vertexArray[baseIndex + 3] = vertex.normal[0];
+        vertexArray[baseIndex + 4] = vertex.normal[1];
+        vertexArray[baseIndex + 5] = vertex.normal[2];
+      } else {
+        vertexArray[baseIndex + 3] = 0;
+        vertexArray[baseIndex + 4] = 1;
+        vertexArray[baseIndex + 5] = 0;
+      }
+
+      // UV (u, v) - use provided UV or default
+      if (vertex.uv) {
+        vertexArray[baseIndex + 6] = vertex.uv[0];
+        vertexArray[baseIndex + 7] = vertex.uv[1];
+      } else {
+        vertexArray[baseIndex + 6] = 0;
+        vertexArray[baseIndex + 7] = 0;
+      }
+    }
+
+    // Convert indices to Uint16Array
+    const indexArray = new Uint16Array(indices);
+
+    // Calculate bounds if not provided
+    let calculatedBounds = bounds;
+    if (!calculatedBounds) {
+      let minX = Infinity,
+        minY = Infinity,
+        minZ = Infinity;
+      let maxX = -Infinity,
+        maxY = -Infinity,
+        maxZ = -Infinity;
+
+      for (const vertex of vertices) {
+        const [x, y, z] = vertex.position;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        minZ = Math.min(minZ, z);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        maxZ = Math.max(maxZ, z);
+      }
+
+      calculatedBounds = {
+        min: [minX, minY, minZ],
+        max: [maxX, maxY, maxZ],
+      };
+    }
+
+    return {
+      vertices: vertexArray,
+      indices: indexArray,
+      vertexCount,
+      indexCount: indexArray.length,
+      vertexFormat: 'full' as VertexFormat,
+      bounds: calculatedBounds,
+    };
+  }
+
   /**
    * Create a cube geometry using primitive-geometry
    * @returns Cube vertex and index data

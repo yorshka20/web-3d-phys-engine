@@ -3,8 +3,46 @@ import { Vec3 } from '@ecs/types/types';
 import { RgbaColor } from '@ecs/utils/color';
 import { SerializedLight } from '@renderer/rayTracing';
 
-export type LightType = 'point' | 'directional' | 'ambient' | 'spot';
 export type AttenuationType = 'none' | 'linear' | 'quadratic' | 'realistic';
+
+export enum LightType {
+  AMBIENT = 'ambient',
+  DIRECTIONAL = 'directional',
+  POINT = 'point',
+  SPOT = 'spot',
+}
+
+export interface BaseLightData {
+  type: LightType;
+  color: Vec3; // RGB
+  intensity: number;
+  castShadow: boolean;
+}
+
+export interface DirectionalLightData extends BaseLightData {
+  type: LightType.DIRECTIONAL;
+  direction: Vec3;
+  shadowMapSize?: number;
+  shadowBias?: number;
+}
+
+export interface PointLightData extends BaseLightData {
+  type: LightType.POINT;
+  position: Vec3;
+  range: number; // attenuation range
+  attenuation: Vec3; // constant, linear, quadratic
+}
+
+export interface SpotLightData extends BaseLightData {
+  type: LightType.SPOT;
+  position: Vec3;
+  direction: Vec3;
+  innerCone: number; // inner cone angle
+  outerCone: number; // outer cone angle
+  range: number;
+}
+
+export type LightData = DirectionalLightData | PointLightData | SpotLightData;
 
 /**
  * Light source component for 2D ray tracing
@@ -29,7 +67,7 @@ export class LightSource3DComponent extends Component {
   height = 0; // Z coordinate, 0 means on the scene plane
 
   // light type and behavior
-  type: LightType = 'point';
+  type: LightType = LightType.POINT;
   castShadows = true;
   attenuation: AttenuationType = 'quadratic';
 
@@ -82,7 +120,7 @@ export class LightSource3DComponent extends Component {
     this.color = props.color ?? { r: 255, g: 255, b: 255, a: 1 };
     this.intensity = props.intensity ?? 1;
     this.radius = props.radius ?? 100;
-    this.type = props.type ?? 'point';
+    this.type = props.type ?? LightType.POINT;
     this.castShadows = props.castShadows ?? true;
     this.attenuation = props.attenuation ?? 'quadratic';
     this.direction = props.direction ?? [0, 0, -1];
@@ -131,11 +169,12 @@ export class LightSource3DComponent extends Component {
       case 'linear':
         return Math.max(0, 1 - distance / this.radius);
 
-      case 'quadratic':
+      case 'quadratic': {
         const normalizedDistance = distance / this.radius;
         return Math.max(0, 1 - normalizedDistance * normalizedDistance);
+      }
 
-      case 'realistic':
+      case 'realistic': {
         // more realistic square inverse attenuation, but with minimum distance to prevent division by zero
         const minDistance = 1;
         const effectiveDistance = Math.max(distance, minDistance);
@@ -143,6 +182,7 @@ export class LightSource3DComponent extends Component {
         // fade out at radius to a small value, not 0
         const radiusFalloff = 1 / (this.radius * this.radius);
         return Math.max(0, falloff - radiusFalloff) / (1 - radiusFalloff);
+      }
 
       default:
         return 1;
@@ -164,20 +204,20 @@ export class LightSource3DComponent extends Component {
 
     // calculate intensity based on light type
     switch (this.type) {
-      case 'ambient':
+      case LightType.AMBIENT:
         // ambient light is not affected by distance
         return intensity;
 
-      case 'directional':
+      case LightType.DIRECTIONAL:
         // directional light is not affected by distance, but can consider direction
         return intensity;
 
-      case 'point':
+      case LightType.POINT:
         // point light is affected by distance attenuation
         intensity *= this.calculateAttenuation(distance);
         break;
 
-      case 'spot':
+      case LightType.SPOT: {
         // spot light needs to check angle
         const lightDir = this.normalizedDirection;
         const targetDir = [
@@ -203,6 +243,7 @@ export class LightSource3DComponent extends Component {
           intensity *= falloff * this.calculateAttenuation(distance);
         }
         break;
+      }
     }
 
     return Math.max(0, intensity);
@@ -212,7 +253,7 @@ export class LightSource3DComponent extends Component {
   isPointInRange(targetPos: Vec3): boolean {
     if (!this.enabled) return false;
 
-    if (this.type === 'ambient' || this.type === 'directional') {
+    if (this.type === LightType.AMBIENT || this.type === LightType.DIRECTIONAL) {
       return true; // ambient and directional light affect all points
     }
 
@@ -228,7 +269,7 @@ export class LightSource3DComponent extends Component {
 
   // get direction from light source to target point (for shadow calculation)
   getDirectionToTarget(targetPos: Vec3): Vec3 {
-    if (this.type === 'directional') {
+    if (this.type === LightType.DIRECTIONAL) {
       // directional light direction is fixed
       return this.normalizedDirection;
     }
@@ -247,14 +288,14 @@ export class LightSource3DComponent extends Component {
 
   // quick set preset light type
   setAsAmbientLight(intensity = 0.3): void {
-    this.type = 'ambient';
+    this.type = LightType.AMBIENT;
     this.intensity = intensity;
     this.castShadows = false;
     this.attenuation = 'none';
   }
 
   setAsDirectionalLight(direction: [number, number, number] = [0, 0, -1], intensity = 1): void {
-    this.type = 'directional';
+    this.type = LightType.DIRECTIONAL;
     this.direction = direction;
     this.intensity = intensity;
     this.castShadows = true;
@@ -262,7 +303,7 @@ export class LightSource3DComponent extends Component {
   }
 
   setAsPointLight(radius = 100, intensity = 1): void {
-    this.type = 'point';
+    this.type = LightType.POINT;
     this.radius = radius;
     this.intensity = intensity;
     this.castShadows = true;
@@ -270,7 +311,7 @@ export class LightSource3DComponent extends Component {
   }
 
   setAsSpotLight(angle = 45, penumbra = 5, direction: [number, number, number] = [0, 0, -1]): void {
-    this.type = 'spot';
+    this.type = LightType.SPOT;
     this.spotAngle = angle;
     this.spotPenumbra = penumbra;
     this.direction = direction;
@@ -379,7 +420,7 @@ export class LightSource3DComponent extends Component {
     direction: Vec3,
   ): LightSource3DComponent {
     return new LightSource3DComponent({
-      type: 'directional',
+      type: LightType.DIRECTIONAL,
       color,
       intensity,
       direction,
@@ -394,7 +435,7 @@ export class LightSource3DComponent extends Component {
     range: number,
   ): LightSource3DComponent {
     return new LightSource3DComponent({
-      type: 'point',
+      type: LightType.POINT,
       color,
       intensity,
       radius: range,
@@ -409,7 +450,7 @@ export class LightSource3DComponent extends Component {
     range: number,
   ): LightSource3DComponent {
     return new LightSource3DComponent({
-      type: 'spot',
+      type: LightType.SPOT,
       color,
       intensity,
       spotAngle: angle,
@@ -421,7 +462,7 @@ export class LightSource3DComponent extends Component {
 
   static createAmbientLight(color: RgbaColor, intensity: number): LightSource3DComponent {
     return new LightSource3DComponent({
-      type: 'ambient',
+      type: LightType.AMBIENT,
       color,
       intensity,
       castShadows: false,
@@ -430,7 +471,7 @@ export class LightSource3DComponent extends Component {
 
   static createSunLight(): LightSource3DComponent {
     return new LightSource3DComponent({
-      type: 'directional',
+      type: LightType.DIRECTIONAL,
       color: { r: 255, g: 242, b: 204, a: 1 }, // Warm sunlight color
       intensity: 1,
       direction: [0, -1, 0],
@@ -441,7 +482,7 @@ export class LightSource3DComponent extends Component {
 
   static createFireLight(): LightSource3DComponent {
     return new LightSource3DComponent({
-      type: 'point',
+      type: LightType.POINT,
       color: { r: 255, g: 128, b: 51, a: 1 }, // Fire color
       intensity: 2,
       radius: 5,
@@ -467,7 +508,7 @@ export class LightSource3DComponent extends Component {
     if (!light.enabled) return 0;
 
     // Directional lights have infinite range
-    if (light.type === 'directional') {
+    if (light.type === LightType.DIRECTIONAL) {
       return light.intensity;
     }
 
@@ -487,18 +528,20 @@ export class LightSource3DComponent extends Component {
         intensity *= Math.max(0, 1 - distance / light.radius);
         break;
 
-      case 'quadratic':
+      case 'quadratic': {
         const normalizedDistance = distance / light.radius;
         intensity *= Math.max(0, 1 - normalizedDistance * normalizedDistance);
         break;
+      }
 
-      case 'realistic':
+      case 'realistic': {
         const minDistance = 1;
         const effectiveDistance = Math.max(distance, minDistance);
         const falloff = 1 / (effectiveDistance * effectiveDistance);
         const radiusFalloff = 1 / (light.radius * light.radius);
         intensity *= Math.max(0, falloff - radiusFalloff) / (1 - radiusFalloff);
         break;
+      }
     }
 
     return Math.max(0, intensity);

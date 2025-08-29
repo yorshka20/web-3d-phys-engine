@@ -151,10 +151,11 @@ export interface Mesh3DDescriptor {
     min: Vec3;
     max: Vec3;
   };
+  params?: undefined;
 }
 
 export type Mesh3DShapeDescriptor =
-  | { type: 'unset' }
+  | { type: 'unset'; params?: undefined }
   | Mesh3DDescriptor
   // geometry primitives
   | BoxDescriptor

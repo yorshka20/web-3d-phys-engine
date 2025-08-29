@@ -67,7 +67,7 @@ export abstract class System implements ISystem {
     return players[0];
   }
 
-  protected log(...args: any[]): void {
+  protected log(...args: Any[]): void {
     if (this.debug) {
       console.log(`[${this.name}]`, ...args);
     }

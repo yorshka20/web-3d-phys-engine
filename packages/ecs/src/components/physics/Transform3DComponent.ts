@@ -1,5 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Vec3 } from '@ecs/types/types';
+import { mat4, quat } from 'gl-matrix';
 
 interface Transform3DProps {
   position: Vec3;
@@ -103,6 +104,24 @@ export class Transform3DComponent extends Component {
     this.scale[1] *= factor[1];
     this.scale[2] *= factor[2];
     console.log('Transform3DComponent scaleBy', JSON.stringify(this.scale, null, 2));
+  }
+
+  getWorldMatrix(): Float32Array {
+    const worldMatrix = mat4.create();
+
+    mat4.fromRotationTranslationScale(
+      worldMatrix,
+      quat.fromEuler(
+        quat.create(),
+        (this.rotation[0] * 180) / Math.PI,
+        (this.rotation[1] * 180) / Math.PI,
+        (this.rotation[2] * 180) / Math.PI,
+      ),
+      this.position,
+      this.scale,
+    );
+
+    return new Float32Array(worldMatrix);
   }
 
   reset(): void {
