@@ -7,7 +7,7 @@ import { DIContainer } from './DIContainer';
  */
 
 // Resource creation method signature
-export type ResourceCreationMethod<TResource = any> = (...args: any[]) => TResource;
+export type ResourceCreationMethod<TResource = Any> = (...args: Any[]) => TResource;
 
 // Injectable class interface
 export interface InjectableClass {
@@ -17,21 +17,21 @@ export interface InjectableClass {
   resourceManager?: WebGPUResourceManager;
   setResourceManager(manager: WebGPUResourceManager): void;
   getResourceManager(): WebGPUResourceManager | undefined;
-  generateResourceId(methodName: string, args: any[]): string;
-  registerResource(id: string, resource: any, type: ResourceType, options?: any): void;
-  createResourceWrapper(type: ResourceType, resource: any): any;
-  destroyResource(resource: any): void;
+  generateResourceId(methodName: string, args: Any[]): string;
+  registerResource(id: string, resource: Any, type: ResourceType, options?: Any): void;
+  createResourceWrapper(type: ResourceType, resource: Any): Any;
+  destroyResource(resource: Any): void;
   setResourceLifecycle?(resourceId: string, lifecycle: string): void;
   cleanupResources?(lifecycle: string): void;
   resourceLifecycles?: Map<string, string>;
-  resourceCache?: Map<string, any>;
-  resourcePool?: Map<string, any>;
+  resourceCache?: Map<string, Any>;
+  resourcePool?: Map<string, Any>;
 }
 
 // Smart resource class interface
 export interface SmartResourceClass extends InjectableClass {
-  resourceCache?: Map<string, any>;
-  resourcePool?: Map<string, any>;
+  resourceCache?: Map<string, Any>;
+  resourcePool?: Map<string, Any>;
   resourceLifecycles?: Map<string, string>;
 }
 
@@ -44,7 +44,7 @@ export interface MonitoredClass extends InjectableClass {
 
 // Dependency injection class interface
 export interface DIClass {
-  container?: any;
+  container?: Any;
 }
 
 // Resource lifecycle types
@@ -63,9 +63,9 @@ export interface SmartResourceOptions extends AutoRegisterOptions {
 }
 
 export interface ResourceFactoryOptions {
-  validate?: (args: any[]) => boolean;
-  transform?: (result: any) => any;
-  metadata?: (args: any[]) => Record<string, any>;
+  validate?: (args: Any[]) => boolean;
+  transform?: (result: Any) => Any;
+  metadata?: (args: Any[]) => Record<string, Any>;
 }
 
 // Type guards for decorator classes
@@ -82,7 +82,7 @@ export function isMonitoredClass(obj: MonitoredClass): obj is MonitoredClass {
 }
 
 // Simplified type constraints for decorators
-export type BufferCreationMethod = (...args: any[]) => GPUBuffer;
-export type ShaderCreationMethod = (...args: any[]) => GPUShaderModule;
-export type PipelineCreationMethod = (...args: any[]) => GPURenderPipeline | GPUComputePipeline;
-export type TextureCreationMethod = (...args: any[]) => GPUTexture;
+export type BufferCreationMethod = (...args: Any[]) => GPUBuffer;
+export type ShaderCreationMethod = (...args: Any[]) => GPUShaderModule;
+export type PipelineCreationMethod = (...args: Any[]) => GPURenderPipeline | GPUComputePipeline;
+export type TextureCreationMethod = (...args: Any[]) => GPUTexture;

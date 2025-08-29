@@ -22,6 +22,9 @@ export interface RenderData {
   renderOrder: number; // render order
   castShadow: boolean;
   receiveShadow: boolean;
+
+  // render task type. could be batch tag.
+  type: string;
 }
 
 export interface EnvironmentData {

@@ -287,6 +287,7 @@ export class WebGPURenderSystem extends System {
       renderOrder: renderComponent.getLayer() || 0,
       castShadow: renderComponent.getCastShadow() ?? true,
       receiveShadow: renderComponent.getReceiveShadow() ?? true,
+      type: renderComponent.getRenderTaskType() || 'scene',
     };
   }
 

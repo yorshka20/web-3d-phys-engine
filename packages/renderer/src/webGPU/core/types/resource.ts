@@ -7,7 +7,7 @@ export interface IWebGPUResource {
   type: ResourceType;
   state: ResourceState;
   dependencies: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, Any>;
   destroy(): void;
 }
 

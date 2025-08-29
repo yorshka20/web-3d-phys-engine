@@ -2,29 +2,18 @@ import { GeometryType, SystemPriorities } from '@ecs';
 import { FrameData } from '@ecs/systems/rendering/types';
 import { RectArea } from '@ecs/types/types';
 import chroma from 'chroma-js';
-import {
-  BindGroupLayoutVisibility,
-  ShaderType,
-  TimeManager,
-  WebGPUContext,
-  WebGPUResourceManager,
-} from '../core';
+import { TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { BufferManager } from '../core/BufferManager';
 import { initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
+import { BaseRenderTask } from '../core/pipeline/BaseRenderTask';
 import { GeometryRenderTask } from '../core/pipeline/geometry/GeometryRenderTask';
+import { SceneRenderTask } from '../core/pipeline/scene/SceneRenderTask';
 import { RenderPipelineManager } from '../core/RenderPipelineManager';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
-import {
-  BufferDescriptor,
-  BufferType,
-  GeometryInstanceDescriptor,
-  GeometryParams,
-  RenderBatch,
-  ShaderDescriptor,
-} from '../core/types';
+import { BufferDescriptor, GeometryParams, RenderBatch, ShaderDescriptor } from '../core/types';
 import {
   BindGroup,
   Camera,
@@ -75,7 +64,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private renderPipelineManager!: RenderPipelineManager;
 
   // Render tasks
-  private geometryRenderTask!: GeometryRenderTask;
+  private renderTasks: BaseRenderTask[] = [];
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
@@ -110,12 +99,11 @@ export class WebGPURenderer implements IWebGPURenderer {
     if (this.renderPipelineManager) {
       this.renderPipelineManager.destroy();
     }
-    if (this.geometryRenderTask) {
-      this.geometryRenderTask.destroy();
-    }
     if (this.context) {
       this.context.destroy();
     }
+
+    this.renderTasks.forEach((task) => task.destroy());
 
     console.log('WebGPURenderer destroyed');
   }
@@ -252,8 +240,8 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     return {
       frameTime: 0, // TODO: implement frame time tracking
-      drawCalls: this.geometryRenderTask.getGeometryInstancesCount(),
-      triangles: this.geometryRenderTask.getGeometryInstancesCount() * 12, // 12 triangles per cube
+      drawCalls: 0,
+      triangles: 0,
       memoryUsage: {
         buffers: Object.values(bufferStats).reduce((a, b) => a + b, 0),
         textures: 0, // TODO: implement texture memory tracking
@@ -299,180 +287,16 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.timeManager = new TimeManager();
     this.geometryManager = new GeometryManager();
     this.renderPipelineManager = new RenderPipelineManager();
-    this.geometryRenderTask = new GeometryRenderTask();
+
+    this.renderTasks.push(new GeometryRenderTask());
+    this.renderTasks.push(new SceneRenderTask());
 
     // Initialize render tasks
-    await this.geometryRenderTask.initialize();
+    await Promise.all(this.renderTasks.map((task) => task.initialize()));
 
     console.log('Initialized WebGPU managers with DI container');
 
     this.initialized = true;
-  }
-
-  private async createBuffers(): Promise<void> {
-    if (!this.context || !this.bufferManager) {
-      throw new Error('WebGPU context or buffer manager not initialized');
-    }
-    if (!this.geometryManager) {
-      throw new Error('Geometry manager not initialized');
-    }
-
-    console.log('Creating example buffers...');
-
-    // prettier-ignore
-    const axesVertices = new Float32Array([
-    // x axis - red
-    0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  // start, red
-    1.0, 0.0, 0.0,  1.0, 0.0, 0.0,  // end, red
-    // y axis - green  
-    0.0, 0.0, 0.0,  0.0, 1.0, 0.0,  // start, green
-    0.0, 1.0, 0.0,  0.0, 1.0, 0.0,  // end, green
-    // z axis - blue
-    0.0, 0.0, 0.0,  0.0, 0.0, 1.0,  // start, blue
-    0.0, 0.0, 1.0,  0.0, 0.0, 1.0,  // end, blue
-    ]);
-
-    // create coordinate buffer
-    this.bufferManager.createBuffer({
-      type: BufferType.VERTEX,
-      size: axesVertices.byteLength,
-      usage: GPUBufferUsage.VERTEX,
-      label: 'Coordinate Buffer',
-    });
-
-    // create coordinate vertices buffer
-    this.bufferManager.createVertexBuffer('Coordinate Vertices', axesVertices.buffer);
-    console.log('Created and auto-registered: Coordinate Vertices');
-  }
-
-  private async createBindGroups(): Promise<void> {
-    if (!this.context || !this.resourceManager || !this.timeManager) {
-      throw new Error('WebGPU context or resource manager or time manager not initialized');
-    }
-
-    // Create coordinate bind group layout
-    const coordinateBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
-      'coordinateBindGroup',
-      {
-        entries: [
-          {
-            binding: 0,
-            visibility: BindGroupLayoutVisibility.VERTEX,
-            buffer: { type: 'uniform' },
-          },
-        ],
-        label: 'CoordinateBindGroup Layout',
-      },
-    );
-
-    this.shaderManager.createBindGroup('CoordinateBindGroup', {
-      layout: coordinateBindGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: {
-            buffer: this.resourceManager.getBufferResource('Coordinate Vertices').buffer,
-          },
-        },
-      ],
-      label: 'CoordinateBindGroup',
-    });
-
-    console.log('Created and auto-registered: CoordinateBindGroup');
-  }
-
-  private async compileShaders(): Promise<void> {
-    if (!this.context || !this.shaderManager) {
-      throw new Error('WebGPU context or shader manager not initialized');
-    }
-
-    const coordinateShaderCode = `
-      struct VertexInput {
-          @location(0) position: vec3<f32>,
-          @location(1) color: vec3<f32>,
-      }
-      
-      struct VertexOutput {
-          @builtin(position) clip_position: vec4<f32>,
-          @location(0) color: vec3<f32>,
-      }
-
-      struct Uniforms {
-          mvp_matrix: mat4x4<f32>,
-      }
-
-      @group(0) @binding(0) var<uniform> uniforms: Uniforms;
-
-      @vertex
-      fn vs_main(@location(0) position: vec3<f32>, @location(1) color: vec3<f32>) -> VertexOutput {
-        var out: VertexOutput;
-        out.clip_position = uniforms.mvp_matrix * vec4<f32>(position, 1.0);
-        out.color = color;
-        return out;
-      }
-
-      @fragment
-      fn fs_main(@location(0) color: vec3<f32>) -> @location(0) vec4<f32> {
-        return vec4<f32>(color, 1.0);
-      }
-    `;
-
-    // coordinate shader
-    this.shaderManager.createShaderModule('coordinateVertex', {
-      id: 'coordinateVertex',
-      code: coordinateShaderCode,
-      type: ShaderType.VERTEX,
-      entryPoint: 'vs_main',
-      label: 'Coordinate Vertex Shader',
-    });
-    console.log('Created and auto-registered: coordinateVertex shader');
-
-    this.shaderManager.createShaderModule('coordinateFragment', {
-      id: 'coordinateFragment',
-      code: coordinateShaderCode,
-      type: ShaderType.FRAGMENT,
-      entryPoint: 'fs_main',
-      label: 'Coordinate Fragment Shader',
-    });
-    console.log('Created and auto-registered: coordinateFragment shader');
-  }
-
-  private async createRenderPipelines(): Promise<void> {
-    // coordinate pipeline
-    // this.shaderManager.createRenderPipeline('coordinate_pipeline', {
-    //   layout: renderPipelineLayout,
-    //   vertex: {
-    //     module: this.resourceManager.getShaderResource('coordinateVertex').shader,
-    //     entryPoint: 'vs_main',
-    //     buffers: [
-    //       {
-    //         arrayStride: 16, // 4 floats * 4 bytes per float
-    //         attributes: [
-    //           {
-    //             format: 'float32x3',
-    //             offset: 0, // position
-    //             shaderLocation: 0,
-    //           },
-    //         ],
-    //       },
-    //     ],
-    //     constants: {},
-    //   },
-    //   fragment: {
-    //     module: this.resourceManager.getShaderResource('coordinateFragment').shader,
-    //     entryPoint: 'fs_main',
-    //     targets: [
-    //       {
-    //         format: this.context.getPreferredFormat(),
-    //       },
-    //     ],
-    //     constants: {},
-    //   },
-    //   primitive: {
-    //     topology: 'line-list',
-    //   },
-    //   label: 'coordinate_render_pipeline',
-    // });
   }
 
   private async initializeWebGPU(): Promise<void> {
@@ -549,26 +373,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Render geometry instances
-    this.geometryRenderTask.render(renderPass, frameData);
-
-    // const coordinatePipeline =
-    //   this.resourceManager.getRenderPipelineResource('coordinate_pipeline');
-    // if (coordinatePipeline) {
-    //   renderPass.setPipeline(coordinatePipeline.pipeline);
-
-    //   // use universal mvp bind group
-    //   renderPass.setBindGroup(
-    //     1,
-    //     this.resourceManager.getBindGroupResource('mvpBindGroup').bindGroup,
-    //   );
-
-    //   // set coordinate vertices buffer
-    //   const coordinateVertexBuffer = this.resourceManager.getBufferResource('Coordinate Vertices');
-    //   renderPass.setVertexBuffer(0, coordinateVertexBuffer.buffer);
-
-    //   // draw 6 vertices, 3 lines
-    //   renderPass.draw(6, 1, 0, 0);
-    // }
+    this.renderTasks.forEach((task) => task.render(renderPass, frameData));
 
     renderPass.end();
 
@@ -628,35 +433,6 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('Geometry manager not initialized');
     }
     return this.geometryManager.getGeometry(type, params);
-  }
-
-  /**
-   * Add a single geometry instance
-   * @param descriptor Geometry instance descriptor
-   */
-  addGeometryInstance(descriptor: GeometryInstanceDescriptor): void {
-    if (!this.initialized) {
-      throw new Error('Renderer not initialized');
-    }
-
-    this.geometryRenderTask.addGeometryInstance(descriptor);
-
-    console.log(`Added geometry instance: ${descriptor.name || descriptor.type}`);
-  }
-
-  /**
-   * Remove a specific geometry instance by name
-   * @param instanceName Name of the instance to remove
-   */
-  removeGeometryInstance(instanceName: string): boolean {
-    return this.geometryRenderTask.removeGeometryInstance(instanceName);
-  }
-
-  /**
-   * Clear all geometry instances
-   */
-  clearGeometryInstances(): void {
-    this.geometryRenderTask.clearGeometryInstances();
   }
 
   updateBuffer(id: string, data: ArrayBuffer, offset?: number): void {

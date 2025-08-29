@@ -3,8 +3,8 @@
  * Provides service registration and resolution with automatic dependency injection
  */
 export class DIContainer {
-  private instances = new Map<string, any>();
-  private factories = new Map<string, (...args: any[]) => any>();
+  private instances = new Map<string, Any>();
+  private factories = new Map<string, (...args: Any[]) => Any>();
   private serviceMetadata = new Map<string, ServiceMetadata>();
 
   /**
@@ -12,7 +12,7 @@ export class DIContainer {
    * @param token Service token/identifier
    * @param factory Factory function to create the service
    */
-  register<T>(token: string, factory: (...args: any[]) => T): void {
+  register<T>(token: string, factory: (...args: Any[]) => T): void {
     this.factories.set(token, factory);
   }
 
@@ -21,8 +21,8 @@ export class DIContainer {
    * @param token Service token/identifier
    * @param factory Factory function to create the service (called only once)
    */
-  registerSingleton<T>(token: string, factory: (...args: any[]) => T): void {
-    this.factories.set(token, (...args: any[]) => {
+  registerSingleton<T>(token: string, factory: (...args: Any[]) => T): void {
+    this.factories.set(token, (...args: Any[]) => {
       if (!this.instances.has(token)) {
         const instance = factory(...args);
         this.instances.set(token, instance);
@@ -48,7 +48,7 @@ export class DIContainer {
    * @param args Arguments to pass to the factory
    * @returns Service instance
    */
-  resolve<T>(token: string, ...args: any[]): T {
+  resolve<T>(token: string, ...args: Any[]): T {
     // Check for existing instance first
     if (this.instances.has(token)) {
       return this.instances.get(token) as T;
@@ -165,7 +165,10 @@ export const ServiceTokens = {
   TIME_MANAGER: 'TimeManager',
   UNIFORM_MANAGER: 'UniformManager',
   RENDER_PIPELINE_MANAGER: 'RenderPipelineManager',
+  // Render Tasks
   GEOMETRY_RENDER_TASK: 'GeometryRenderTask',
+  SCENE_RENDER_TASK: 'SceneRenderTask',
+  // WebGPU
   WEBGPU_DEVICE: 'WebGPUDevice',
   WEBGPU_CONTEXT: 'WebGPUContext',
 } as const;
@@ -183,7 +186,7 @@ export type ServiceLifecycle = 'singleton' | 'transient';
 export interface ServiceOptions {
   lifecycle?: ServiceLifecycle;
   dependencies?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, Any>;
 }
 
 /**
@@ -193,6 +196,6 @@ export interface ServiceMetadata {
   token: string;
   lifecycle: ServiceLifecycle;
   dependencies: string[];
-  metadata: Record<string, any>;
+  metadata: Record<string, Any>;
   registeredAt: number;
 }

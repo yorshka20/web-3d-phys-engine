@@ -1,15 +1,6 @@
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { mat4, vec3 } from 'gl-matrix';
-import { RenderPipelineManager } from '../../RenderPipelineManager';
-import { Inject, Injectable, ServiceTokens } from '../../decorators';
-import {
-  BufferManager,
-  GeometryManager,
-  ShaderManager,
-  TimeManager,
-  WebGPUContext,
-  WebGPUResourceManager,
-} from '../../index';
+import { Injectable, ServiceTokens } from '../../decorators';
 import {
   BindGroupLayoutVisibility,
   BufferType,
@@ -17,6 +8,7 @@ import {
   GeometryInstanceDescriptor,
   ShaderType,
 } from '../../types';
+import { BaseRenderTask } from '../BaseRenderTask';
 import shaderCode from './shader.wgsl?raw';
 
 export interface GeometryInstance {
@@ -32,33 +24,8 @@ export interface GeometryInstance {
 @Injectable(ServiceTokens.GEOMETRY_RENDER_TASK, {
   lifecycle: 'transient',
 })
-export class GeometryRenderTask {
-  @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
-
-  @Inject(ServiceTokens.GEOMETRY_MANAGER)
-  private geometryManager!: GeometryManager;
-
-  @Inject(ServiceTokens.SHADER_MANAGER)
-  private shaderManager!: ShaderManager;
-
-  @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
-
-  @Inject(ServiceTokens.TIME_MANAGER)
-  private timeManager!: TimeManager;
-
-  @Inject(ServiceTokens.RENDER_PIPELINE_MANAGER)
-  private renderPipelineManager!: RenderPipelineManager;
-
-  @Inject(ServiceTokens.WEBGPU_CONTEXT)
-  private context!: WebGPUContext;
-
+export class GeometryRenderTask extends BaseRenderTask {
   private geometryInstances: Array<GeometryInstance> = [];
-
-  private get device(): GPUDevice {
-    return this.context.getDevice();
-  }
 
   async initialize(): Promise<void> {
     await this.createBuffers();
@@ -160,7 +127,7 @@ export class GeometryRenderTask {
     const fragmentShader = this.resourceManager.getShaderResource('mainFragment');
 
     // Create simple vertex format pipeline (position only - for cubes)
-    const pipeline = this.shaderManager.createRenderPipeline('main_pipeline', {
+    const pipeline = this.shaderManager.createRenderPipeline('geometry_render_pipeline', {
       layout: renderPipelineLayout,
       vertex: {
         module: vertexShader.shader,
@@ -202,11 +169,11 @@ export class GeometryRenderTask {
       primitive: {
         topology: 'triangle-list',
       },
-      label: 'main_render_pipeline',
+      label: 'geometry_render_pipeline',
     });
 
-    this.renderPipelineManager.registerPipeline('geometryPipeline', pipeline);
-    console.log('[GeometryRenderTask] Created and auto-registered: geometryPipeline');
+    this.renderPipelineManager.registerPipeline('geometry_render_pipeline', pipeline);
+    console.log('[GeometryRenderTask] Created and auto-registered: geometry_render_pipeline');
   }
 
   setupGeometryInstances(descriptors: GeometryInstanceDescriptor[]): void {
@@ -344,8 +311,12 @@ export class GeometryRenderTask {
     );
   }
 
+  protected getRenderables(frameData: FrameData): RenderData[] {
+    return frameData.renderables.filter((r) => r.type === 'geometry');
+  }
+
   render(renderPassEncoder: GPURenderPassEncoder, frameData: FrameData): void {
-    const mainPipeline = this.renderPipelineManager.getPipeline('geometryPipeline');
+    const mainPipeline = this.renderPipelineManager.getPipeline('geometry_render_pipeline');
     if (!mainPipeline) {
       throw new Error('[GeometryRenderTask] Geometry pipeline not found');
     }
@@ -358,11 +329,13 @@ export class GeometryRenderTask {
     const projectionMatrix = frameData.scene.camera.projectionMatrix;
     const viewMatrix = frameData.scene.camera.viewMatrix;
 
+    const renderables = this.getRenderables(frameData);
+
     // Clean up instances that are no longer needed
-    this.cleanupUnusedInstances(frameData.renderables);
+    this.cleanupUnusedInstances(renderables);
 
     // Render each renderable from FrameData
-    for (const renderData of frameData.renderables) {
+    for (const renderData of renderables) {
       this.renderRenderable(renderPassEncoder, renderData, projectionMatrix, viewMatrix);
     }
   }

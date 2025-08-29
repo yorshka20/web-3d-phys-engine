@@ -60,6 +60,7 @@ export interface WebGPU3DRenderProperties {
   castShadow?: boolean;
   receiveShadow?: boolean;
   layer?: number;
+  renderTaskType?: string; // render task type. could be batch tag.
   customShader?: string; // Custom shader path/ID (from Render3DComponent)
   uniforms?: Record<string, Any>; // Custom shader uniforms (from Render3DComponent)
 

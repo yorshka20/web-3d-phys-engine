@@ -105,6 +105,7 @@ function cretePlane(world: World) {
         emissive: chroma('#000000'),
         emissiveIntensity: 0,
       },
+      renderTaskType: 'scene',
     }),
   );
 
@@ -175,6 +176,7 @@ function createGeometryEntities(world: World) {
           emissive: chroma('#000000'),
           emissiveIntensity: 0,
         },
+        renderTaskType: 'geometry',
       }),
     );
     world.addEntity(entity);
