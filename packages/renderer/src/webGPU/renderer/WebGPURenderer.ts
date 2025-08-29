@@ -306,16 +306,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     console.log('Initialized WebGPU managers with DI container');
 
-    await this.setupScene();
-
     this.initialized = true;
-  }
-
-  private async setupScene(): Promise<void> {
-    // The geometry render task handles its own setup
-    // await this.createBuffers();
-    // await this.createBindGroups();
-    // await this.compileShaders();
   }
 
   private async createBuffers(): Promise<void> {

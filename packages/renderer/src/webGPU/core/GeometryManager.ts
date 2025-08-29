@@ -45,6 +45,29 @@ export class GeometryManager {
   }
 
   /**
+   * Get or create geometry from existing geometry data
+   * @param geometryData Existing geometry data
+   * @param geometryId Unique identifier for this geometry
+   * @returns Geometry cache item
+   */
+  getGeometryFromData(geometryData: GeometryData, geometryId?: string): GeometryCacheItem {
+    const cacheKey = geometryId || this.generateCacheKeyFromData(geometryData);
+
+    // Check cache
+    if (this.geometryCache.has(cacheKey)) {
+      return this.geometryCache.get(cacheKey)!;
+    }
+
+    // Create cache item from existing geometry data
+    const cacheItem = this.createCacheItem(geometryData, cacheKey);
+
+    // Cache geometry
+    this.geometryCache.set(cacheKey, cacheItem);
+
+    return cacheItem;
+  }
+
+  /**
    * Generate cache key
    * @param type Geometry type
    * @param params Geometry parameters
@@ -53,6 +76,19 @@ export class GeometryManager {
   private generateCacheKey<T extends GeometryType>(type: T, params: GeometryParams<T>): string {
     const paramStr = JSON.stringify(params);
     return `${type}_${paramStr}`;
+  }
+
+  /**
+   * Generate cache key from geometry data
+   * @param geometryData Geometry data
+   * @returns Cache key
+   */
+  private generateCacheKeyFromData(geometryData: GeometryData): string {
+    // Create a hash-like key based on geometry data properties
+    const vertexCount = geometryData.vertexCount;
+    const indexCount = geometryData.indexCount;
+    const bounds = geometryData.bounds;
+    return `data_${vertexCount}_${indexCount}_${bounds.min.join(',')}_${bounds.max.join(',')}`;
   }
 
   /**
