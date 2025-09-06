@@ -13,6 +13,8 @@ export interface Input3DState {
   mouseDeltaX: number;
   mouseDeltaY: number;
   mouseButtons: Set<number>;
+  lastMouseX: number; // For orbit mode mouse tracking
+  lastMouseY: number; // For orbit mode mouse tracking
 
   // other controls
   sprint: boolean; // Shift - sprint
@@ -35,6 +37,8 @@ export class Input3DComponent extends Component {
     mouseDeltaX: 0,
     mouseDeltaY: 0,
     mouseButtons: new Set(),
+    lastMouseX: 0,
+    lastMouseY: 0,
     sprint: false,
     isMouseLocked: false,
   };
@@ -106,6 +110,8 @@ export class Input3DComponent extends Component {
       mouseDeltaX: 0,
       mouseDeltaY: 0,
       mouseButtons: new Set(),
+      lastMouseX: 0,
+      lastMouseY: 0,
       sprint: false,
       isMouseLocked: false,
     };

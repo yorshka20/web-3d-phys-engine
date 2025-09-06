@@ -1,6 +1,7 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Resolution, Vec2, Vec3, ViewBounds } from '@ecs/types/types';
 import { SerializedCamera, SerializedRay } from '@renderer/rayTracing/base/types';
+import { CameraControlMode } from './CameraControlTypes';
 
 export type ProjectionMode = 'perspective' | 'orthographic';
 export type CameraMode = 'topdown' | 'sideview' | 'custom';
@@ -12,6 +13,7 @@ export interface Camera3DProps {
   pitch?: number;
   projectionMode?: ProjectionMode;
   cameraMode?: CameraMode;
+  controlMode?: CameraControlMode;
   resolution?: Resolution;
   viewBounds?: ViewBounds;
   isActive?: boolean;
@@ -58,6 +60,7 @@ export class Camera3DComponent extends Component {
   // projection and rendering settings
   projectionMode: ProjectionMode = 'perspective';
   cameraMode: CameraMode = 'sideview';
+  controlMode: CameraControlMode = 'fps';
   near = 0.1;
   far = 1000;
 
@@ -96,6 +99,7 @@ export class Camera3DComponent extends Component {
     this.pitch = props.pitch ?? 0;
     this.projectionMode = props.projectionMode ?? 'perspective';
     this.cameraMode = props.cameraMode ?? 'sideview';
+    this.controlMode = props.controlMode ?? 'fps';
     this.resolution = props.resolution ?? { width: 800, height: 600 };
     this.viewBounds = props.viewBounds ?? {
       left: -10,
@@ -441,7 +445,111 @@ export class Camera3DComponent extends Component {
       aspectRatio: 16 / 9,
       projectionMode: 'perspective',
       cameraMode: 'custom',
+      controlMode: 'fps',
       isActive: true,
     });
+  }
+
+  /**
+   * Create FPS-style camera
+   */
+  static createFPSCamera(fov: number = 75, aspectRatio: number = 16 / 9): Camera3DComponent {
+    return new Camera3DComponent({
+      fov,
+      aspectRatio,
+      projectionMode: 'perspective',
+      cameraMode: 'custom',
+      controlMode: 'fps',
+      isActive: true,
+    });
+  }
+
+  /**
+   * Create orbit camera (3D modeling software style)
+   */
+  static createOrbitCamera(
+    fov: number = 75,
+    aspectRatio: number = 16 / 9,
+    target: Vec3 = [0, 0, 0],
+  ): Camera3DComponent {
+    return new Camera3DComponent({
+      fov,
+      aspectRatio,
+      projectionMode: 'perspective',
+      cameraMode: 'custom',
+      controlMode: 'orbit',
+      target,
+      isActive: true,
+    });
+  }
+
+  /**
+   * Create free camera (unrestricted movement)
+   */
+  static createFreeCamera(fov: number = 75, aspectRatio: number = 16 / 9): Camera3DComponent {
+    return new Camera3DComponent({
+      fov,
+      aspectRatio,
+      projectionMode: 'perspective',
+      cameraMode: 'custom',
+      controlMode: 'free',
+      isActive: true,
+    });
+  }
+
+  /**
+   * Create fixed camera (no user control)
+   */
+  static createFixedCamera(fov: number = 75, aspectRatio: number = 16 / 9): Camera3DComponent {
+    return new Camera3DComponent({
+      fov,
+      aspectRatio,
+      projectionMode: 'perspective',
+      cameraMode: 'custom',
+      controlMode: 'fixed',
+      isActive: true,
+    });
+  }
+
+  /**
+   * Get current control mode
+   */
+  getControlMode(): CameraControlMode {
+    return this.controlMode;
+  }
+
+  /**
+   * Set control mode
+   */
+  setControlMode(mode: CameraControlMode): void {
+    this.controlMode = mode;
+  }
+
+  /**
+   * Check if camera is in FPS mode
+   */
+  isFPSMode(): boolean {
+    return this.controlMode === 'fps';
+  }
+
+  /**
+   * Check if camera is in orbit mode
+   */
+  isOrbitMode(): boolean {
+    return this.controlMode === 'orbit';
+  }
+
+  /**
+   * Check if camera is in free mode
+   */
+  isFreeMode(): boolean {
+    return this.controlMode === 'free';
+  }
+
+  /**
+   * Check if camera is in fixed mode
+   */
+  isFixedMode(): boolean {
+    return this.controlMode === 'fixed';
   }
 }

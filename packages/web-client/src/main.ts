@@ -1,6 +1,7 @@
 import {
   ActiveCameraTag,
   Camera3DComponent,
+  CameraControlComponent,
   Entity,
   Input3DComponent,
   Input3DSystem,
@@ -63,9 +64,29 @@ function create3DCamera(world: World) {
       far: 1000,
       projectionMode: 'perspective',
       cameraMode: 'custom',
+      controlMode: 'orbit',
+      target: [0, 0, 0],
     }),
   );
-
+  camera.addComponent(
+    world.createComponent(CameraControlComponent, {
+      mode: 'orbit',
+      config: {
+        orbit: {
+          target: [0, 0, 0],
+          distance: 10,
+          minDistance: 1,
+          maxDistance: 100,
+          panSensitivity: 0.01,
+          zoomSensitivity: 0.1,
+          rotationSensitivity: 0.005,
+          enablePan: true,
+          enableZoom: true,
+          enableRotation: true,
+        },
+      },
+    }),
+  );
   // Add transform component for position/rotation
   camera.addComponent(
     world.createComponent(Transform3DComponent, {
