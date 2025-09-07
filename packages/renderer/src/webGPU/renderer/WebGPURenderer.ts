@@ -8,6 +8,7 @@ import { initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
 import { BaseRenderTask } from '../core/pipeline/BaseRenderTask';
+import { CoordinateRenderTask } from '../core/pipeline/coordinate/CoordinateRenderTask';
 import { GeometryRenderTask } from '../core/pipeline/geometry/GeometryRenderTask';
 import { SceneRenderTask } from '../core/pipeline/scene/SceneRenderTask';
 import { RenderPipelineManager } from '../core/RenderPipelineManager';
@@ -69,6 +70,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
   private instanceManager!: InstanceManager;
+
+  // depth buffer
+  private depthTexture!: GPUTexture;
 
   private get device(): GPUDevice {
     return this.context.getDevice();
@@ -288,11 +292,15 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.geometryManager = new GeometryManager();
     this.renderPipelineManager = new RenderPipelineManager();
 
+    this.renderTasks.push(new CoordinateRenderTask());
     this.renderTasks.push(new GeometryRenderTask());
     this.renderTasks.push(new SceneRenderTask());
 
     // Initialize render tasks
     await Promise.all(this.renderTasks.map((task) => task.initialize()));
+
+    // Create depth texture
+    this.createDepthTexture();
 
     console.log('Initialized WebGPU managers with DI container');
 
@@ -313,6 +321,20 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   private getDPR(): number {
     return window.devicePixelRatio;
+  }
+
+  private createDepthTexture(): void {
+    const canvas = this.context.getContext().canvas;
+    this.depthTexture = this.device.createTexture({
+      size: {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      format: 'depth24plus',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      label: 'Depth Texture',
+    });
+    console.log('[WebGPURenderer] Created depth texture');
   }
 
   /**
@@ -363,6 +385,12 @@ export class WebGPURenderer implements IWebGPURenderer {
           storeOp: 'store',
         },
       ],
+      depthStencilAttachment: {
+        view: this.depthTexture.createView(),
+        depthClearValue: 1.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
     });
 
     // Debug: List all available resources
@@ -461,6 +489,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   onResize(): void {
-    throw new Error('Method not implemented.');
+    // Recreate depth texture with new size
+    this.createDepthTexture();
   }
 }

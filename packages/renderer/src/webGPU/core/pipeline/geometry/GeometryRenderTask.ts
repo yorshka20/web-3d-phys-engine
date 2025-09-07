@@ -169,6 +169,11 @@ export class GeometryRenderTask extends BaseRenderTask {
       primitive: {
         topology: 'triangle-list',
       },
+      depthStencil: {
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+        format: 'depth24plus',
+      },
       label: 'geometry_render_pipeline',
     });
 

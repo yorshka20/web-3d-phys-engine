@@ -168,6 +168,7 @@ export const ServiceTokens = {
   // Render Tasks
   GEOMETRY_RENDER_TASK: 'GeometryRenderTask',
   SCENE_RENDER_TASK: 'SceneRenderTask',
+  COORDINATE_RENDER_TASK: 'CoordinateRenderTask',
   // WebGPU
   WEBGPU_DEVICE: 'WebGPUDevice',
   WEBGPU_CONTEXT: 'WebGPUContext',

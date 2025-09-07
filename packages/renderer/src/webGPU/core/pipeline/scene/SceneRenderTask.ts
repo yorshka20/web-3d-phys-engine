@@ -1,14 +1,24 @@
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
-import { mat4 } from 'gl-matrix';
+import { mat4, vec3 } from 'gl-matrix';
 import { Injectable, ServiceTokens } from '../../decorators';
-import { BindGroupLayoutVisibility, ShaderType } from '../../types';
+import { BindGroupLayoutVisibility, BufferType, GeometryCacheItem } from '../../types';
 import { BaseRenderTask } from '../BaseRenderTask';
+
+export interface GeometryInstance {
+  geometry: GeometryCacheItem;
+  transform: mat4;
+  scale: vec3;
+  position: vec3;
+  rotation: vec3;
+  mvpBuffer: GPUBuffer;
+  mvpBindGroup: GPUBindGroup;
+}
 
 @Injectable(ServiceTokens.SCENE_RENDER_TASK, {
   lifecycle: 'transient',
 })
 export class SceneRenderTask extends BaseRenderTask {
-  private coordinateBindGroupLayout!: GPUBindGroupLayout;
+  private geometryInstances: Array<GeometryInstance> = [];
 
   async initialize(): Promise<void> {
     await this.createBuffers();
@@ -58,62 +68,106 @@ export class SceneRenderTask extends BaseRenderTask {
     projectionMatrix: mat4,
     viewMatrix: mat4,
   ): void {
-    const coordinatePipeline =
-      this.resourceManager.getRenderPipelineResource('scene_render_pipeline');
-    if (coordinatePipeline) {
-      renderPassEncoder.setPipeline(coordinatePipeline.pipeline);
+    // Get or create geometry instance for this renderable
+    const geometryInstance = this.getOrCreateGeometryInstance(renderData);
 
-      // Calculate MVP matrix for coordinate axes
-      const modelMatrix = mat4.create(); // Identity matrix for coordinate axes
-      const mvpMatrix = mat4.create();
-      mat4.multiply(mvpMatrix, projectionMatrix, viewMatrix);
-      mat4.multiply(mvpMatrix, mvpMatrix, modelMatrix);
+    // Calculate MVP matrix using the world matrix from renderData
+    const mvpMatrix = mat4.create();
+    mat4.multiply(mvpMatrix, viewMatrix, renderData.worldMatrix);
+    mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
 
-      // Update MVP uniform buffer
-      const mvpBuffer = this.resourceManager.getBufferResource('Coordinate MVP Buffer');
-      this.device.queue.writeBuffer(mvpBuffer.buffer, 0, new Float32Array(mvpMatrix));
+    // Update this instance's MVP uniform buffer
+    this.device.queue.writeBuffer(geometryInstance.mvpBuffer, 0, new Float32Array(mvpMatrix));
 
-      // use coordinate bind group
-      renderPassEncoder.setBindGroup(
-        0,
-        this.resourceManager.getBindGroupResource('coordinateBindGroup').bindGroup,
-      );
+    // Use this instance's MVPBindGroup
+    renderPassEncoder.setBindGroup(1, geometryInstance.mvpBindGroup);
 
-      // set coordinate vertices buffer
-      const coordinateVertexBuffer = this.resourceManager.getBufferResource('Coordinate Vertices');
-      renderPassEncoder.setVertexBuffer(0, coordinateVertexBuffer.buffer);
+    // Set vertex buffer
+    renderPassEncoder.setVertexBuffer(0, geometryInstance.geometry.vertexBuffer);
+    // Set index buffer
+    renderPassEncoder.setIndexBuffer(geometryInstance.geometry.indexBuffer, 'uint16');
 
-      // draw 6 vertices, 3 lines
-      renderPassEncoder.draw(6, 1, 0, 0);
+    // Draw this instance
+    renderPassEncoder.drawIndexed(geometryInstance.geometry.indexCount);
+  }
+
+  private getOrCreateGeometryInstance(renderData: RenderData): GeometryInstance {
+    // Try to find existing instance by geometryId
+    let instance = this.geometryInstances.find((inst) => {
+      const bufferLabel = this.bufferManager.getBufferLabel(inst.mvpBuffer);
+      return bufferLabel?.includes(renderData.geometryId);
+    });
+
+    if (!instance) {
+      // Create new geometry instance based on renderData
+      instance = this.createGeometryInstanceFromRenderData(renderData);
+      this.geometryInstances.push(instance);
     }
+
+    return instance;
+  }
+
+  private createGeometryInstanceFromRenderData(renderData: RenderData): GeometryInstance {
+    // Get MVPBindGroup layout
+    const mvpBindGroupLayout =
+      this.resourceManager.getBindGroupLayoutResource('mvpBindGroupLayout');
+    if (!mvpBindGroupLayout) {
+      throw new Error('[SceneRenderTask] MVPBindGroup layout not found');
+    }
+
+    // Create geometry using geometry manager based on renderData.geometryData
+    const geometry = this.geometryManager.getGeometryFromData(
+      renderData.geometryData,
+      renderData.geometryId,
+    );
+
+    // Create individual MVP buffer for this instance using BufferManager
+    const mvpBuffer = this.bufferManager.createBuffer({
+      type: BufferType.UNIFORM,
+      size: 64, // 4x4 matrix * 4 bytes per float
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: `Scene MVP Buffer ${renderData.geometryId}`,
+    });
+
+    // Create individual MVPBindGroup for this instance
+    const mvpBindGroup = this.shaderManager.createBindGroup(
+      `Scene MVPBindGroup_${renderData.geometryId}`,
+      {
+        layout: mvpBindGroupLayout.layout,
+        entries: [
+          {
+            binding: 0,
+            resource: { buffer: mvpBuffer },
+          },
+        ],
+        label: `Scene MVPBindGroup ${renderData.geometryId}`,
+      },
+    );
+
+    // Extract transform components from world matrix
+    const position: vec3 = [
+      renderData.worldMatrix[12],
+      renderData.worldMatrix[13],
+      renderData.worldMatrix[14],
+    ];
+    const scale: vec3 = [1, 1, 1]; // TODO: Extract scale from world matrix
+    const rotation: vec3 = [0, 0, 0]; // TODO: Extract rotation from world matrix
+
+    return {
+      geometry,
+      transform: renderData.worldMatrix,
+      scale,
+      position,
+      rotation,
+      mvpBuffer,
+      mvpBindGroup,
+    };
   }
 
   private async createBuffers(): Promise<void> {
-    if (!this.context || !this.bufferManager) {
-      throw new Error('WebGPU context or buffer manager not initialized');
-    }
-    if (!this.geometryManager) {
-      throw new Error('Geometry manager not initialized');
-    }
-
-    console.log('Creating coordinate axes buffers...');
-
-    // prettier-ignore
-    const axesVertices = new Float32Array([
-        // x axis - red
-        0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  // start, red
-        1.0, 0.0, 0.0,  1.0, 0.0, 0.0,  // end, red
-        // y axis - green  
-        0.0, 0.0, 0.0,  0.0, 1.0, 0.0,  // start, green
-        0.0, 1.0, 0.0,  0.0, 1.0, 0.0,  // end, green
-        // z axis - blue
-        0.0, 0.0, 0.0,  0.0, 0.0, 1.0,  // start, blue
-        0.0, 0.0, 1.0,  0.0, 0.0, 1.0,  // end, blue
-    ]);
-
-    // Create coordinate vertices buffer with proper usage flags
-    this.bufferManager.createVertexBuffer('Coordinate Vertices', axesVertices.buffer);
-    console.log('Created and auto-registered: Coordinate Vertices');
+    // Scene render task doesn't need to create any specific buffers
+    // Geometry buffers are managed by the geometry manager
+    console.log('Scene render task buffers initialized');
   }
 
   private async createBindGroups(): Promise<void> {
@@ -121,120 +175,57 @@ export class SceneRenderTask extends BaseRenderTask {
       throw new Error('WebGPU context or resource manager or time manager not initialized');
     }
 
-    // Create MVP uniform buffer for coordinate axes
-    // Initialize with identity matrix
-    const identityMatrix = new Float32Array(16);
-    identityMatrix[0] = 1;
-    identityMatrix[5] = 1;
-    identityMatrix[10] = 1;
-    identityMatrix[15] = 1;
-    const mvpBuffer = this.bufferManager.createUniformBuffer(
-      'Coordinate MVP Buffer',
-      identityMatrix.buffer,
-    );
-
-    // Create coordinate bind group layout for MVP matrix
-    this.coordinateBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
-      'coordinateBindGroup',
-      {
-        entries: [
-          {
-            binding: 0,
-            visibility: BindGroupLayoutVisibility.VERTEX,
-            buffer: { type: 'uniform' },
-          },
-        ],
-        label: 'CoordinateBindGroup Layout',
-      },
-    );
-
-    this.shaderManager.createBindGroup('coordinateBindGroup', {
-      layout: this.coordinateBindGroupLayout,
+    // Create MVP bind group layout for geometry instances
+    this.shaderManager.createCustomBindGroupLayout('mvpBindGroupLayout', {
       entries: [
         {
           binding: 0,
-          resource: {
-            buffer: mvpBuffer,
-          },
+          visibility: BindGroupLayoutVisibility.VERTEX,
+          buffer: { type: 'uniform' },
         },
       ],
-      label: 'coordinateBindGroup',
+      label: 'MVP BindGroup Layout',
     });
 
-    console.log('Created and auto-registered: coordinateBindGroup');
+    console.log('Created and auto-registered: mvpBindGroupLayout');
   }
 
   private async compileShaders(): Promise<void> {
-    if (!this.context || !this.shaderManager) {
-      throw new Error('WebGPU context or shader manager not initialized');
-    }
-
-    const coordinateShaderCode = `
-      struct VertexInput {
-          @location(0) position: vec3<f32>,
-          @location(1) color: vec3<f32>,
-      }
-      
-      struct VertexOutput {
-          @builtin(position) clip_position: vec4<f32>,
-          @location(0) color: vec3<f32>,
-      }
-
-      struct Uniforms {
-          mvp_matrix: mat4x4<f32>,
-      }
-
-      @group(0) @binding(0) var<uniform> uniforms: Uniforms;
-
-      @vertex
-      fn vs_main(@location(0) position: vec3<f32>, @location(1) color: vec3<f32>) -> VertexOutput {
-        var out: VertexOutput;
-        out.clip_position = uniforms.mvp_matrix * vec4<f32>(position, 1.0);
-        out.color = color;
-        return out;
-      }
-
-      @fragment
-      fn fs_main(@location(0) color: vec3<f32>) -> @location(0) vec4<f32> {
-        return vec4<f32>(color, 1.0);
-      }
-    `;
-
-    // coordinate shader
-    this.shaderManager.createShaderModule('coordinateVertex', {
-      id: 'coordinateVertex',
-      code: coordinateShaderCode,
-      type: ShaderType.VERTEX,
-      entryPoint: 'vs_main',
-      label: 'Coordinate Vertex Shader',
-    });
-    console.log('Created and auto-registered: coordinateVertex shader');
-
-    this.shaderManager.createShaderModule('coordinateFragment', {
-      id: 'coordinateFragment',
-      code: coordinateShaderCode,
-      type: ShaderType.FRAGMENT,
-      entryPoint: 'fs_main',
-      label: 'Coordinate Fragment Shader',
-    });
-    console.log('Created and auto-registered: coordinateFragment shader');
+    // Scene render task uses the same shaders as geometry render task
+    // The shaders are already created by GeometryRenderTask
+    console.log('Scene render task shaders initialized (using geometry shaders)');
   }
 
   private async createRenderPipelines(): Promise<void> {
+    // Get time bind group layout
+    const timeBindGroupLayout =
+      this.resourceManager.getBindGroupLayoutResource('timeBindGroupLayout');
+    if (!timeBindGroupLayout) {
+      throw new Error('[SceneRenderTask] Time bind group layout not found');
+    }
+
+    // Get MVP bind group layout
+    const mvpBindGroupLayout =
+      this.resourceManager.getBindGroupLayoutResource('mvpBindGroupLayout');
+    if (!mvpBindGroupLayout) {
+      throw new Error('[SceneRenderTask] MVP bind group layout not found');
+    }
+
+    // Create render pipeline layout with both time and MVP bind groups
     const renderPipelineLayout = this.device.createPipelineLayout({
-      bindGroupLayouts: [this.coordinateBindGroupLayout],
+      bindGroupLayouts: [timeBindGroupLayout.layout, mvpBindGroupLayout.layout],
       label: 'scene_render_pipeline_layout',
     });
 
-    // coordinate pipeline
+    // Create geometry rendering pipeline (similar to GeometryRenderTask)
     const pipeline = this.shaderManager.createRenderPipeline('scene_render_pipeline', {
       layout: renderPipelineLayout,
       vertex: {
-        module: this.resourceManager.getShaderResource('coordinateVertex').shader,
+        module: this.resourceManager.getShaderResource('mainVertex').shader,
         entryPoint: 'vs_main',
         buffers: [
           {
-            arrayStride: 24, // 6 floats * 4 bytes per float (3 position + 3 color)
+            arrayStride: 32, // 8 floats * 4 bytes per float (3 position + 3 normal + 2 uv)
             attributes: [
               {
                 format: 'float32x3',
@@ -243,8 +234,13 @@ export class SceneRenderTask extends BaseRenderTask {
               },
               {
                 format: 'float32x3',
-                offset: 12, // color
+                offset: 12, // normal
                 shaderLocation: 1,
+              },
+              {
+                format: 'float32x2',
+                offset: 24, // uv
+                shaderLocation: 2,
               },
             ],
           },
@@ -252,7 +248,7 @@ export class SceneRenderTask extends BaseRenderTask {
         constants: {},
       },
       fragment: {
-        module: this.resourceManager.getShaderResource('coordinateFragment').shader,
+        module: this.resourceManager.getShaderResource('mainFragment').shader,
         entryPoint: 'fs_main',
         targets: [
           {
@@ -262,12 +258,17 @@ export class SceneRenderTask extends BaseRenderTask {
         constants: {},
       },
       primitive: {
-        topology: 'line-list',
+        topology: 'triangle-list',
+      },
+      depthStencil: {
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+        format: 'depth24plus',
       },
       label: 'scene_render_pipeline',
     });
 
-    // TODO: auto-register pipeline
+    // Register pipeline
     this.renderPipelineManager.registerPipeline('scene_render_pipeline', pipeline);
     console.log('[SceneRenderTask] Created and auto-registered: scene_render_pipeline');
   }

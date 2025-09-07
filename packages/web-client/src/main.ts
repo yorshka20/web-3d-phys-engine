@@ -118,7 +118,7 @@ function cretePlane(world: World) {
       descriptor: { type: 'plane', params: { sx: 30, sy: 40, nx: 3, ny: 4, direction: 'y' } },
     }),
   );
-  plane.addComponent(world.createComponent(Transform3DComponent, { position: [0, 0, -5] }));
+  plane.addComponent(world.createComponent(Transform3DComponent, { position: [0, -5, 0] }));
   plane.addComponent(
     world.createComponent(WebGPU3DRenderComponent, {
       material: {
