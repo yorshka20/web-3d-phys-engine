@@ -6,6 +6,7 @@ import {
   Input3DComponent,
   Input3DSystem,
   Mesh3DComponent,
+  OrbitCameraControlSystem,
   PhysicsComponent,
   PhysicsSystem,
   StatsComponent,
@@ -34,6 +35,7 @@ async function main() {
   world.addSystem(new Input3DSystem(rootElement));
   world.addSystem(new Transform3DSystem());
   world.addSystem(new PhysicsSystem());
+  world.addSystem(new OrbitCameraControlSystem());
   world.addSystem(new WebGPURenderSystem(rootElement));
 
   const camera = create3DCamera(world);

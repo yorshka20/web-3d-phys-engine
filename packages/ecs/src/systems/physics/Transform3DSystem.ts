@@ -1,6 +1,7 @@
 import {
   ActiveCameraTag,
   Camera3DComponent,
+  CameraControlComponent,
   Input3DComponent,
   Input3DState,
   PhysicsComponent,
@@ -97,30 +98,121 @@ export class Transform3DSystem extends System {
         Transform3DComponent.componentName,
       );
       const camera = entity.getComponent<Camera3DComponent>(Camera3DComponent.componentName);
+      const control = entity.getComponent<CameraControlComponent>(
+        CameraControlComponent.componentName,
+      );
 
       if (!transform || !camera) continue;
 
-      // Update camera component with current rotation
-      camera.facing = (this.cameraYaw * 180) / Math.PI; // Convert to degrees
-      camera.pitch = (this.cameraPitch * 180) / Math.PI; // Convert to degrees
-      camera.roll = (this.cameraRoll * 180) / Math.PI; // Convert to degrees
-
-      // Update transform rotation to match camera rotation
-      transform.setRotation([this.cameraPitch, this.cameraYaw, this.cameraRoll]);
-
-      // Calculate and update camera target based on rotation
-      const position = transform.getPosition();
-      const forward = this.getCameraForwardVector();
-
-      // Calculate target position (camera position + forward direction)
-      const target: Vec3 = [
-        position[0] + forward[0],
-        position[1] + forward[1],
-        position[2] + forward[2],
-      ];
-
-      camera.setTarget(target);
+      // Handle different camera control modes
+      if (control) {
+        switch (control.getMode()) {
+          case 'fps':
+            this.handleFPSCameraTransform(entity, transform, camera, deltaTime);
+            break;
+          case 'orbit':
+            // Orbit camera is handled by OrbitCameraControlSystem
+            break;
+          case 'free':
+            this.handleFreeCameraTransform(entity, transform, camera, deltaTime);
+            break;
+          case 'fixed':
+            // Fixed camera doesn't need transformation updates
+            break;
+        }
+      } else {
+        // Fallback to legacy FPS behavior for backward compatibility
+        this.handleLegacyFPSCameraTransform(transform, camera);
+      }
     }
+  }
+
+  /**
+   * Handle FPS camera transformations
+   */
+  private handleFPSCameraTransform(
+    entity: Entity,
+    transform: Transform3DComponent,
+    camera: Camera3DComponent,
+    deltaTime: number,
+  ): void {
+    // Update camera component with current rotation
+    camera.facing = (this.cameraYaw * 180) / Math.PI; // Convert to degrees
+    camera.pitch = (this.cameraPitch * 180) / Math.PI; // Convert to degrees
+    camera.roll = (this.cameraRoll * 180) / Math.PI; // Convert to degrees
+
+    // Update transform rotation to match camera rotation
+    transform.setRotation([this.cameraPitch, this.cameraYaw, this.cameraRoll]);
+
+    // Calculate and update camera target based on rotation
+    const position = transform.getPosition();
+    const forward = this.getCameraForwardVector();
+
+    // Calculate target position (camera position + forward direction)
+    const target: Vec3 = [
+      position[0] + forward[0],
+      position[1] + forward[1],
+      position[2] + forward[2],
+    ];
+
+    camera.setTarget(target);
+  }
+
+  /**
+   * Handle free camera transformations
+   */
+  private handleFreeCameraTransform(
+    entity: Entity,
+    transform: Transform3DComponent,
+    camera: Camera3DComponent,
+    deltaTime: number,
+  ): void {
+    // Similar to FPS but with different constraints
+    camera.facing = (this.cameraYaw * 180) / Math.PI;
+    camera.pitch = (this.cameraPitch * 180) / Math.PI;
+    camera.roll = (this.cameraRoll * 180) / Math.PI;
+
+    transform.setRotation([this.cameraPitch, this.cameraYaw, this.cameraRoll]);
+
+    const position = transform.getPosition();
+    const forward = this.getCameraForwardVector();
+
+    const target: Vec3 = [
+      position[0] + forward[0],
+      position[1] + forward[1],
+      position[2] + forward[2],
+    ];
+
+    camera.setTarget(target);
+  }
+
+  /**
+   * Handle legacy FPS camera transformations (for backward compatibility)
+   */
+  private handleLegacyFPSCameraTransform(
+    transform: Transform3DComponent,
+    camera: Camera3DComponent,
+  ): void {
+    // Update camera component with current rotation
+    camera.facing = (this.cameraYaw * 180) / Math.PI; // Convert to degrees
+    camera.pitch = (this.cameraPitch * 180) / Math.PI; // Convert to degrees
+    camera.roll = (this.cameraRoll * 180) / Math.PI; // Convert to degrees
+
+    // Update transform rotation to match camera rotation
+    transform.setRotation([this.cameraPitch, this.cameraYaw, this.cameraRoll]);
+
+    // Calculate and update camera target based on rotation
+    const position = transform.getPosition();
+    const forward = this.getCameraForwardVector();
+
+    // Calculate target position (camera position + forward direction)
+    const target: Vec3 = [
+      position[0] + forward[0],
+      position[1] + forward[1],
+      position[2] + forward[2],
+    ];
+
+    camera.setTarget(target);
   }
 
   /**
@@ -128,10 +220,95 @@ export class Transform3DSystem extends System {
    */
   private handleCameraRotation(entity: Entity, state: Input3DState, deltaTime: number): void {
     const input = entity.getComponent<Input3DComponent>(Input3DComponent.componentName);
+    const control = entity.getComponent<CameraControlComponent>(
+      CameraControlComponent.componentName,
+    );
     if (!input) return;
 
     const [mouseDeltaX, mouseDeltaY] = input.getMouseDelta();
 
+    // Handle different control modes
+    if (control) {
+      switch (control.getMode()) {
+        case 'fps':
+          this.handleFPSRotation(control, input, mouseDeltaX, mouseDeltaY);
+          break;
+        case 'orbit':
+          // Orbit rotation is handled by OrbitCameraControlSystem
+          break;
+        case 'free':
+          this.handleFreeRotation(control, input, mouseDeltaX, mouseDeltaY);
+          break;
+        case 'fixed':
+          // Fixed camera doesn't respond to mouse input
+          break;
+      }
+    } else {
+      // Legacy FPS behavior for backward compatibility
+      this.handleLegacyFPSRotation(input, mouseDeltaX, mouseDeltaY);
+    }
+  }
+
+  /**
+   * Handle FPS camera rotation
+   */
+  private handleFPSRotation(
+    control: CameraControlComponent,
+    input: Input3DComponent,
+    mouseDeltaX: number,
+    mouseDeltaY: number,
+  ): void {
+    const config = control.getFPSConfig();
+    if (!config) return;
+
+    const sensitivity = config.mouseSensitivity;
+    const invertY = config.invertY ? -1 : 1;
+
+    this.cameraYaw -= mouseDeltaX * sensitivity;
+    this.cameraPitch += mouseDeltaY * sensitivity * invertY;
+
+    // Apply pitch clamping
+    this.cameraPitch = Math.max(
+      config.pitchClamp.min,
+      Math.min(config.pitchClamp.max, this.cameraPitch),
+    );
+
+    // Clamp yaw to prevent 360-degree rotation
+    const maxYaw = Math.PI;
+    this.cameraYaw = Math.max(-maxYaw, Math.min(maxYaw, this.cameraYaw));
+
+    input.clearMouseDelta();
+  }
+
+  /**
+   * Handle free camera rotation
+   */
+  private handleFreeRotation(
+    control: CameraControlComponent,
+    input: Input3DComponent,
+    mouseDeltaX: number,
+    mouseDeltaY: number,
+  ): void {
+    const config = control.getFreeConfig();
+    if (!config) return;
+
+    const sensitivity = config.mouseSensitivity;
+
+    this.cameraYaw -= mouseDeltaX * sensitivity;
+    this.cameraPitch += mouseDeltaY * sensitivity;
+
+    // No pitch clamping for free camera
+    input.clearMouseDelta();
+  }
+
+  /**
+   * Handle legacy FPS rotation (for backward compatibility)
+   */
+  private handleLegacyFPSRotation(
+    input: Input3DComponent,
+    mouseDeltaX: number,
+    mouseDeltaY: number,
+  ): void {
     // Apply mouse sensitivity
     const sensitivity = 0.002; // Adjust as needed
     this.cameraYaw -= mouseDeltaX * sensitivity;

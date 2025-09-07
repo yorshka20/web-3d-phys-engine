@@ -1,4 +1,9 @@
-import { Input3DComponent } from '@ecs/components';
+import {
+  ActiveCameraTag,
+  Camera3DComponent,
+  CameraControlComponent,
+  Input3DComponent,
+} from '@ecs/components';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
@@ -128,19 +133,32 @@ export class Input3DSystem extends System {
 
   private handleCanvasClick = () => {
     if (!this.isPointerLocked) {
-      this.rootElement.requestPointerLock();
+      // Check if any active camera requires pointer lock
+      if (this.shouldLockPointer()) {
+        this.rootElement.requestPointerLock();
+      }
     }
   };
 
   private handleMouseMove = (event: MouseEvent) => {
+    // Handle mouse movement for different camera modes
     if (this.isPointerLocked) {
+      // FPS/Free mode: use locked pointer movement
       this.updateMouseDelta(event.movementX, event.movementY);
+    } else {
+      // Orbit mode: use regular mouse movement
+      this.updateMousePosition(event.clientX, event.clientY);
     }
   };
 
   private handleMouseDown = (event: MouseEvent) => {
     this.mouseButtons.add(event.button);
     this.updateMouseButtons();
+
+    // Initialize mouse position for orbit mode
+    if (!this.isPointerLocked) {
+      this.initializeMousePosition(event.clientX, event.clientY);
+    }
   };
 
   private handleMouseUp = (event: MouseEvent) => {
@@ -153,9 +171,9 @@ export class Input3DSystem extends System {
     this.updatePointerLockState();
 
     if (this.isPointerLocked) {
-      console.log('Pointer locked - FPS controls enabled');
+      console.log('Pointer locked - FPS/Free controls enabled');
     } else {
-      console.log('Pointer unlocked - Click canvas to re-enable FPS controls');
+      console.log('Pointer unlocked - Click canvas to enable FPS/Free controls, or use Orbit mode');
     }
   };
 
@@ -218,7 +236,71 @@ export class Input3DSystem extends System {
     }
   }
 
-  update(deltaTime: number): void {
+  /**
+   * Check if any active camera requires pointer lock
+   */
+  private shouldLockPointer(): boolean {
+    // Find active camera entities
+    const activeCameras = this.world.getEntitiesWithComponents([
+      Camera3DComponent,
+      CameraControlComponent,
+      ActiveCameraTag,
+    ]);
+
+    for (const camera of activeCameras) {
+      const control = camera.getComponent<CameraControlComponent>(
+        CameraControlComponent.componentName,
+      );
+      if (control) {
+        const mode = control.getMode();
+        // Only FPS and Free modes require pointer lock
+        if (mode === 'fps' || mode === 'free') {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Initialize mouse position for orbit mode
+   */
+  private initializeMousePosition(clientX: number, clientY: number): void {
+    for (const entity of this.inputEntities) {
+      const inputComponent = entity.getComponent<Input3DComponent>(Input3DComponent.componentName);
+      if (inputComponent) {
+        inputComponent.setState({
+          lastMouseX: clientX,
+          lastMouseY: clientY,
+        });
+      }
+    }
+  }
+
+  /**
+   * Update mouse position for orbit mode
+   */
+  private updateMousePosition(clientX: number, clientY: number): void {
+    for (const entity of this.inputEntities) {
+      const inputComponent = entity.getComponent<Input3DComponent>(Input3DComponent.componentName);
+      if (inputComponent) {
+        // For orbit mode, we need to track mouse position and calculate delta
+        const currentState = inputComponent.getState();
+        const deltaX = clientX - currentState.lastMouseX;
+        const deltaY = clientY - currentState.lastMouseY;
+
+        inputComponent.setState({
+          mouseDeltaX: currentState.mouseDeltaX + deltaX,
+          mouseDeltaY: currentState.mouseDeltaY + deltaY,
+          lastMouseX: clientX,
+          lastMouseY: clientY,
+        });
+      }
+    }
+  }
+
+  update(_deltaTime: number): void {
     // Mouse delta clearing is now handled by Transform3DSystem after processing
     // to avoid double clearing which was causing mouse rotation issues
   }
