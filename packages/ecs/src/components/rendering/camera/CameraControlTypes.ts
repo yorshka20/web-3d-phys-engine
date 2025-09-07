@@ -92,12 +92,12 @@ export const DEFAULT_CAMERA_CONTROLS: Record<CameraControlMode, CameraControlCon
   orbit: {
     mode: 'orbit',
     orbit: {
-      target: [0, 0, 0],
+      target: [0, 0, 0], // Default target point (can be changed via setOrbitTarget)
       distance: 10,
       minDistance: 1,
       maxDistance: 100,
       panSensitivity: 0.01,
-      zoomSensitivity: 0.1,
+      zoomSensitivity: 0.0001,
       rotationSensitivity: 0.005,
       enablePan: true,
       enableZoom: true,

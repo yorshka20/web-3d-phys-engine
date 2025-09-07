@@ -121,7 +121,7 @@ export class CameraFactory {
             minDistance: 1,
             maxDistance: 100,
             panSensitivity: 0.01,
-            zoomSensitivity: 0.1,
+            zoomSensitivity: 0.0001,
             rotationSensitivity: 0.005,
             enablePan: true,
             enableZoom: true,
