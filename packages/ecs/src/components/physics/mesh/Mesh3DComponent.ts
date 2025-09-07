@@ -1,6 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Vec3 } from '@ecs/types/types';
-import { GeometryData } from './GeometryFactory';
+import { GeometryData, GeometryFactory } from './GeometryFactory';
 import { AnyMesh3DShapeDescriptor, GeometryPrimitiveOptions, Vertex3D } from './types';
 
 interface Mesh3DProps {
@@ -24,7 +24,7 @@ export class Mesh3DComponent extends Component {
 
   constructor(props: Mesh3DProps) {
     super('Mesh3D');
-    this.descriptor = props.descriptor;
+    this.descriptor = this.normalizeDescriptor(props.descriptor);
 
     if (props.vertices) {
       this.vertices = [...props.vertices];
@@ -44,7 +44,7 @@ export class Mesh3DComponent extends Component {
    * update mesh descriptor
    */
   updateDescriptor(descriptor: AnyMesh3DShapeDescriptor): void {
-    this.descriptor = descriptor;
+    this.descriptor = this.normalizeDescriptor(descriptor);
     this.dirty = true;
     this.vertices = [];
     this.indices = [];
@@ -265,5 +265,28 @@ export class Mesh3DComponent extends Component {
       descriptor: { type: 'mesh', vertices: [...vertices] },
       indices,
     });
+  }
+
+  /**
+   * Normalize descriptor by ensuring params is defined with default values
+   */
+  private normalizeDescriptor(descriptor: AnyMesh3DShapeDescriptor): AnyMesh3DShapeDescriptor {
+    // Handle unset or mesh descriptors
+    if (descriptor.type === 'unset' || descriptor.type === 'mesh') {
+      return descriptor;
+    }
+
+    // For primitive geometry types, ensure params is defined
+    if (!descriptor.params) {
+      // Create a new descriptor with default params based on geometry type
+      const type = (descriptor as { type: string }).type;
+      const defaultParams = GeometryFactory.getDefaultParams(type);
+      return {
+        type,
+        params: defaultParams,
+      } as AnyMesh3DShapeDescriptor;
+    }
+
+    return descriptor;
   }
 }

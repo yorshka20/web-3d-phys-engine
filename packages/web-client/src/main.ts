@@ -50,7 +50,7 @@ async function main() {
 
   game.start();
 
-  // @ts-ignore
+  // @ts-expect-error - Adding game to window for debugging purposes
   window.game = game;
 }
 
@@ -183,7 +183,7 @@ function createGeometryEntities(world: World) {
       world.createComponent(Mesh3DComponent, {
         descriptor: {
           type: geometry.type,
-          params: geometry.params!,
+          params: geometry.params,
         },
       }),
     );

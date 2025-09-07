@@ -164,7 +164,7 @@ export interface Mesh3DDescriptor {
 // Generic mesh descriptor that supports type-safe geometry parameters
 export interface Mesh3DShapeDescriptor<T extends GeometryType = GeometryType> {
   type: T;
-  params: GeometryPrimitiveOptions[T];
+  params?: GeometryPrimitiveOptions[T];
 }
 
 // Special case for unset and custom mesh

@@ -58,6 +58,182 @@ export interface GeometryData {
  */
 export class GeometryFactory {
   /**
+   * Get default parameters for each geometry type based on primitive-geometry documentation
+   */
+  static getDefaultParams(type: string): Record<string, unknown> {
+    switch (type) {
+      case 'cube':
+        return {
+          sx: 1,
+          sy: 1,
+          sz: 1,
+          nx: 1,
+          ny: 1,
+          nz: 1,
+        };
+      case 'box':
+        return {
+          sx: 1,
+          sy: 1,
+          sz: 1,
+        };
+      case 'sphere':
+        return {
+          radius: 0.5,
+          nx: 32,
+          ny: 16,
+          theta: Math.PI,
+          thetaOffset: 0,
+          phi: Math.PI * 2,
+          phiOffset: 0,
+        };
+      case 'cylinder':
+        return {
+          height: 1,
+          radius: 0.25,
+          nx: 16,
+          ny: 1,
+          radiusApex: 0.25,
+          capSegments: 1,
+          capApex: true,
+          capBase: true,
+          capBaseSegments: 1,
+          phi: Math.PI * 2,
+        };
+      case 'plane':
+        return {
+          sx: 1,
+          sy: 1,
+          nx: 1,
+          ny: 1,
+          direction: 'z',
+          quads: false,
+        };
+      case 'cone':
+        return {
+          height: 1,
+          radius: 0.25,
+          nx: 16,
+          ny: 1,
+          capSegments: 1,
+          capBase: true,
+          theta: Math.PI * 2,
+        };
+      case 'icosphere':
+        return {
+          radius: 0.5,
+          subdivisions: 2,
+        };
+      case 'ellipsoid':
+        return {
+          radius: 0.5,
+          nx: 32,
+          ny: 16,
+          rx: 1,
+          ry: 0.5,
+          rz: 0.5,
+          theta: Math.PI,
+          thetaOffset: 0,
+          phi: Math.PI * 2,
+          phiOffset: 0,
+        };
+      case 'capsule':
+        return {
+          height: 0.5,
+          radius: 0.25,
+          nx: 16,
+          ny: 1,
+          roundSegments: 32,
+          phi: Math.PI * 2,
+        };
+      case 'torus':
+        return {
+          radius: 0.4,
+          segments: 64,
+          minorRadius: 0.1,
+          minorSegments: 32,
+          theta: Math.PI * 2,
+          thetaOffset: 0,
+          phi: Math.PI * 2,
+          phiOffset: 0,
+        };
+      case 'tetrahedron':
+        return {
+          radius: 0.5,
+        };
+      case 'icosahedron':
+        return {
+          radius: 0.5,
+        };
+      case 'quad':
+        return {
+          scale: 0.5,
+        };
+      case 'roundedCube':
+        return {
+          sx: 1,
+          sy: 1,
+          sz: 1,
+          nx: 1,
+          ny: 1,
+          nz: 1,
+          radius: 0.25,
+          roundSegments: 8,
+          edgeSegments: 1,
+        };
+      case 'ellipse':
+        return {
+          sx: 1,
+          sy: 0.5,
+          radius: 0.5,
+          segments: 32,
+          innerSegments: 16,
+          theta: Math.PI * 2,
+          thetaOffset: 0,
+          mergeCentroid: true,
+        };
+      case 'disc':
+        return {
+          radius: 0.5,
+          segments: 32,
+          innerSegments: 16,
+          theta: Math.PI * 2,
+          thetaOffset: 0,
+          mergeCentroid: true,
+        };
+      case 'circle':
+        return {
+          radius: 0.5,
+          segments: 32,
+          theta: Math.PI * 2,
+          thetaOffset: 0,
+          closed: false,
+        };
+      case 'roundedRectangle':
+        return {
+          sx: 1,
+          sy: 1,
+          nx: 1,
+          ny: 1,
+          radius: 0.25,
+          roundSegments: 8,
+          edgeSegments: 1,
+        };
+      case 'stadium':
+        return {
+          sx: 1,
+          sy: 1,
+          nx: 1,
+          ny: 1,
+          roundSegments: 8,
+          edgeSegments: 1,
+        };
+      default:
+        return {};
+    }
+  }
+
+  /**
    * Convert primitive-geometry data to our GeometryData format
    * @param primitiveData Data from primitive-geometry library
    * @returns Converted geometry data
@@ -156,7 +332,7 @@ export class GeometryFactory {
   // Type-safe geometry creation by type and params
   static createGeometryByType<T extends GeometryType>(
     type: T,
-    params: GeometryPrimitiveOptions[T],
+    params?: GeometryPrimitiveOptions[T],
   ): GeometryData {
     switch (type) {
       case 'box':
