@@ -241,19 +241,26 @@ export class CameraControlComponent extends Component {
   }
 
   /**
-   * Merge configuration with defaults
+   * Deep merge camera control config with updates for nested control modes.
+   * Only merges known nested keys for performance and clarity.
    */
   private mergeConfig(
     base: CameraControlConfig,
     updates: Partial<CameraControlConfig>,
   ): CameraControlConfig {
+    // Helper to merge nested config objects
+    const mergeNested = <T extends object>(a?: T, b?: Partial<T>): T | undefined => {
+      if (a && b) return { ...a, ...b };
+      return (a as T) || (b as T) || undefined;
+    };
+
     return {
       ...base,
       ...updates,
-      fps: { ...base.fps, ...updates.fps },
-      orbit: { ...base.orbit, ...updates.orbit },
-      free: { ...base.free, ...updates.free },
-      fixed: { ...base.fixed, ...updates.fixed },
+      fps: mergeNested(base.fps, updates.fps),
+      orbit: mergeNested(base.orbit, updates.orbit),
+      free: mergeNested(base.free, updates.free),
+      fixed: mergeNested(base.fixed, updates.fixed),
     };
   }
 

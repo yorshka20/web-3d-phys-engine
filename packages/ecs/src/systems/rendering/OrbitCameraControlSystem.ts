@@ -12,6 +12,7 @@ import {
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
+import { CameraTargetIndicator } from '@ecs/helpers/CameraTargetIndicator';
 import { Vec3 } from '@ecs/types/types';
 
 /**
@@ -23,6 +24,9 @@ import { Vec3 } from '@ecs/types/types';
  * - Right mouse button can be used for additional controls
  */
 export class OrbitCameraControlSystem extends System {
+  private targetIndicator: CameraTargetIndicator | null = null;
+  private showTargetIndicator: boolean = true;
+
   constructor() {
     super('OrbitCameraControlSystem', SystemPriorities.INPUT, 'logic');
   }
@@ -30,11 +34,22 @@ export class OrbitCameraControlSystem extends System {
   init(): void {
     // Add mouse wheel event listener for zoom
     document.addEventListener('wheel', this.handleMouseWheel, { passive: false });
+    document.addEventListener('keydown', this.handleKeyDown, { passive: false });
+
+    // Initialize target indicator
+    this.targetIndicator = new CameraTargetIndicator(this.world, this);
+    this.targetIndicator.createIndicator();
   }
 
   destroy(): void {
     // Remove mouse wheel event listener
     document.removeEventListener('wheel', this.handleMouseWheel);
+    document.removeEventListener('keydown', this.handleKeyDown);
+    // Destroy target indicator
+    if (this.targetIndicator) {
+      this.targetIndicator.destroyIndicator();
+      this.targetIndicator = null;
+    }
   }
 
   update(deltaTime: number): void {
@@ -53,6 +68,11 @@ export class OrbitCameraControlSystem extends System {
       if (!control || !control.isOrbitMode()) continue;
 
       this.handleOrbitCameraControl(entity, deltaTime);
+
+      // Update target indicator position
+      if (this.targetIndicator && this.showTargetIndicator) {
+        this.targetIndicator.updateIndicatorPosition(entity);
+      }
     }
   }
 
@@ -132,6 +152,7 @@ export class OrbitCameraControlSystem extends System {
 
   /**
    * Handle mouse panning (right mouse button)
+   * Panning moves the target point in camera space
    */
   private handleMousePanning(
     entity: Entity,
@@ -147,7 +168,7 @@ export class OrbitCameraControlSystem extends System {
     const position = transform.getPosition();
     const target = config.target;
 
-    // Calculate camera's right and up vectors
+    // Calculate camera's right and up vectors relative to target
     const [right, up] = this.getCameraRightAndUpVectors(position, target);
 
     // Pan the target in camera space
@@ -233,6 +254,7 @@ export class OrbitCameraControlSystem extends System {
 
   /**
    * Update camera position based on orbit parameters
+   * Orbit around the configured target point
    */
   private updateCameraPosition(
     transform: Transform3DComponent,
@@ -243,7 +265,7 @@ export class OrbitCameraControlSystem extends System {
     const target = config.target;
     const distance = state.distance;
 
-    // Calculate position based on spherical coordinates
+    // Calculate position based on spherical coordinates around target
     const x = target[0] + distance * Math.cos(state.elevation) * Math.sin(state.azimuth);
     const y = target[1] + distance * Math.sin(state.elevation);
     const z = target[2] + distance * Math.cos(state.elevation) * Math.cos(state.azimuth);
@@ -258,6 +280,7 @@ export class OrbitCameraControlSystem extends System {
     camera: Camera3DComponent,
     config: NonNullable<CameraControlConfig['orbit']>,
   ): void {
+    // Look at the configured target point
     camera.setTarget(config.target);
   }
 
@@ -329,6 +352,49 @@ export class OrbitCameraControlSystem extends System {
   }
 
   /**
+   * Update orbit state from a given camera position
+   * Converts Cartesian coordinates to spherical coordinates around target
+   */
+  private updateOrbitStateFromPosition(control: CameraControlComponent, position: Vec3): void {
+    const state = control.getOrbitState();
+    const config = control.getOrbitConfig();
+    if (!state || !config) return;
+
+    const target = config.target;
+
+    // Calculate relative position from target
+    const relativeX = position[0] - target[0];
+    const relativeY = position[1] - target[1];
+    const relativeZ = position[2] - target[2];
+
+    // Calculate distance from target
+    const distance = Math.sqrt(
+      relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ,
+    );
+
+    if (distance > 0) {
+      // Calculate elevation (vertical angle)
+      state.elevation = Math.asin(relativeY / distance);
+
+      // Calculate azimuth (horizontal angle)
+      state.azimuth = Math.atan2(relativeX, relativeZ);
+
+      // Update distance
+      state.distance = distance;
+    }
+  }
+
+  private handleKeyDown = (event: KeyboardEvent): void => {
+    switch (event.key) {
+      case 't':
+      case 'T':
+        // toggle target indicator visibility
+        this.toggleTargetIndicator();
+        break;
+    }
+  };
+
+  /**
    * Handle mouse wheel zoom
    */
   private handleMouseWheel = (event: WheelEvent): void => {
@@ -353,8 +419,13 @@ export class OrbitCameraControlSystem extends System {
       // Prevent default scrolling behavior
       event.preventDefault();
 
-      // Update distance based on wheel delta
-      const zoomFactor = 1 - event.deltaY * config.zoomSensitivity;
+      // Calculate zoom factor based on wheel delta
+      // Positive deltaY = scroll down = zoom out (increase distance)
+      // Negative deltaY = scroll up = zoom in (decrease distance)
+      const zoomDelta = -event.deltaY * config.zoomSensitivity;
+
+      // Apply zoom with exponential scaling for smoother control
+      const zoomFactor = Math.exp(zoomDelta);
       state.distance *= zoomFactor;
 
       // Clamp distance to min/max bounds
@@ -376,8 +447,13 @@ export class OrbitCameraControlSystem extends System {
 
     if (!config || !state || !config.enableZoom) return;
 
-    // Update distance based on wheel delta
-    const zoomFactor = 1 + delta * config.zoomSensitivity;
+    // Calculate zoom factor based on wheel delta
+    // Positive delta = zoom out (increase distance)
+    // Negative delta = zoom in (decrease distance)
+    const zoomDelta = -delta * config.zoomSensitivity;
+
+    // Apply zoom with exponential scaling for smoother control
+    const zoomFactor = Math.exp(zoomDelta);
     state.distance *= zoomFactor;
 
     // Clamp distance to min/max bounds
@@ -416,5 +492,39 @@ export class OrbitCameraControlSystem extends System {
     if (config && state) {
       state.distance = Math.max(config.minDistance, Math.min(config.maxDistance, distance));
     }
+  }
+
+  /**
+   * Show/hide target indicator
+   */
+  setTargetIndicatorVisible(visible: boolean): void {
+    this.showTargetIndicator = visible;
+    if (this.targetIndicator) {
+      this.targetIndicator.setVisible(visible);
+    }
+  }
+
+  /**
+   * Toggle target indicator visibility
+   */
+  toggleTargetIndicator(): void {
+    this.showTargetIndicator = !this.showTargetIndicator;
+    if (this.targetIndicator) {
+      this.targetIndicator.toggleVisibility();
+    }
+  }
+
+  /**
+   * Get target indicator visibility state
+   */
+  isTargetIndicatorVisible(): boolean {
+    return this.showTargetIndicator;
+  }
+
+  /**
+   * Get target indicator instance
+   */
+  getTargetIndicator(): CameraTargetIndicator | null {
+    return this.targetIndicator;
   }
 }

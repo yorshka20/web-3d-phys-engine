@@ -64,7 +64,7 @@ export class World implements IWorld {
     componentClasses.forEach((ComponentClass) => {
       this.poolManager.createComponentPool(
         ComponentClass,
-        (props: any) => new ComponentClass(props),
+        (props: Any) => new ComponentClass(props),
         ComponentClass.poolConfig.initialSize,
         ComponentClass.poolConfig.maxSize,
       );
@@ -273,15 +273,15 @@ export class World implements IWorld {
   }
 
   // Add direct event methods
-  on(event: string, handler: (...args: any[]) => void): void {
+  on(event: string, handler: (...args: Any[]) => void): void {
     this.eventEmitter.on(event, handler);
   }
 
-  off(event: string, handler: (...args: any[]) => void): void {
+  off(event: string, handler: (...args: Any[]) => void): void {
     this.eventEmitter.off(event, handler);
   }
 
-  emit(event: string, ...args: any): void {
+  emit(event: string, ...args: Any): void {
     this.eventEmitter.emit(event, args);
   }
 
@@ -296,6 +296,6 @@ export class World implements IWorld {
     this.systems.clear();
 
     // Clear the singleton instance
-    World.instance = null as any;
+    World.instance = null as Any;
   }
 }

@@ -18,6 +18,8 @@ export class Entity implements IEntity {
   toRemove: boolean = false;
   components: Map<string, IComponent> = new Map();
 
+  private label = '';
+
   // onRemove will be called when the entity is removed from the world
   private onRemovedCallbacks: ((id: string) => void)[] = [];
   // onDestroyed will be called when the entity is removed except by lifecycleSystem
@@ -93,6 +95,14 @@ export class Entity implements IEntity {
   notifyDestroyed(): void {
     this.onDestroyedCallbacks.forEach((cb) => cb(this.id));
     this.onDestroyedCallbacks.length = 0;
+  }
+
+  setLabel(label: string): void {
+    this.label = label;
+  }
+
+  getLabel(): string {
+    return this.label;
   }
 
   // Implement IPoolable interface
