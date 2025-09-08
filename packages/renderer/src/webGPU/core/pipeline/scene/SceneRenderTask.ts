@@ -1,8 +1,9 @@
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { mat4, vec3 } from 'gl-matrix';
 import { Injectable, ServiceTokens } from '../../decorators';
-import { BindGroupLayoutVisibility, BufferType, GeometryCacheItem } from '../../types';
+import { BindGroupLayoutVisibility, BufferType, GeometryCacheItem, ShaderType } from '../../types';
 import { BaseRenderTask } from '../BaseRenderTask';
+import shaderCode from './shader.wgsl?raw';
 
 export interface GeometryInstance {
   geometry: GeometryCacheItem;
@@ -191,9 +192,21 @@ export class SceneRenderTask extends BaseRenderTask {
   }
 
   private async compileShaders(): Promise<void> {
-    // Scene render task uses the same shaders as geometry render task
-    // The shaders are already created by GeometryRenderTask
-    console.log('Scene render task shaders initialized (using geometry shaders)');
+    this.shaderManager.createShaderModule('sceneVertex', {
+      id: 'sceneVertex',
+      code: shaderCode,
+      type: ShaderType.VERTEX,
+      entryPoint: 'vs_main',
+      label: 'Scene Vertex Shader',
+    });
+
+    this.shaderManager.createShaderModule('sceneFragment', {
+      id: 'sceneFragment',
+      code: shaderCode,
+      type: ShaderType.FRAGMENT,
+      entryPoint: 'fs_main',
+      label: 'Scene Fragment Shader',
+    });
   }
 
   private async createRenderPipelines(): Promise<void> {
@@ -221,7 +234,7 @@ export class SceneRenderTask extends BaseRenderTask {
     const pipeline = this.shaderManager.createRenderPipeline('scene_render_pipeline', {
       layout: renderPipelineLayout,
       vertex: {
-        module: this.resourceManager.getShaderResource('mainVertex').shader,
+        module: this.resourceManager.getShaderResource('sceneVertex').shader,
         entryPoint: 'vs_main',
         buffers: [
           {
@@ -248,7 +261,7 @@ export class SceneRenderTask extends BaseRenderTask {
         constants: {},
       },
       fragment: {
-        module: this.resourceManager.getShaderResource('mainFragment').shader,
+        module: this.resourceManager.getShaderResource('sceneFragment').shader,
         entryPoint: 'fs_main',
         targets: [
           {

@@ -203,8 +203,8 @@ export class CoordinateRenderTask extends BaseRenderTask {
         topology: 'line-list',
       },
       depthStencil: {
-        depthWriteEnabled: false, // Don't write to depth buffer for coordinate axes
-        depthCompare: 'always', // Always pass depth test for coordinate axes
+        depthWriteEnabled: true,
+        depthCompare: 'less',
         format: 'depth24plus',
       },
       label: 'coordinate_render_pipeline',

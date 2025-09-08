@@ -118,7 +118,7 @@ function cretePlane(world: World) {
       descriptor: { type: 'plane', params: { sx: 30, sy: 40, nx: 3, ny: 4, direction: 'y' } },
     }),
   );
-  plane.addComponent(world.createComponent(Transform3DComponent, { position: [0, -5, 0] }));
+  plane.addComponent(world.createComponent(Transform3DComponent, { position: [0, -1, 0] }));
   plane.addComponent(
     world.createComponent(WebGPU3DRenderComponent, {
       material: {
@@ -141,7 +141,7 @@ function createGeometryEntities(world: World) {
     {
       type: 'cube',
       transform: {
-        position: [-2, 0, 0],
+        position: [-2, 5, 0],
         rotation: [0, 0, 0],
         scale: [0.5, 0.5, 0.5],
       },
@@ -150,7 +150,7 @@ function createGeometryEntities(world: World) {
     {
       type: 'cube',
       transform: {
-        position: [0, 0, 0],
+        position: [5, 5, 0],
         rotation: [0, Math.PI / 4, 0],
         scale: [1.0, 1.0, 1.0],
       },
@@ -159,7 +159,7 @@ function createGeometryEntities(world: World) {
     {
       type: 'cylinder',
       transform: {
-        position: [2, 0, 0],
+        position: [5, 5, 0],
         rotation: [Math.PI / 6, 0, Math.PI / 6],
         scale: [1.5, 1.5, 1.5],
       },
@@ -168,7 +168,7 @@ function createGeometryEntities(world: World) {
     {
       type: 'sphere',
       transform: {
-        position: [0, 2, 0],
+        position: [0, 5, 0],
         rotation: [Math.PI / 6, 0, Math.PI / 6],
         scale: [5, 5, 5],
       },

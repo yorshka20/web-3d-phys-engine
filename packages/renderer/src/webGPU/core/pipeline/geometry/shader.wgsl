@@ -59,7 +59,7 @@ fn fs_main(@location(0) color: vec4<f32>, @location(1) normal: vec3<f32>, @locat
     let ambient = 0.15;
     let brightness = 1.0;
 
-    let finalColor = (animatedColor * wave * pulse + ambient) * brightness;
+    let finalColor = (color.xyz * wave + ambient) * brightness;
 
     return vec4<f32>(finalColor, color.w);
 }
