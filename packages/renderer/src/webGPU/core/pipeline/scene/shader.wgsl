@@ -25,8 +25,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4f {
-    let white = vec4f(1.0, 1.0, 1.0, 1.0);
-    let gray = vec4f(0.5, 0.5, 0.5, 1.0);
+    let white = vec4f(1.0, 1.0, 1.0, 0.6);
+    let gray = vec4f(0.5, 0.5, 0.5, 0.6);
 
     // Create checkerboard pattern based on UV coordinates
     let grid = vec2u(uv * 8.0);

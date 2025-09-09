@@ -1,19 +1,10 @@
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { mat4, vec3 } from 'gl-matrix';
 import { Injectable, ServiceTokens } from '../../decorators';
-import { BindGroupLayoutVisibility, BufferType, GeometryCacheItem, ShaderType } from '../../types';
+import { BindGroupLayoutVisibility, BufferType, ShaderType } from '../../types';
 import { BaseRenderTask } from '../BaseRenderTask';
+import { GeometryInstance } from '../types';
 import shaderCode from './shader.wgsl?raw';
-
-export interface GeometryInstance {
-  geometry: GeometryCacheItem;
-  transform: mat4;
-  scale: vec3;
-  position: vec3;
-  rotation: vec3;
-  mvpBuffer: GPUBuffer;
-  mvpBindGroup: GPUBindGroup;
-}
 
 @Injectable(ServiceTokens.SCENE_RENDER_TASK, {
   lifecycle: 'transient',

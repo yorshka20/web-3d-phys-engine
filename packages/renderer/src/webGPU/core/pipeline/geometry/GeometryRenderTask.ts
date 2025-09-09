@@ -4,22 +4,12 @@ import { Injectable, ServiceTokens } from '../../decorators';
 import {
   BindGroupLayoutVisibility,
   BufferType,
-  GeometryCacheItem,
   GeometryInstanceDescriptor,
   ShaderType,
 } from '../../types';
 import { BaseRenderTask } from '../BaseRenderTask';
+import { GeometryInstance } from '../types';
 import shaderCode from './shader.wgsl?raw';
-
-export interface GeometryInstance {
-  geometry: GeometryCacheItem;
-  transform: mat4;
-  scale: vec3;
-  position: vec3;
-  rotation: vec3;
-  mvpBuffer: GPUBuffer;
-  mvpBindGroup: GPUBindGroup;
-}
 
 @Injectable(ServiceTokens.GEOMETRY_RENDER_TASK, {
   lifecycle: 'transient',
