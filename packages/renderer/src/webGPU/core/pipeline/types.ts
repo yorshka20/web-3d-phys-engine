@@ -63,16 +63,9 @@ export interface GpuPipelineKey {
 }
 
 /**
- * Legacy PipelineKey for backward compatibility
- * @deprecated Use SemanticPipelineKey instead
- */
-export interface PipelineKey extends SemanticPipelineKey {}
-
-/**
  * Pipeline descriptor for creating WebGPU render pipelines
  */
 export interface PipelineDescriptor {
-  key: PipelineKey;
   shaderModule: {
     vertex: GPUShaderModule;
     fragment: GPUShaderModule;
@@ -160,18 +153,6 @@ export function generateSemanticPipelineKey(
 }
 
 /**
- * Generate semantic pipeline key from material and geometry data
- * @deprecated Use generateSemanticPipelineKey instead
- */
-export function generatePipelineKey(
-  material: Material3D,
-  geometry: GeometryData,
-  options: Partial<PipelineCreationOptions> = {},
-): PipelineKey {
-  return generateSemanticPipelineKey(material, geometry, options);
-}
-
-/**
  * Generate semantic cache key from semantic pipeline key
  */
 export function generateSemanticCacheKey(key: SemanticPipelineKey): string {
@@ -199,14 +180,6 @@ export function convertToGpuPipelineKey(semanticKey: SemanticPipelineKey): GpuPi
     vertexAttributes: determineVertexAttributes(semanticKey),
     shaderDefines: generateShaderDefines(semanticKey),
   };
-}
-
-/**
- * Generate pipeline ID from pipeline key (legacy)
- * @deprecated Use generateSemanticCacheKey instead
- */
-export function generatePipelineId(key: PipelineKey): string {
-  return generateSemanticCacheKey(key);
 }
 
 /**

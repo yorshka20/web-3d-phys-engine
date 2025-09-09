@@ -5,9 +5,6 @@ export * from './types';
 export * from './PipelineFactory';
 export * from './PipelineManager';
 
-// Advanced render tasks using the new pipeline system
-export * from './AdvancedGeometryRenderTask';
-
 // Base render task (existing)
 export * from './BaseRenderTask';
 
