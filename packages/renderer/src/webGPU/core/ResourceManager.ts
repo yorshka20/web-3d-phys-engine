@@ -23,7 +23,7 @@ export interface ResourceMetadata {
   createdAt: number;
   lastUsed: number;
   size?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -117,14 +117,12 @@ export class WebGPUResourceManager {
 
   /**
    * Get resource by ID with type safety
+   * Returns null if resource doesn't exist or is not ready
    */
-  getResource<T extends WebGPUResource>(id: string): T {
+  getResource<T extends WebGPUResource>(id: string): T | null {
     const resource = this.resources.get(id);
-    if (!resource) {
-      throw new Error(`Resource with ID '${id}' not found.`);
-    }
-    if (resource.state !== ResourceState.READY) {
-      throw new Error(`Resource '${id}' is not ready (state: ${resource.state})`);
+    if (!resource || resource.state !== ResourceState.READY) {
+      return null;
     }
     return resource as T;
   }
@@ -132,42 +130,42 @@ export class WebGPUResourceManager {
   /**
    * Get buffer resource
    */
-  getBufferResource(id: string): BufferResource {
+  getBufferResource(id: string): BufferResource | null {
     return this.getResource<BufferResource>(id);
   }
 
   /**
    * Get shader resource
    */
-  getShaderResource(id: string): ShaderResource {
+  getShaderResource(id: string): ShaderResource | null {
     return this.getResource<ShaderResource>(id);
   }
 
   /**
    * Get render pipeline resource
    */
-  getRenderPipelineResource(id: string): RenderPipelineResource {
+  getRenderPipelineResource(id: string): RenderPipelineResource | null {
     return this.getResource<RenderPipelineResource>(id);
   }
 
   /**
    * Get compute pipeline resource
    */
-  getComputePipelineResource(id: string): ComputePipelineResource {
+  getComputePipelineResource(id: string): ComputePipelineResource | null {
     return this.getResource<ComputePipelineResource>(id);
   }
 
   /**
    * Get bind group layout resource
    */
-  getBindGroupLayoutResource(id: string): BindGroupLayoutResource {
+  getBindGroupLayoutResource(id: string): BindGroupLayoutResource | null {
     return this.getResource<BindGroupLayoutResource>(id);
   }
 
   /**
    * Get bind group resource
    */
-  getBindGroupResource(id: string): BindGroupResource {
+  getBindGroupResource(id: string): BindGroupResource | null {
     return this.getResource<BindGroupResource>(id);
   }
 

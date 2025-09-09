@@ -26,10 +26,10 @@ export function AutoRegisterResource<T extends ResourceType>(
   type: T,
   options: AutoRegisterOptions = {},
 ) {
-  return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
+  return function (target: (...args: Any[]) => Any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: InjectableClass, ...args: [string, ...any[]]) {
+    return function (this: InjectableClass, ...args: [string, ...Any[]]) {
       // Execute original method
       const result = originalMethod.apply(this, args);
 
@@ -66,7 +66,7 @@ export function AutoRegisterResource<T extends ResourceType>(
  * @param options Service options including lifecycle and dependencies
  */
 export function Injectable(token?: string, options: ServiceOptions = {}) {
-  return function (target: any, context: ClassDecoratorContext) {
+  return function (target: Any, context: ClassDecoratorContext) {
     const className = target.name;
     const lifecycle = options.lifecycle || 'transient';
 
@@ -93,17 +93,17 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
 
     // Add container property for @Inject decorator support
     if (!proto.hasOwnProperty('container')) {
-      proto.container = undefined as any;
+      proto.container = undefined as Any;
     }
 
     if (!proto.hasOwnProperty('setContainer')) {
-      proto.setContainer = function (container: any) {
+      proto.setContainer = function (container: Any) {
         this.container = container;
       };
     }
 
     if (!proto.hasOwnProperty('getContainer')) {
-      proto.getContainer = function (): any {
+      proto.getContainer = function (): Any {
         return this.container;
       };
     }
@@ -122,9 +122,9 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
 
     // Helper method to generate resource ID
     if (!proto.hasOwnProperty('generateResourceId')) {
-      proto.generateResourceId = function (methodName: string, args: any[]): string {
+      proto.generateResourceId = function (methodName: string, args: Any[]): string {
         // Try to find a string argument (usually the label)
-        const labelArg = args.find((arg: any) => typeof arg === 'string');
+        const labelArg = args.find((arg: Any) => typeof arg === 'string');
         if (labelArg) {
           return labelArg;
         }
@@ -138,9 +138,9 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
     if (!proto.hasOwnProperty('registerResource')) {
       proto.registerResource = function (
         id: string,
-        resource: any,
+        resource: Any,
         type: ResourceType,
-        options: any = {},
+        options: Any = {},
       ) {
         // Validate inputs
         if (!id || typeof id !== 'string') {
@@ -181,7 +181,7 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
             .then(() => {
               console.log(`[Injectable] Successfully registered resource: ${id}, type: ${type}`);
             })
-            .catch((error: any) => {
+            .catch((error: Any) => {
               console.error(`[Injectable] Failed to auto-register ${type} ${id}:`, error);
             });
         } catch (error) {
@@ -192,7 +192,7 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
 
     // Helper method to create resource wrapper
     if (!proto.hasOwnProperty('createResourceWrapper')) {
-      proto.createResourceWrapper = function (type: ResourceType, resource: any) {
+      proto.createResourceWrapper = function (type: ResourceType, resource: Any) {
         // Add the appropriate property based on resource type
         const resourceWrapper = {
           type,
@@ -247,14 +247,14 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
             return {
               ...resourceWrapper,
               resource: resource,
-            } as any;
+            } as Any;
         }
       };
     }
 
     // Helper method to destroy resource
     if (!proto.hasOwnProperty('destroyResource')) {
-      proto.destroyResource = function (resource: any) {
+      proto.destroyResource = function (resource: Any) {
         if (resource && typeof resource.destroy === 'function') {
           resource.destroy();
         }
@@ -296,7 +296,7 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
 
       // Create new constructor function that extends the original
       const NewConstructor = class extends originalConstructor {
-        constructor(...args: any[]) {
+        constructor(...args: Any[]) {
           // Call original constructor
           super(...args);
 
@@ -339,16 +339,16 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
  * Combines caching, pooling, and lifecycle management
  */
 export function SmartResource<T extends ResourceType>(type: T, options: SmartResourceOptions = {}) {
-  return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
+  return function (target: (...args: Any[]) => Any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: InjectableClass, ...args: [string, ...any[]]) {
+    return function (this: InjectableClass, ...args: [string, ...Any[]]) {
       // Initialize resource cache and pool on instance with proper typing
       if (!this.resourceCache) {
-        this.resourceCache = new Map<string, any>();
+        this.resourceCache = new Map<string, Any>();
       }
       if (!this.resourcePool) {
-        this.resourcePool = new Map<string, any>();
+        this.resourcePool = new Map<string, Any>();
       }
       if (!this.resourceLifecycles) {
         this.resourceLifecycles = new Map<string, string>();
@@ -363,8 +363,6 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
         console.error('[SmartResource] Invalid resource ID generated');
         throw new Error('Invalid resource ID');
       }
-
-      console.log(`[SmartResource] Processing resource: ${resourceId}, type: ${type}`);
 
       // Check cache first with validation
       if (options.cache && this.resourceCache.has(resourceId)) {
@@ -390,8 +388,10 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
         }
       }
 
+      console.log(`[SmartResource] Processing resource: ${resourceId}, type: ${type}`);
+
       // Create new resource with error handling
-      let resource: any;
+      let resource: Any;
       try {
         resource = originalMethod.apply(this, args);
         if (!resource) {
@@ -458,7 +458,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
  * Compatible with TypeScript 5.0+ decorators
  */
 export function Inject(token: string) {
-  return function (target: any, context: ClassFieldDecoratorContext) {
+  return function (target: Any, context: ClassFieldDecoratorContext) {
     // Validate token
     if (!token || typeof token !== 'string') {
       console.error('[Inject] Invalid token provided for dependency injection');
@@ -466,7 +466,7 @@ export function Inject(token: string) {
     }
 
     // Use addInitializer to set up the property after class definition
-    context.addInitializer(function (this: any) {
+    context.addInitializer(function (this: Any) {
       const propertyName = context.name as string;
       const privateProp = `__${propertyName}_cached`;
       const errorProp = `__${propertyName}_error`;
@@ -516,7 +516,7 @@ export function Inject(token: string) {
           }
         },
 
-        set(newValue: any) {
+        set(newValue: Any) {
           // Clear cached error when manually setting value
           delete this[errorProp];
           this[privateProp] = newValue;
@@ -540,10 +540,10 @@ export function ResourceFactory<T extends ResourceType>(
   type: T,
   factoryOptions: ResourceFactoryOptions = {},
 ) {
-  return function (target: (...args: any[]) => any, context: ClassMethodDecoratorContext) {
+  return function (target: (...args: Any[]) => Any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
-    return function (this: any, ...args: any[]) {
+    return function (this: Any, ...args: Any[]) {
       // Validate arguments if validator provided
       if (factoryOptions.validate && !factoryOptions.validate(args)) {
         throw new Error(`Invalid arguments for ${String(context.name)}`);
@@ -590,11 +590,11 @@ export function MonitorPerformance(
     enableLogging = true,
   } = options;
 
-  return function (target: any, context: ClassMethodDecoratorContext) {
+  return function (target: Any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
     const methodName = String(context.name);
 
-    return function (this: any, ...args: any[]) {
+    return function (this: Any, ...args: Any[]) {
       // Initialize performance metrics on instance
       if (!this.performanceMetrics) {
         this.performanceMetrics = new Map<string, number[]>();
@@ -691,28 +691,28 @@ export const DecoratorValidation = {
   /**
    * Validates that a resource type is valid
    */
-  validateResourceType(type: any): type is ResourceType {
+  validateResourceType(type: Any): type is ResourceType {
     return Object.values(ResourceType).includes(type);
   },
 
   /**
    * Validates that a resource ID is valid
    */
-  validateResourceId(id: any): id is string {
+  validateResourceId(id: Any): id is string {
     return typeof id === 'string' && id.length > 0;
   },
 
   /**
    * Validates that a resource manager is available
    */
-  validateResourceManager(manager: any): manager is WebGPUResourceManager {
+  validateResourceManager(manager: Any): manager is WebGPUResourceManager {
     return manager && typeof manager.createResource === 'function';
   },
 
   /**
    * Creates a standardized error message for decorator validation failures
    */
-  createValidationError(decoratorName: string, field: string, value: any, expected: string): Error {
+  createValidationError(decoratorName: string, field: string, value: Any, expected: string): Error {
     return new Error(
       `[${decoratorName}] Invalid ${field}: expected ${expected}, got ${typeof value} (${value})`,
     );
@@ -721,7 +721,7 @@ export const DecoratorValidation = {
   /**
    * Validates decorator options
    */
-  validateOptions(options: any, allowedKeys: string[]): void {
+  validateOptions(options: Any, allowedKeys: string[]): void {
     if (options && typeof options === 'object') {
       const invalidKeys = Object.keys(options).filter((key) => !allowedKeys.includes(key));
       if (invalidKeys.length > 0) {
@@ -740,12 +740,12 @@ export const DecoratorErrorHandler = {
   /**
    * Wraps a function with error handling and logging
    */
-  wrapWithErrorHandling<T extends (...args: any[]) => any>(
+  wrapWithErrorHandling<T extends (...args: Any[]) => Any>(
     fn: T,
     decoratorName: string,
     context: string,
   ): T {
-    return ((...args: any[]) => {
+    return ((...args: Any[]) => {
       try {
         return fn(...args);
       } catch (error) {

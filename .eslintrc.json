@@ -20,7 +20,8 @@
     "prettier/prettier": "error",
     "no-unused-vars": 1,
     "@typescript-eslint/no-unused-vars": 0,
-    "@typescript-eslint/ban-ts-comment": 1
+    "@typescript-eslint/ban-ts-comment": 1,
+    "no-prototype-builtins": 0
   },
   "settings": {}
 }
