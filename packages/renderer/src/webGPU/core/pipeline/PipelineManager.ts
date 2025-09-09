@@ -456,11 +456,12 @@ export class PipelineManager {
    * Generate shader code based on GPU key
    */
   private async generateShaderCodeFromGpuKey(gpuKey: GpuPipelineKey): Promise<string> {
-    const defines = gpuKey.shaderDefines.map((define) => `#define ${define}`).join('\n');
+    // Generate WGSL constants for shader defines
+    const constants = gpuKey.shaderDefines.map((define) => `const ${define}: u32 = 1u;`).join('\n');
 
     // Base shader template
     const baseShader = `
-${defines}
+${constants}
 
 struct TimeUniforms {
     time: f32,
