@@ -31,6 +31,42 @@ export class ShaderManager {
   private bindGroupLayouts: Map<string, GPUBindGroupLayout> = new Map();
   private bindGroups: Map<string, GPUBindGroup> = new Map();
 
+  // Properties from InjectableClass interface
+  resourceCache?: Map<string, Any>;
+  resourcePool?: Map<string, Any>;
+  resourceLifecycles?: Map<string, string>;
+
+  /**
+   * Safe get or create shader module (fast path with fallback to create)
+   * @param id shader id
+   * @param descriptor shader descriptor (required if not found)
+   * @returns existing or newly created shader module
+   */
+  safeGetShaderModule(id: string, descriptor?: ShaderDescriptor): GPUShaderModule {
+    // Fast path: try to get existing resource from both caches
+    const existing = this.shaderModules.get(id);
+    if (existing) {
+      return existing;
+    }
+
+    // TODO: remove duplicate cache
+
+    // Also check resourceCache (from @SmartResource decorator)
+    if (this.resourceCache && this.resourceCache.has(id)) {
+      const cachedResource = this.resourceCache.get(id);
+      if (cachedResource) {
+        return cachedResource;
+      }
+    }
+
+    // Slow path: create new resource if descriptor provided
+    if (descriptor) {
+      return this.createShaderModule(id, descriptor);
+    }
+
+    throw new Error(`Shader module '${id}' not found and no descriptor provided for creation`);
+  }
+
   /**
    * create shader module with automatic resource registration
    * @param id shader id
@@ -439,5 +475,133 @@ export class ShaderManager {
 
     // clean bind groups (frame-level cleanup)
     this.bindGroups.clear();
+  }
+
+  /**
+   * Safe get or create bind group layout (fast path with fallback to create)
+   * @param id bind group layout id
+   * @param descriptor bind group layout descriptor (required if not found)
+   * @returns existing or newly created bind group layout
+   */
+  safeGetBindGroupLayout(id: string, descriptor?: BindGroupLayoutDescriptor): GPUBindGroupLayout {
+    // Fast path: try to get existing resource from both caches
+    const existing = this.bindGroupLayouts.get(id);
+    if (existing) {
+      return existing;
+    }
+
+    // TODO: remove duplicate cache
+
+    // Also check resourceCache (from @SmartResource decorator)
+    if (this.resourceCache && this.resourceCache.has(id)) {
+      const cachedResource = this.resourceCache.get(id);
+      if (cachedResource) {
+        return cachedResource;
+      }
+    }
+
+    // Slow path: create new resource if descriptor provided
+    if (descriptor) {
+      return this.createPublicBindGroupLayout(id, descriptor);
+    }
+
+    throw new Error(`Bind group layout '${id}' not found and no descriptor provided for creation`);
+  }
+
+  /**
+   * create bind group layout with automatic resource registration
+   * @param id bind group layout id
+   * @param descriptor bind group layout descriptor
+   * @returns created bind group layout
+   */
+  @SmartResource(ResourceType.BIND_GROUP_LAYOUT, {
+    cache: true,
+    lifecycle: 'persistent',
+    maxCacheSize: 30,
+  })
+  createPublicBindGroupLayout(
+    id: string,
+    descriptor: BindGroupLayoutDescriptor,
+  ): GPUBindGroupLayout {
+    // check cache
+    if (this.bindGroupLayouts.has(id)) {
+      return this.bindGroupLayouts.get(id)!;
+    }
+
+    // create bind group layout
+    const bindGroupLayout = this.device.createBindGroupLayout({
+      entries: descriptor.entries,
+      label: descriptor.label,
+    });
+
+    // cache bind group layout
+    this.bindGroupLayouts.set(id, bindGroupLayout);
+
+    console.log(`Created bind group layout: ${id}`);
+
+    return bindGroupLayout;
+  }
+
+  /**
+   * Safe get or create bind group (fast path with fallback to create)
+   * @param id bind group id
+   * @param descriptor bind group descriptor (required if not found)
+   * @returns existing or newly created bind group
+   */
+  safeGetBindGroup(id: string, descriptor?: BindGroupDescriptor): GPUBindGroup {
+    // Fast path: try to get existing resource from both caches
+    const existing = this.bindGroups.get(id);
+    if (existing) {
+      return existing;
+    }
+
+    // TODO: remove duplicate cache
+
+    // Also check resourceCache (from @SmartResource decorator)
+    if (this.resourceCache && this.resourceCache.has(id)) {
+      const cachedResource = this.resourceCache.get(id);
+      if (cachedResource) {
+        return cachedResource;
+      }
+    }
+
+    // Slow path: create new resource if descriptor provided
+    if (descriptor) {
+      return this.createPublicBindGroup(id, descriptor);
+    }
+
+    throw new Error(`Bind group '${id}' not found and no descriptor provided for creation`);
+  }
+
+  /**
+   * create bind group with automatic resource registration
+   * @param id bind group id
+   * @param descriptor bind group descriptor
+   * @returns created bind group
+   */
+  @SmartResource(ResourceType.BIND_GROUP, {
+    cache: true,
+    lifecycle: 'frame',
+    maxCacheSize: 100,
+  })
+  createPublicBindGroup(id: string, descriptor: BindGroupDescriptor): GPUBindGroup {
+    // check cache
+    if (this.bindGroups.has(id)) {
+      return this.bindGroups.get(id)!;
+    }
+
+    // create bind group
+    const bindGroup = this.device.createBindGroup({
+      layout: descriptor.layout,
+      entries: descriptor.entries,
+      label: descriptor.label,
+    });
+
+    // cache bind group
+    this.bindGroups.set(id, bindGroup);
+
+    console.log(`Created bind group: ${id}`);
+
+    return bindGroup;
   }
 }

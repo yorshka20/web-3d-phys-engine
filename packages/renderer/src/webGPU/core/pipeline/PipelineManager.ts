@@ -45,6 +45,10 @@ export class PipelineManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
   private resourceManager!: WebGPUResourceManager;
 
+  private get device(): GPUDevice {
+    return this.context.getDevice();
+  }
+
   constructor() {
     // Constructor body - services are injected via dependency injection
   }
@@ -118,8 +122,6 @@ export class PipelineManager {
    * Create GPU pipeline from GPU key
    */
   private async createGpuPipeline(gpuKey: GpuPipelineKey): Promise<GPURenderPipeline> {
-    const device = this.context.getDevice();
-
     // Create shader modules
     const shaderModules = await this.createShaderModulesFromGpuKey(gpuKey);
 
@@ -150,7 +152,7 @@ export class PipelineManager {
       label: `pipeline_${generateGpuCacheKey(gpuKey)}`,
     };
 
-    return device.createRenderPipeline(descriptor);
+    return this.device.createRenderPipeline(descriptor);
   }
 
   /**
@@ -255,37 +257,29 @@ export class PipelineManager {
   ): Promise<{ vertex: GPUShaderModule; fragment: GPUShaderModule }> {
     const shaderId = generateGpuCacheKey(gpuKey);
 
-    // Try to get existing shaders first
-    let vertexShaderResource = this.resourceManager.getShaderResource(`${shaderId}_vertex`);
-    let fragmentShaderResource = this.resourceManager.getShaderResource(`${shaderId}_fragment`);
+    // Generate shader code
+    const shaderCode = await this.generateShaderCodeFromGpuKey(gpuKey);
 
-    if (!vertexShaderResource || !fragmentShaderResource) {
-      // Create new shader modules with appropriate defines
-      const shaderCode = await this.generateShaderCodeFromGpuKey(gpuKey);
+    // Get or create shader modules (fast path with fallback)
+    const vertexShader = this.shaderManager.safeGetShaderModule(`${shaderId}_vertex`, {
+      id: `${shaderId}_vertex`,
+      code: shaderCode,
+      type: ShaderType.VERTEX,
+      entryPoint: 'vs_main',
+      label: `Vertex Shader ${shaderId}`,
+    });
 
-      this.shaderManager.createShaderModule(`${shaderId}_vertex`, {
-        id: `${shaderId}_vertex`,
-        code: shaderCode,
-        type: ShaderType.VERTEX,
-        entryPoint: 'vs_main',
-        label: `Vertex Shader ${shaderId}`,
-      });
-
-      this.shaderManager.createShaderModule(`${shaderId}_fragment`, {
-        id: `${shaderId}_fragment`,
-        code: shaderCode,
-        type: ShaderType.FRAGMENT,
-        entryPoint: 'fs_main',
-        label: `Fragment Shader ${shaderId}`,
-      });
-
-      vertexShaderResource = this.resourceManager.getShaderResource(`${shaderId}_vertex`);
-      fragmentShaderResource = this.resourceManager.getShaderResource(`${shaderId}_fragment`);
-    }
+    const fragmentShader = this.shaderManager.safeGetShaderModule(`${shaderId}_fragment`, {
+      id: `${shaderId}_fragment`,
+      code: shaderCode,
+      type: ShaderType.FRAGMENT,
+      entryPoint: 'fs_main',
+      label: `Fragment Shader ${shaderId}`,
+    });
 
     return {
-      vertex: vertexShaderResource.shader,
-      fragment: fragmentShaderResource.shader,
+      vertex: vertexShader,
+      fragment: fragmentShader,
     };
   }
 
@@ -293,8 +287,6 @@ export class PipelineManager {
    * Create pipeline layout based on GPU key
    */
   private async createPipelineLayoutFromGpuKey(gpuKey: GpuPipelineKey): Promise<GPUPipelineLayout> {
-    const device = this.context.getDevice();
-
     // Create bind group layouts based on pipeline requirements
     const bindGroupLayouts: GPUBindGroupLayout[] = [];
 
@@ -321,7 +313,7 @@ export class PipelineManager {
       }
     }
 
-    return device.createPipelineLayout({
+    return this.device.createPipelineLayout({
       bindGroupLayouts,
       label: `pipeline_layout_${generateGpuCacheKey(gpuKey)}`,
     });
