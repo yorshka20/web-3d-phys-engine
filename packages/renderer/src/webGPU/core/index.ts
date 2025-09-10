@@ -3,7 +3,7 @@ export * from './decorators';
 export * from './GeometryManager';
 export * from './InstanceManager';
 export * from './pipeline/geometry';
-export * from './RenderPipelineManager';
+export * from './RendererInitializationManager';
 export * from './ResourceManager';
 export * from './ShaderManager';
 export * from './TextureManager';

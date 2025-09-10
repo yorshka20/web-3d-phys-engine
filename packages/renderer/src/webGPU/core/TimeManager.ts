@@ -1,7 +1,8 @@
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable } from './decorators/ResourceDecorators';
-import { BufferType } from './types';
+import { ShaderManager } from './ShaderManager';
+import { BindGroupLayoutVisibility, BufferType } from './types';
 
 @Injectable(ServiceTokens.TIME_MANAGER, {
   lifecycle: 'singleton',
@@ -15,11 +16,47 @@ export class TimeManager {
   @Inject(ServiceTokens.BUFFER_MANAGER)
   private bufferManager!: BufferManager;
 
+  @Inject(ServiceTokens.SHADER_MANAGER)
+  private shaderManager!: ShaderManager;
+
   private startTime = performance.now();
   private lastTime = 0;
 
   // max frame count is 2^32 - 1
   private frameCount = 0;
+
+  constructor() {
+    this.lastTime = 0;
+    this.frameCount = 0;
+
+    // Create TimeBindGroup layout using shader manager
+    const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+      'timeBindGroupLayout',
+      {
+        entries: [
+          {
+            binding: 0,
+            visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
+            buffer: { type: 'uniform' },
+          },
+        ],
+        label: 'TimeBindGroup Layout',
+      },
+    );
+
+    this.shaderManager.createBindGroup('timeBindGroup', {
+      layout: timeBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: this.getBuffer() },
+        },
+      ],
+      label: 'timeBindGroup',
+    });
+
+    console.log('[TimeManager] Created and auto-registered: TimeBindGroup');
+  }
 
   getBuffer() {
     let buffer = this.bufferManager.getBufferByLabel(TimeManager.TimeBufferLabel);

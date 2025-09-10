@@ -2,7 +2,6 @@ import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { BufferManager } from '../BufferManager';
 import { Inject, ServiceTokens } from '../decorators';
 import { GeometryManager } from '../GeometryManager';
-import { RenderPipelineManager } from '../RenderPipelineManager';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
 import { TimeManager } from '../TimeManager';
@@ -23,9 +22,6 @@ export class BaseRenderTask {
 
   @Inject(ServiceTokens.TIME_MANAGER)
   protected timeManager!: TimeManager;
-
-  @Inject(ServiceTokens.RENDER_PIPELINE_MANAGER)
-  protected renderPipelineManager!: RenderPipelineManager;
 
   @Inject(ServiceTokens.WEBGPU_CONTEXT)
   protected context!: WebGPUContext;
