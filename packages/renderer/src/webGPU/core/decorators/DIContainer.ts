@@ -168,6 +168,8 @@ export const ServiceTokens = {
   // Advanced Pipeline Management
   PIPELINE_MANAGER: 'PipelineManager',
   PIPELINE_FACTORY: 'PipelineFactory',
+  // Renderer Initialization
+  RENDERER_INITIALIZATION_MANAGER: 'RendererInitializationManager',
   // Render Tasks
   GEOMETRY_RENDER_TASK: 'GeometryRenderTask',
   SCENE_RENDER_TASK: 'SceneRenderTask',
