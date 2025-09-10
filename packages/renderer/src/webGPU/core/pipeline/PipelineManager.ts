@@ -1,9 +1,11 @@
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
-import { ShaderType } from '../types';
+import { BindGroupLayoutDescriptor, ShaderType } from '../types';
 import { WebGPUContext } from '../WebGPUContext';
 import {
+  BindGroupLayoutName,
+  BindGroupLayoutOrder,
   GpuPipelineKey,
   SemanticPipelineKey,
   convertToGpuPipelineKey,
@@ -30,6 +32,9 @@ export class PipelineManager {
   private semanticCache = new Map<string, SimpleCacheEntry>();
   private gpuCache = new Map<string, SimpleCacheEntry>();
   private semanticToGpuMap = new Map<string, string>();
+
+  // Bind group layout cache
+  private bindGroupLayoutCache = new Map<string, GPUBindGroupLayout>();
 
   // Cache statistics
   private maxCacheSize = 100;
@@ -110,7 +115,7 @@ export class PipelineManager {
 
     // Create new pipeline
     const gpuKey = convertToGpuPipelineKey(semanticKey);
-    const pipeline = await this.createGpuPipeline(gpuKey);
+    const pipeline = await this.createGpuPipeline(gpuKey, semanticKey);
 
     // Cache in GPU layer
     this.cacheGpuPipeline(gpuId, pipeline);
@@ -121,12 +126,15 @@ export class PipelineManager {
   /**
    * Create GPU pipeline from GPU key
    */
-  private async createGpuPipeline(gpuKey: GpuPipelineKey): Promise<GPURenderPipeline> {
+  private async createGpuPipeline(
+    gpuKey: GpuPipelineKey,
+    semanticKey?: SemanticPipelineKey,
+  ): Promise<GPURenderPipeline> {
     // Create shader modules
-    const shaderModules = await this.createShaderModulesFromGpuKey(gpuKey);
+    const shaderModules = await this.createShaderModulesFromGpuKey(gpuKey, semanticKey);
 
     // Create pipeline layout
-    const layout = await this.createPipelineLayoutFromGpuKey(gpuKey);
+    const layout = await this.createPipelineLayoutFromGpuKey(gpuKey, semanticKey);
 
     // Create vertex buffer layout
     const vertexBuffers = this.createVertexBufferLayoutsFromGpuKey(gpuKey);
@@ -247,6 +255,23 @@ export class PipelineManager {
     }
   }
 
+  /**
+   * Register a custom shader definition
+   * @param definition Custom shader definition
+   */
+  registerCustomShader(definition: any): void {
+    this.shaderManager.registerCustomShader(definition);
+  }
+
+  /**
+   * Get custom shader definition by ID
+   * @param id Shader ID
+   * @returns Custom shader definition or undefined
+   */
+  getCustomShader(id: string): any {
+    return this.shaderManager.getCustomShader(id);
+  }
+
   // ===== GPU Layer Methods =====
 
   /**
@@ -254,11 +279,12 @@ export class PipelineManager {
    */
   private async createShaderModulesFromGpuKey(
     gpuKey: GpuPipelineKey,
+    semanticKey?: SemanticPipelineKey,
   ): Promise<{ vertex: GPUShaderModule; fragment: GPUShaderModule }> {
     const shaderId = generateGpuCacheKey(gpuKey);
 
     // Generate shader code
-    const shaderCode = await this.generateShaderCodeFromGpuKey(gpuKey);
+    const shaderCode = await this.generateShaderCodeFromGpuKey(gpuKey, semanticKey);
 
     // Get or create shader modules (fast path with fallback)
     const vertexShader = this.shaderManager.safeGetShaderModule(`${shaderId}_vertex`, {
@@ -284,32 +310,36 @@ export class PipelineManager {
   }
 
   /**
-   * Create pipeline layout based on GPU key
+   * Create pipeline layout based on fixed bind group order
+   * Always includes the first 4 bind groups in fixed order, then appends optional ones
    */
-  private async createPipelineLayoutFromGpuKey(gpuKey: GpuPipelineKey): Promise<GPUPipelineLayout> {
-    // Create bind group layouts based on pipeline requirements
+  private async createPipelineLayoutFromGpuKey(
+    gpuKey: GpuPipelineKey,
+    semanticKey?: SemanticPipelineKey,
+  ): Promise<GPUPipelineLayout> {
     const bindGroupLayouts: GPUBindGroupLayout[] = [];
 
-    // Always include time bind group for animated effects
-    const timeBindGroupLayout =
-      this.resourceManager.getBindGroupLayoutResource('timeBindGroupLayout');
-    if (timeBindGroupLayout) {
-      bindGroupLayouts.push(timeBindGroupLayout.layout);
+    // Always create the first 4 bind groups in fixed order
+    const fixedBindGroups = [
+      BindGroupLayoutOrder.TIME,
+      BindGroupLayoutOrder.MVP,
+      BindGroupLayoutOrder.TEXTURE,
+      BindGroupLayoutOrder.MATERIAL,
+    ];
+
+    for (const bindGroupOrder of fixedBindGroups) {
+      const layout = await this.getOrCreateBindGroupLayoutByOrder(bindGroupOrder, gpuKey);
+      if (layout) {
+        bindGroupLayouts.push(layout);
+      }
     }
 
-    // Add MVP bind group layout
-    const mvpBindGroupLayout =
-      this.resourceManager.getBindGroupLayoutResource('mvpBindGroupLayout');
-    if (mvpBindGroupLayout) {
-      bindGroupLayouts.push(mvpBindGroupLayout.layout);
-    }
-
-    // Add material bind group layout if textures are present
-    if (gpuKey.shaderDefines.includes('HAS_TEXTURES')) {
-      const materialBindGroupLayout =
-        this.resourceManager.getBindGroupLayoutResource('materialBindGroupLayout');
-      if (materialBindGroupLayout) {
-        bindGroupLayouts.push(materialBindGroupLayout.layout);
+    // Add optional bind groups based on requirements
+    const optionalBindGroups = this.determineOptionalBindGroups(gpuKey, semanticKey);
+    for (const bindGroupOrder of optionalBindGroups) {
+      const layout = await this.getOrCreateBindGroupLayoutByOrder(bindGroupOrder, gpuKey);
+      if (layout) {
+        bindGroupLayouts.push(layout);
       }
     }
 
@@ -317,6 +347,188 @@ export class PipelineManager {
       bindGroupLayouts,
       label: `pipeline_layout_${generateGpuCacheKey(gpuKey)}`,
     });
+  }
+
+  /**
+   * Determine optional bind groups based on shader requirements
+   * The first 4 bind groups are always included, this determines additional ones
+   */
+  private determineOptionalBindGroups(
+    gpuKey: GpuPipelineKey,
+    semanticKey?: SemanticPipelineKey,
+  ): BindGroupLayoutOrder[] {
+    const optionalGroups: BindGroupLayoutOrder[] = [];
+
+    // Check if custom shader has specific requirements
+    if (semanticKey?.customShaderId) {
+      const customShader = this.shaderManager.getCustomShader(semanticKey.customShaderId);
+      if (customShader) {
+        return this.determineOptionalBindGroupsFromCustomShader(customShader);
+      }
+    }
+
+    // Add lighting bind group if needed
+    if (this.needsLightingUniforms(gpuKey)) {
+      optionalGroups.push(BindGroupLayoutOrder.LIGHTING);
+    }
+
+    return optionalGroups;
+  }
+
+  /**
+   * Determine optional bind groups from custom shader requirements
+   */
+  private determineOptionalBindGroupsFromCustomShader(customShader: any): BindGroupLayoutOrder[] {
+    const optionalGroups: BindGroupLayoutOrder[] = [];
+    const requiredUniforms = customShader.requiredUniforms || [];
+
+    // Map uniform requirements to optional bind groups
+    // Note: TIME, MVP, TEXTURE, MATERIAL are always included, so we only check for additional ones
+    if (requiredUniforms.some((uniform: string) => uniform.includes('light'))) {
+      optionalGroups.push(BindGroupLayoutOrder.LIGHTING);
+    }
+
+    // Add more custom bind groups as needed
+    // For now, we only support lighting as an optional group
+
+    return optionalGroups;
+  }
+
+  /**
+   * Check if pipeline needs lighting uniforms
+   */
+  private needsLightingUniforms(gpuKey: GpuPipelineKey): boolean {
+    return gpuKey.shaderDefines.some(
+      (define) => define.includes('LIGHTING') || define.includes('PBR') || define.includes('LIGHT'),
+    );
+  }
+
+  /**
+   * Get or create bind group layout by order
+   */
+  private async getOrCreateBindGroupLayoutByOrder(
+    bindGroupOrder: BindGroupLayoutOrder,
+    gpuKey: GpuPipelineKey,
+  ): Promise<GPUBindGroupLayout | null> {
+    const layoutId = this.getBindGroupLayoutId(bindGroupOrder);
+
+    // Try to get existing layout from cache
+    if (this.bindGroupLayoutCache.has(layoutId)) {
+      return this.bindGroupLayoutCache.get(layoutId)!;
+    }
+
+    // Try to get existing layout from resource manager
+    const existingLayout = this.resourceManager.getBindGroupLayoutResource(layoutId);
+    if (existingLayout) {
+      this.bindGroupLayoutCache.set(layoutId, existingLayout.layout);
+      return existingLayout.layout;
+    }
+
+    // Create new layout based on order
+    const layout = this.createBindGroupLayoutByOrder(bindGroupOrder, gpuKey);
+    if (layout) {
+      this.bindGroupLayoutCache.set(layoutId, layout);
+    }
+    return layout;
+  }
+
+  /**
+   * Get bind group layout ID from order
+   */
+  private getBindGroupLayoutId(bindGroupOrder: BindGroupLayoutOrder): string {
+    switch (bindGroupOrder) {
+      case BindGroupLayoutOrder.TIME:
+        return BindGroupLayoutName.TIME;
+      case BindGroupLayoutOrder.MVP:
+        return BindGroupLayoutName.MVP;
+      case BindGroupLayoutOrder.TEXTURE:
+        return BindGroupLayoutName.TEXTURE;
+      case BindGroupLayoutOrder.MATERIAL:
+        return BindGroupLayoutName.MATERIAL;
+      case BindGroupLayoutOrder.LIGHTING:
+        return BindGroupLayoutName.LIGHTING;
+      default:
+        return `customBindGroupLayout_${bindGroupOrder}`;
+    }
+  }
+
+  /**
+   * Create bind group layout by order
+   */
+  private createBindGroupLayoutByOrder(
+    bindGroupOrder: BindGroupLayoutOrder,
+    gpuKey: GpuPipelineKey,
+  ): GPUBindGroupLayout | null {
+    const entries: BindGroupLayoutDescriptor['entries'] = [];
+    const layoutId = this.getBindGroupLayoutId(bindGroupOrder);
+
+    switch (bindGroupOrder) {
+      case BindGroupLayoutOrder.TIME:
+        // Group 0: Time uniforms (per-frame changes)
+        entries.push({
+          binding: 0,
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        });
+        break;
+
+      case BindGroupLayoutOrder.MVP:
+        // Group 1: MVP matrices (camera changes)
+        entries.push({
+          binding: 0,
+          visibility: GPUShaderStage.VERTEX,
+          buffer: { type: 'uniform' },
+        });
+        break;
+
+      case BindGroupLayoutOrder.TEXTURE:
+        // Group 2: Texture resources (material type changes)
+        // This group is always present but may be empty for non-textured materials
+        entries.push({
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        });
+        entries.push({
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        });
+        break;
+
+      case BindGroupLayoutOrder.MATERIAL:
+        // Group 3: Material uniforms (per-object changes)
+        entries.push({
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        });
+        break;
+
+      case BindGroupLayoutOrder.LIGHTING:
+        // Group 4: Lighting uniforms (optional)
+        entries.push({
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        });
+        break;
+
+      default:
+        console.warn(`Unknown bind group order: ${bindGroupOrder}`);
+        return null;
+    }
+
+    const layout = this.shaderManager.createCustomBindGroupLayout(layoutId, {
+      entries,
+      label: layoutId,
+    });
+
+    // Cache the layout - Note: This would need to be implemented in ResourceManager
+    // For now, we'll just return the layout without caching
+    // TODO: Implement registerBindGroupLayoutResource in ResourceManager
+
+    return layout;
   }
 
   /**
@@ -455,13 +667,40 @@ export class PipelineManager {
   /**
    * Generate shader code based on GPU key
    */
-  private async generateShaderCodeFromGpuKey(gpuKey: GpuPipelineKey): Promise<string> {
+  private async generateShaderCodeFromGpuKey(
+    gpuKey: GpuPipelineKey,
+    semanticKey?: SemanticPipelineKey,
+  ): Promise<string> {
+    // Check if we have a custom shader
+    if (semanticKey?.customShaderId) {
+      const customShader = this.shaderManager.getCustomShader(semanticKey.customShaderId);
+      if (customShader) {
+        // Use custom shader with vertex format adaptation
+        const vertexFormat = semanticKey.vertexFormat;
+        const shaderParams = {}; // TODO: Get shader params from material
+        return this.shaderManager.generateCustomShaderCode(
+          customShader,
+          vertexFormat,
+          gpuKey.shaderDefines,
+          shaderParams,
+        );
+      }
+    }
+
+    // Fallback to default shader generation
+    return this.generateDefaultShaderCode(gpuKey);
+  }
+
+  /**
+   * Generate default shader code (original implementation)
+   */
+  private generateDefaultShaderCode(gpuKey: GpuPipelineKey): string {
     // Generate WGSL constants for shader defines
     const overrides = gpuKey.shaderDefines
       .map((define) => `override ${define}: u32 = 1u;`)
       .join('\n');
 
-    // Base shader template
+    // Base shader template with fixed bind group indices
     const baseShader = `
 ${overrides}
 
@@ -476,6 +715,14 @@ struct MVPUniforms {
     mvpMatrix: mat4x4<f32>,
 }
 
+struct MaterialUniforms {
+    albedo: vec4<f32>,
+    metallic: f32,
+    roughness: f32,
+    emissive: vec4<f32>,
+    emissiveIntensity: f32,
+}
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     ${(gpuKey.vertexAttributes & 0x02) !== 0 ? '@location(1) normal: vec3<f32>,' : ''}
@@ -488,8 +735,12 @@ struct VertexOutput {
     ${(gpuKey.vertexAttributes & 0x04) !== 0 ? '@location(1) uv: vec2<f32>' : ''}
 }
 
-@group(0) @binding(0) var<uniform> timeData: TimeUniforms;
-@group(1) @binding(0) var<uniform> mvp: MVPUniforms;
+// Fixed bind group indices
+@group(0) @binding(0) var<uniform> timeData: TimeUniforms;           // TIME
+@group(1) @binding(0) var<uniform> mvp: MVPUniforms;                 // MVP
+@group(2) @binding(0) var texture: texture_2d<f32>;                 // TEXTURE
+@group(2) @binding(1) var textureSampler: sampler;                  // TEXTURE
+@group(3) @binding(0) var<uniform> material: MaterialUniforms;      // MATERIAL
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {

@@ -380,6 +380,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
     console.log('[WebGPURenderer] Created material bind group layout for PipelineManager');
 
+    // create depth texture
     const canvas = this.context.getContext().canvas;
     this.depthTexture = this.device.createTexture({
       size: {
@@ -391,6 +392,101 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'Depth Texture',
     });
     console.log('[WebGPURenderer] Created depth texture');
+
+    const texture = this.textureManager.createTexture('default_white_texture', {
+      id: 'default_white_texture',
+      width: 1,
+      height: 1,
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    const sampler = this.textureManager.createSampler('default_white_sampler', {
+      id: 'default_white_sampler',
+      addressMode: 'clamp-to-edge',
+      magFilter: 'linear',
+      minFilter: 'linear',
+    });
+    console.log('[WebGPURenderer] Created default white texture');
+
+    const textureBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+      'textureBindGroupLayout',
+      {
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+        ],
+        label: 'TextureBindGroup Layout',
+      },
+    );
+    this.shaderManager.createBindGroup('textureBindGroup', {
+      layout: textureBindGroupLayout,
+      entries: [
+        { binding: 0, resource: texture.createView() },
+        { binding: 1, resource: sampler },
+      ],
+      label: 'textureBindGroup',
+    });
+    console.log('[WebGPURenderer] Created texture bind group');
+
+    const materialBuffer = this.bufferManager.createBuffer({
+      type: BufferType.UNIFORM,
+      size: 32,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: 'default_material_buffer',
+    });
+
+    // Get the existing material bind group layout (created earlier)
+    const materialBindGroupLayout =
+      this.shaderManager.getBindGroupLayout('materialBindGroupLayout');
+    if (!materialBindGroupLayout) {
+      throw new Error('Material bind group layout not found');
+    }
+
+    this.shaderManager.createBindGroup('materialBindGroup', {
+      layout: materialBindGroupLayout,
+      entries: [
+        { binding: 0, resource: texture.createView() }, // texture
+        { binding: 1, resource: sampler }, // sampler
+        { binding: 2, resource: { buffer: materialBuffer } }, // material buffer
+      ],
+      label: 'materialBindGroup',
+    });
+    console.log('[WebGPURenderer] Created material bind group');
+
+    // Create lighting bind group layout and bind group
+    const lightingBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+      'lightingBindGroupLayout',
+      {
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: 'uniform' },
+          },
+        ],
+        label: 'LightingBindGroup Layout',
+      },
+    );
+
+    // Create a default lighting buffer (can be expanded later for actual lighting data)
+    const lightingBuffer = this.bufferManager.createBuffer({
+      type: BufferType.UNIFORM,
+      size: 64, // Space for basic lighting data (direction, color, etc.)
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: 'default_lighting_buffer',
+    });
+
+    this.shaderManager.createBindGroup('lightingBindGroup', {
+      layout: lightingBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: lightingBuffer },
+        },
+      ],
+      label: 'lightingBindGroup',
+    });
+    console.log('[WebGPURenderer] Created lighting bind group');
   }
 
   /**
@@ -527,6 +623,8 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Get or create pipeline for this group
     const firstRenderable = renderGroup.renderables[0];
+
+    // createAutoPipeline now supports custom shaders automatically
     const pipeline = await this.pipelineFactory.createAutoPipeline(
       firstRenderable.material,
       firstRenderable.geometryData,
@@ -546,13 +644,32 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   /**
    * Set common bind groups that are shared across all renderables
+   * Always sets all fixed bind groups to avoid WebGPU errors
    */
   private setCommonBindGroups(renderPass: GPURenderPassEncoder, _frameData: FrameData): void {
-    // Set time bind group (if available)
+    // Group 0: Time bind group (always required)
     const timeBindGroup = this.resourceManager.getBindGroupResource('timeBindGroup');
-    if (timeBindGroup) {
-      renderPass.setBindGroup(0, timeBindGroup.bindGroup);
+    if (!timeBindGroup) {
+      throw new Error('Time bind group not found');
     }
+    renderPass.setBindGroup(0, timeBindGroup.bindGroup);
+
+    // Group 1: MVP bind group (set per object, but we need a default for unused cases)
+    // This will be overridden in renderObject method
+
+    // Group 2: Texture bind group (always required)
+    const textureBindGroup = this.resourceManager.getBindGroupResource('textureBindGroup');
+    if (!textureBindGroup) {
+      throw new Error('Texture bind group not found');
+    }
+    renderPass.setBindGroup(2, textureBindGroup.bindGroup);
+
+    // Group 3: Material bind group (always required)
+    const materialBindGroup = this.resourceManager.getBindGroupResource('materialBindGroup');
+    if (!materialBindGroup) {
+      throw new Error('Material bind group not found');
+    }
+    renderPass.setBindGroup(3, materialBindGroup.bindGroup);
   }
 
   /**

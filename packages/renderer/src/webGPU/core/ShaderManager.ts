@@ -12,6 +12,43 @@ import {
 import { ResourceType } from './types/constant';
 
 /**
+ * Custom shader definition for advanced material rendering
+ */
+export interface CustomShaderDefinition {
+  id: string;
+  name: string;
+  description: string;
+
+  // Shader code
+  vertexCode: string;
+  fragmentCode: string;
+
+  // Dependencies
+  requiredUniforms: string[];
+  requiredTextures: string[];
+
+  // Supported vertex formats
+  supportedVertexFormats: ('simple' | 'full')[];
+
+  // Render state requirements
+  renderState: {
+    blendMode?: 'replace' | 'alpha-blend' | 'alpha-to-coverage';
+    depthTest?: boolean;
+    depthWrite?: boolean;
+    cullMode?: 'none' | 'front' | 'back';
+  };
+
+  // Shader parameters that can be overridden by materials
+  shaderParams?: {
+    [paramName: string]: {
+      type: 'float' | 'int' | 'bool' | 'vec2' | 'vec3' | 'vec4' | 'mat3' | 'mat4';
+      defaultValue: any;
+      description?: string;
+    };
+  };
+}
+
+/**
  * WebGPU shader manager
  * manage shader modules and render pipelines
  */
@@ -31,9 +68,12 @@ export class ShaderManager {
   private bindGroupLayouts: Map<string, GPUBindGroupLayout> = new Map();
   private bindGroups: Map<string, GPUBindGroup> = new Map();
 
+  // Custom shader registry
+  private customShaders: Map<string, CustomShaderDefinition> = new Map();
+
   // Properties from InjectableClass interface
-  resourceCache?: Map<string, Any>;
-  resourcePool?: Map<string, Any>;
+  resourceCache?: Map<string, any>;
+  resourcePool?: Map<string, any>;
   resourceLifecycles?: Map<string, string>;
 
   /**
@@ -475,6 +515,183 @@ export class ShaderManager {
 
     // clean bind groups (frame-level cleanup)
     this.bindGroups.clear();
+  }
+
+  // ===== Custom Shader Management =====
+
+  /**
+   * Register a custom shader definition
+   * @param definition Custom shader definition
+   */
+  registerCustomShader(definition: CustomShaderDefinition): void {
+    this.customShaders.set(definition.id, definition);
+    console.log(`Registered custom shader: ${definition.id} - ${definition.name}`);
+  }
+
+  /**
+   * Get custom shader definition by ID
+   * @param id Shader ID
+   * @returns Custom shader definition or undefined
+   */
+  getCustomShader(id: string): CustomShaderDefinition | undefined {
+    return this.customShaders.get(id);
+  }
+
+  /**
+   * Get all registered custom shaders
+   * @returns Array of custom shader definitions
+   */
+  getAllCustomShaders(): CustomShaderDefinition[] {
+    return Array.from(this.customShaders.values());
+  }
+
+  /**
+   * Check if a custom shader is registered
+   * @param id Shader ID
+   * @returns True if shader is registered
+   */
+  hasCustomShader(id: string): boolean {
+    return this.customShaders.has(id);
+  }
+
+  /**
+   * Generate shader code for custom shader with vertex format adaptation
+   * @param customShader Custom shader definition
+   * @param vertexFormat Target vertex format
+   * @param shaderDefines Additional shader defines
+   * @param shaderParams Material-specific shader parameters
+   * @returns Combined shader code
+   */
+  generateCustomShaderCode(
+    customShader: CustomShaderDefinition,
+    vertexFormat: 'simple' | 'full',
+    shaderDefines: string[] = [],
+    shaderParams: Record<string, any> = {},
+  ): string {
+    // Generate shader defines
+    const defines = shaderDefines.map((define) => `override ${define}: u32 = 1u;`).join('\n');
+
+    // Generate shader parameters
+    const params = this.generateShaderParameters(customShader, shaderParams);
+
+    // Adapt vertex shader based on vertex format
+    const adaptedVertexCode = this.adaptVertexShaderForFormat(
+      customShader.vertexCode,
+      vertexFormat,
+    );
+
+    // Adapt fragment shader with defines
+    const adaptedFragmentCode = this.adaptFragmentShaderWithDefines(
+      customShader.fragmentCode,
+      shaderDefines,
+    );
+
+    return `${defines}\n\n${params}\n\n${adaptedVertexCode}\n\n${adaptedFragmentCode}`;
+  }
+
+  /**
+   * Adapt vertex shader code based on vertex format
+   * @param baseCode Base vertex shader code
+   * @param vertexFormat Target vertex format
+   * @returns Adapted vertex shader code
+   */
+  private adaptVertexShaderForFormat(baseCode: string, vertexFormat: 'simple' | 'full'): string {
+    if (vertexFormat === 'full') {
+      return baseCode; // Full format supports all attributes
+    }
+
+    // For simple format, remove normal and UV attributes
+    let adaptedCode = baseCode;
+
+    // Remove normal attribute from input
+    adaptedCode = adaptedCode.replace(/@location\(1\)\s+normal:\s+vec3<f32>,?\s*/g, '');
+
+    // Remove UV attribute from input
+    adaptedCode = adaptedCode.replace(/@location\(2\)\s+uv:\s+vec2<f32>,?\s*/g, '');
+
+    // Remove normal from output
+    adaptedCode = adaptedCode.replace(/@location\(0\)\s+normal:\s+vec3<f32>,?\s*/g, '');
+
+    // Remove UV from output
+    adaptedCode = adaptedCode.replace(/@location\(1\)\s+uv:\s+vec2<f32>,?\s*/g, '');
+
+    // Remove assignments to normal and UV in vertex shader
+    adaptedCode = adaptedCode.replace(/out\.normal\s*=\s*[^;]+;/g, '');
+    adaptedCode = adaptedCode.replace(/out\.uv\s*=\s*[^;]+;/g, '');
+
+    return adaptedCode;
+  }
+
+  /**
+   * Adapt fragment shader code with shader defines
+   * @param baseCode Base fragment shader code
+   * @param shaderDefines Shader defines to apply
+   * @returns Adapted fragment shader code
+   */
+  private adaptFragmentShaderWithDefines(baseCode: string, shaderDefines: string[]): string {
+    // For now, just return the base code
+    // In the future, we could add conditional compilation based on defines
+    return baseCode;
+  }
+
+  /**
+   * Generate shader parameters from custom shader definition and material overrides
+   * @param customShader Custom shader definition
+   * @param shaderParams Material-specific parameter overrides
+   * @returns WGSL parameter declarations
+   */
+  private generateShaderParameters(
+    customShader: CustomShaderDefinition,
+    shaderParams: Record<string, any>,
+  ): string {
+    if (!customShader.shaderParams) {
+      return '';
+    }
+
+    const paramDeclarations: string[] = [];
+
+    for (const [paramName, paramDef] of Object.entries(customShader.shaderParams)) {
+      // Use material override value or default value
+      const value =
+        shaderParams[paramName] !== undefined ? shaderParams[paramName] : paramDef.defaultValue;
+
+      // Convert value to WGSL format
+      const wgslValue = this.convertValueToWGSL(value, paramDef.type);
+
+      // Generate parameter declaration
+      paramDeclarations.push(`override ${paramName}: ${paramDef.type} = ${wgslValue};`);
+    }
+
+    return paramDeclarations.join('\n');
+  }
+
+  /**
+   * Convert JavaScript value to WGSL format
+   * @param value JavaScript value
+   * @param type WGSL type
+   * @returns WGSL formatted value
+   */
+  private convertValueToWGSL(value: any, type: string): string {
+    switch (type) {
+      case 'float':
+        return `${value}f`;
+      case 'int':
+        return `${value}i`;
+      case 'bool':
+        return value ? 'true' : 'false';
+      case 'vec2':
+        return `vec2<f32>(${value[0]}f, ${value[1]}f)`;
+      case 'vec3':
+        return `vec3<f32>(${value[0]}f, ${value[1]}f, ${value[2]}f)`;
+      case 'vec4':
+        return `vec4<f32>(${value[0]}f, ${value[1]}f, ${value[2]}f, ${value[3]}f)`;
+      case 'mat3':
+        return `mat3x3<f32>(${value.join('f, ')}f)`;
+      case 'mat4':
+        return `mat4x4<f32>(${value.join('f, ')}f)`;
+      default:
+        return `${value}`;
+    }
   }
 
   /**

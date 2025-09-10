@@ -105,8 +105,10 @@ export class BufferManager {
    * @param label label
    * @returns vertex buffer
    */
-  @AutoRegisterResource(ResourceType.BUFFER, {
-    lifecycle: 'scene',
+  @SmartResource(ResourceType.BUFFER, {
+    cache: true,
+    lifecycle: 'frame',
+    maxCacheSize: 20,
   })
   createVertexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     const buffer = this.createBuffer({
@@ -126,8 +128,10 @@ export class BufferManager {
    * @param label label
    * @returns index buffer
    */
-  @AutoRegisterResource(ResourceType.BUFFER, {
-    lifecycle: 'scene',
+  @SmartResource(ResourceType.BUFFER, {
+    cache: true,
+    lifecycle: 'frame',
+    maxCacheSize: 20,
   })
   createIndexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     const buffer = this.createBuffer({

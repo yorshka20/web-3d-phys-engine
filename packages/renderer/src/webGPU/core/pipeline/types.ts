@@ -24,6 +24,39 @@ export type RenderPurpose =
   | 'postprocess';
 
 /**
+ * Bind Group Layout Order - defines the fixed order of bind groups in pipeline layout
+ * This ensures consistent resource indexing across all shaders
+ */
+export enum BindGroupLayoutOrder {
+  TIME = 0, // Group 0: Time uniforms (per-frame changes)
+  MVP = 1, // Group 1: MVP matrices (camera changes)
+  TEXTURE = 2, // Group 2: Texture resources (material type changes)
+  MATERIAL = 3, // Group 3: Material uniforms (per-object changes)
+  LIGHTING = 4, // Group 4: Lighting uniforms (optional)
+  CUSTOM = 5, // Group 5+: Custom bind groups (optional)
+}
+
+export enum BindGroupLayoutName {
+  TIME = 'timeBindGroupLayout',
+  MVP = 'mvpBindGroupLayout',
+  TEXTURE = 'textureBindGroupLayout',
+  MATERIAL = 'materialBindGroupLayout',
+  LIGHTING = 'lightingBindGroupLayout',
+}
+
+/**
+ * Bind Group Layout Configuration
+ */
+export interface BindGroupLayoutConfig {
+  order: BindGroupLayoutOrder;
+  name: string;
+  description: string;
+  isRequired: boolean;
+  visibility: GPUShaderStageFlags;
+  entries: GPUBindGroupLayoutEntry[];
+}
+
+/**
  * Semantic Pipeline Key - ECS system level
  * High-level semantic characteristics that affect rendering strategy
  */
@@ -43,6 +76,9 @@ export interface SemanticPipelineKey {
 
   // Geometry type
   primitiveType: 'triangle' | 'line';
+
+  // Custom shader support
+  customShaderId?: string; // ID of custom shader to use
 }
 
 /**
@@ -149,6 +185,7 @@ export function generateSemanticPipelineKey(
     hasTextures: hasAnyTexture(material),
     primitiveType: determinePrimitiveType(geometry, options),
     vertexFormat: geometry.vertexFormat,
+    customShaderId: material.customShaderId,
   };
 }
 
@@ -156,7 +193,16 @@ export function generateSemanticPipelineKey(
  * Generate semantic cache key from semantic pipeline key
  */
 export function generateSemanticCacheKey(key: SemanticPipelineKey): string {
-  return `${key.renderPass}_${key.alphaMode}_${key.doubleSided}_${key.vertexFormat}_${key.hasTextures}_${key.primitiveType}`;
+  const keys = [
+    key.renderPass,
+    key.alphaMode,
+    key.doubleSided,
+    key.vertexFormat,
+    key.hasTextures,
+    key.primitiveType,
+    key.customShaderId,
+  ];
+  return keys.join('_');
 }
 
 /**
@@ -164,7 +210,16 @@ export function generateSemanticCacheKey(key: SemanticPipelineKey): string {
  */
 export function generateGpuCacheKey(key: GpuPipelineKey): string {
   const defines = key.shaderDefines.sort().join(',');
-  return `${key.blendState}_${key.cullMode}_${key.topology}_${key.depthWrite}_${key.depthTest}_${key.vertexAttributes}_${defines}`;
+  const keys = [
+    key.blendState,
+    key.cullMode,
+    key.topology,
+    key.depthWrite,
+    key.depthTest,
+    key.vertexAttributes,
+    defines,
+  ];
+  return keys.join('_');
 }
 
 /**
