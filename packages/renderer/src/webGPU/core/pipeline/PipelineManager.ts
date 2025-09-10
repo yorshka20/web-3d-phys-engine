@@ -457,11 +457,13 @@ export class PipelineManager {
    */
   private async generateShaderCodeFromGpuKey(gpuKey: GpuPipelineKey): Promise<string> {
     // Generate WGSL constants for shader defines
-    const constants = gpuKey.shaderDefines.map((define) => `const ${define}: u32 = 1u;`).join('\n');
+    const overrides = gpuKey.shaderDefines
+      .map((define) => `override ${define}: u32 = 1u;`)
+      .join('\n');
 
     // Base shader template
     const baseShader = `
-${constants}
+${overrides}
 
 struct TimeUniforms {
     time: f32,
