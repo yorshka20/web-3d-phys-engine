@@ -1,7 +1,7 @@
-import { Inject, Injectable } from './decorators';
+import { AutoRegisterResource, Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
-import { SamplerDescriptor, TextureDescriptor } from './types';
+import { ResourceType, SamplerDescriptor, TextureDescriptor } from './types';
 
 @Injectable(ServiceTokens.TEXTURE_MANAGER, {
   lifecycle: 'singleton',
@@ -27,16 +27,20 @@ export class TextureManager {
     return this.textures.get(id)!;
   }
 
-  createSampler(descriptor: SamplerDescriptor): string {
+  @AutoRegisterResource(ResourceType.SAMPLER, {
+    lifecycle: 'persistent',
+  })
+  createSampler(id: string, descriptor: SamplerDescriptor): GPUSampler {
     const sampler = this.device.createSampler({
       addressModeU: descriptor.addressMode,
       addressModeV: descriptor.addressMode,
       addressModeW: descriptor.addressMode,
       magFilter: descriptor.magFilter,
       minFilter: descriptor.minFilter,
+      label: id,
     });
-    this.samplers.set(descriptor.id, sampler);
-    return descriptor.id;
+    this.samplers.set(id, sampler);
+    return sampler;
   }
 
   updateTexture(id: string, data: ImageData): void {
@@ -48,13 +52,18 @@ export class TextureManager {
     );
   }
 
-  createTexture(descriptor: TextureDescriptor): GPUTexture {
+  @AutoRegisterResource(ResourceType.TEXTURE, {
+    lifecycle: 'persistent',
+  })
+  createTexture(id: string, descriptor: TextureDescriptor): GPUTexture {
     const texture = this.device.createTexture({
       size: { width: descriptor.width, height: descriptor.height },
       format: descriptor.format,
       usage: descriptor.usage,
+      label: id,
     });
-    this.textures.set(descriptor.id, texture);
+
+    this.textures.set(id, texture);
     return texture;
   }
 

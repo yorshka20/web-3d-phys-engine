@@ -38,6 +38,7 @@ export interface ComputePipelineDescriptor {
  * bind group layout descriptor interface
  */
 export interface BindGroupLayoutDescriptor {
+  // TODO: use GPUBindGroupLayoutEntry
   entries: Array<{
     binding: number;
     visibility: BindGroupLayoutVisibility;
@@ -57,6 +58,7 @@ export interface BindGroupLayoutDescriptor {
  */
 export interface BindGroupDescriptor {
   layout: GPUBindGroupLayout;
+  // TODO: use GPUBindGroupEntry
   entries: Array<{
     binding: number;
     resource: GPUBindingResource;
