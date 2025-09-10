@@ -2,7 +2,7 @@ import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable } from './decorators/ResourceDecorators';
 import { ShaderManager } from './ShaderManager';
-import { BindGroupLayoutVisibility, BufferType } from './types';
+import { BufferType } from './types';
 
 @Injectable(ServiceTokens.TIME_MANAGER, {
   lifecycle: 'singleton',
@@ -28,34 +28,6 @@ export class TimeManager {
   constructor() {
     this.lastTime = 0;
     this.frameCount = 0;
-
-    // Create TimeBindGroup layout using shader manager
-    const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
-      'timeBindGroupLayout',
-      {
-        entries: [
-          {
-            binding: 0,
-            visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
-            buffer: { type: 'uniform' },
-          },
-        ],
-        label: 'TimeBindGroup Layout',
-      },
-    );
-
-    this.shaderManager.createBindGroup('timeBindGroup', {
-      layout: timeBindGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: { buffer: this.getBuffer() },
-        },
-      ],
-      label: 'timeBindGroup',
-    });
-
-    console.log('[TimeManager] Created and auto-registered: TimeBindGroup');
   }
 
   getBuffer() {

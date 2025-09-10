@@ -1,20 +1,27 @@
 import { GeometryType, SystemPriorities } from '@ecs';
-import { FrameData } from '@ecs/systems/rendering/types';
+import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { RectArea } from '@ecs/types/types';
 import chroma from 'chroma-js';
+import { mat4 } from 'gl-matrix';
 import { TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { BufferManager } from '../core/BufferManager';
 import { initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
 import { BaseRenderTask } from '../core/pipeline/BaseRenderTask';
-import { CoordinateRenderTask } from '../core/pipeline/coordinate/CoordinateRenderTask';
-import { GeometryRenderTask } from '../core/pipeline/geometry/GeometryRenderTask';
-import { SceneRenderTask } from '../core/pipeline/scene/SceneRenderTask';
-import { RenderPipelineManager } from '../core/RenderPipelineManager';
+import { PipelineFactory } from '../core/pipeline/PipelineFactory';
+import { PipelineManager } from '../core/pipeline/PipelineManager';
+import { determineRenderPurpose, RenderPurpose } from '../core/pipeline/types';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
-import { BufferDescriptor, GeometryParams, RenderBatch, ShaderDescriptor } from '../core/types';
+import {
+  BindGroupLayoutVisibility,
+  BufferDescriptor,
+  BufferType,
+  GeometryParams,
+  RenderBatch,
+  ShaderDescriptor,
+} from '../core/types';
 import {
   BindGroup,
   Camera,
@@ -33,7 +40,12 @@ import {
   Scene,
   Texture,
 } from './types/IWebGPURenderer';
-
+// Render group definition
+interface RenderGroup {
+  purpose: RenderPurpose;
+  renderables: RenderData[];
+  pipeline?: GPURenderPipeline;
+}
 /**
  * WebGPU Renderer
  *
@@ -62,7 +74,8 @@ export class WebGPURenderer implements IWebGPURenderer {
   private resourceManager!: WebGPUResourceManager;
   private timeManager!: TimeManager;
   private geometryManager!: GeometryManager;
-  private renderPipelineManager!: RenderPipelineManager;
+  private pipelineManager!: PipelineManager;
+  private pipelineFactory!: PipelineFactory;
 
   // Render tasks
   private renderTasks: BaseRenderTask[] = [];
@@ -100,9 +113,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     if (this.textureManager) {
       this.textureManager.onDestroy();
     }
-    if (this.renderPipelineManager) {
-      this.renderPipelineManager.destroy();
-    }
+
     if (this.context) {
       this.context.destroy();
     }
@@ -290,14 +301,11 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.textureManager = new TextureManager();
     this.timeManager = new TimeManager();
     this.geometryManager = new GeometryManager();
-    this.renderPipelineManager = new RenderPipelineManager();
+    this.pipelineManager = new PipelineManager();
+    this.pipelineFactory = new PipelineFactory();
 
-    this.renderTasks.push(new CoordinateRenderTask());
-    this.renderTasks.push(new GeometryRenderTask());
-    this.renderTasks.push(new SceneRenderTask());
-
-    // Initialize render tasks
-    await Promise.all(this.renderTasks.map((task) => task.initialize()));
+    // Ensure essential bind group layouts are created for PipelineManager
+    this.ensureEssentialBindGroupLayouts();
 
     // Create depth texture
     this.createDepthTexture();
@@ -323,6 +331,74 @@ export class WebGPURenderer implements IWebGPURenderer {
     return window.devicePixelRatio;
   }
 
+  /**
+   * Ensure essential bind group layouts are created for PipelineManager
+   * This is a minimal fix for the current resource preparation issue
+   */
+  private ensureEssentialBindGroupLayouts(): void {
+    // Create TimeBindGroup layout using shader manager
+    const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+      'timeBindGroupLayout',
+      {
+        entries: [
+          {
+            binding: 0,
+            visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
+            buffer: { type: 'uniform' },
+          },
+        ],
+        label: 'TimeBindGroup Layout',
+      },
+    );
+
+    this.shaderManager.createBindGroup('timeBindGroup', {
+      layout: timeBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: this.timeManager.getBuffer() },
+        },
+      ],
+      label: 'timeBindGroup',
+    });
+
+    // We only need to ensure MVP bind group layout exists
+    this.shaderManager.createCustomBindGroupLayout('mvpBindGroupLayout', {
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.VERTEX,
+          buffer: { type: 'uniform' },
+        },
+      ],
+      label: 'MVPBindGroup Layout',
+    });
+    console.log('[WebGPURenderer] Created MVP bind group layout for PipelineManager');
+
+    // Ensure material bind group layout exists for texture support
+    this.shaderManager.createCustomBindGroupLayout('materialBindGroupLayout', {
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
+      ],
+      label: 'MaterialBindGroup Layout',
+    });
+    console.log('[WebGPURenderer] Created material bind group layout for PipelineManager');
+  }
+
   private createDepthTexture(): void {
     const canvas = this.context.getContext().canvas;
     this.depthTexture = this.device.createTexture({
@@ -340,7 +416,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   /**
    * Main render loop
    */
-  render(deltaTime: number, frameData: FrameData): void {
+  async render(deltaTime: number, frameData: FrameData): Promise<void> {
     if (!this.initialized) {
       console.warn('WebGPU not initialized');
       return;
@@ -356,7 +432,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       this.beginFrame();
 
       // Render frame
-      this.renderTick(deltaTime, frameData);
+      await this.renderTick(deltaTime, frameData);
 
       // End frame
       this.endFrame();
@@ -365,13 +441,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
   }
 
-  private renderTick(deltaTime: number, frameData: FrameData): void {
-    // Note: Time is already updated in beginFrame()
-
-    // Update projection and view matrices (same for all cubes)
-    const now = performance.now() / 1000;
-    this.timeManager.updateTime(now * 1000);
-
+  private async renderTick(deltaTime: number, frameData: FrameData): Promise<void> {
     // create command encoder
     const commandEncoder = this.device.createCommandEncoder();
 
@@ -394,14 +464,19 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
 
     // Debug: List all available resources
-    if (this.frameCount % 60 === 0) {
-      const resourceStats = this.resourceManager.getResourceStats();
-      // Only log every 60 frames to reduce spam
-      // console.log('[WebGPURenderer] Available resources:', resourceStats);
-    }
+    // if (this.frameCount % 300 === 0) {
+    //   const resourceStats = this.resourceManager.getResourceStats();
+    //   // Only log every 60 frames to reduce spam
+    //   console.log('[WebGPURenderer] Available resources:', resourceStats);
+    // }
 
-    // Render geometry instances
-    this.renderTasks.forEach((task) => task.render(renderPass, frameData));
+    // Group renderables by purpose for efficient pipeline usage
+    const renderGroups = this.groupRenderablesByPurpose(frameData.renderables);
+
+    // Render each group with its optimized pipeline
+    for (const renderGroup of renderGroups) {
+      await this.renderGroup(renderGroup, renderPass, frameData);
+    }
 
     renderPass.end();
 
@@ -433,6 +508,176 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Note: Frame counter is incremented in endFrame()
     // Render loop continuation is handled by external system
+  }
+
+  /**
+   * Group renderables by their render purpose for efficient pipeline usage
+   */
+  private groupRenderablesByPurpose(renderables: RenderData[]): RenderGroup[] {
+    const groups = new Map<RenderPurpose, RenderData[]>();
+
+    // Group renderables by their determined purpose
+    for (const renderable of renderables) {
+      const purpose = determineRenderPurpose(renderable.material);
+
+      if (!groups.has(purpose)) {
+        groups.set(purpose, []);
+      }
+      groups.get(purpose)!.push(renderable);
+    }
+
+    // Convert to RenderGroup array
+    return Array.from(groups.entries()).map(([purpose, renderables]) => ({
+      purpose,
+      renderables,
+    }));
+  }
+
+  /**
+   * Render a group of renderables with the same pipeline
+   */
+  private async renderGroup(
+    renderGroup: RenderGroup,
+    renderPass: GPURenderPassEncoder,
+    frameData: FrameData,
+  ): Promise<void> {
+    if (renderGroup.renderables.length === 0) {
+      return;
+    }
+
+    // Get or create pipeline for this group
+    const firstRenderable = renderGroup.renderables[0];
+    const pipeline = await this.pipelineFactory.createAutoPipeline(
+      firstRenderable.material,
+      firstRenderable.geometryData,
+    );
+
+    // Set pipeline once for the entire group
+    renderPass.setPipeline(pipeline);
+
+    // Set common bind groups (time, camera, etc.)
+    this.setCommonBindGroups(renderPass, frameData);
+
+    // Render all objects in this group
+    for (const renderable of renderGroup.renderables) {
+      await this.renderObject(renderPass, renderable, frameData);
+    }
+  }
+
+  /**
+   * Set common bind groups that are shared across all renderables
+   */
+  private setCommonBindGroups(renderPass: GPURenderPassEncoder, _frameData: FrameData): void {
+    // Set time bind group (if available)
+    const timeBindGroup = this.resourceManager.getBindGroupResource('timeBindGroup');
+    if (timeBindGroup) {
+      renderPass.setBindGroup(0, timeBindGroup.bindGroup);
+    }
+  }
+
+  /**
+   * Render a single object with its specific resources
+   */
+  private async renderObject(
+    renderPass: GPURenderPassEncoder,
+    renderable: RenderData,
+    frameData: FrameData,
+  ): Promise<void> {
+    // Get or create geometry instance
+    const geometry = this.geometryManager.getGeometryFromData(
+      renderable.geometryData,
+      renderable.geometryId,
+    );
+
+    // Create or get MVP buffer and bind group for this instance
+    const mvpBuffer = this.createOrGetMVPBuffer(renderable.geometryId);
+    const mvpBindGroup = this.createOrGetMVPBindGroup(renderable.geometryId, mvpBuffer);
+
+    // Calculate MVP matrix
+    const mvpMatrix = this.calculateMVPMatrix(renderable, frameData);
+
+    // Update MVP buffer
+    this.device.queue.writeBuffer(mvpBuffer, 0, new Float32Array(mvpMatrix));
+
+    // Set MVP bind group
+    renderPass.setBindGroup(1, mvpBindGroup);
+
+    // Set vertex and index buffers
+    renderPass.setVertexBuffer(0, geometry.vertexBuffer);
+    renderPass.setIndexBuffer(geometry.indexBuffer, 'uint16');
+
+    // Draw the object
+    renderPass.drawIndexed(geometry.indexCount);
+  }
+
+  /**
+   * Create or get MVP buffer for a geometry instance
+   */
+  private createOrGetMVPBuffer(geometryId: string): GPUBuffer {
+    const bufferLabel = `MVP_Buffer_${geometryId}`;
+    let buffer = this.bufferManager.getBufferByLabel(bufferLabel);
+
+    if (!buffer) {
+      buffer = this.bufferManager.createBuffer({
+        type: BufferType.UNIFORM,
+        size: 64, // 4x4 matrix * 4 bytes per float
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        label: bufferLabel,
+      });
+    }
+
+    return buffer;
+  }
+
+  /**
+   * Create or get MVP bind group for a geometry instance
+   */
+  private createOrGetMVPBindGroup(geometryId: string, mvpBuffer: GPUBuffer): GPUBindGroup {
+    const bindGroupLabel = `MVP_BindGroup_${geometryId}`;
+
+    // Get or create MVP bind group layout (fast path with fallback)
+    const mvpBindGroupLayout = this.shaderManager.safeGetBindGroupLayout('mvpBindGroupLayout', {
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          buffer: {
+            type: BufferType.UNIFORM,
+          },
+        },
+      ],
+      label: 'MVP Bind Group Layout',
+    });
+
+    // Get or create bind group (fast path with fallback)
+    const bindGroup = this.shaderManager.safeGetBindGroup(bindGroupLabel, {
+      layout: mvpBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: mvpBuffer },
+        },
+      ],
+      label: bindGroupLabel,
+    });
+
+    return bindGroup;
+  }
+
+  /**
+   * Calculate MVP matrix for a renderable
+   */
+  private calculateMVPMatrix(renderable: RenderData, frameData: FrameData): mat4 {
+    const projectionMatrix = frameData.scene.camera.projectionMatrix;
+    const viewMatrix = frameData.scene.camera.viewMatrix;
+    const modelMatrix = renderable.worldMatrix;
+
+    // Calculate MVP matrix using the world matrix from renderData
+    const mvpMatrix = mat4.create();
+    mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
+    mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
+
+    return mvpMatrix;
   }
 
   getDevice(): GPUDevice {
