@@ -56,6 +56,7 @@ async function main() {
 
 function create3DCamera(world: World) {
   const camera = world.createEntity('camera');
+  camera.setLabel('camera');
 
   // Add camera component with 3D properties
   camera.addComponent(
@@ -113,6 +114,7 @@ function create3DCamera(world: World) {
 
 function cretePlane(world: World) {
   const plane = world.createEntity('object');
+  plane.setLabel('plane');
   plane.addComponent(
     world.createComponent(Mesh3DComponent, {
       descriptor: { type: 'plane', params: { sx: 30, sy: 40, nx: 3, ny: 4, direction: 'y' } },
@@ -141,7 +143,7 @@ function createGeometryEntities(world: World) {
     {
       type: 'cube',
       transform: {
-        position: [-2, 5, 0],
+        position: [0, 0, 5],
         rotation: [0, 0, 0],
         scale: [0.5, 0.5, 0.5],
       },
@@ -150,16 +152,16 @@ function createGeometryEntities(world: World) {
     {
       type: 'cube',
       transform: {
-        position: [5, 5, 0],
+        position: [5, 0, 0],
         rotation: [0, Math.PI / 4, 0],
-        scale: [1.0, 1.0, 1.0],
+        scale: [2.0, 1.0, 1.0],
       },
       name: 'MediumCube',
     },
     {
       type: 'cylinder',
       transform: {
-        position: [5, 5, 0],
+        position: [5, 0, 5],
         rotation: [Math.PI / 6, 0, Math.PI / 6],
         scale: [1.5, 1.5, 1.5],
       },
@@ -178,6 +180,7 @@ function createGeometryEntities(world: World) {
 
   for (const geometry of geometries) {
     const entity = world.createEntity('object');
+    entity.setLabel(geometry.name || '');
 
     entity.addComponent(
       world.createComponent(Mesh3DComponent, {
@@ -188,7 +191,11 @@ function createGeometryEntities(world: World) {
       }),
     );
     entity.addComponent(
-      world.createComponent(Transform3DComponent, { position: geometry.transform.position }),
+      world.createComponent(Transform3DComponent, {
+        position: geometry.transform.position,
+        rotation: geometry.transform.rotation,
+        scale: geometry.transform.scale,
+      }),
     );
     entity.addComponent(
       world.createComponent(WebGPU3DRenderComponent, {

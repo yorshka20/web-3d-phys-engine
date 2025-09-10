@@ -5,10 +5,9 @@ import chroma from 'chroma-js';
 import { mat4 } from 'gl-matrix';
 import { TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { BufferManager } from '../core/BufferManager';
-import { initContainer } from '../core/decorators';
+import { DIContainer, initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
-import { BaseRenderTask } from '../core/pipeline/BaseRenderTask';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
 import { PipelineManager } from '../core/pipeline/PipelineManager';
 import { determineRenderPurpose, RenderPurpose } from '../core/pipeline/types';
@@ -67,6 +66,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private viewport!: RectArea;
   private frameCount = 0;
 
+  private diContainer!: DIContainer;
   // resource managers
   private bufferManager!: BufferManager;
   private shaderManager!: ShaderManager;
@@ -76,9 +76,6 @@ export class WebGPURenderer implements IWebGPURenderer {
   private geometryManager!: GeometryManager;
   private pipelineManager!: PipelineManager;
   private pipelineFactory!: PipelineFactory;
-
-  // Render tasks
-  private renderTasks: BaseRenderTask[] = [];
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
@@ -104,21 +101,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
   destroy(): void {
     // Clean up all managers
-    if (this.bufferManager) {
-      this.bufferManager.onDestroy();
+    if (this.diContainer) {
+      this.diContainer.clear();
     }
-    if (this.shaderManager) {
-      this.shaderManager.onDestroy();
-    }
-    if (this.textureManager) {
-      this.textureManager.onDestroy();
-    }
-
-    if (this.context) {
-      this.context.destroy();
-    }
-
-    this.renderTasks.forEach((task) => task.destroy());
 
     console.log('WebGPURenderer destroyed');
   }
@@ -292,7 +277,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // init resource managers using DI container
     // Pass the already initialized context to ensure single device instance
-    initContainer(this.device, this.context);
+    this.diContainer = initContainer(this.device, this.context);
 
     // Create services using new operator - they will be auto-registered
     this.resourceManager = new WebGPUResourceManager();
@@ -304,11 +289,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.pipelineManager = new PipelineManager();
     this.pipelineFactory = new PipelineFactory();
 
-    // Ensure essential bind group layouts are created for PipelineManager
-    this.ensureEssentialBindGroupLayouts();
-
-    // Create depth texture
-    this.createDepthTexture();
+    // Ensure essential resources are created for PipelineManager
+    this.ensureEssentialResources();
 
     console.log('Initialized WebGPU managers with DI container');
 
@@ -332,10 +314,10 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
-   * Ensure essential bind group layouts are created for PipelineManager
+   * Ensure essential resources are created for PipelineManager
    * This is a minimal fix for the current resource preparation issue
    */
-  private ensureEssentialBindGroupLayouts(): void {
+  private ensureEssentialResources(): void {
     // Create TimeBindGroup layout using shader manager
     const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
       'timeBindGroupLayout',
@@ -397,9 +379,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'MaterialBindGroup Layout',
     });
     console.log('[WebGPURenderer] Created material bind group layout for PipelineManager');
-  }
 
-  private createDepthTexture(): void {
     const canvas = this.context.getContext().canvas;
     this.depthTexture = this.device.createTexture({
       size: {
@@ -735,6 +715,6 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   onResize(): void {
     // Recreate depth texture with new size
-    this.createDepthTexture();
+    this.ensureEssentialResources();
   }
 }
