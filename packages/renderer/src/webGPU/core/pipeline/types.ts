@@ -1,4 +1,4 @@
-import { GeometryData, Material3D } from '@ecs/components';
+import { GeometryData, WebGPUMaterialDescriptor } from '@ecs/components';
 import { mat4, vec3 } from 'gl-matrix';
 import { GeometryCacheItem } from '../types';
 
@@ -69,7 +69,7 @@ export interface SemanticPipelineKey {
   doubleSided: boolean;
 
   // Vertex format (affects shader compilation)
-  vertexFormat: 'simple' | 'full'; // simple=position, full=position+normal+uv
+  vertexFormat: 'simple' | 'full' | 'colored'; // simple=position, full=position+normal+uv, colored=position+color
 
   // Texture usage (affects shader variants)
   hasTextures: boolean;
@@ -174,7 +174,7 @@ export interface PipelineCreationOptions {
  * High-level semantic characteristics for ECS system
  */
 export function generateSemanticPipelineKey(
-  material: Material3D,
+  material: WebGPUMaterialDescriptor,
   geometry: GeometryData,
   options: Partial<PipelineCreationOptions> = {},
 ): SemanticPipelineKey {
@@ -240,7 +240,7 @@ export function convertToGpuPipelineKey(semanticKey: SemanticPipelineKey): GpuPi
 /**
  * Check if material has any textures
  */
-function hasAnyTexture(material: Material3D): boolean {
+function hasAnyTexture(material: WebGPUMaterialDescriptor): boolean {
   return !!(
     material.albedoTexture ||
     material.normalTexture ||
@@ -252,7 +252,7 @@ function hasAnyTexture(material: Material3D): boolean {
 /**
  * Determine render purpose from material properties
  */
-export function determineRenderPurpose(material: Material3D): RenderPurpose {
+export function determineRenderPurpose(material: WebGPUMaterialDescriptor): RenderPurpose {
   if (material.alphaMode === 'blend') {
     return 'transparent';
   } else if (material.alphaMode === 'mask') {
@@ -266,7 +266,7 @@ export function determineRenderPurpose(material: Material3D): RenderPurpose {
  * Determine render pass from material and options
  */
 function determineRenderPass(
-  material: Material3D,
+  material: WebGPUMaterialDescriptor,
   options: Partial<PipelineCreationOptions> = {},
 ): 'opaque' | 'transparent' | 'wireframe' | 'shadow' {
   // Check for wireframe mode
@@ -296,6 +296,11 @@ function determinePrimitiveType(
 ): 'triangle' | 'line' {
   // Check if wireframe mode is requested
   if (options.shaderDefines?.WIREFRAME_MODE) {
+    return 'line';
+  }
+
+  // Use primitive type from geometry data
+  if (geometry.primitiveType === 'line-list' || geometry.primitiveType === 'line-strip') {
     return 'line';
   }
 
@@ -357,6 +362,8 @@ function determineVertexAttributes(semanticKey: SemanticPipelineKey): number {
   if (semanticKey.vertexFormat === 'full') {
     attributes |= 0x02; // NORMAL
     attributes |= 0x04; // UV
+  } else if (semanticKey.vertexFormat === 'colored') {
+    attributes |= 0x08; // COLOR
   }
 
   return attributes;

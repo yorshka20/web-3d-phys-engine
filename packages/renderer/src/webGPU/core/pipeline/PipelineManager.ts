@@ -1,6 +1,6 @@
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { WebGPUResourceManager } from '../ResourceManager';
-import { ShaderManager } from '../ShaderManager';
+import { CustomShaderDefinition, ShaderManager } from '../ShaderManager';
 import { BindGroupLayoutDescriptor, ShaderType } from '../types';
 import { WebGPUContext } from '../WebGPUContext';
 import {
@@ -12,6 +12,10 @@ import {
   generateGpuCacheKey,
   generateSemanticCacheKey,
 } from './types';
+
+import checkerboardShader from './shader/checkerboard.wgsl?raw';
+import coordinateShader from './shader/coordinate.wgsl?raw';
+import pulsewaveShader from './shader/pulsewave.wgsl?raw';
 
 // Simple cache entry for dual-layer cache
 interface SimpleCacheEntry {
@@ -56,6 +60,54 @@ export class PipelineManager {
 
   constructor() {
     // Constructor body - services are injected via dependency injection
+    this.registerCustomShader({
+      id: 'checkerboard_shader',
+      name: 'Checkerboard Shader',
+      description: 'Checkerboard shader',
+      vertexCode: checkerboardShader,
+      fragmentCode: '',
+      requiredUniforms: [],
+      requiredTextures: [],
+      supportedVertexFormats: ['simple', 'full'],
+      renderState: {
+        blendMode: 'replace',
+        depthTest: true,
+        depthWrite: true,
+        cullMode: 'back',
+      },
+    });
+    this.registerCustomShader({
+      id: 'pulsewave_shader',
+      name: 'Pulsewave Shader',
+      description: 'Pulsewave shader',
+      vertexCode: pulsewaveShader,
+      fragmentCode: '',
+      requiredUniforms: [],
+      requiredTextures: [],
+      supportedVertexFormats: ['simple', 'full'],
+      renderState: {
+        blendMode: 'replace',
+        depthTest: true,
+        depthWrite: true,
+        cullMode: 'back',
+      },
+    });
+    this.registerCustomShader({
+      id: 'coordinate_shader',
+      name: 'Coordinate Shader',
+      description: 'Coordinate shader',
+      vertexCode: coordinateShader,
+      fragmentCode: '',
+      requiredUniforms: [],
+      requiredTextures: [],
+      supportedVertexFormats: ['simple', 'full'],
+      renderState: {
+        blendMode: 'replace',
+        depthTest: true,
+        depthWrite: true,
+        cullMode: 'back',
+      },
+    });
   }
 
   /**
@@ -259,7 +311,7 @@ export class PipelineManager {
    * Register a custom shader definition
    * @param definition Custom shader definition
    */
-  registerCustomShader(definition: any): void {
+  registerCustomShader(definition: CustomShaderDefinition): void {
     this.shaderManager.registerCustomShader(definition);
   }
 
@@ -268,7 +320,7 @@ export class PipelineManager {
    * @param id Shader ID
    * @returns Custom shader definition or undefined
    */
-  getCustomShader(id: string): any {
+  getCustomShader(id: string): CustomShaderDefinition | undefined {
     return this.shaderManager.getCustomShader(id);
   }
 
@@ -537,6 +589,7 @@ export class PipelineManager {
   private createVertexBufferLayoutsFromGpuKey(gpuKey: GpuPipelineKey): GPUVertexBufferLayout[] {
     const hasNormal = (gpuKey.vertexAttributes & 0x02) !== 0;
     const hasUV = (gpuKey.vertexAttributes & 0x04) !== 0;
+    const hasColor = (gpuKey.vertexAttributes & 0x08) !== 0;
 
     if (hasNormal && hasUV) {
       // Full format: position + normal + uv
@@ -558,6 +611,25 @@ export class PipelineManager {
               format: 'float32x2',
               offset: 24, // uv
               shaderLocation: 2,
+            },
+          ],
+        },
+      ];
+    } else if (hasColor) {
+      // Colored format: position + color
+      return [
+        {
+          arrayStride: 28, // 7 floats * 4 bytes
+          attributes: [
+            {
+              format: 'float32x3',
+              offset: 0, // position
+              shaderLocation: 0,
+            },
+            {
+              format: 'float32x4',
+              offset: 12, // color
+              shaderLocation: 1,
             },
           ],
         },

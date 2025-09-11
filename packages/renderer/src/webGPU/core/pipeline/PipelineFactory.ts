@@ -1,4 +1,4 @@
-import { GeometryData, Material3D } from '@ecs/components';
+import { GeometryData, WebGPUMaterialDescriptor } from '@ecs/components';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
@@ -13,7 +13,7 @@ export interface PredefinedPipelineConfig {
   name: string;
   description: string;
   options: Partial<PipelineCreationOptions>;
-  materialFilter?: (_material: Material3D) => boolean;
+  materialFilter?: (_material: WebGPUMaterialDescriptor) => boolean;
   geometryFilter?: (_geometry: GeometryData) => boolean;
 }
 
@@ -44,7 +44,7 @@ export class PipelineFactory {
    * Create a pipeline for opaque geometry rendering
    */
   async createOpaquePipeline(
-    material: Material3D,
+    material: WebGPUMaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
@@ -56,7 +56,7 @@ export class PipelineFactory {
    * Create a pipeline for transparent geometry rendering
    */
   async createTransparentPipeline(
-    material: Material3D,
+    material: WebGPUMaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
@@ -68,7 +68,7 @@ export class PipelineFactory {
    * Create a pipeline for wireframe rendering
    */
   async createWireframePipeline(
-    material: Material3D,
+    material: WebGPUMaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
@@ -87,7 +87,7 @@ export class PipelineFactory {
    * Create a pipeline for shadow map rendering
    */
   async createShadowPipeline(
-    material: Material3D,
+    material: WebGPUMaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
@@ -106,7 +106,7 @@ export class PipelineFactory {
    * Create a pipeline for UI/overlay rendering
    */
   async createUIPipeline(
-    material: Material3D,
+    material: WebGPUMaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
@@ -125,7 +125,7 @@ export class PipelineFactory {
    * Create a pipeline for post-processing effects
    */
   async createPostProcessPipeline(
-    material: Material3D,
+    material: WebGPUMaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
@@ -145,7 +145,7 @@ export class PipelineFactory {
    */
   async createPredefinedPipeline(
     configName: string,
-    material: Material3D,
+    material: WebGPUMaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
@@ -197,7 +197,7 @@ export class PipelineFactory {
    * Create a pipeline based on material properties (auto-detection)
    */
   async createAutoPipeline(
-    material: Material3D,
+    material: WebGPUMaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
@@ -223,7 +223,7 @@ export class PipelineFactory {
    */
   async batchCreatePipelines(
     requests: Array<{
-      material: Material3D;
+      material: WebGPUMaterialDescriptor;
       geometry: GeometryData;
       options?: Partial<PipelineCreationOptions>;
       purpose?: RenderPurpose | 'auto';
