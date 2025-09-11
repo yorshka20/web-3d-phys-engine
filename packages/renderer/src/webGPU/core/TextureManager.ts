@@ -3,6 +3,8 @@ import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import { ResourceType, SamplerDescriptor, TextureDescriptor } from './types';
 
+import texture from './texture.jpg';
+
 type SamplerId = 'linear' | 'nearest' | 'clamp';
 
 @Injectable(ServiceTokens.TEXTURE_MANAGER, {
@@ -18,21 +20,14 @@ export class TextureManager {
   private textures: Map<string, GPUTexture> = new Map();
   private samplers: Map<SamplerId, GPUSampler> = new Map();
 
-  constructor() {
-    this.init();
+  async init(): Promise<void> {
+    // Load image asynchronously and create texture when ready
+    await this.loadAndCreateTexture('water_texture', texture);
+
+    this.createSamplers();
   }
 
-  async init(): Promise<void> {
-    const imageBitmap = await loadImageBitmap('https://picsum.photos/200/300');
-    this.createTexture('water_texture', {
-      id: 'water_texture',
-      width: imageBitmap.width,
-      height: imageBitmap.height,
-      format: 'rgba8unorm',
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      initialData: imageBitmap,
-    });
-
+  private createSamplers() {
     this.samplers.set(
       'linear',
       this.createSampler('linear', {
@@ -126,6 +121,48 @@ export class TextureManager {
     return texture;
   }
 
+  /**
+   * Load image asynchronously and create texture when ready
+   */
+  private async loadAndCreateTexture(textureId: string, url: string): Promise<void> {
+    try {
+      console.log(`[TextureManager] Loading texture from: ${url}`);
+      const imageBitmap = await loadImageBitmap(url);
+      console.log(
+        `[TextureManager] Image loaded, dimensions: ${imageBitmap.width}x${imageBitmap.height}`,
+      );
+
+      // Create texture with correct dimensions
+      this.createTexture(textureId, {
+        id: textureId,
+        width: imageBitmap.width,
+        height: imageBitmap.height,
+        format: 'rgba8unorm',
+        usage:
+          GPUTextureUsage.TEXTURE_BINDING |
+          GPUTextureUsage.COPY_DST |
+          GPUTextureUsage.RENDER_ATTACHMENT,
+        initialData: imageBitmap,
+      });
+
+      console.log(`[TextureManager] Texture ${textureId} created with image data`);
+    } catch (error) {
+      console.error(`[TextureManager] Failed to load texture from ${url}:`, error);
+
+      // Create a fallback 1x1 white texture if loading fails
+      this.createTexture(textureId, {
+        id: textureId,
+        width: 1,
+        height: 1,
+        format: 'rgba8unorm',
+        usage:
+          GPUTextureUsage.TEXTURE_BINDING |
+          GPUTextureUsage.COPY_DST |
+          GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+    }
+  }
+
   onDestroy(): void {
     this.textures.clear();
     this.samplers.clear();
@@ -142,3 +179,6 @@ async function loadImageBitmap(url: string): Promise<ImageBitmap> {
 
   return imageBitmap;
 }
+
+const base64TextureData =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAG0lEQVQIHWPU/8/AxwABjAz/GRgYGBkYGJgBABsDAj8dW2AeAAAAAElFTkSuQmCC';

@@ -13,11 +13,7 @@ import {
   generateSemanticCacheKey,
 } from './types';
 
-import { fireShaderDefinition, waterShaderDefinition } from './CustomShaderExample';
-import checkerboardShader from './shader/checkerboard.wgsl?raw';
-import coordinateShader from './shader/coordinate.wgsl?raw';
-import emissiveShader from './shader/emissive.wgsl?raw';
-import pulsewaveShader from './shader/pulsewave.wgsl?raw';
+import { setupCustomShaders } from './CustomShaderExample';
 
 // Simple cache entry for dual-layer cache
 interface SimpleCacheEntry {
@@ -61,73 +57,7 @@ export class PipelineManager {
   }
 
   constructor() {
-    this.registerCustomShader(waterShaderDefinition);
-    this.registerCustomShader(fireShaderDefinition);
-
-    this.registerCustomShader({
-      id: 'checkerboard_shader',
-      name: 'Checkerboard Shader',
-      description: 'Checkerboard shader',
-      vertexCode: checkerboardShader,
-      fragmentCode: '',
-      requiredUniforms: [],
-      requiredTextures: [],
-      supportedVertexFormats: ['simple', 'full'],
-      renderState: {
-        blendMode: 'replace',
-        depthTest: true,
-        depthWrite: true,
-        cullMode: 'back',
-      },
-    });
-    this.registerCustomShader({
-      id: 'pulsewave_shader',
-      name: 'Pulsewave Shader',
-      description: 'Pulsewave shader',
-      vertexCode: pulsewaveShader,
-      fragmentCode: '',
-      requiredUniforms: [],
-      requiredTextures: [],
-      supportedVertexFormats: ['simple', 'full'],
-      renderState: {
-        blendMode: 'replace',
-        depthTest: true,
-        depthWrite: true,
-        cullMode: 'back',
-      },
-    });
-    this.registerCustomShader({
-      id: 'coordinate_shader',
-      name: 'Coordinate Shader',
-      description: 'Coordinate shader',
-      vertexCode: coordinateShader,
-      fragmentCode: '',
-      requiredUniforms: [],
-      requiredTextures: [],
-      supportedVertexFormats: ['simple', 'full'],
-      renderState: {
-        blendMode: 'replace',
-        depthTest: true,
-        depthWrite: true,
-        cullMode: 'back',
-      },
-    });
-    this.registerCustomShader({
-      id: 'emissive_shader',
-      name: 'Emissive Shader',
-      description: 'Emissive shader',
-      vertexCode: emissiveShader,
-      fragmentCode: '',
-      requiredUniforms: [],
-      requiredTextures: [],
-      supportedVertexFormats: ['simple', 'full'],
-      renderState: {
-        blendMode: 'replace',
-        depthTest: true,
-        depthWrite: true,
-        cullMode: 'back',
-      },
-    });
+    setupCustomShaders(this);
   }
 
   /**

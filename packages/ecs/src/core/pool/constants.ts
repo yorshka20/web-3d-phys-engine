@@ -1,7 +1,9 @@
 import {
+  ActiveCameraTag,
   AIComponent,
   AnimationComponent,
   Camera3DComponent,
+  CameraControlComponent,
   ChaseComponent,
   ColliderComponent,
   DamageComponent,
@@ -9,9 +11,11 @@ import {
   DeathMarkComponent,
   ExperienceComponent,
   HealthComponent,
+  Input3DComponent,
   InputComponent,
   LifecycleComponent,
   LightSource3DComponent,
+  Mesh3DComponent,
   PhysicsComponent,
   PickupComponent,
   RenderComponent,
@@ -20,8 +24,10 @@ import {
   SpiralMovementComponent,
   StateComponent,
   StatsComponent,
+  Transform3DComponent,
   TransformComponent,
   WeaponComponent,
+  WebGPU3DRenderComponent,
 } from '@ecs/components';
 import { ComponentConstructor, EntityType, IComponent } from '../ecs/types';
 
@@ -65,4 +71,10 @@ export const ComponentPoolList: ComponentConstructor<IComponent>[] = [
   ShapeComponent,
   LightSource3DComponent,
   Camera3DComponent,
+  Mesh3DComponent,
+  WebGPU3DRenderComponent,
+  Transform3DComponent,
+  CameraControlComponent,
+  Input3DComponent,
+  ActiveCameraTag,
 ];

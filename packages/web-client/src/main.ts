@@ -127,7 +127,10 @@ function cretePlane(world: World) {
   plane.setLabel('plane');
   plane.addComponent(
     world.createComponent(Mesh3DComponent, {
-      descriptor: { type: 'plane', params: { sx: 30, sy: 40, nx: 3, ny: 4, direction: 'y' } },
+      descriptor: {
+        type: 'plane',
+        params: { sx: 30, sy: 40, nx: 30, ny: 40, direction: 'y' },
+      },
     }),
   );
   plane.addComponent(world.createComponent(Transform3DComponent, { position: [0, -1, 0] }));
@@ -213,6 +216,10 @@ function createGeometryEntities(world: World) {
         scale: [1.5, 1.5, 1.5],
         rotationVelocity: [0, 1, 0], // Rotate around Y axis at 1 radian per second
       },
+      material: {
+        ...defaultMaterial,
+        normalTextureId: 'normal_texture',
+      },
       name: 'Cylinder',
     },
     {
@@ -224,11 +231,7 @@ function createGeometryEntities(world: World) {
       },
       name: 'Sphere',
       material: {
-        albedo: chroma('#000000'),
-        metallic: 0,
-        roughness: 0.5,
-        emissive: chroma('#000000'),
-        emissiveIntensity: 0,
+        ...defaultMaterial,
         alphaMode: 'blend',
         customShaderId: 'water_shader',
         albedoTextureId: 'water_texture',
@@ -238,6 +241,31 @@ function createGeometryEntities(world: World) {
           waveAmplitude: 0.15,
           fresnelPower: 2.5,
           waterOpacity: 0.7,
+        },
+      },
+    },
+    {
+      type: 'sphere',
+      transform: {
+        position: [8, 3, 0],
+        rotation: [0, 0, 0],
+        scale: [3, 5, 7],
+        rotationVelocity: [0, 0.5, 0.5],
+      },
+      name: 'Sphere 2',
+      material: {
+        albedo: chroma('#00ff00'),
+        metallic: 0,
+        roughness: 0.5,
+        emissive: chroma('#ff0000'),
+        emissiveIntensity: 10,
+        alphaMode: 'blend',
+        customShaderId: 'fire_shader',
+        albedoTextureId: 'water_texture', // Use same texture for now
+        shaderParams: {
+          flickerSpeed: 6.0,
+          flickerIntensity: 0.15,
+          fireOpacity: 0.95,
         },
       },
     },

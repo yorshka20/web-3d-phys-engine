@@ -300,6 +300,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Ensure essential resources are created for PipelineManager
     this.ensureEssentialResources();
 
+    await this.textureManager.init();
+
     console.log('Initialized WebGPU managers with DI container');
 
     this.initialized = true;
@@ -393,14 +395,14 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
     console.log('[WebGPURenderer] Created depth texture');
 
-    const texture = this.textureManager.createTexture('linear_texture', {
+    const texture = this.textureManager.createTexture('default_white_texture', {
       id: 'default_white_texture',
       width: 1,
       height: 1,
       format: 'rgba8unorm',
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
-    const sampler = this.textureManager.createSampler('linear', {
+    const sampler = this.textureManager.createSampler('clamp', {
       id: 'default_white_sampler',
       addressMode: 'clamp-to-edge',
       magFilter: 'linear',
@@ -612,19 +614,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Convert to RenderGroup array
     const renderGroups = Array.from(groups.values());
 
-    // Debug: Log grouping statistics
-    if (this.frameCount % 300 === 0) {
-      console.log(`[WebGPURenderer] Render grouping stats:`, {
-        totalRenderables: renderables.length,
-        totalGroups: renderGroups.length,
-        groupsBySemanticKey: renderGroups.map((g) => ({
-          semanticKey: g.semanticKey,
-          count: g.renderables.length,
-          renderables: g.renderables,
-        })),
-      });
-    }
-
     return renderGroups;
   }
 
@@ -673,7 +662,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Group 1: MVP bind group (set per object, but we need a default for unused cases)
     // This will be overridden in renderObject method
 
-    // Group 2: Texture bind group (always required)
+    // Group 2: Texture bind group (always required, will be overridden for entities with textures)
     const textureBindGroup = this.resourceManager.getBindGroupResource('textureBindGroup');
     if (!textureBindGroup) {
       throw new Error('Texture bind group not found');
@@ -768,14 +757,13 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Get or create texture
     let texture = this.textureManager.getTexture(textureId);
     if (!texture) {
-      // Create texture if it doesn't exist
-      texture = this.textureManager.createTexture(textureId, {
-        id: textureId,
-        width: 200,
-        height: 200,
-        format: 'rgba8unorm',
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      });
+      console.warn(`Texture ${textureId} not found, using default white texture`);
+      // Use default white texture if the requested texture doesn't exist
+      texture = this.textureManager.getTexture('default_white_texture');
+      if (!texture) {
+        console.error('Default white texture not found');
+        return;
+      }
     }
 
     // Get sampler and bind group layout
