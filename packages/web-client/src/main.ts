@@ -201,6 +201,7 @@ function createGeometryEntities(world: World) {
         position: [5, 0, 0],
         rotation: [0, Math.PI / 4, 0],
         scale: [2.0, 1.0, 1.0],
+        rotationVelocity: [3 * Math.PI, 0, 0],
       },
       name: 'MediumCube',
     },
@@ -210,6 +211,7 @@ function createGeometryEntities(world: World) {
         position: [5, 0, 5],
         rotation: [Math.PI / 6, 0, Math.PI / 6],
         scale: [1.5, 1.5, 1.5],
+        rotationVelocity: [0, 1, 0], // Rotate around Y axis at 1 radian per second
       },
       name: 'Cylinder',
     },
@@ -249,6 +251,7 @@ function createGeometryEntities(world: World) {
         position: geometry.transform.position,
         rotation: geometry.transform.rotation,
         scale: geometry.transform.scale,
+        rotationVelocity: geometry.transform.rotationVelocity,
       }),
     );
     entity.addComponent(

@@ -450,7 +450,33 @@ export class Transform3DSystem extends System {
       );
       if (!transform) continue;
 
+      // Handle rotation velocity
+      this.handleRotationVelocity(transform, deltaTime);
+
       this.handleTransformations(entity.id, transform, deltaTime);
+    }
+  }
+
+  /**
+   * Handle rotation velocity for entities
+   */
+  private handleRotationVelocity(transform: Transform3DComponent, deltaTime: number): void {
+    const rotationVelocity = transform.getRotationVelocity();
+
+    // Check if there's any rotation velocity
+    const magnitude = Math.sqrt(
+      rotationVelocity[0] ** 2 + rotationVelocity[1] ** 2 + rotationVelocity[2] ** 2,
+    );
+
+    if (magnitude > this.SMALL_VELOCITY_THRESHOLD) {
+      // Apply rotation velocity to current rotation
+      const deltaRotation: Vec3 = [
+        rotationVelocity[0] * deltaTime,
+        rotationVelocity[1] * deltaTime,
+        rotationVelocity[2] * deltaTime,
+      ];
+
+      transform.rotate(deltaRotation[0], deltaRotation[1], deltaRotation[2]);
     }
   }
 

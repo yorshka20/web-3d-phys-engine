@@ -6,6 +6,7 @@ interface Transform3DProps {
   position: Vec3;
   rotation?: Vec3; // Euler angles in radians [x, y, z]
   scale?: Vec3;
+  rotationVelocity?: Vec3; // Angular velocity in radians per second [x, y, z]
   fixed?: boolean;
   /**
    * Whether this entity can be recycled (auto-removed by RecycleSystem)
@@ -20,6 +21,7 @@ export class Transform3DComponent extends Component {
   position: Vec3 = [0, 0, 0];
   rotation: Vec3 = [0, 0, 0]; // Euler angles in radians
   scale: Vec3 = [1, 1, 1];
+  rotationVelocity: Vec3 = [0, 0, 0]; // Angular velocity in radians per second
   fixed: boolean;
   /**
    * Whether this entity can be recycled (auto-removed by RecycleSystem)
@@ -43,6 +45,12 @@ export class Transform3DComponent extends Component {
       this.scale[0] = props.scale[0];
       this.scale[1] = props.scale[1];
       this.scale[2] = props.scale[2];
+    }
+
+    if (props.rotationVelocity) {
+      this.rotationVelocity[0] = props.rotationVelocity[0];
+      this.rotationVelocity[1] = props.rotationVelocity[1];
+      this.rotationVelocity[2] = props.rotationVelocity[2];
     }
 
     this.fixed = props.fixed ?? false;
@@ -106,6 +114,24 @@ export class Transform3DComponent extends Component {
     console.log('Transform3DComponent scaleBy', JSON.stringify(this.scale, null, 2));
   }
 
+  getRotationVelocity(): Vec3 {
+    return this.rotationVelocity;
+  }
+
+  setRotationVelocity(velocity: Vec3): void {
+    if (this.fixed) return;
+    this.rotationVelocity[0] = velocity[0];
+    this.rotationVelocity[1] = velocity[1];
+    this.rotationVelocity[2] = velocity[2];
+  }
+
+  addRotationVelocity(delta: Vec3): void {
+    if (this.fixed) return;
+    this.rotationVelocity[0] += delta[0];
+    this.rotationVelocity[1] += delta[1];
+    this.rotationVelocity[2] += delta[2];
+  }
+
   getWorldMatrix(): Float32Array {
     const worldMatrix = mat4.create();
 
@@ -130,6 +156,7 @@ export class Transform3DComponent extends Component {
     this.position = [0, 0, 0];
     this.rotation = [0, 0, 0];
     this.scale = [1, 1, 1];
+    this.rotationVelocity = [0, 0, 0];
     this.fixed = false;
     this.recyclable = true;
   }

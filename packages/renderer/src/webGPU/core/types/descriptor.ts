@@ -136,6 +136,7 @@ export interface GeometryInstanceDescriptor {
     position: [number, number, number];
     rotation: [number, number, number];
     scale: [number, number, number];
+    rotationVelocity?: [number, number, number];
   };
   material?: WebGPUMaterialDescriptor;
 }
