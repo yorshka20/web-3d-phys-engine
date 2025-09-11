@@ -1,5 +1,7 @@
 struct MVPUniforms {
     mvpMatrix: mat4x4<f32>,
+    cameraPos: vec3<f32>,
+    padding: f32,
 }
 
 struct VertexInput {
