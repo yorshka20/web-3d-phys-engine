@@ -24,6 +24,10 @@ export interface Material3D {
 
   // Double sided rendering
   doubleSided?: boolean;
+
+  // Custom shader support
+  customShaderId?: string; // ID of custom shader to use
+  shaderParams?: Record<string, unknown>; // Material-specific shader parameters
 }
 
 /**
@@ -42,13 +46,6 @@ export interface WebGPUMaterialDescriptor extends Material3D {
   normalTextureId?: string;
   metallicRoughnessTextureId?: string;
   emissiveTextureId?: string;
-
-  // Render state configuration
-  depthStencilState?: GPUDepthStencilState;
-  blendState?: GPUBlendState;
-  cullMode?: GPUCullMode;
-  frontFace?: GPUFrontFace;
-  primitiveTopology?: GPUPrimitiveTopology;
 }
 
 /**
@@ -60,7 +57,6 @@ export interface WebGPU3DRenderProperties {
   castShadow?: boolean;
   receiveShadow?: boolean;
   layer?: number;
-  renderTaskType?: string; // render task type. could be batch tag.
   customShader?: string; // Custom shader path/ID (from Render3DComponent)
   uniforms?: Record<string, Any>; // Custom shader uniforms (from Render3DComponent)
 

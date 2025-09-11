@@ -8,6 +8,7 @@ interface Mesh3DProps {
   vertices?: Vertex3D[]; // pre-calculated vertex cache
   indices?: number[]; // pre-calculated indices cache
   bounds?: { min: Vec3; max: Vec3 }; // bounding box cache
+  primitiveType?: GPUPrimitiveTopology; // primitive topology for rendering
 }
 
 export class Mesh3DComponent extends Component {
@@ -18,7 +19,6 @@ export class Mesh3DComponent extends Component {
   vertices: Vertex3D[] = []; // vertex cache
   indices: number[] = []; // indices cache
   bounds: { min: Vec3; max: Vec3 } | null = null;
-  primitiveType: GPUPrimitiveTopology = 'triangle-list';
 
   private dirty: boolean = true;
 
@@ -105,6 +105,13 @@ export class Mesh3DComponent extends Component {
   }
 
   /**
+   * get primitive type
+   */
+  getPrimitiveType(): GPUPrimitiveTopology {
+    return this.descriptor.primitiveType ?? 'triangle-list';
+  }
+
+  /**
    * get mesh size
    */
   getSize(): Vec3 {
@@ -144,8 +151,7 @@ export class Mesh3DComponent extends Component {
     this.indices = [];
     this.bounds = null;
     this.dirty = true;
-    this.primitiveType = 'triangle-list';
-    this.descriptor = { type: 'unset' };
+    this.descriptor = { type: 'unset', primitiveType: 'triangle-list' };
   }
 
   // ===== Convenient create methods =====

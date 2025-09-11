@@ -1,4 +1,4 @@
-import { Vec2, Vec3 } from '@ecs/types/types';
+import { Vec2, Vec3, Vec4 } from '@ecs/types/types';
 import { BoxOptions } from 'primitive-geometry/types/src/box';
 import { CapsuleOptions } from 'primitive-geometry/types/src/capsule';
 import { CircleOptions } from 'primitive-geometry/types/src/circle';
@@ -25,7 +25,7 @@ export interface Vertex3D {
   position: Vec3; // Position [x, y, z]
   normal?: Vec3; // Normal vector [nx, ny, nz]
   uv?: Vec2; // UV coordinates [u, v]
-  color?: Vec3; // Vertex color [r, g, b]
+  color?: Vec4; // Vertex color [r, g, b, a]
 }
 
 export type GeometryPrimitiveOptions = {
@@ -165,10 +165,15 @@ export interface Mesh3DDescriptor {
 export interface Mesh3DShapeDescriptor<T extends GeometryType = GeometryType> {
   type: T;
   params?: GeometryPrimitiveOptions[T];
+  primitiveType?: GPUPrimitiveTopology;
 }
 
 // Special case for unset and custom mesh
-export type Mesh3DUnsetDescriptor = { type: 'unset'; params?: undefined };
+export type Mesh3DUnsetDescriptor = {
+  type: 'unset';
+  params?: undefined;
+  primitiveType?: GPUPrimitiveTopology;
+};
 export type Mesh3DCustomDescriptor = Mesh3DDescriptor;
 
 // Union type for all possible mesh descriptors

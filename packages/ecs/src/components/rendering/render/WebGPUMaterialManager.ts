@@ -50,9 +50,6 @@ export class WebGPUMaterialManager {
       emissive: descriptor.emissive ?? { r: 0, g: 0, b: 0, a: 1 },
       emissiveIntensity: descriptor.emissiveIntensity ?? 0,
       doubleSided: false,
-      primitiveTopology: 'triangle-list',
-      cullMode: 'back',
-      frontFace: 'ccw',
 
       // Resource IDs (to be set by renderer)
       shaderId: descriptor.shaderId,

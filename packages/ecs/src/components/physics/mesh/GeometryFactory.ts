@@ -34,8 +34,9 @@ import {
  * Vertex format types.
  * - simple: position only
  * - full: position + normal + uv
+ * - colored: position + color
  */
-export type VertexFormat = 'simple' | 'full';
+export type VertexFormat = 'simple' | 'full' | 'colored';
 
 /**
  * Geometry data
@@ -46,6 +47,7 @@ export interface GeometryData {
   vertexCount: number;
   indexCount: number;
   vertexFormat: VertexFormat; // 'simple' for position only, 'full' for pos+normal+uv
+  primitiveType: GPUPrimitiveTopology; // primitive topology for rendering
   bounds: {
     min: Vec3;
     max: Vec3;
@@ -236,14 +238,18 @@ export class GeometryFactory {
   /**
    * Convert primitive-geometry data to our GeometryData format
    * @param primitiveData Data from primitive-geometry library
+   * @param primitiveType Primitive topology for rendering
    * @returns Converted geometry data
    */
-  private static convertPrimitiveGeometry(primitiveData: {
-    positions: Float32Array;
-    normals?: Float32Array;
-    uvs?: Float32Array;
-    cells: Uint16Array | Uint8Array | Uint32Array;
-  }): GeometryData {
+  private static convertPrimitiveGeometry(
+    primitiveData: {
+      positions: Float32Array;
+      normals?: Float32Array;
+      uvs?: Float32Array;
+      cells: Uint16Array | Uint8Array | Uint32Array;
+    },
+    primitiveType: GPUPrimitiveTopology = 'triangle-list',
+  ): GeometryData {
     const { positions, normals, uvs, cells } = primitiveData;
 
     // Calculate vertex count (positions array length / 3)
@@ -315,6 +321,7 @@ export class GeometryFactory {
       vertexCount,
       indexCount: indices.length,
       vertexFormat: 'full' as VertexFormat,
+      primitiveType,
       bounds: {
         min: [minX, minY, minZ],
         max: [maxX, maxY, maxZ],
@@ -380,7 +387,10 @@ export class GeometryFactory {
     }
   }
 
-  static createGeometryDataByDescriptor(descriptor: AnyMesh3DShapeDescriptor): GeometryData {
+  static createGeometryDataByDescriptor(
+    descriptor: AnyMesh3DShapeDescriptor,
+    primitiveType: GPUPrimitiveTopology = 'triangle-list',
+  ): GeometryData {
     // Handle unset descriptor
     if (descriptor.type === 'unset') {
       throw new Error('Cannot create geometry from unset descriptor');
@@ -388,7 +398,7 @@ export class GeometryFactory {
 
     // Handle custom mesh descriptor
     if (descriptor.type === 'mesh') {
-      return GeometryFactory.convertCustomMesh(descriptor);
+      return GeometryFactory.convertCustomMesh(descriptor, primitiveType);
     }
 
     // Handle primitive geometry descriptors using the new type-safe method
@@ -400,42 +410,78 @@ export class GeometryFactory {
   /**
    * Convert custom mesh descriptor to GeometryData
    * @param descriptor Custom mesh descriptor with vertices
+   * @param primitiveType Primitive topology for rendering
    * @returns Converted geometry data
    */
-  private static convertCustomMesh(descriptor: Mesh3DDescriptor): GeometryData {
+  private static convertCustomMesh(
+    descriptor: Mesh3DDescriptor,
+    primitiveType: GPUPrimitiveTopology = 'triangle-list',
+  ): GeometryData {
     const { vertices, indices = [], bounds } = descriptor;
+
+    // Check if vertices have color data
+    const hasColor = vertices.some((vertex) => vertex.color !== undefined);
+
+    // Determine vertex format and stride
+    let vertexStride: number;
+    let vertexFormat: VertexFormat;
+
+    if (hasColor) {
+      // Format: position(3) + color(4) = 7 floats per vertex
+      vertexStride = 7;
+      vertexFormat = 'colored';
+    } else {
+      // Format: position(3) + normal(3) + uv(2) = 8 floats per vertex
+      vertexStride = 8;
+      vertexFormat = 'full';
+    }
 
     // Convert Vertex3D[] to interleaved Float32Array
     const vertexCount = vertices.length;
-    const vertexArray = new Float32Array(vertexCount * 8); // 8 floats per vertex: pos(3) + normal(3) + uv(2)
+    const vertexArray = new Float32Array(vertexCount * vertexStride);
 
     for (let i = 0; i < vertexCount; i++) {
       const vertex = vertices[i];
-      const baseIndex = i * 8;
+      const baseIndex = i * vertexStride;
 
       // Position (x, y, z)
       vertexArray[baseIndex] = vertex.position[0];
       vertexArray[baseIndex + 1] = vertex.position[1];
       vertexArray[baseIndex + 2] = vertex.position[2];
 
-      // Normal (nx, ny, nz) - use provided normal or default up vector
-      if (vertex.normal) {
-        vertexArray[baseIndex + 3] = vertex.normal[0];
-        vertexArray[baseIndex + 4] = vertex.normal[1];
-        vertexArray[baseIndex + 5] = vertex.normal[2];
+      if (hasColor) {
+        // Color (r, g, b, a) - use provided color or default white
+        if (vertex.color) {
+          vertexArray[baseIndex + 3] = vertex.color[0];
+          vertexArray[baseIndex + 4] = vertex.color[1];
+          vertexArray[baseIndex + 5] = vertex.color[2];
+          vertexArray[baseIndex + 6] = vertex.color[3];
+        } else {
+          vertexArray[baseIndex + 3] = 1.0; // r
+          vertexArray[baseIndex + 4] = 1.0; // g
+          vertexArray[baseIndex + 5] = 1.0; // b
+          vertexArray[baseIndex + 6] = 1.0; // a
+        }
       } else {
-        vertexArray[baseIndex + 3] = 0;
-        vertexArray[baseIndex + 4] = 1;
-        vertexArray[baseIndex + 5] = 0;
-      }
+        // Normal (nx, ny, nz) - use provided normal or default up vector
+        if (vertex.normal) {
+          vertexArray[baseIndex + 3] = vertex.normal[0];
+          vertexArray[baseIndex + 4] = vertex.normal[1];
+          vertexArray[baseIndex + 5] = vertex.normal[2];
+        } else {
+          vertexArray[baseIndex + 3] = 0;
+          vertexArray[baseIndex + 4] = 1;
+          vertexArray[baseIndex + 5] = 0;
+        }
 
-      // UV (u, v) - use provided UV or default
-      if (vertex.uv) {
-        vertexArray[baseIndex + 6] = vertex.uv[0];
-        vertexArray[baseIndex + 7] = vertex.uv[1];
-      } else {
-        vertexArray[baseIndex + 6] = 0;
-        vertexArray[baseIndex + 7] = 0;
+        // UV (u, v) - use provided UV or default
+        if (vertex.uv) {
+          vertexArray[baseIndex + 6] = vertex.uv[0];
+          vertexArray[baseIndex + 7] = vertex.uv[1];
+        } else {
+          vertexArray[baseIndex + 6] = 0;
+          vertexArray[baseIndex + 7] = 0;
+        }
       }
     }
 
@@ -473,7 +519,8 @@ export class GeometryFactory {
       indices: indexArray,
       vertexCount,
       indexCount: indexArray.length,
-      vertexFormat: 'full' as VertexFormat,
+      vertexFormat,
+      primitiveType,
       bounds: calculatedBounds,
     };
   }
@@ -484,7 +531,7 @@ export class GeometryFactory {
    */
   static createCube(options: GeometryPrimitiveOptions['cube'] = {}): GeometryData {
     const primitiveData = cube(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -493,7 +540,7 @@ export class GeometryFactory {
    */
   static createSphere(options: GeometryPrimitiveOptions['sphere'] = {}): GeometryData {
     const primitiveData = sphere(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -502,7 +549,7 @@ export class GeometryFactory {
    */
   static createPlane(options: GeometryPrimitiveOptions['plane'] = {}): GeometryData {
     const primitiveData = plane(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -511,7 +558,7 @@ export class GeometryFactory {
    */
   static createCylinder(options: GeometryPrimitiveOptions['cylinder'] = {}): GeometryData {
     const primitiveData = cylinder(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -520,7 +567,7 @@ export class GeometryFactory {
    */
   static createCone(options: GeometryPrimitiveOptions['cone'] = {}): GeometryData {
     const primitiveData = cone(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   // === 2D Shapes ===
@@ -531,7 +578,7 @@ export class GeometryFactory {
    */
   static createQuad(options: GeometryPrimitiveOptions['quad'] = {}): GeometryData {
     const primitiveData = quad(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -542,7 +589,7 @@ export class GeometryFactory {
     options: GeometryPrimitiveOptions['roundedRectangle'] = {},
   ): GeometryData {
     const primitiveData = roundedRectangle(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -551,7 +598,7 @@ export class GeometryFactory {
    */
   static createStadium(options: GeometryPrimitiveOptions['stadium'] = {}): GeometryData {
     const primitiveData = stadium(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -560,7 +607,7 @@ export class GeometryFactory {
    */
   static createEllipse(options: GeometryPrimitiveOptions['ellipse'] = {}): GeometryData {
     const primitiveData = ellipse(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -569,7 +616,7 @@ export class GeometryFactory {
    */
   static createDisc(options: GeometryPrimitiveOptions['disc'] = {}): GeometryData {
     const primitiveData = disc(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -578,7 +625,7 @@ export class GeometryFactory {
    */
   static createCircle(options: GeometryPrimitiveOptions['circle'] = {}): GeometryData {
     const primitiveData = circle(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   // === 3D Shapes ===
@@ -589,7 +636,7 @@ export class GeometryFactory {
    */
   static createBox(options: GeometryPrimitiveOptions['box'] = {}): GeometryData {
     const primitiveData = box(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -598,7 +645,7 @@ export class GeometryFactory {
    */
   static createRoundedCube(options: GeometryPrimitiveOptions['roundedCube'] = {}): GeometryData {
     const primitiveData = roundedCube(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -607,7 +654,7 @@ export class GeometryFactory {
    */
   static createIcosphere(options: GeometryPrimitiveOptions['icosphere'] = {}): GeometryData {
     const primitiveData = icosphere(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -616,7 +663,7 @@ export class GeometryFactory {
    */
   static createEllipsoid(options: GeometryPrimitiveOptions['ellipsoid'] = {}): GeometryData {
     const primitiveData = ellipsoid(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -625,7 +672,7 @@ export class GeometryFactory {
    */
   static createCapsule(options: GeometryPrimitiveOptions['capsule'] = {}): GeometryData {
     const primitiveData = capsule(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -634,7 +681,7 @@ export class GeometryFactory {
    */
   static createTorus(options: GeometryPrimitiveOptions['torus'] = {}): GeometryData {
     const primitiveData = torus(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -644,7 +691,7 @@ export class GeometryFactory {
    */
   static createTetrahedron(options: GeometryPrimitiveOptions['tetrahedron'] = {}): GeometryData {
     const primitiveData = tetrahedron(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 
   /**
@@ -654,6 +701,6 @@ export class GeometryFactory {
    */
   static createIcosahedron(options: GeometryPrimitiveOptions['icosahedron'] = {}): GeometryData {
     const primitiveData = icosahedron(options);
-    return this.convertPrimitiveGeometry(primitiveData);
+    return this.convertPrimitiveGeometry(primitiveData, 'triangle-list');
   }
 }

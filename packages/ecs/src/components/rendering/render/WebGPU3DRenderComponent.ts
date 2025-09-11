@@ -24,7 +24,6 @@ export class WebGPU3DRenderComponent extends Component {
   private castShadow: boolean;
   private receiveShadow: boolean;
   private layer: number;
-  private renderTaskType: string;
   private customShader: string | undefined; // From Render3DComponent
   private uniforms: Record<string, Any>; // From Render3DComponent
 
@@ -65,7 +64,6 @@ export class WebGPU3DRenderComponent extends Component {
     this.castShadow = properties.castShadow ?? true;
     this.receiveShadow = properties.receiveShadow ?? true;
     this.layer = properties.layer ?? 0;
-    this.renderTaskType = properties.renderTaskType ?? 'scene';
     this.customShader = properties.customShader;
     this.uniforms = properties.uniforms ?? {};
 
@@ -104,7 +102,6 @@ export class WebGPU3DRenderComponent extends Component {
     if (properties.castShadow !== undefined) this.castShadow = properties.castShadow;
     if (properties.receiveShadow !== undefined) this.receiveShadow = properties.receiveShadow;
     if (properties.layer !== undefined) this.layer = properties.layer;
-    if (properties.renderTaskType !== undefined) this.renderTaskType = properties.renderTaskType;
     if (properties.customShader !== undefined) this.customShader = properties.customShader;
     if (properties.uniforms !== undefined) this.uniforms = properties.uniforms;
 
@@ -148,7 +145,6 @@ export class WebGPU3DRenderComponent extends Component {
       castShadow: this.castShadow,
       receiveShadow: this.receiveShadow,
       layer: this.layer,
-      renderTaskType: this.renderTaskType,
       customShader: this.customShader,
       uniforms: this.uniforms,
       depthTest: this.depthTest,
@@ -498,13 +494,6 @@ export class WebGPU3DRenderComponent extends Component {
   }
 
   /**
-   * Get render task type
-   */
-  getRenderTaskType(): string {
-    return this.renderTaskType;
-  }
-
-  /**
    * Get custom shader (from Render3DComponent)
    */
   getCustomShader(): string | undefined {
@@ -528,7 +517,6 @@ export class WebGPU3DRenderComponent extends Component {
     this.castShadow = true;
     this.receiveShadow = true;
     this.layer = 0;
-    this.renderTaskType = 'scene';
     this.customShader = undefined;
     this.uniforms = {};
 
