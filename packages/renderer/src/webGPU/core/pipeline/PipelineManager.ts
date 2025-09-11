@@ -15,6 +15,7 @@ import {
 
 import checkerboardShader from './shader/checkerboard.wgsl?raw';
 import coordinateShader from './shader/coordinate.wgsl?raw';
+import emissiveShader from './shader/emissive.wgsl?raw';
 import pulsewaveShader from './shader/pulsewave.wgsl?raw';
 
 // Simple cache entry for dual-layer cache
@@ -108,6 +109,22 @@ export class PipelineManager {
         cullMode: 'back',
       },
     });
+    this.registerCustomShader({
+      id: 'emissive_shader',
+      name: 'Emissive Shader',
+      description: 'Emissive shader',
+      vertexCode: emissiveShader,
+      fragmentCode: '',
+      requiredUniforms: [],
+      requiredTextures: [],
+      supportedVertexFormats: ['simple', 'full'],
+      renderState: {
+        blendMode: 'replace',
+        depthTest: true,
+        depthWrite: true,
+        cullMode: 'back',
+      },
+    });
   }
 
   /**
@@ -180,7 +197,7 @@ export class PipelineManager {
    */
   private async createGpuPipeline(
     gpuKey: GpuPipelineKey,
-    semanticKey?: SemanticPipelineKey,
+    semanticKey: SemanticPipelineKey,
   ): Promise<GPURenderPipeline> {
     // Create shader modules
     const shaderModules = await this.createShaderModulesFromGpuKey(gpuKey, semanticKey);
@@ -331,7 +348,7 @@ export class PipelineManager {
    */
   private async createShaderModulesFromGpuKey(
     gpuKey: GpuPipelineKey,
-    semanticKey?: SemanticPipelineKey,
+    semanticKey: SemanticPipelineKey,
   ): Promise<{ vertex: GPUShaderModule; fragment: GPUShaderModule }> {
     const shaderId = generateGpuCacheKey(gpuKey);
 
@@ -741,14 +758,15 @@ export class PipelineManager {
    */
   private async generateShaderCodeFromGpuKey(
     gpuKey: GpuPipelineKey,
-    semanticKey?: SemanticPipelineKey,
+    semanticKey: SemanticPipelineKey,
   ): Promise<string> {
-    // Check if we have a custom shader
-    if (semanticKey?.customShaderId) {
-      const customShader = this.shaderManager.getCustomShader(semanticKey.customShaderId);
+    // Check if we have a custom shader (prioritize gpuKey over semanticKey)
+    const customShaderId = gpuKey.customShaderId || semanticKey?.customShaderId;
+    if (customShaderId) {
+      const customShader = this.shaderManager.getCustomShader(customShaderId);
       if (customShader) {
         // Use custom shader with vertex format adaptation
-        const vertexFormat = semanticKey.vertexFormat;
+        const vertexFormat = semanticKey.vertexFormat || 'full';
         const shaderParams = {}; // TODO: Get shader params from material
         return this.shaderManager.generateCustomShaderCode(
           customShader,

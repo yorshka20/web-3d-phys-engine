@@ -564,7 +564,7 @@ export class ShaderManager {
    */
   generateCustomShaderCode(
     customShader: CustomShaderDefinition,
-    vertexFormat: 'simple' | 'full',
+    vertexFormat: 'simple' | 'full' | 'colored',
     shaderDefines: string[] = [],
     shaderParams: Record<string, any> = {},
   ): string {
@@ -595,12 +595,38 @@ export class ShaderManager {
    * @param vertexFormat Target vertex format
    * @returns Adapted vertex shader code
    */
-  private adaptVertexShaderForFormat(baseCode: string, vertexFormat: 'simple' | 'full'): string {
+  private adaptVertexShaderForFormat(
+    baseCode: string,
+    vertexFormat: 'simple' | 'full' | 'colored',
+  ): string {
     if (vertexFormat === 'full') {
       return baseCode; // Full format supports all attributes
     }
 
-    // For simple format, remove normal and UV attributes
+    if (vertexFormat === 'colored') {
+      // For colored format, keep position and color, remove normal and UV
+      let adaptedCode = baseCode;
+
+      // Remove normal attribute from input
+      adaptedCode = adaptedCode.replace(/@location\(1\)\s+normal:\s+vec3<f32>,?\s*/g, '');
+
+      // Remove UV attribute from input
+      adaptedCode = adaptedCode.replace(/@location\(2\)\s+uv:\s+vec2<f32>,?\s*/g, '');
+
+      // Remove normal from output
+      adaptedCode = adaptedCode.replace(/@location\(0\)\s+normal:\s+vec3<f32>,?\s*/g, '');
+
+      // Remove UV from output
+      adaptedCode = adaptedCode.replace(/@location\(1\)\s+uv:\s+vec2<f32>,?\s*/g, '');
+
+      // Remove assignments to normal and UV in vertex shader
+      adaptedCode = adaptedCode.replace(/out\.normal\s*=\s*[^;]+;/g, '');
+      adaptedCode = adaptedCode.replace(/out\.uv\s*=\s*[^;]+;/g, '');
+
+      return adaptedCode;
+    }
+
+    // For simple format, remove normal, UV, and color attributes
     let adaptedCode = baseCode;
 
     // Remove normal attribute from input
@@ -609,15 +635,22 @@ export class ShaderManager {
     // Remove UV attribute from input
     adaptedCode = adaptedCode.replace(/@location\(2\)\s+uv:\s+vec2<f32>,?\s*/g, '');
 
+    // Remove color attribute from input
+    adaptedCode = adaptedCode.replace(/@location\(1\)\s+color:\s+vec4<f32>,?\s*/g, '');
+
     // Remove normal from output
     adaptedCode = adaptedCode.replace(/@location\(0\)\s+normal:\s+vec3<f32>,?\s*/g, '');
 
     // Remove UV from output
     adaptedCode = adaptedCode.replace(/@location\(1\)\s+uv:\s+vec2<f32>,?\s*/g, '');
 
-    // Remove assignments to normal and UV in vertex shader
+    // Remove color from output
+    adaptedCode = adaptedCode.replace(/@location\(0\)\s+color:\s+vec4<f32>,?\s*/g, '');
+
+    // Remove assignments to normal, UV, and color in vertex shader
     adaptedCode = adaptedCode.replace(/out\.normal\s*=\s*[^;]+;/g, '');
     adaptedCode = adaptedCode.replace(/out\.uv\s*=\s*[^;]+;/g, '');
+    adaptedCode = adaptedCode.replace(/out\.color\s*=\s*[^;]+;/g, '');
 
     return adaptedCode;
   }

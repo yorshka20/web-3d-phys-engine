@@ -94,8 +94,9 @@ export interface GpuPipelineKey {
   depthTest: boolean;
 
   // Shader compilation parameters
-  vertexAttributes: number; // Bitmask: POSITION|NORMAL|UV
+  vertexAttributes: number; // Bitmask: POSITION|NORMAL|UV|COLOR
   shaderDefines: string[]; // ['HAS_TEXTURES', 'USE_VERTEX_COLORS']
+  customShaderId?: string; // Custom shader ID for specialized rendering
 }
 
 /**
@@ -218,6 +219,7 @@ export function generateGpuCacheKey(key: GpuPipelineKey): string {
     key.depthTest,
     key.vertexAttributes,
     defines,
+    key.customShaderId || 'default',
   ];
   return keys.join('_');
 }
@@ -234,6 +236,7 @@ export function convertToGpuPipelineKey(semanticKey: SemanticPipelineKey): GpuPi
     depthTest: determineDepthTest(semanticKey),
     vertexAttributes: determineVertexAttributes(semanticKey),
     shaderDefines: generateShaderDefines(semanticKey),
+    customShaderId: semanticKey.customShaderId,
   };
 }
 

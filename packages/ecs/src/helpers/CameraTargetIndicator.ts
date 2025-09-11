@@ -62,8 +62,8 @@ export class CameraTargetIndicator {
           roughness: 0.2,
           emissive: chroma('#ff0000'), // Emissive for visibility
           emissiveIntensity: 0.5,
+          customShaderId: 'emissive_shader',
         },
-        renderTaskType: 'geometry',
       }),
     );
 

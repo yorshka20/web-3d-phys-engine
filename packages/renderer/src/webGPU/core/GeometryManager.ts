@@ -134,6 +134,7 @@ export class GeometryManager {
       indexBuffer,
       vertexCount: geometry.vertexCount,
       indexCount: geometry.indexCount,
+      primitiveType: geometry.primitiveType,
       bounds: {
         min: geometry.bounds.min as [number, number, number],
         max: geometry.bounds.max as [number, number, number],
