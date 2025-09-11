@@ -1,4 +1,4 @@
-import { AutoRegisterResource, Inject, Injectable, SmartResource } from './decorators';
+import { Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import {
@@ -41,7 +41,7 @@ export interface CustomShaderDefinition {
   // Shader parameters that can be overridden by materials
   shaderParams?: {
     [paramName: string]: {
-      type: 'float' | 'int' | 'bool' | 'vec2' | 'vec3' | 'vec4' | 'mat3' | 'mat4';
+      type: 'f32' | 'i32' | 'bool' | 'vec2' | 'vec3' | 'vec4' | 'mat3' | 'mat4';
       defaultValue: any;
       description?: string;
     };
@@ -332,7 +332,7 @@ export class ShaderManager {
    * @param descriptor layout descriptor
    * @returns bind group layout
    */
-  @AutoRegisterResource(ResourceType.BIND_GROUP_LAYOUT, {
+  @SmartResource(ResourceType.BIND_GROUP_LAYOUT, {
     lifecycle: 'persistent',
   })
   createCustomBindGroupLayout(
@@ -400,7 +400,7 @@ export class ShaderManager {
    * @param descriptor bind group descriptor
    * @returns created bind group
    */
-  @AutoRegisterResource(ResourceType.BIND_GROUP, {
+  @SmartResource(ResourceType.BIND_GROUP, {
     lifecycle: 'scene',
   })
   createBindGroup(id: string, descriptor: BindGroupDescriptor): GPUBindGroup {

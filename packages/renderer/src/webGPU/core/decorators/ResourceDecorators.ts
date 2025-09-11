@@ -19,47 +19,6 @@ import {
 } from './types';
 
 /**
- * Auto-register resource decorator for TypeScript 5.0
- * Automatically registers created resources to the resource manager
- */
-export function AutoRegisterResource<T extends ResourceType>(
-  type: T,
-  options: AutoRegisterOptions = {},
-) {
-  return function (target: (...args: Any[]) => Any, context: ClassMethodDecoratorContext) {
-    const originalMethod = target;
-
-    return function (this: InjectableClass, ...args: [string, ...Any[]]) {
-      // Execute original method
-      const result = originalMethod.apply(this, args);
-
-      // Auto-register resource if resource manager is available
-      const resourceManager = this.getResourceManager
-        ? this.getResourceManager()
-        : this.resourceManager;
-      if (resourceManager && result) {
-        // Use first argument as resource ID if it's a string, otherwise generate one
-        const resourceId =
-          typeof args[0] === 'string'
-            ? args[0]
-            : this.generateResourceId(String(context.name), args);
-        console.log(
-          `[Decorator:AutoRegisterResource] Registering resource: ${resourceId}, type: ${type}`,
-        );
-
-        this.registerResource(resourceId, result, type, options);
-      } else if (!resourceManager) {
-        console.warn(
-          `[Decorator:AutoRegisterResource] No resource manager available - resource registration skipped for ${String(context.name)}`,
-        );
-      }
-
-      return result;
-    };
-  };
-}
-
-/**
  * Injectable decorator for dependency injection with auto-registration support
  * Automatically injects ResourceManager dependency and sets up DI container support
  * @param token Optional service token for auto-registration
@@ -335,15 +294,58 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
 }
 
 /**
- * Smart resource decorator with advanced features
- * Combines caching, pooling, and lifecycle management
+ * Enhanced smart resource decorator that combines automatic registration with advanced features
+ * Supports caching, pooling, lifecycle management, and simple auto-registration
+ * Replaces both AutoRegisterResource and original SmartResource functionality
  */
-export function SmartResource<T extends ResourceType>(type: T, options: SmartResourceOptions = {}) {
+export function SmartResource<T extends ResourceType>(
+  type: T,
+  options: SmartResourceOptions & AutoRegisterOptions = {},
+) {
   return function (target: (...args: Any[]) => Any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
     return function (this: InjectableClass, ...args: [string, ...Any[]]) {
-      // Initialize resource cache and pool on instance with proper typing
+      // Determine execution mode based on provided options
+      const hasAdvancedFeatures =
+        options.cache || options.pool || options.lifecycle || options.maxCacheSize;
+      const strictValidation = options.strictValidation ?? hasAdvancedFeatures;
+
+      // Generate or extract resource ID
+      const resourceId =
+        typeof args[0] === 'string' ? args[0] : this.generateResourceId(String(context.name), args);
+
+      // Validate resource ID if strict validation is enabled
+      if (strictValidation && (!resourceId || typeof resourceId !== 'string')) {
+        console.error('[SmartResource] Invalid resource ID generated');
+        throw new Error('Invalid resource ID');
+      }
+
+      // Simple mode: direct execution like AutoRegisterResource
+      if (!hasAdvancedFeatures) {
+        // Execute original method
+        const result = originalMethod.apply(this, args);
+
+        // Auto-register resource if resource manager is available
+        const resourceManager = this.getResourceManager
+          ? this.getResourceManager()
+          : this.resourceManager;
+
+        if (resourceManager && result) {
+          console.log(`[SmartResource] Registering resource: ${resourceId}, type: ${type}`);
+          this.registerResource(resourceId, result, type, options);
+        } else if (!resourceManager) {
+          console.warn(
+            `[SmartResource] No resource manager available - resource registration skipped for ${String(context.name)}`,
+          );
+        }
+
+        return result;
+      }
+
+      // Advanced mode: full smart resource management
+
+      // Initialize resource management containers on instance
       if (!this.resourceCache) {
         this.resourceCache = new Map<string, Any>();
       }
@@ -352,16 +354,6 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
       }
       if (!this.resourceLifecycles) {
         this.resourceLifecycles = new Map<string, string>();
-      }
-
-      // Use first argument as resource ID if it's a string, otherwise generate one
-      const resourceId =
-        typeof args[0] === 'string' ? args[0] : this.generateResourceId(String(context.name), args);
-
-      // Validate resource ID
-      if (!resourceId || typeof resourceId !== 'string') {
-        console.error('[SmartResource] Invalid resource ID generated');
-        throw new Error('Invalid resource ID');
       }
 
       // Check cache first with validation
@@ -373,6 +365,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
         } else {
           // Remove invalid cache entry
           this.resourceCache.delete(resourceId);
+          console.warn(`[SmartResource] Removed invalid cached resource: ${resourceId}`);
         }
       }
 
@@ -385,16 +378,17 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
         } else {
           // Remove invalid pool entry
           this.resourcePool.delete(resourceId);
+          console.warn(`[SmartResource] Removed invalid pooled resource: ${resourceId}`);
         }
       }
 
-      console.log(`[SmartResource] Processing resource: ${resourceId}, type: ${type}`);
+      console.log(`[SmartResource] Creating new resource: ${resourceId}, type: ${type}`);
 
-      // Create new resource with error handling
+      // Create new resource with comprehensive error handling
       let resource: Any;
       try {
         resource = originalMethod.apply(this, args);
-        if (!resource) {
+        if (strictValidation && !resource) {
           throw new Error('Resource creation returned null/undefined');
         }
       } catch (error) {
@@ -402,48 +396,74 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
         throw error;
       }
 
-      // Cache resource
-      if (options.cache) {
+      // Cache management with LRU eviction
+      if (options.cache && resource) {
         this.resourceCache.set(resourceId, resource);
 
-        // Implement cache size limit with LRU eviction
+        // Implement cache size limit with FIFO eviction (could be enhanced to LRU)
         if (options.maxCacheSize && this.resourceCache.size > options.maxCacheSize) {
-          // Remove oldest entries (simple FIFO for now, could be enhanced with LRU)
           const entriesToRemove = this.resourceCache.size - options.maxCacheSize;
           const keysToRemove = Array.from(this.resourceCache.keys()).slice(0, entriesToRemove);
+
           keysToRemove.forEach((key) => {
-            const resource = this.resourceCache?.get(key);
-            if (resource && typeof resource.destroy === 'function') {
-              resource.destroy();
+            const resourceToDestroy = this.resourceCache?.get(key);
+            if (resourceToDestroy && typeof resourceToDestroy.destroy === 'function') {
+              try {
+                resourceToDestroy.destroy();
+              } catch (destroyError) {
+                console.warn(
+                  `[SmartResource] Failed to destroy evicted resource ${key}:`,
+                  destroyError,
+                );
+              }
             }
             this.resourceCache?.delete(key);
           });
+
           console.log(
-            `[SmartResource] Evicted ${entriesToRemove} cached resources to maintain size limit`,
+            `[SmartResource] Evicted ${entriesToRemove} cached resources to maintain size limit of ${options.maxCacheSize}`,
           );
         }
       }
 
-      // Add to pool
-      if (options.pool) {
+      // Add to resource pool
+      if (options.pool && resource) {
         this.resourcePool.set(resourceId, resource);
       }
 
-      // Set lifecycle
+      // Set resource lifecycle
       if (options.lifecycle && this.setResourceLifecycle) {
         this.setResourceLifecycle(resourceId, options.lifecycle);
       }
 
-      // Auto-register
+      // Auto-register resource to resource manager
       const resourceManager = this.getResourceManager
         ? this.getResourceManager()
         : this.resourceManager;
-      if (resourceManager) {
-        console.log(`[Decorator:SmartResource] Registering resource: ${resourceId}, type: ${type}`);
-        this.registerResource(resourceId, resource, type, options);
-      } else {
+
+      if (resourceManager && resource) {
+        console.log(`[SmartResource] Registering resource: ${resourceId}, type: ${type}`);
+        try {
+          this.registerResource(resourceId, resource, type, {
+            ...options,
+            // Add metadata about smart resource features used
+            smartFeatures: {
+              cache: !!options.cache,
+              pool: !!options.pool,
+              lifecycle: options.lifecycle,
+              maxCacheSize: options.maxCacheSize,
+            },
+          });
+        } catch (registrationError) {
+          console.error(
+            `[SmartResource] Failed to register resource ${resourceId}:`,
+            registrationError,
+          );
+          // Don't throw here, return the resource anyway as it was created successfully
+        }
+      } else if (!resourceManager) {
         console.warn(
-          `[Decorator:SmartResource] No resource manager available - registration skipped for resource: ${resourceId}`,
+          `[SmartResource] No resource manager available - registration skipped for resource: ${resourceId}`,
         );
       }
 
@@ -451,7 +471,6 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
     };
   };
 }
-
 /**
  * Dependency injection decorator for properties
  * Automatically injects dependencies from the global container

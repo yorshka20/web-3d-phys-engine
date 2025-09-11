@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResourceType } from '../../types/constant';
 import { globalContainer, ServiceTokens } from '../DIContainer';
-import { AutoRegisterResource, Inject, Injectable, SmartResource } from '../ResourceDecorators';
+import { Inject, Injectable, SmartResource } from '../ResourceDecorators';
 
 // Mock services
 class MockResourceManager {
@@ -170,28 +170,6 @@ describe('Decorator Execution Order', () => {
   });
 
   describe('Resource Decorators Execution', () => {
-    it('should execute AutoRegisterResource decorator', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      @Injectable()
-      class TestManager {
-        @AutoRegisterResource(ResourceType.BUFFER)
-        createBuffer(label: string): any {
-          return { id: `buffer-${label}`, type: 'buffer' };
-        }
-      }
-
-      const manager = new TestManager();
-      const buffer = manager.createBuffer('test-buffer');
-
-      expect(buffer).toEqual({ id: 'buffer-test-buffer', type: 'buffer' });
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[Decorator:AutoRegisterResource] Registering resource'),
-      );
-
-      consoleSpy.mockRestore();
-    });
-
     it('should execute SmartResource decorator with caching', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -226,7 +204,7 @@ describe('Decorator Execution Order', () => {
         @Inject(ServiceTokens.RESOURCE_MANAGER)
         resourceManager!: MockResourceManager;
 
-        @AutoRegisterResource(ResourceType.TEXTURE)
+        @SmartResource(ResourceType.TEXTURE)
         createTexture(label: string): any {
           return { id: `texture-${label}`, type: 'texture' };
         }
@@ -275,7 +253,7 @@ describe('Decorator Execution Order', () => {
           executionOrder.push('Constructor executed');
         }
 
-        @AutoRegisterResource(ResourceType.BUFFER)
+        @SmartResource(ResourceType.BUFFER)
         createBuffer(label: string): any {
           executionOrder.push('Resource creation method called');
           return { id: `buffer-${label}` };

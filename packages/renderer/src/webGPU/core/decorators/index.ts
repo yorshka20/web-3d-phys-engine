@@ -35,7 +35,6 @@ import { globalContainer, ServiceTokens } from './DIContainer';
 
 // Core decorators
 export {
-  AutoRegisterResource,
   Inject,
   Injectable,
   MonitorPerformance,

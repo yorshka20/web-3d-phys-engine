@@ -60,6 +60,7 @@ export interface AutoRegisterOptions {
 
 export interface SmartResourceOptions extends AutoRegisterOptions {
   maxCacheSize?: number;
+  strictValidation?: boolean;
 }
 
 export interface ResourceFactoryOptions {

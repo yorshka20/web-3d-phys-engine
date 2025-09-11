@@ -1,4 +1,4 @@
-import { AutoRegisterResource, Inject, Injectable, SmartResource } from './decorators';
+import { Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import { BufferDescriptor, BufferPoolItem, BufferType } from './types';
@@ -174,7 +174,7 @@ export class BufferManager {
    * @param label label
    * @returns storage buffer
    */
-  @AutoRegisterResource(ResourceType.BUFFER, {
+  @SmartResource(ResourceType.BUFFER, {
     lifecycle: 'persistent',
   })
   createStorageBuffer(label: string, data: ArrayBuffer): GPUBuffer {

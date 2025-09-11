@@ -1,4 +1,4 @@
-import { AutoRegisterResource, Inject, Injectable } from './decorators';
+import { Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import { ResourceType, SamplerDescriptor, TextureDescriptor } from './types';
@@ -27,7 +27,7 @@ export class TextureManager {
     return this.textures.get(id)!;
   }
 
-  @AutoRegisterResource(ResourceType.SAMPLER, {
+  @SmartResource(ResourceType.SAMPLER, {
     lifecycle: 'persistent',
   })
   createSampler(id: string, descriptor: SamplerDescriptor): GPUSampler {
@@ -52,7 +52,7 @@ export class TextureManager {
     );
   }
 
-  @AutoRegisterResource(ResourceType.TEXTURE, {
+  @SmartResource(ResourceType.TEXTURE, {
     lifecycle: 'persistent',
   })
   createTexture(id: string, descriptor: TextureDescriptor): GPUTexture {
