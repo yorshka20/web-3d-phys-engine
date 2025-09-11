@@ -334,6 +334,8 @@ export class ShaderManager {
    */
   @SmartResource(ResourceType.BIND_GROUP_LAYOUT, {
     lifecycle: 'persistent',
+    cache: true,
+    maxCacheSize: 100,
   })
   createCustomBindGroupLayout(
     id: string,
@@ -402,6 +404,8 @@ export class ShaderManager {
    */
   @SmartResource(ResourceType.BIND_GROUP, {
     lifecycle: 'scene',
+    cache: true,
+    maxCacheSize: 100,
   })
   createBindGroup(id: string, descriptor: BindGroupDescriptor): GPUBindGroup {
     // check cache

@@ -18,20 +18,19 @@ export interface InjectableClass {
   setResourceManager(manager: WebGPUResourceManager): void;
   getResourceManager(): WebGPUResourceManager | undefined;
   generateResourceId(methodName: string, args: Any[]): string;
+  releaseResource(resourceId: string): boolean;
+  enforceStorageLimit(maxSize: number): void;
   registerResource(id: string, resource: Any, type: ResourceType, options?: Any): void;
   createResourceWrapper(type: ResourceType, resource: Any): Any;
   destroyResource(resource: Any): void;
   setResourceLifecycle?(resourceId: string, lifecycle: string): void;
-  cleanupResources?(lifecycle: string): void;
   resourceLifecycles?: Map<string, string>;
-  resourceCache?: Map<string, Any>;
-  resourcePool?: Map<string, Any>;
+  resourceStorage?: Map<string, Any>;
 }
 
 // Smart resource class interface
 export interface SmartResourceClass extends InjectableClass {
-  resourceCache?: Map<string, Any>;
-  resourcePool?: Map<string, Any>;
+  resourceStorage?: Map<string, Any>;
   resourceLifecycles?: Map<string, string>;
 }
 
@@ -50,15 +49,10 @@ export interface DIClass {
 // Resource lifecycle types
 export type ResourceLifecycle = 'frame' | 'scene' | 'persistent';
 
-// Decorator options interfaces
-export interface AutoRegisterOptions {
+export interface SmartResourceOptions {
   lifecycle?: ResourceLifecycle;
   cache?: boolean;
   pool?: boolean;
-  dependencies?: string[];
-}
-
-export interface SmartResourceOptions extends AutoRegisterOptions {
   maxCacheSize?: number;
   strictValidation?: boolean;
 }
@@ -75,7 +69,7 @@ export function isInjectableClass(obj: InjectableClass): obj is InjectableClass 
 }
 
 export function isSmartResourceClass(obj: SmartResourceClass): obj is SmartResourceClass {
-  return isInjectableClass(obj) && obj.resourceCache instanceof Map;
+  return isInjectableClass(obj) && obj.resourceStorage instanceof Map;
 }
 
 export function isMonitoredClass(obj: MonitoredClass): obj is MonitoredClass {

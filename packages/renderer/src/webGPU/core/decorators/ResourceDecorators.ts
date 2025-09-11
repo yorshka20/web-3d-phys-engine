@@ -11,12 +11,7 @@ import {
   TextureResource,
 } from '../types/resource';
 import { globalContainer, ServiceMetadata, ServiceOptions } from './DIContainer';
-import {
-  AutoRegisterOptions,
-  InjectableClass,
-  ResourceFactoryOptions,
-  SmartResourceOptions,
-} from './types';
+import { InjectableClass, ResourceFactoryOptions, SmartResourceOptions } from './types';
 
 /**
  * Injectable decorator for dependency injection with auto-registration support
@@ -90,6 +85,38 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
 
         // Fallback to method name with timestamp
         return `${methodName}_${Date.now()}`;
+      };
+    }
+
+    // Add to Injectable decorator
+    if (!proto.hasOwnProperty('releaseResource')) {
+      proto.releaseResource = function (resourceId: string): boolean {
+        const entry = this.resourceStorage?.get(resourceId);
+        if (entry && entry.inUse) {
+          entry.inUse = false;
+          entry.lastUsed = Date.now();
+          console.log(`[SmartResource] Released resource: ${resourceId}`);
+          return true;
+        }
+        return false;
+      };
+    }
+
+    if (!proto.hasOwnProperty('enforceStorageLimit')) {
+      proto.enforceStorageLimit = function (maxSize: number) {
+        if (!this.resourceStorage || this.resourceStorage.size <= maxSize) return;
+
+        // Get LRU entries that are not in use
+        const entries = Array.from(this.resourceStorage.entries())
+          .filter(([_, entry]) => !entry.inUse)
+          .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+
+        const toRemove = this.resourceStorage.size - maxSize;
+        for (let i = 0; i < toRemove && i < entries.length; i++) {
+          const [resourceId, entry] = entries[i];
+          entry.resource.destroy?.();
+          this.resourceStorage.delete(resourceId);
+        }
       };
     }
 
@@ -230,24 +257,6 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
       };
     }
 
-    // Add cleanup method
-    if (!proto.hasOwnProperty('cleanupResources')) {
-      proto.cleanupResources = function (lifecycle: string) {
-        if (this.resourceLifecycles) {
-          for (const [resourceId, resourceLifecycle] of this.resourceLifecycles) {
-            if (resourceLifecycle === lifecycle) {
-              // Clean up based on lifecycle
-              if (lifecycle === 'frame') {
-                this.resourceCache?.delete(resourceId);
-                this.resourcePool?.delete(resourceId);
-              }
-              this.resourceLifecycles.delete(resourceId);
-            }
-          }
-        }
-      };
-    }
-
     // Add auto-registration logic if token is provided
     if (token) {
       // Store original constructor
@@ -294,183 +303,93 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
 }
 
 /**
- * Enhanced smart resource decorator that combines automatic registration with advanced features
- * Supports caching, pooling, lifecycle management, and simple auto-registration
- * Replaces both AutoRegisterResource and original SmartResource functionality
+ * Smart resource decorator with unified storage
+ * Uses semantic flags to control behavior, not separate storage
  */
-export function SmartResource<T extends ResourceType>(
-  type: T,
-  options: SmartResourceOptions & AutoRegisterOptions = {},
-) {
+export function SmartResource<T extends ResourceType>(type: T, options: SmartResourceOptions = {}) {
   return function (target: (...args: Any[]) => Any, context: ClassMethodDecoratorContext) {
     const originalMethod = target;
 
     return function (this: InjectableClass, ...args: [string, ...Any[]]) {
-      // Determine execution mode based on provided options
-      const hasAdvancedFeatures =
-        options.cache || options.pool || options.lifecycle || options.maxCacheSize;
-      const strictValidation = options.strictValidation ?? hasAdvancedFeatures;
+      const resourceId = args[0];
 
-      // Generate or extract resource ID
-      const resourceId =
-        typeof args[0] === 'string' ? args[0] : this.generateResourceId(String(context.name), args);
-
-      // Validate resource ID if strict validation is enabled
-      if (strictValidation && (!resourceId || typeof resourceId !== 'string')) {
-        console.error('[SmartResource] Invalid resource ID generated');
-        throw new Error('Invalid resource ID');
+      // Initialize single unified storage
+      if (!this.resourceStorage) {
+        this.resourceStorage = new Map<string, ResourceEntry>();
       }
 
-      // Simple mode: direct execution like AutoRegisterResource
-      if (!hasAdvancedFeatures) {
-        // Execute original method
-        const result = originalMethod.apply(this, args);
+      // Check if resource already exists
+      const existingEntry = this.resourceStorage.get(resourceId);
 
-        // Auto-register resource if resource manager is available
-        const resourceManager = this.getResourceManager
-          ? this.getResourceManager()
-          : this.resourceManager;
-
-        if (resourceManager && result) {
-          console.log(`[SmartResource] Registering resource: ${resourceId}, type: ${type}`);
-          this.registerResource(resourceId, result, type, options);
-        } else if (!resourceManager) {
-          console.warn(
-            `[SmartResource] No resource manager available - resource registration skipped for ${String(context.name)}`,
-          );
+      if (existingEntry && !existingEntry.destroyed) {
+        // Cache behavior: always return existing
+        if (options.cache) {
+          // console.log(`[SmartResource] Using cached resource: ${resourceId}`);
+          return existingEntry.resource;
         }
 
-        return result;
-      }
-
-      // Advanced mode: full smart resource management
-
-      // Initialize resource management containers on instance
-      if (!this.resourceCache) {
-        this.resourceCache = new Map<string, Any>();
-      }
-      if (!this.resourcePool) {
-        this.resourcePool = new Map<string, Any>();
-      }
-      if (!this.resourceLifecycles) {
-        this.resourceLifecycles = new Map<string, string>();
-      }
-
-      // Check cache first with validation
-      if (options.cache && this.resourceCache.has(resourceId)) {
-        const cachedResource = this.resourceCache.get(resourceId);
-        if (cachedResource) {
-          console.log(`[SmartResource] Using cached resource: ${resourceId}`);
-          return cachedResource;
-        } else {
-          // Remove invalid cache entry
-          this.resourceCache.delete(resourceId);
-          console.warn(`[SmartResource] Removed invalid cached resource: ${resourceId}`);
+        // Pool behavior: check if available for reuse
+        if (options.pool) {
+          if (!existingEntry.inUse) {
+            existingEntry.inUse = true;
+            existingEntry.lastUsed = Date.now();
+            existingEntry.usageCount++;
+            console.log(`[SmartResource] Acquired pooled resource: ${resourceId}`);
+            return existingEntry.resource;
+          } else {
+            console.warn(`[SmartResource] Resource ${resourceId} is currently in use`);
+            // Could create new instance or wait, depending on requirements
+          }
         }
+
+        // Default: return existing resource
+        return existingEntry.resource;
       }
 
-      // Check pool with validation
-      if (options.pool && this.resourcePool.has(resourceId)) {
-        const pooledResource = this.resourcePool.get(resourceId);
-        if (pooledResource) {
-          console.log(`[SmartResource] Using pooled resource: ${resourceId}`);
-          return pooledResource;
-        } else {
-          // Remove invalid pool entry
-          this.resourcePool.delete(resourceId);
-          console.warn(`[SmartResource] Removed invalid pooled resource: ${resourceId}`);
-        }
-      }
-
+      // Create new resource
       console.log(`[SmartResource] Creating new resource: ${resourceId}, type: ${type}`);
 
-      // Create new resource with comprehensive error handling
-      let resource: Any;
-      try {
-        resource = originalMethod.apply(this, args);
-        if (strictValidation && !resource) {
-          throw new Error('Resource creation returned null/undefined');
-        }
-      } catch (error) {
-        console.error(`[SmartResource] Failed to create resource ${resourceId}:`, error);
-        throw error;
+      const resource = originalMethod.apply(this, args);
+
+      if (resource) {
+        // Store in unified storage with metadata
+        const entry: ResourceEntry = {
+          resource,
+          type,
+          created: Date.now(),
+          lastUsed: Date.now(),
+          usageCount: 1,
+          inUse: options.pool ? true : false, // Only track usage for pool mode
+          destroyed: false,
+        };
+
+        this.resourceStorage.set(resourceId, entry);
+
+        // Handle size limits (applies to both cache and pool)
+        this.enforceStorageLimit(options.maxCacheSize || 50);
       }
 
-      // Cache management with LRU eviction
-      if (options.cache && resource) {
-        this.resourceCache.set(resourceId, resource);
-
-        // Implement cache size limit with FIFO eviction (could be enhanced to LRU)
-        if (options.maxCacheSize && this.resourceCache.size > options.maxCacheSize) {
-          const entriesToRemove = this.resourceCache.size - options.maxCacheSize;
-          const keysToRemove = Array.from(this.resourceCache.keys()).slice(0, entriesToRemove);
-
-          keysToRemove.forEach((key) => {
-            const resourceToDestroy = this.resourceCache?.get(key);
-            if (resourceToDestroy && typeof resourceToDestroy.destroy === 'function') {
-              try {
-                resourceToDestroy.destroy();
-              } catch (destroyError) {
-                console.warn(
-                  `[SmartResource] Failed to destroy evicted resource ${key}:`,
-                  destroyError,
-                );
-              }
-            }
-            this.resourceCache?.delete(key);
-          });
-
-          console.log(
-            `[SmartResource] Evicted ${entriesToRemove} cached resources to maintain size limit of ${options.maxCacheSize}`,
-          );
-        }
-      }
-
-      // Add to resource pool
-      if (options.pool && resource) {
-        this.resourcePool.set(resourceId, resource);
-      }
-
-      // Set resource lifecycle
-      if (options.lifecycle && this.setResourceLifecycle) {
-        this.setResourceLifecycle(resourceId, options.lifecycle);
-      }
-
-      // Auto-register resource to resource manager
-      const resourceManager = this.getResourceManager
-        ? this.getResourceManager()
-        : this.resourceManager;
-
+      // Register with resource manager
+      const resourceManager = this.getResourceManager?.() || this.resourceManager;
       if (resourceManager && resource) {
-        console.log(`[SmartResource] Registering resource: ${resourceId}, type: ${type}`);
-        try {
-          this.registerResource(resourceId, resource, type, {
-            ...options,
-            // Add metadata about smart resource features used
-            smartFeatures: {
-              cache: !!options.cache,
-              pool: !!options.pool,
-              lifecycle: options.lifecycle,
-              maxCacheSize: options.maxCacheSize,
-            },
-          });
-        } catch (registrationError) {
-          console.error(
-            `[SmartResource] Failed to register resource ${resourceId}:`,
-            registrationError,
-          );
-          // Don't throw here, return the resource anyway as it was created successfully
-        }
-      } else if (!resourceManager) {
-        console.warn(
-          `[SmartResource] No resource manager available - registration skipped for resource: ${resourceId}`,
-        );
+        this.registerResource(resourceId, resource, type, options);
       }
 
       return resource;
     };
   };
 }
+
+interface ResourceEntry {
+  resource: Any;
+  type: ResourceType;
+  created: number;
+  lastUsed: number;
+  usageCount: number;
+  inUse: boolean; // Only meaningful in pool mode
+  destroyed: boolean;
+}
+
 /**
  * Dependency injection decorator for properties
  * Automatically injects dependencies from the global container

@@ -170,10 +170,6 @@ export const ServiceTokens = {
   PIPELINE_FACTORY: 'PipelineFactory',
   // Renderer Initialization
   RENDERER_INITIALIZATION_MANAGER: 'RendererInitializationManager',
-  // Render Tasks
-  GEOMETRY_RENDER_TASK: 'GeometryRenderTask',
-  SCENE_RENDER_TASK: 'SceneRenderTask',
-  COORDINATE_RENDER_TASK: 'CoordinateRenderTask',
   // WebGPU
   WEBGPU_DEVICE: 'WebGPUDevice',
   WEBGPU_CONTEXT: 'WebGPUContext',
