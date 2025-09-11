@@ -230,6 +230,15 @@ function createGeometryEntities(world: World) {
         emissive: chroma('#000000'),
         emissiveIntensity: 0,
         alphaMode: 'blend',
+        customShaderId: 'water_shader',
+        albedoTextureId: 'water_texture',
+        shaderParams: {
+          waveFrequency: 0.15,
+          waveSpeed: 1.2,
+          waveAmplitude: 0.15,
+          fresnelPower: 2.5,
+          waterOpacity: 0.7,
+        },
       },
     },
   ];

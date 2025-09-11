@@ -13,6 +13,7 @@ import {
   generateSemanticCacheKey,
 } from './types';
 
+import { fireShaderDefinition, waterShaderDefinition } from './CustomShaderExample';
 import checkerboardShader from './shader/checkerboard.wgsl?raw';
 import coordinateShader from './shader/coordinate.wgsl?raw';
 import emissiveShader from './shader/emissive.wgsl?raw';
@@ -60,7 +61,9 @@ export class PipelineManager {
   }
 
   constructor() {
-    // Constructor body - services are injected via dependency injection
+    this.registerCustomShader(waterShaderDefinition);
+    this.registerCustomShader(fireShaderDefinition);
+
     this.registerCustomShader({
       id: 'checkerboard_shader',
       name: 'Checkerboard Shader',

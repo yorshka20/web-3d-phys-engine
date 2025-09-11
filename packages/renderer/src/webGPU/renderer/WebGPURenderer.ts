@@ -8,6 +8,7 @@ import { BufferManager } from '../core/BufferManager';
 import { DIContainer, initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
+import { MaterialManager } from '../core/MaterialManager';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
 import { PipelineManager } from '../core/pipeline/PipelineManager';
 import {
@@ -79,6 +80,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private resourceManager!: WebGPUResourceManager;
   private timeManager!: TimeManager;
   private geometryManager!: GeometryManager;
+  private materialManager!: MaterialManager;
   private pipelineManager!: PipelineManager;
   private pipelineFactory!: PipelineFactory;
 
@@ -290,6 +292,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.shaderManager = new ShaderManager();
     this.textureManager = new TextureManager();
     this.timeManager = new TimeManager();
+    this.materialManager = new MaterialManager();
     this.geometryManager = new GeometryManager();
     this.pipelineManager = new PipelineManager();
     this.pipelineFactory = new PipelineFactory();
@@ -367,18 +370,10 @@ export class WebGPURenderer implements IWebGPURenderer {
       entries: [
         {
           binding: 0,
-          visibility: GPUShaderStage.FRAGMENT,
-          texture: { sampleType: 'float' },
-        },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.FRAGMENT,
-          sampler: { type: 'filtering' },
-        },
-        {
-          binding: 2,
-          visibility: GPUShaderStage.FRAGMENT,
-          buffer: { type: 'uniform' },
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          buffer: {
+            type: 'uniform',
+          },
         },
       ],
       label: 'MaterialBindGroup Layout',
@@ -398,14 +393,14 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
     console.log('[WebGPURenderer] Created depth texture');
 
-    const texture = this.textureManager.createTexture('default_white_texture', {
+    const texture = this.textureManager.createTexture('linear_texture', {
       id: 'default_white_texture',
       width: 1,
       height: 1,
       format: 'rgba8unorm',
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
-    const sampler = this.textureManager.createSampler('default_white_sampler', {
+    const sampler = this.textureManager.createSampler('linear', {
       id: 'default_white_sampler',
       addressMode: 'clamp-to-edge',
       magFilter: 'linear',
@@ -450,9 +445,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.shaderManager.createBindGroup('materialBindGroup', {
       layout: materialBindGroupLayout,
       entries: [
-        { binding: 0, resource: texture.createView() }, // texture
-        { binding: 1, resource: sampler }, // sampler
-        { binding: 2, resource: { buffer: materialBuffer } }, // material buffer
+        { binding: 0, resource: { buffer: materialBuffer } }, // material buffer
       ],
       label: 'materialBindGroup',
     });
@@ -709,6 +702,43 @@ export class WebGPURenderer implements IWebGPURenderer {
       renderable.geometryId,
     );
 
+    // Setup all bind groups for this object
+    await this.setupObjectBindGroups(renderPass, renderable, frameData);
+
+    // Set vertex and index buffers
+    renderPass.setVertexBuffer(0, geometry.vertexBuffer);
+    renderPass.setIndexBuffer(geometry.indexBuffer, 'uint16');
+
+    // Draw the object
+    renderPass.drawIndexed(geometry.indexCount);
+  }
+
+  /**
+   * Setup all bind groups for a single object
+   */
+  private async setupObjectBindGroups(
+    renderPass: GPURenderPassEncoder,
+    renderable: RenderData,
+    frameData: FrameData,
+  ): Promise<void> {
+    // Setup MVP bind group (Group 1)
+    this.setupMVPBindGroup(renderPass, renderable, frameData);
+
+    // Setup texture bind group (Group 2)
+    await this.setupTextureBindGroup(renderPass, renderable);
+
+    // Setup material bind group (Group 3)
+    this.setupMaterialBindGroup(renderPass, renderable);
+  }
+
+  /**
+   * Setup MVP bind group for object transformation
+   */
+  private setupMVPBindGroup(
+    renderPass: GPURenderPassEncoder,
+    renderable: RenderData,
+    frameData: FrameData,
+  ): void {
     // Create or get MVP buffer and bind group for this instance
     const mvpBuffer = this.createOrGetMVPBuffer(renderable.geometryId);
     const mvpBindGroup = this.createOrGetMVPBindGroup(renderable.geometryId, mvpBuffer);
@@ -717,17 +747,88 @@ export class WebGPURenderer implements IWebGPURenderer {
     const mvpMatrix = this.calculateMVPMatrix(renderable, frameData);
 
     // Update MVP buffer
-    this.device.queue.writeBuffer(mvpBuffer, 0, new Float32Array(mvpMatrix));
+    this.device.queue.writeBuffer(mvpBuffer, 0, mvpMatrix);
 
     // Set MVP bind group
     renderPass.setBindGroup(1, mvpBindGroup);
+  }
 
-    // Set vertex and index buffers
-    renderPass.setVertexBuffer(0, geometry.vertexBuffer);
-    renderPass.setIndexBuffer(geometry.indexBuffer, 'uint16');
+  /**
+   * Setup texture bind group for material textures
+   */
+  private async setupTextureBindGroup(
+    renderPass: GPURenderPassEncoder,
+    renderable: RenderData,
+  ): Promise<void> {
+    const textureId = renderable.material.albedoTextureId || renderable.material.albedoTexture;
+    if (!textureId) {
+      return; // No texture to bind
+    }
 
-    // Draw the object
-    renderPass.drawIndexed(geometry.indexCount);
+    // Get or create texture
+    let texture = this.textureManager.getTexture(textureId);
+    if (!texture) {
+      // Create texture if it doesn't exist
+      texture = this.textureManager.createTexture(textureId, {
+        id: textureId,
+        width: 200,
+        height: 200,
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+    }
+
+    // Get sampler and bind group layout
+    const sampler = this.textureManager.getSampler('linear');
+    const textureBindGroupLayout = this.shaderManager.getBindGroupLayout('textureBindGroupLayout');
+    if (!textureBindGroupLayout) {
+      throw new Error('Texture bind group layout not found');
+    }
+
+    // Create texture bind group
+    const textureBindGroup = this.shaderManager.createBindGroup(`${textureId}_textureBindGroup`, {
+      layout: textureBindGroupLayout,
+      entries: [
+        { binding: 0, resource: texture.createView() },
+        { binding: 1, resource: sampler },
+      ],
+      label: `${textureId}_textureBindGroup`,
+    });
+
+    // Set texture bind group
+    renderPass.setBindGroup(2, textureBindGroup);
+  }
+
+  /**
+   * Setup material bind group for material properties
+   */
+  private setupMaterialBindGroup(renderPass: GPURenderPassEncoder, renderable: RenderData): void {
+    if (!renderable.material.albedo) {
+      return; // No material properties to bind
+    }
+
+    const materialBindGroupLayout =
+      this.shaderManager.getBindGroupLayout('materialBindGroupLayout');
+    if (!materialBindGroupLayout) {
+      throw new Error('Material bind group layout not found');
+    }
+
+    // Create or get material bind group using material ID from renderable
+    // Use a combination of material properties to create a unique ID
+    const materialId =
+      renderable.material.bindGroupId ||
+      renderable.material.uniformBufferId ||
+      `material_${renderable.geometryId}`;
+
+    const materialBindGroup = this.materialManager.createMaterialBindGroup(
+      materialId,
+      renderable.material,
+      materialBindGroupLayout,
+    );
+
+    if (materialBindGroup) {
+      renderPass.setBindGroup(3, materialBindGroup);
+    }
   }
 
   /**
@@ -740,7 +841,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     if (!buffer) {
       buffer = this.bufferManager.createBuffer({
         type: BufferType.UNIFORM,
-        size: 64, // 4x4 matrix * 4 bytes per float
+        size: 80, // 4x4 matrix * 4 bytes per float + 3x3 vector * 4 bytes per float
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         label: bufferLabel,
       });
@@ -787,7 +888,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   /**
    * Calculate MVP matrix for a renderable
    */
-  private calculateMVPMatrix(renderable: RenderData, frameData: FrameData): mat4 {
+  private calculateMVPMatrix(renderable: RenderData, frameData: FrameData): Float32Array {
     const projectionMatrix = frameData.scene.camera.projectionMatrix;
     const viewMatrix = frameData.scene.camera.viewMatrix;
     const modelMatrix = renderable.worldMatrix;
@@ -797,7 +898,9 @@ export class WebGPURenderer implements IWebGPURenderer {
     mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
     mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
 
-    return mvpMatrix;
+    const cameraPos = frameData.scene.camera.position;
+
+    return new Float32Array([...mvpMatrix, ...cameraPos, 0]);
   }
 
   getDevice(): GPUDevice {

@@ -164,6 +164,7 @@ export const ServiceTokens = {
   GEOMETRY_MANAGER: 'GeometryManager',
   TIME_MANAGER: 'TimeManager',
   UNIFORM_MANAGER: 'UniformManager',
+  MATERIAL_MANAGER: 'MaterialManager',
   RENDER_PIPELINE_MANAGER: 'RenderPipelineManager',
   // Advanced Pipeline Management
   PIPELINE_MANAGER: 'PipelineManager',
