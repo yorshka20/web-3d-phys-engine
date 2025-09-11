@@ -244,7 +244,7 @@ describe('Decorator Execution Order', () => {
         }
       });
 
-      @Injectable(ServiceTokens.UNIFORM_MANAGER, { lifecycle: 'singleton' })
+      @Injectable(ServiceTokens.RESOURCE_MANAGER, { lifecycle: 'singleton' })
       class TestManager {
         @Inject(ServiceTokens.RESOURCE_MANAGER)
         resourceManager!: MockResourceManager;

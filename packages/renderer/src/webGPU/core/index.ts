@@ -8,5 +8,4 @@ export * from './ShaderManager';
 export * from './TextureManager';
 export * from './TimeManager';
 export * from './types';
-export * from './UniformManager';
 export * from './WebGPUContext';

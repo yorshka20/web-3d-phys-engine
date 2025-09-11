@@ -14,7 +14,7 @@ export interface WebGPUGeometry {
     min: Vec3;
     max: Vec3;
   };
-  vertexFormat: 'simple' | 'full';
+  vertexFormat: 'simple' | 'full' | 'colored';
   primitiveTopology: GPUPrimitiveTopology;
 }
 
@@ -144,6 +144,7 @@ export class WebGPUGeometryManager {
     vertices: Float32Array,
     indices: Uint16Array,
     bounds?: { min: Vec3; max: Vec3 },
+    primitiveType: GPUPrimitiveTopology = 'triangle-list',
   ): WebGPUGeometry {
     // Check cache first
     if (this.geometryCache.has(id)) {
@@ -162,6 +163,7 @@ export class WebGPUGeometryManager {
       indexCount: indices.length,
       vertexFormat: 'full',
       bounds,
+      primitiveType,
     };
 
     return this.createGeometryDescriptor(id, geometryData);

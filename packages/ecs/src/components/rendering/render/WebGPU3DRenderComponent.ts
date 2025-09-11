@@ -319,27 +319,6 @@ export class WebGPU3DRenderComponent extends Component {
     };
   }
 
-  /**
-   * Get primitive topology
-   */
-  getPrimitiveTopology(): GPUPrimitiveTopology {
-    return this.material.primitiveTopology ?? 'triangle-list';
-  }
-
-  /**
-   * Get cull mode
-   */
-  getCullMode(): GPUCullMode {
-    return this.material.cullMode ?? 'back';
-  }
-
-  /**
-   * Get front face winding
-   */
-  getFrontFace(): GPUFrontFace {
-    return this.material.frontFace ?? 'ccw';
-  }
-
   // ===== Instancing =====
 
   /**
@@ -565,9 +544,6 @@ export class WebGPU3DRenderComponent extends Component {
       emissive: { r: 0, g: 0, b: 0, a: 1 },
       emissiveIntensity: 0,
       doubleSided: false,
-      primitiveTopology: 'triangle-list',
-      cullMode: 'back',
-      frontFace: 'ccw',
     };
   }
 
@@ -586,9 +562,6 @@ export class WebGPU3DRenderComponent extends Component {
       emissive: { r: 0, g: 0, b: 0, a: 1 },
       emissiveIntensity: 0,
       doubleSided: false,
-      primitiveTopology: 'triangle-list',
-      cullMode: 'back',
-      frontFace: 'ccw',
     };
   }
 
@@ -606,9 +579,6 @@ export class WebGPU3DRenderComponent extends Component {
       emissive,
       emissiveIntensity: intensity,
       doubleSided: false,
-      primitiveTopology: 'triangle-list',
-      cullMode: 'back',
-      frontFace: 'ccw',
     };
   }
 
