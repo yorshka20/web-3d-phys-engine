@@ -1,5 +1,5 @@
 import { GeometryData } from '@ecs/components/physics/mesh';
-import { CameraData, LightData, Material3D } from '@ecs/components/rendering';
+import { CameraData, LightData, WebGPUMaterialDescriptor } from '@ecs/components/rendering';
 import { Vec3 } from '@ecs/types/types';
 import { GlobalUniforms, ViewportData } from '@renderer/webGPU/types';
 import { mat3, mat4 } from 'gl-matrix';
@@ -15,16 +15,13 @@ export interface RenderData {
   normalMatrix: mat3; // normal transformation matrix
 
   // Material information
-  material: Material3D;
+  material: WebGPUMaterialDescriptor;
   materialUniforms: Record<string, Any>; // material specific uniforms
 
   // render control
   renderOrder: number; // render order
   castShadow: boolean;
   receiveShadow: boolean;
-
-  // render task type. could be batch tag.
-  type: string;
 }
 
 export interface EnvironmentData {

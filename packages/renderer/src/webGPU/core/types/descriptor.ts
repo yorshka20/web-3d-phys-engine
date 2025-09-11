@@ -1,4 +1,4 @@
-import { Transform3DComponent } from '@ecs/components';
+import { Transform3DComponent, WebGPUMaterialDescriptor } from '@ecs/components';
 import { GeometryType } from '@ecs/components/physics/mesh';
 import { BindGroupLayoutVisibility, BufferType, ResourceType, ShaderType } from './constant';
 import { GeometryParams } from './geometry';
@@ -129,6 +129,7 @@ export interface ResourceDescriptor<T extends WebGPUResource> {
  * Geometry instance descriptor for batch creation
  */
 export interface GeometryInstanceDescriptor {
+  name?: string;
   type: GeometryType;
   params?: GeometryParams<GeometryType>;
   transform: {
@@ -136,5 +137,5 @@ export interface GeometryInstanceDescriptor {
     rotation: [number, number, number];
     scale: [number, number, number];
   };
-  name?: string;
+  material?: WebGPUMaterialDescriptor;
 }

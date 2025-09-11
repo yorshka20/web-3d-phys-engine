@@ -10,7 +10,11 @@ import { GeometryManager } from '../core/GeometryManager';
 import { InstanceManager } from '../core/InstanceManager';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
 import { PipelineManager } from '../core/pipeline/PipelineManager';
-import { determineRenderPurpose, RenderPurpose } from '../core/pipeline/types';
+import {
+  generateSemanticCacheKey,
+  generateSemanticPipelineKey,
+  SemanticPipelineKey,
+} from '../core/pipeline/types';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
 import {
@@ -39,9 +43,10 @@ import {
   Scene,
   Texture,
 } from './types/IWebGPURenderer';
-// Render group definition
+// Render group definition - now uses semantic key for more precise grouping
 interface RenderGroup {
-  purpose: RenderPurpose;
+  semanticKey: SemanticPipelineKey;
+  semanticCacheKey: string;
   renderables: RenderData[];
   pipeline?: GPURenderPipeline;
 }
@@ -349,7 +354,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       entries: [
         {
           binding: 0,
-          visibility: GPUShaderStage.VERTEX,
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' },
         },
       ],
@@ -546,8 +551,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     //   console.log('[WebGPURenderer] Available resources:', resourceStats);
     // }
 
-    // Group renderables by purpose for efficient pipeline usage
-    const renderGroups = this.groupRenderablesByPurpose(frameData.renderables);
+    // Group renderables by semantic pipeline key for efficient pipeline usage
+    const renderGroups = this.groupRenderablesBySemanticKey(frameData.renderables);
 
     // Render each group with its optimized pipeline
     for (const renderGroup of renderGroups) {
@@ -587,26 +592,47 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
-   * Group renderables by their render purpose for efficient pipeline usage
+   * Group renderables by their semantic pipeline key for efficient pipeline usage
+   * This considers all factors that affect pipeline selection, not just render purpose
    */
-  private groupRenderablesByPurpose(renderables: RenderData[]): RenderGroup[] {
-    const groups = new Map<RenderPurpose, RenderData[]>();
+  private groupRenderablesBySemanticKey(renderables: RenderData[]): RenderGroup[] {
+    const groups = new Map<string, RenderGroup>();
 
-    // Group renderables by their determined purpose
+    // Group renderables by their semantic pipeline key
     for (const renderable of renderables) {
-      const purpose = determineRenderPurpose(renderable.material);
+      // Generate semantic key considering all pipeline factors
+      const semanticKey = generateSemanticPipelineKey(renderable.material, renderable.geometryData);
 
-      if (!groups.has(purpose)) {
-        groups.set(purpose, []);
+      // Generate cache key for grouping
+      const semanticCacheKey = generateSemanticCacheKey(semanticKey);
+
+      if (!groups.has(semanticCacheKey)) {
+        groups.set(semanticCacheKey, {
+          semanticKey,
+          semanticCacheKey,
+          renderables: [],
+        });
       }
-      groups.get(purpose)!.push(renderable);
+      groups.get(semanticCacheKey)!.renderables.push(renderable);
     }
 
     // Convert to RenderGroup array
-    return Array.from(groups.entries()).map(([purpose, renderables]) => ({
-      purpose,
-      renderables,
-    }));
+    const renderGroups = Array.from(groups.values());
+
+    // Debug: Log grouping statistics
+    if (this.frameCount % 300 === 0) {
+      console.log(`[WebGPURenderer] Render grouping stats:`, {
+        totalRenderables: renderables.length,
+        totalGroups: renderGroups.length,
+        groupsBySemanticKey: renderGroups.map((g) => ({
+          semanticKey: g.semanticKey,
+          count: g.renderables.length,
+          renderables: g.renderables,
+        })),
+      });
+    }
+
+    return renderGroups;
   }
 
   /**
@@ -621,13 +647,10 @@ export class WebGPURenderer implements IWebGPURenderer {
       return;
     }
 
-    // Get or create pipeline for this group
-    const firstRenderable = renderGroup.renderables[0];
-
-    // createAutoPipeline now supports custom shaders automatically
+    // Get or create pipeline for this group using the semantic key
     const pipeline = await this.pipelineFactory.createAutoPipeline(
-      firstRenderable.material,
-      firstRenderable.geometryData,
+      renderGroup.renderables[0].material,
+      renderGroup.renderables[0].geometryData,
     );
 
     // Set pipeline once for the entire group

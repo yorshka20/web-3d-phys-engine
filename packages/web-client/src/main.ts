@@ -12,6 +12,7 @@ import {
   StatsComponent,
   Transform3DComponent,
   Transform3DSystem,
+  Vertex3D,
   WebGPU3DRenderComponent,
   WebGPURenderSystem,
   World,
@@ -40,6 +41,7 @@ async function main() {
 
   const camera = create3DCamera(world);
   cretePlane(world);
+  createCoordinate(world);
   createGeometryEntities(world);
 
   // Initialize the game
@@ -53,6 +55,14 @@ async function main() {
   // @ts-expect-error - Adding game to window for debugging purposes
   window.game = game;
 }
+
+const defaultMaterial = {
+  albedo: chroma('#000000'),
+  metallic: 0,
+  roughness: 0.5,
+  emissive: chroma('#000000'),
+  emissiveIntensity: 0,
+};
 
 function create3DCamera(world: World) {
   const camera = world.createEntity('camera');
@@ -129,13 +139,49 @@ function cretePlane(world: World) {
         roughness: 0.5,
         emissive: chroma('#000000'),
         emissiveIntensity: 0,
+        customShaderId: 'checkerboard_shader',
       },
-      renderTaskType: 'scene',
     }),
   );
 
   world.addEntity(plane);
   return plane;
+}
+
+function createCoordinate(world: World) {
+  const coordinate = world.createEntity('object');
+  coordinate.setLabel('coordinate');
+  // prettier-ignore
+  const coordinateVertex3D: Vertex3D[] = [
+    // x axis - red
+    { position: [0.0, 0.0, 0.0], color: [1.0, 0.0, 0.0, 1.0] },
+    { position: [1.0, 0.0, 0.0], color: [1.0, 0.0, 0.0, 1.0] },
+    // y axis - green
+    { position: [0.0, 0.0, 0.0], color: [0.0, 1.0, 0.0, 1.0] },
+    { position: [0.0, 1.0, 0.0], color: [0.0, 1.0, 0.0, 1.0] },
+    // z axis - blue
+    { position: [0.0, 0.0, 0.0], color: [0.0, 0.0, 1.0, 1.0] },
+    { position: [0.0, 0.0, 1.0], color: [0.0, 0.0, 1.0, 1.0] },
+  ];
+  const indices = [0, 1, 2, 3, 4, 5];
+  coordinate.addComponent(
+    world.createComponent(Mesh3DComponent, {
+      descriptor: {
+        type: 'mesh',
+        vertices: coordinateVertex3D,
+        indices,
+        primitiveType: 'line-list',
+      },
+    }),
+  );
+  coordinate.addComponent(world.createComponent(Transform3DComponent, { position: [0, 0, 0] }));
+  coordinate.addComponent(
+    world.createComponent(WebGPU3DRenderComponent, {
+      material: { ...defaultMaterial, customShaderId: 'coordinate_shader' },
+    }),
+  );
+  world.addEntity(coordinate);
+  return coordinate;
 }
 
 function createGeometryEntities(world: World) {
@@ -175,6 +221,14 @@ function createGeometryEntities(world: World) {
         scale: [5, 5, 5],
       },
       name: 'Sphere',
+      material: {
+        albedo: chroma('#000000'),
+        metallic: 0,
+        roughness: 0.5,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+        alphaMode: 'blend',
+      },
     },
   ];
 
@@ -199,14 +253,7 @@ function createGeometryEntities(world: World) {
     );
     entity.addComponent(
       world.createComponent(WebGPU3DRenderComponent, {
-        material: {
-          albedo: chroma('#000000'),
-          metallic: 0,
-          roughness: 0.5,
-          emissive: chroma('#000000'),
-          emissiveIntensity: 0,
-        },
-        renderTaskType: 'geometry',
+        material: geometry.material || defaultMaterial,
       }),
     );
     world.addEntity(entity);

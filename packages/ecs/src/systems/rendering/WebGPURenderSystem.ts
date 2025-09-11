@@ -287,7 +287,6 @@ export class WebGPURenderSystem extends System {
       renderOrder: renderComponent.getLayer() || 0,
       castShadow: renderComponent.getCastShadow() ?? true,
       receiveShadow: renderComponent.getReceiveShadow() ?? true,
-      type: renderComponent.getRenderTaskType() || 'scene',
     };
   }
 
@@ -295,7 +294,10 @@ export class WebGPURenderSystem extends System {
    * Generate geometry data if not exists
    */
   private generateGeometryData(meshComponent: Mesh3DComponent): GeometryData {
-    return GeometryFactory.createGeometryDataByDescriptor(meshComponent.descriptor);
+    return GeometryFactory.createGeometryDataByDescriptor(
+      meshComponent.descriptor,
+      meshComponent.getPrimitiveType(),
+    );
   }
 
   /**
