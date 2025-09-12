@@ -1,6 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
-import { AssetDescriptor, assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
-import { PMXModel } from '@renderer/webGPU/core/PMXTypes';
+import { AssetDescriptor, assetRegistry, AssetType } from '@renderer/webGPU/core/AssetRegistry';
+import { PMXModel } from './PMXModel';
 
 /**
  * PMX Mesh Component
@@ -28,9 +28,9 @@ export class PMXMeshComponent extends Component {
   /**
    * Resolve asset reference from registry
    */
-  resolveAsset(): AssetDescriptor | null {
+  resolveAsset(): AssetDescriptor<AssetType> | null {
     if (!this.assetDescriptor) {
-      this.assetDescriptor = assetRegistry.get(this.assetId) || null;
+      this.assetDescriptor = assetRegistry.getAssetDescriptor(this.assetId) || null;
       if (this.assetDescriptor) {
         assetRegistry.addRef(this.assetId);
       }
@@ -54,7 +54,7 @@ export class PMXMeshComponent extends Component {
    */
   getAssetData(): unknown | null {
     const descriptor = this.resolveAsset();
-    return descriptor?.cpuData || null;
+    return descriptor?.rawData || null;
   }
 
   /**

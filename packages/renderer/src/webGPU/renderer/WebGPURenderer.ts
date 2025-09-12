@@ -694,6 +694,12 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Check if this is a PMX model that needs asset-based geometry creation
     if (renderable.pmxAssetId) {
       geometry = await this.getOrCreatePMXGeometry(renderable);
+
+      // Also get the material for PMX models
+      const pmxMaterial = await this.getOrCreatePMXMaterial(renderable);
+      if (pmxMaterial) {
+        renderable.material = pmxMaterial;
+      }
     } else {
       // Regular geometry from geometry data
       geometry = this.geometryManager.getGeometryFromData(
@@ -729,10 +735,47 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error(`PMX asset not found: ${pmxAssetId}`);
     }
 
-    // Use GPUResourceCoordinator to create geometry
+    // Use GPUResourceCoordinator to create geometry only
     const geometry = await this.gpuResourceCoordinator.getOrCreateGPUResource(assetDescriptor);
 
+    if (!geometry) {
+      throw new Error('Failed to create PMX geometry');
+    }
+
     return geometry;
+  }
+
+  /**
+   * Get or create material for PMX model from asset data
+   */
+  private async getOrCreatePMXMaterial(renderable: RenderData) {
+    const { pmxAssetId, pmxComponent } = renderable;
+
+    if (!pmxAssetId || !pmxComponent) {
+      throw new Error('PMX asset ID or component not provided');
+    }
+
+    // Get asset data from registry
+    const assetDescriptor = pmxComponent.resolveAsset();
+    if (!assetDescriptor) {
+      throw new Error(`PMX asset not found: ${pmxAssetId}`);
+    }
+
+    // Create a separate asset descriptor for material
+    const materialAssetDescriptor = {
+      ...assetDescriptor,
+      type: 'pmx_material' as const,
+    };
+
+    // Use GPUResourceCoordinator to create material only
+    const material =
+      await this.gpuResourceCoordinator.getOrCreateGPUResource(materialAssetDescriptor);
+
+    if (!material) {
+      throw new Error('Failed to create PMX material');
+    }
+
+    return material;
   }
 
   /**

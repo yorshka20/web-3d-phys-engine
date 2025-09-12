@@ -25,6 +25,20 @@ import { Game } from './game/Game';
 
 import pmxModel from '../assets/endministrator/endministrator.pmx?url';
 
+// Import PMX textures
+import texture9 from '../assets/endministrator/textures/hair_s.png?url';
+import texture7 from '../assets/endministrator/textures/ls.png?url';
+import texture3 from '../assets/endministrator/textures/st-1g2.jpg?url';
+import texture11 from '../assets/endministrator/textures/T_actor_common_eyeshadow_01_M.png?url';
+import texture12 from '../assets/endministrator/textures/T_actor_common_hairshadow_01_M.png?url';
+import texture1 from '../assets/endministrator/textures/T_actor_endminf_body_01_D.png?url';
+import texture2 from '../assets/endministrator/textures/T_actor_endminf_cloth_01_D.png?url';
+import texture5 from '../assets/endministrator/textures/T_actor_endminf_cloth_03_D.png?url';
+import texture6 from '../assets/endministrator/textures/T_actor_endminf_face_01_D.png?url';
+import texture8 from '../assets/endministrator/textures/T_actor_endminf_hair_01_D.png?url';
+import texture10 from '../assets/endministrator/textures/T_actor_endminf_iris_01_D.png?url';
+import texture4 from '../assets/endministrator/textures/T_actor_pelica_cloth_02_D.png?url';
+
 // Start the application when the page loads
 window.addEventListener('load', () => {
   // new PhysicsEngineApp();
@@ -50,7 +64,49 @@ async function main() {
 
   createPMXEntity(world);
 
+  // Load PMX model and its textures
   await AssetLoader.loadPMXModelFromURL(pmxModel, 'character');
+
+  // Load PMX textures based on actual PMX model texture list
+  const pmxTextureList = [
+    'textures\\T_actor_endminf_body_01_D.png',
+    'textures\\T_actor_endminf_cloth_01_D.png',
+    'textures\\st-1g2.jpg',
+    'textures\\T_actor_pelica_cloth_02_D.png',
+    'textures\\T_actor_endminf_cloth_03_D.png',
+    'textures\\T_actor_endminf_face_01_D.png',
+    'textures\\ls.png',
+    'textures\\T_actor_endminf_hair_01_D.png',
+    'textures\\hair_s.png',
+    'textures\\T_actor_endminf_iris_01_D.png',
+    'textures\\T_actor_common_eyeshadow_01_M.png',
+    'textures\\T_actor_common_hairshadow_01_M.png',
+  ];
+
+  const textureUrlMap = {
+    'textures\\T_actor_endminf_body_01_D.png': texture1,
+    'textures\\T_actor_endminf_cloth_01_D.png': texture2,
+    'textures\\st-1g2.jpg': texture3,
+    'textures\\T_actor_pelica_cloth_02_D.png': texture4,
+    'textures\\T_actor_endminf_cloth_03_D.png': texture5,
+    'textures\\T_actor_endminf_face_01_D.png': texture6,
+    'textures\\ls.png': texture7,
+    'textures\\T_actor_endminf_hair_01_D.png': texture8,
+    'textures\\hair_s.png': texture9,
+    'textures\\T_actor_endminf_iris_01_D.png': texture10,
+    'textures\\T_actor_common_eyeshadow_01_M.png': texture11,
+    'textures\\T_actor_common_hairshadow_01_M.png': texture12,
+  };
+
+  // Load all textures using the exact PMX texture paths as IDs
+  for (const texturePath of pmxTextureList) {
+    const textureUrl = textureUrlMap[texturePath];
+    if (textureUrl) {
+      await AssetLoader.loadTextureFromURL(textureUrl, texturePath);
+    } else {
+      console.warn(`[Main] Texture URL not found for path: ${texturePath}`);
+    }
+  }
 
   // Initialize the game
   await game.initialize();
@@ -140,7 +196,7 @@ function create3DCamera(world: World) {
   // Add input component for camera control
   camera.addComponent(world.createComponent(Input3DComponent, {}));
 
-  camera.addComponent(world.createComponent(StatsComponent, { moveSpeedMultiplier: 1 }));
+  camera.addComponent(world.createComponent(StatsComponent, { moveSpeedMultiplier: 2 }));
 
   world.addEntity(camera);
   return camera;

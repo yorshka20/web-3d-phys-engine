@@ -5,7 +5,6 @@ export * from './decorators';
 export * from './GeometryManager';
 export * from './GPUResourceCoordinator';
 export * from './InstanceManager';
-export * from './PMXTypes';
 export * from './RendererInitializationManager';
 export * from './ResourceManager';
 export * from './ShaderManager';

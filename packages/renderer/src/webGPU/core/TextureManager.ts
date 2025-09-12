@@ -122,7 +122,50 @@ export class TextureManager {
   }
 
   /**
-   * Load image asynchronously and create texture when ready
+   * Load texture from URL (public method)
+   */
+  async loadTextureFromURL(textureId: string, url: string): Promise<GPUTexture> {
+    try {
+      console.log(`[TextureManager] Loading texture from: ${url}`);
+      const imageBitmap = await loadImageBitmap(url);
+      console.log(
+        `[TextureManager] Image loaded, dimensions: ${imageBitmap.width}x${imageBitmap.height}`,
+      );
+
+      // Create texture with correct dimensions
+      const texture = this.createTexture(textureId, {
+        id: textureId,
+        width: imageBitmap.width,
+        height: imageBitmap.height,
+        format: 'rgba8unorm',
+        usage:
+          GPUTextureUsage.TEXTURE_BINDING |
+          GPUTextureUsage.COPY_DST |
+          GPUTextureUsage.RENDER_ATTACHMENT,
+        initialData: imageBitmap,
+      });
+
+      console.log(`[TextureManager] Texture ${textureId} created with image data`);
+      return texture;
+    } catch (error) {
+      console.error(`[TextureManager] Failed to load texture from ${url}:`, error);
+      // Create a fallback 1x1 white texture if loading fails
+      return this.createTexture(textureId, {
+        id: textureId,
+        width: 1,
+        height: 1,
+        format: 'rgba8unorm',
+        usage:
+          GPUTextureUsage.TEXTURE_BINDING |
+          GPUTextureUsage.COPY_DST |
+          GPUTextureUsage.RENDER_ATTACHMENT,
+        initialData: new ImageData(1, 1),
+      });
+    }
+  }
+
+  /**
+   * Load image asynchronously and create texture when ready (private method)
    */
   private async loadAndCreateTexture(textureId: string, url: string): Promise<void> {
     try {

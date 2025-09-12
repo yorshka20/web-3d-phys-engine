@@ -1,5 +1,12 @@
+import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { Parser } from 'mmd-parser';
-import { AssetDescriptor, AssetMetadata, assetRegistry, AssetType } from './AssetRegistry';
+import {
+  AssetDescriptor,
+  AssetMetadata,
+  assetRegistry,
+  AssetType,
+  RawDataType,
+} from './AssetRegistry';
 
 /**
  * Asset Loader - Centralized asset loading for the game engine
@@ -227,12 +234,12 @@ export class AssetLoader {
    * @param file PMX file
    * @returns Parsed PMX data
    */
-  private static async parsePMXFile(file: File): Promise<unknown> {
+  private static async parsePMXFile(file: File): Promise<PMXModel> {
     try {
       const arrayBuffer = await file.arrayBuffer();
 
       // Parse PMX file using mmd-parser
-      const pmxData = this.parser.parsePmx(arrayBuffer);
+      const pmxData = this.parser.parsePmx(arrayBuffer) as PMXModel;
 
       return pmxData;
     } catch (error) {
@@ -246,8 +253,8 @@ export class AssetLoader {
    * @param assetId Asset identifier
    * @returns Asset descriptor or undefined
    */
-  static getAsset(assetId: string): AssetDescriptor | undefined {
-    return assetRegistry.get(assetId);
+  static getAsset<T extends AssetType>(assetId: string): AssetDescriptor<T> | undefined {
+    return assetRegistry.getAssetDescriptor(assetId) as AssetDescriptor<T> | undefined;
   }
 
   /**
@@ -255,16 +262,16 @@ export class AssetLoader {
    * @param assetId Asset identifier
    * @returns Asset CPU data or undefined
    */
-  static getAssetData(assetId: string): unknown | undefined {
-    return assetRegistry.getAssetData(assetId);
+  static getAssetData<T extends AssetType>(assetId: string): RawDataType<T> | undefined {
+    return assetRegistry.getAssetData(assetId) as RawDataType<T> | undefined;
   }
 
   /**
    * Get all loaded assets from registry
    * @returns Array of all asset descriptors
    */
-  static getAllAssets(): AssetDescriptor[] {
-    return assetRegistry.getAllAssets();
+  static getAllAssets(): AssetDescriptor<AssetType>[] {
+    return assetRegistry.getAllAssets() as AssetDescriptor<AssetType>[];
   }
 
   /**
@@ -272,7 +279,7 @@ export class AssetLoader {
    * @param type Asset type
    * @returns Array of assets of the specified type
    */
-  static getAssetsByType(type: AssetType): AssetDescriptor[] {
+  static getAssetsByType<T extends AssetType>(type: T): AssetDescriptor<T>[] {
     return assetRegistry.getAssetsByType(type);
   }
 
@@ -337,7 +344,7 @@ export class AssetLoader {
   /**
    * Extract texture dependencies from PMX model data
    */
-  private static extractTextureDependencies(pmxData: any): string[] {
+  private static extractTextureDependencies(pmxData: PMXModel): string[] {
     const dependencies: string[] = [];
 
     if (pmxData.textures && Array.isArray(pmxData.textures)) {

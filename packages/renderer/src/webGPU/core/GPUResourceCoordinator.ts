@@ -1,11 +1,24 @@
-import { VertexFormat } from '@ecs';
-import { AssetDescriptor } from './AssetRegistry';
+import { VertexFormat, WebGPUMaterialDescriptor } from '@ecs';
+import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { AssetDescriptor, AssetType, assetRegistry } from './AssetRegistry';
 import { BufferManager } from './BufferManager';
 import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { GeometryManager } from './GeometryManager';
 import { MaterialManager } from './MaterialManager';
 import { TextureManager } from './TextureManager';
+import { GeometryCacheItem } from './types/geometry';
+
+// GPU resource return types based on asset type
+type GPUResourceType<T extends AssetType> = T extends 'pmx_model'
+  ? GeometryCacheItem // Geometry cache item
+  : T extends 'pmx_material'
+    ? WebGPUMaterialDescriptor
+    : T extends 'texture'
+      ? GPUTexture
+      : T extends 'material'
+        ? WebGPUMaterialDescriptor
+        : unknown;
 
 /**
  * GPU Resource Coordinator - Coordinates GPU resource creation across specialized managers
@@ -36,19 +49,29 @@ export class GPUResourceCoordinator {
    * Get or create GPU resource for an asset
    * This coordinates with specialized managers rather than creating resources directly
    */
-  async getOrCreateGPUResource(
-    assetDescriptor: AssetDescriptor,
+  async getOrCreateGPUResource<T extends AssetType>(
+    assetDescriptor: AssetDescriptor<T>,
     urgency: 'immediate' | 'high' | 'normal' | 'low' = 'normal',
-  ): Promise<unknown> {
+  ): Promise<GPUResourceType<T> | null> {
     const assetType = assetDescriptor.type;
 
     switch (assetType) {
       case 'pmx_model':
-        return this.createPMXGeometry(assetDescriptor);
+        return this.createPMXGeometry(
+          assetDescriptor as AssetDescriptor<'pmx_model'>,
+        ) as GPUResourceType<T>;
+      case 'pmx_material':
+        return this.createPMXMaterial(
+          assetDescriptor as AssetDescriptor<'pmx_material'>,
+        ) as GPUResourceType<T>;
       case 'texture':
-        return this.createTexture(assetDescriptor);
+        return this.createTexture(
+          assetDescriptor as AssetDescriptor<'texture'>,
+        ) as GPUResourceType<T>;
       case 'material':
-        return this.createMaterial(assetDescriptor);
+        return this.createMaterial(
+          assetDescriptor as AssetDescriptor<'material'>,
+        ) as GPUResourceType<T>;
       default:
         console.warn(`[GPUResourceCoordinator] Unsupported asset type: ${assetType}`);
         return null;
@@ -58,8 +81,8 @@ export class GPUResourceCoordinator {
   /**
    * Create PMX geometry using GeometryManager
    */
-  private async createPMXGeometry(assetDescriptor: AssetDescriptor): Promise<unknown> {
-    const pmxData = assetDescriptor.cpuData as Record<string, unknown>;
+  private async createPMXGeometry(assetDescriptor: AssetDescriptor<'pmx_model'>) {
+    const pmxData = assetDescriptor.rawData;
     const assetId = assetDescriptor.id;
 
     // Convert PMX data to geometry data format
@@ -72,8 +95,8 @@ export class GPUResourceCoordinator {
   /**
    * Create texture using TextureManager
    */
-  private async createTexture(assetDescriptor: AssetDescriptor): Promise<unknown> {
-    const image = assetDescriptor.cpuData as HTMLImageElement;
+  private async createTexture(assetDescriptor: AssetDescriptor<'texture'>) {
+    const image = assetDescriptor.rawData;
     const assetId = assetDescriptor.id;
 
     // Use TextureManager to create the actual GPU texture
@@ -90,19 +113,71 @@ export class GPUResourceCoordinator {
   /**
    * Create material using MaterialManager
    */
-  private async createMaterial(assetDescriptor: AssetDescriptor): Promise<unknown> {
-    const materialData = assetDescriptor.cpuData as Record<string, unknown>;
+  private async createMaterial(assetDescriptor: AssetDescriptor<'material'>) {
+    const assetId = assetDescriptor.id;
+    const materialData = assetDescriptor.rawData;
+
+    return this.materialManager.createMaterial(assetId, materialData);
+  }
+
+  /**
+   * Create PMX material with texture loading
+   */
+  private async createPMXMaterial(assetDescriptor: AssetDescriptor<'pmx_material'>) {
+    const pmxData = assetDescriptor.rawData;
     const assetId = assetDescriptor.id;
 
+    // Extract materials and textures from PMX data
+    const materials = pmxData.materials;
+    const textures = pmxData.textures;
+
+    if (!materials || materials.length === 0) {
+      throw new Error('No materials found in PMX data');
+    }
+
+    // For now, create a material for the first material in the PMX file
+    // TODO: Support multiple materials per PMX model
+    const firstMaterial = materials[0];
+    const textureIndex = firstMaterial.textureIndex ?? -1;
+
+    // Create material descriptor
+    const diffuse = firstMaterial.diffuse || [1, 1, 1, 1];
+    const materialDescriptor: WebGPUMaterialDescriptor = {
+      albedo: { r: diffuse[0], g: diffuse[1], b: diffuse[2], a: diffuse[3] },
+      metallic: 0.0,
+      roughness: 0.5,
+      emissive: { r: 0, g: 0, b: 0, a: 1 },
+      emissiveIntensity: 0.0,
+      alphaMode: 'opaque' as const,
+      doubleSided: false,
+    };
+
+    // Load texture if available
+    if (textureIndex >= 0 && textureIndex < textures.length) {
+      const textureInfo = textures[textureIndex];
+      const texturePath = typeof textureInfo === 'string' ? textureInfo : textureInfo.path;
+
+      // Check if texture is already loaded in AssetRegistry
+      const textureAsset = assetRegistry.getAssetDescriptor(texturePath);
+      if (textureAsset) {
+        // Texture is already loaded, create GPU texture resource
+        const gpuTexture = await this.createTexture(textureAsset as AssetDescriptor<'texture'>);
+        if (gpuTexture) {
+          materialDescriptor.albedoTexture = texturePath;
+        }
+      } else {
+        console.warn(`Texture not found in AssetRegistry: ${texturePath}`);
+      }
+    }
+
     // Use MaterialManager to create the actual GPU material
-    // Note: This might need proper material descriptor conversion
-    return this.materialManager.createMaterial(assetId, materialData as any);
+    return this.materialManager.createMaterial(`${assetId}_material`, materialDescriptor);
   }
 
   /**
    * Convert PMX model data to GeometryData format
    */
-  private convertPMXToGeometryData(pmxModel: Record<string, unknown>): {
+  private convertPMXToGeometryData(pmxModel: PMXModel): {
     vertices: Float32Array;
     indices: Uint16Array;
     vertexCount: number;
@@ -126,19 +201,19 @@ export class GPUResourceCoordinator {
       maxZ = -Infinity;
 
     // Convert vertices - based on actual PMX data structure
-    const pmxVertices = pmxModel.vertices as Array<Record<string, unknown>>;
+    const pmxVertices = pmxModel.vertices;
 
     // Process vertices
 
     for (const vertex of pmxVertices) {
       // Safely get vertex attributes with default values
-      const position = (vertex.position as [number, number, number]) || [0, 0, 0];
-      const normal = (vertex.normal as [number, number, number]) || [0, 1, 0];
-      const uv = (vertex.uv as [number, number]) || [0, 0];
+      const position = vertex.position || [0, 0, 0];
+      const normal = vertex.normal || [0, 1, 0];
+      const uv = vertex.uv || [0, 0];
 
       // Use correct property names: skinIndices and skinWeights
-      const skinIndices = (vertex.skinIndices as [number, number, number, number]) || [0, 0, 0, 0];
-      const skinWeights = (vertex.skinWeights as [number, number, number, number]) || [1, 0, 0, 0];
+      const skinIndices = vertex.skinIndices || [0, 0, 0, 0];
+      const skinWeights = vertex.skinWeights || [1, 0, 0, 0];
 
       // Position (3 floats)
       vertices.push(position[0], position[1], position[2]);
@@ -161,14 +236,14 @@ export class GPUResourceCoordinator {
     }
 
     // Convert faces (indices) - handle faces array
-    const pmxFaces = pmxModel.faces as Array<unknown>;
+    const pmxFaces = pmxModel.faces;
 
     // Process faces
 
     for (let i = 0; i < pmxFaces.length; i++) {
       // Each face object contains an indices array with 3 vertex indices
-      const face = pmxFaces[i] as Record<string, unknown>;
-      const faceIndices = face.indices as [number, number, number];
+      const face = pmxFaces[i];
+      const faceIndices = face.indices;
 
       if (faceIndices && faceIndices.length === 3) {
         const [idx1, idx2, idx3] = faceIndices;

@@ -4,12 +4,15 @@
  * This follows the design principle of separating asset loading from GPU resource creation
  */
 
+import { GeometryData } from '@ecs/components/physics/mesh/GeometryFactory';
+import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { WebGPUMaterialDescriptor } from '@ecs/components/rendering/render/types';
 import { AssetLoader } from './AssetLoader';
 
-export interface AssetDescriptor {
+export interface AssetDescriptor<T extends AssetType = AssetType> {
   id: string;
-  type: AssetType;
-  cpuData: unknown; // Raw parsed data
+  type: T;
+  rawData: RawDataType<T>; // Raw parsed data
   gpuHandle: unknown | null; // GPU resource handle (created lazily)
   refCount: number; // ECS component reference count
   lastAccess: number; // LRU management
@@ -18,7 +21,21 @@ export interface AssetDescriptor {
   loadTime: number;
 }
 
-export type AssetType = 'mesh' | 'texture' | 'material' | 'pmx_model' | 'geometry';
+export type RawDataType<T extends AssetType> = T extends 'pmx_model'
+  ? PMXModel
+  : T extends 'pmx_material'
+    ? PMXModel
+    : T extends 'texture'
+      ? HTMLImageElement
+      : T extends 'material'
+        ? WebGPUMaterialDescriptor
+        : T extends 'mesh'
+          ? GeometryData
+          : T extends 'geometry'
+            ? GeometryData
+            : unknown;
+
+export type AssetType = 'mesh' | 'texture' | 'material' | 'pmx_model' | 'pmx_material' | 'geometry';
 
 export interface AssetMetadata {
   type: AssetType;
@@ -30,20 +47,24 @@ export interface AssetMetadata {
  * Asset Registry - Manages CPU resources and their lifecycle
  */
 export class AssetRegistry {
-  private assets: Map<string, AssetDescriptor> = new Map();
+  private assets: Map<string, AssetDescriptor<AssetType>> = new Map();
   private dependencyGraph: Map<string, string[]> = new Map();
   private memoryUsage: number = 0;
 
   /**
    * Register a loaded asset
    */
-  register(assetId: string, parsedData: unknown, metadata: AssetMetadata): AssetDescriptor {
+  register<T extends AssetType>(
+    assetId: string,
+    parsedData: RawDataType<T>,
+    metadata: AssetMetadata,
+  ): AssetDescriptor<T> {
     const memorySize = metadata.memorySize || this.calculateSize(parsedData);
 
-    const descriptor: AssetDescriptor = {
+    const descriptor: AssetDescriptor<T> = {
       id: assetId,
-      type: metadata.type,
-      cpuData: parsedData,
+      type: metadata.type as T,
+      rawData: parsedData,
       gpuHandle: null,
       refCount: 0,
       lastAccess: Date.now(),
@@ -63,7 +84,7 @@ export class AssetRegistry {
   /**
    * Get asset descriptor by ID
    */
-  get(assetId: string): AssetDescriptor | undefined {
+  getAssetDescriptor(assetId: string): AssetDescriptor<AssetType> | undefined {
     const descriptor = this.assets.get(assetId);
     if (descriptor) {
       descriptor.lastAccess = Date.now();
@@ -74,9 +95,9 @@ export class AssetRegistry {
   /**
    * Get asset CPU data by ID
    */
-  getAssetData(assetId: string): unknown | undefined {
+  getAssetData(assetId: string) {
     const descriptor = this.assets.get(assetId);
-    return descriptor?.cpuData;
+    return descriptor?.rawData;
   }
 
   /**
@@ -153,14 +174,16 @@ export class AssetRegistry {
   /**
    * Get all assets by type
    */
-  getAssetsByType(type: AssetType): AssetDescriptor[] {
-    return Array.from(this.assets.values()).filter((asset) => asset.type === type);
+  getAssetsByType<T extends AssetType>(type: T): AssetDescriptor<T>[] {
+    return Array.from(this.assets.values()).filter(
+      (asset) => asset.type === type,
+    ) as AssetDescriptor<T>[];
   }
 
   /**
    * Get all loaded assets
    */
-  getAllAssets(): AssetDescriptor[] {
+  getAllAssets(): AssetDescriptor<AssetType>[] {
     return Array.from(this.assets.values());
   }
 
