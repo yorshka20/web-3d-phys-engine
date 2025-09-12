@@ -1,9 +1,11 @@
-import { GeometryType, SystemPriorities } from '@ecs';
+import { GeometryType, SystemPriorities, WebGPUMaterialDescriptor } from '@ecs';
+import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { RectArea } from '@ecs/types/types';
 import chroma from 'chroma-js';
 import { mat4 } from 'gl-matrix';
 import { TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
+import { AssetDescriptor } from '../core/AssetRegistry';
 import { BufferManager } from '../core/BufferManager';
 import { DIContainer, initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
@@ -17,6 +19,7 @@ import {
   generateSemanticPipelineKey,
   SemanticPipelineKey,
 } from '../core/pipeline/types';
+import { PMXMaterialCacheData, PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
 import {
@@ -74,6 +77,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   private frameCount = 0;
 
   private diContainer!: DIContainer;
+
+  // PMX material cache
+  private pmxMaterials: Map<string, PMXMaterialCacheData> = new Map();
   // resource managers
   private bufferManager!: BufferManager;
   private shaderManager!: ShaderManager;
@@ -85,6 +91,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private materialManager!: MaterialManager;
   private pipelineManager!: PipelineManager;
   private pipelineFactory!: PipelineFactory;
+  private pmxMaterialProcessor!: PMXMaterialProcessor;
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
@@ -132,15 +139,10 @@ export class WebGPURenderer implements IWebGPURenderer {
     return this.device.createBindGroupLayout(descriptor);
   }
   createBindGroup(descriptor: GPUBindGroupDescriptor): GPUBindGroup {
-    return this.device.createBindGroup(descriptor);
+    throw new Error('Method not implemented.');
   }
   destroyBuffer(bufferId: string): void {
-    const buffer = this.bufferManager.getBufferByLabel(bufferId);
-    if (buffer) {
-      this.bufferManager.destroyBuffer(buffer);
-    } else {
-      console.warn(`Buffer not found: ${bufferId}`);
-    }
+    throw new Error('Method not implemented.');
   }
   destroyTexture(textureId: string): void {
     // Texture destruction handled by TextureManager
@@ -178,9 +180,9 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Begin frame for buffer manager
     this.bufferManager.beginFrame();
 
-    // Clean up frame resources
-    this.bufferManager.cleanupFrameResources();
-    this.shaderManager.cleanupFrameResources();
+    // Clean up frame resources - DISABLED to prevent premature destruction
+    // this.bufferManager.cleanupFrameResources();
+    // this.shaderManager.cleanupFrameResources();
   }
   endFrame(): void {
     // End frame for buffer manager
@@ -300,6 +302,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.geometryManager = new GeometryManager();
     this.pipelineManager = new PipelineManager();
     this.pipelineFactory = new PipelineFactory();
+    this.pmxMaterialProcessor = new PMXMaterialProcessor();
 
     // Ensure essential resources are created for PipelineManager
     this.ensureEssentialResources();
@@ -600,7 +603,10 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Group renderables by their semantic pipeline key
     for (const renderable of renderables) {
       // Generate semantic key considering all pipeline factors
-      const semanticKey = generateSemanticPipelineKey(renderable.material, renderable.geometryData);
+      const semanticKey = generateSemanticPipelineKey(
+        renderable.material as WebGPUMaterialDescriptor,
+        renderable.geometryData,
+      );
 
       // Generate cache key for grouping
       const semanticCacheKey = generateSemanticCacheKey(semanticKey);
@@ -633,10 +639,11 @@ export class WebGPURenderer implements IWebGPURenderer {
       return;
     }
 
-    // Get or create pipeline for this group using the semantic key
+    // Use unified createAutoPipeline which now supports both regular and PMX materials
+    const firstRenderable = renderGroup.renderables[0];
     const pipeline = await this.pipelineFactory.createAutoPipeline(
-      renderGroup.renderables[0].material,
-      renderGroup.renderables[0].geometryData,
+      firstRenderable.material, // MaterialDescriptor union type
+      firstRenderable.geometryData,
     );
 
     // Set pipeline once for the entire group
@@ -673,7 +680,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
     renderPass.setBindGroup(2, textureBindGroup.bindGroup);
 
-    // Group 3: Material bind group (always required)
+    // Group 3: Material bind group - only set for non-PMX materials
+    // PMX materials will set their own material bind group at index 2 in setupMaterialBindGroup
     const materialBindGroup = this.resourceManager.getBindGroupResource('materialBindGroup');
     if (!materialBindGroup) {
       throw new Error('Material bind group not found');
@@ -693,10 +701,12 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Check if this is a PMX model that needs asset-based geometry creation
     if (renderable.pmxAssetId) {
-      geometry = await this.getOrCreatePMXGeometry(renderable);
+      // For PMX models, we need to determine which material this renderable represents
+      const materialIndex = renderable.materialIndex || 0;
+      geometry = await this.getOrCreatePMXGeometry(renderable, materialIndex);
 
       // Also get the material for PMX models
-      const pmxMaterial = await this.getOrCreatePMXMaterial(renderable);
+      const pmxMaterial = await this.getOrCreatePMXMaterial(renderable, materialIndex);
       if (pmxMaterial) {
         renderable.material = pmxMaterial;
       }
@@ -722,7 +732,10 @@ export class WebGPURenderer implements IWebGPURenderer {
   /**
    * Get or create geometry for PMX model from asset data
    */
-  private async getOrCreatePMXGeometry(renderable: RenderData): Promise<unknown> {
+  private async getOrCreatePMXGeometry(
+    renderable: RenderData,
+    materialIndex: number = 0,
+  ): Promise<unknown> {
     const { pmxAssetId, pmxComponent } = renderable;
 
     if (!pmxAssetId || !pmxComponent) {
@@ -735,12 +748,127 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error(`PMX asset not found: ${pmxAssetId}`);
     }
 
-    // Use GPUResourceCoordinator to create geometry only
-    const geometry = await this.gpuResourceCoordinator.getOrCreateGPUResource(assetDescriptor);
+    // Create a unique geometry ID for this material
+    const geometryId = `${pmxAssetId}_material_${materialIndex}`;
+
+    // Check if geometry already exists using getGeometryFromData
+    // We'll create the geometry directly since we need to check if it exists
+
+    // Get PMX model data from asset descriptor
+    const pmxModel = assetDescriptor.rawData as PMXModel;
+    if (!pmxModel || !pmxModel.materials || !pmxModel.faces) {
+      throw new Error('PMX model data not available');
+    }
+
+    // Create geometry for this specific material
+    const geometry = await this.createPMXGeometryForMaterial(pmxModel, materialIndex, geometryId);
 
     if (!geometry) {
-      throw new Error('Failed to create PMX geometry');
+      throw new Error('Failed to create PMX geometry for material');
     }
+
+    return geometry;
+  }
+
+  /**
+   * Create PMX geometry for a specific material
+   */
+  private async createPMXGeometryForMaterial(
+    pmxModel: PMXModel,
+    materialIndex: number,
+    geometryId: string,
+  ): Promise<unknown> {
+    // Get the material to determine which faces belong to it
+    const material = pmxModel.materials[materialIndex];
+    if (!material) {
+      throw new Error(`PMX material ${materialIndex} not found`);
+    }
+
+    // Calculate face range for this material
+    let faceStart = 0;
+    for (let i = 0; i < materialIndex; i++) {
+      faceStart += pmxModel.materials[i].faceCount;
+    }
+    const faceEnd = faceStart + material.faceCount;
+
+    // Extract vertices and faces for this material
+    const materialVertices: number[] = [];
+    const materialIndices: number[] = [];
+    const vertexMap = new Map<number, number>(); // original index -> new index
+
+    // Process faces for this material
+    for (let faceIndex = faceStart; faceIndex < faceEnd; faceIndex++) {
+      const face = pmxModel.faces[faceIndex];
+      if (!face) continue;
+
+      const triangleIndices: number[] = [];
+
+      // Process each vertex in the triangle
+      for (const originalVertexIndex of face.indices) {
+        let newVertexIndex = vertexMap.get(originalVertexIndex);
+
+        if (newVertexIndex === undefined) {
+          // Add new vertex
+          newVertexIndex = materialVertices.length / 16; // 16 floats per vertex (position + normal + uv + skinIndices + skinWeights)
+
+          const vertex = pmxModel.vertices[originalVertexIndex];
+          if (vertex) {
+            // Position (3 floats)
+            materialVertices.push(vertex.position[0], vertex.position[1], vertex.position[2]);
+            // Normal (3 floats)
+            materialVertices.push(vertex.normal[0], vertex.normal[1], vertex.normal[2]);
+            // UV (2 floats)
+            materialVertices.push(vertex.uv[0], vertex.uv[1]);
+            // Skin indices (4 floats)
+            materialVertices.push(
+              vertex.skinIndices[0],
+              vertex.skinIndices[1],
+              vertex.skinIndices[2],
+              vertex.skinIndices[3],
+            );
+            // Skin weights (4 floats)
+            materialVertices.push(
+              vertex.skinWeights[0],
+              vertex.skinWeights[1],
+              vertex.skinWeights[2],
+              vertex.skinWeights[3],
+            );
+          }
+
+          vertexMap.set(originalVertexIndex, newVertexIndex);
+        }
+
+        triangleIndices.push(newVertexIndex);
+      }
+
+      // Add triangle indices
+      materialIndices.push(...triangleIndices);
+    }
+
+    // Ensure indices are properly aligned for WebGPU (must be multiple of 2 for Uint16Array)
+    // WebGPU requires buffer sizes to be multiples of 4 bytes
+    const alignedIndices = [...materialIndices];
+    if (alignedIndices.length % 2 !== 0) {
+      // Add a duplicate of the last index to make it even
+      alignedIndices.push(alignedIndices[alignedIndices.length - 1]);
+    }
+
+    // Create geometry data
+    const geometryData = {
+      vertices: new Float32Array(materialVertices),
+      indices: new Uint16Array(alignedIndices),
+      vertexCount: materialVertices.length / 16,
+      indexCount: alignedIndices.length,
+      primitiveType: 'triangle-list' as const,
+      vertexFormat: 'pmx' as const,
+      bounds: {
+        min: [0, 0, 0] as [number, number, number],
+        max: [0, 0, 0] as [number, number, number],
+      },
+    };
+
+    // Create geometry using geometry manager
+    const geometry = this.geometryManager.getGeometryFromData(geometryData, geometryId);
 
     return geometry;
   }
@@ -748,11 +876,20 @@ export class WebGPURenderer implements IWebGPURenderer {
   /**
    * Get or create material for PMX model from asset data
    */
-  private async getOrCreatePMXMaterial(renderable: RenderData) {
+  private async getOrCreatePMXMaterial(renderable: RenderData, materialIndex: number = 0) {
     const { pmxAssetId, pmxComponent } = renderable;
 
     if (!pmxAssetId || !pmxComponent) {
       throw new Error('PMX asset ID or component not provided');
+    }
+
+    // Create a unique key for this specific material
+    const materialKey = `${pmxAssetId}_material_${materialIndex}`;
+
+    // Check if material already exists in cache
+    const existingMaterial = this.pmxMaterialProcessor.getMaterialData(materialKey);
+    if (existingMaterial) {
+      return existingMaterial;
     }
 
     // Get asset data from registry
@@ -762,19 +899,31 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Create a separate asset descriptor for material
-    const materialAssetDescriptor = {
+    const materialAssetDescriptor: AssetDescriptor<'pmx_material'> = {
       ...assetDescriptor,
       type: 'pmx_material' as const,
+      rawData: assetDescriptor.rawData as PMXModel,
     };
 
-    // Use GPUResourceCoordinator to create material only
-    const material =
+    // Use GPUResourceCoordinator to create materials
+    const materials =
       await this.gpuResourceCoordinator.getOrCreateGPUResource(materialAssetDescriptor);
 
-    if (!material) {
-      throw new Error('Failed to create PMX material');
+    if (!materials || materials.length === 0) {
+      throw new Error('Failed to create PMX materials');
     }
 
+    // Validate material index
+    if (materialIndex >= materials.length) {
+      console.warn(
+        `Material index ${materialIndex} out of range, using material 0. Available materials: ${materials.length}`,
+      );
+      materialIndex = 0;
+    }
+
+    // Cache and return the specific material
+    const material = materials[materialIndex];
+    this.pmxMaterials.set(materialKey, material);
     return material;
   }
 
@@ -825,7 +974,13 @@ export class WebGPURenderer implements IWebGPURenderer {
     renderPass: GPURenderPassEncoder,
     renderable: RenderData,
   ): Promise<void> {
-    const textureId = renderable.material.albedoTextureId || renderable.material.albedoTexture;
+    // Check if this is a PMX material (skip texture setup as it's handled by PMX processor)
+    if ('materialType' in renderable.material && renderable.material.materialType === 'pmx') {
+      return; // PMX materials handle their own texture binding
+    }
+
+    const regularMaterial = renderable.material as WebGPUMaterialDescriptor;
+    const textureId = regularMaterial.albedoTextureId || regularMaterial.albedoTexture;
     if (!textureId) {
       return; // No texture to bind
     }
@@ -867,6 +1022,16 @@ export class WebGPURenderer implements IWebGPURenderer {
    * Setup material bind group for material properties
    */
   private setupMaterialBindGroup(renderPass: GPURenderPassEncoder, renderable: RenderData): void {
+    // Check if this is a PMX material (has PMX-specific data)
+    if (renderable.material.materialType === 'pmx') {
+      // This is a PMX material with pre-created bind group
+      // PMX materials use bind group index 2 (TIME=0, MVP=1, PMX_MATERIAL=2)
+      const pmxMaterial = renderable.material as PMXMaterialCacheData;
+      renderPass.setBindGroup(2, pmxMaterial.bindGroup);
+      return;
+    }
+
+    // Regular material handling
     if (!renderable.material.albedo) {
       return; // No material properties to bind
     }
