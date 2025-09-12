@@ -1,11 +1,12 @@
 import { VertexFormat, WebGPUMaterialDescriptor } from '@ecs';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
-import { AssetDescriptor, AssetType, assetRegistry } from './AssetRegistry';
+import { AssetDescriptor, AssetType } from './AssetRegistry';
 import { BufferManager } from './BufferManager';
 import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { GeometryManager } from './GeometryManager';
 import { MaterialManager } from './MaterialManager';
+import { PMXMaterialCacheData, PMXMaterialProcessor } from './PMXMaterialProcessor';
 import { TextureManager } from './TextureManager';
 import { GeometryCacheItem } from './types/geometry';
 
@@ -13,7 +14,7 @@ import { GeometryCacheItem } from './types/geometry';
 type GPUResourceType<T extends AssetType> = T extends 'pmx_model'
   ? GeometryCacheItem // Geometry cache item
   : T extends 'pmx_material'
-    ? WebGPUMaterialDescriptor
+    ? PMXMaterialCacheData[] // Array of processed PMX materials
     : T extends 'texture'
       ? GPUTexture
       : T extends 'material'
@@ -44,6 +45,9 @@ export class GPUResourceCoordinator {
 
   @Inject(ServiceTokens.MATERIAL_MANAGER)
   private materialManager!: MaterialManager;
+
+  @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
+  private pmxMaterialProcessor!: PMXMaterialProcessor;
 
   /**
    * Get or create GPU resource for an asset
@@ -121,7 +125,7 @@ export class GPUResourceCoordinator {
   }
 
   /**
-   * Create PMX material with texture loading
+   * Create PMX materials with texture loading using PMXMaterialProcessor
    */
   private async createPMXMaterial(assetDescriptor: AssetDescriptor<'pmx_material'>) {
     const pmxData = assetDescriptor.rawData;
@@ -135,43 +139,21 @@ export class GPUResourceCoordinator {
       throw new Error('No materials found in PMX data');
     }
 
-    // For now, create a material for the first material in the PMX file
-    // TODO: Support multiple materials per PMX model
-    const firstMaterial = materials[0];
-    const textureIndex = firstMaterial.textureIndex ?? -1;
-
-    // Create material descriptor
-    const diffuse = firstMaterial.diffuse || [1, 1, 1, 1];
-    const materialDescriptor: WebGPUMaterialDescriptor = {
-      albedo: { r: diffuse[0], g: diffuse[1], b: diffuse[2], a: diffuse[3] },
-      metallic: 0.0,
-      roughness: 0.5,
-      emissive: { r: 0, g: 0, b: 0, a: 1 },
-      emissiveIntensity: 0.0,
-      alphaMode: 'opaque' as const,
-      doubleSided: false,
-    };
-
-    // Load texture if available
-    if (textureIndex >= 0 && textureIndex < textures.length) {
-      const textureInfo = textures[textureIndex];
-      const texturePath = typeof textureInfo === 'string' ? textureInfo : textureInfo.path;
-
-      // Check if texture is already loaded in AssetRegistry
-      const textureAsset = assetRegistry.getAssetDescriptor(texturePath);
-      if (textureAsset) {
-        // Texture is already loaded, create GPU texture resource
-        const gpuTexture = await this.createTexture(textureAsset as AssetDescriptor<'texture'>);
-        if (gpuTexture) {
-          materialDescriptor.albedoTexture = texturePath;
-        }
-      } else {
-        console.warn(`Texture not found in AssetRegistry: ${texturePath}`);
-      }
+    if (!textures || textures.length === 0) {
+      console.warn(`No textures found in PMX data for ${assetId}`);
     }
 
-    // Use MaterialManager to create the actual GPU material
-    return this.materialManager.createMaterial(`${assetId}_material`, materialDescriptor);
+    // Use PMXMaterialProcessor to process all materials
+    const processedMaterials = await this.pmxMaterialProcessor.processPMXMaterials(
+      materials,
+      textures || [],
+      assetId,
+    );
+
+    console.log(
+      `[GPUResourceCoordinator] Processed ${processedMaterials.length} PMX materials for ${assetId}`,
+    );
+    return processedMaterials;
   }
 
   /**

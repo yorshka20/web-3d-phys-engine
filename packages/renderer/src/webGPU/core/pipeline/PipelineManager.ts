@@ -1,4 +1,5 @@
 import { Inject, Injectable, ServiceTokens } from '../decorators';
+import { PMXMaterialProcessor } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { CustomShaderDefinition, ShaderManager } from '../ShaderManager';
 import { BindGroupLayoutDescriptor, ShaderType } from '../types';
@@ -51,6 +52,8 @@ export class PipelineManager {
   private context!: WebGPUContext;
   @Inject(ServiceTokens.RESOURCE_MANAGER)
   private resourceManager!: WebGPUResourceManager;
+  @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
+  private pmxMaterialProcessor!: PMXMaterialProcessor; // PMXMaterialProcessor type
 
   private get device(): GPUDevice {
     return this.context.getDevice();
@@ -321,27 +324,54 @@ export class PipelineManager {
   ): Promise<GPUPipelineLayout> {
     const bindGroupLayouts: GPUBindGroupLayout[] = [];
 
-    // Always create the first 4 bind groups in fixed order
-    const fixedBindGroups = [
-      BindGroupLayoutOrder.TIME,
-      BindGroupLayoutOrder.MVP,
-      BindGroupLayoutOrder.TEXTURE,
-      BindGroupLayoutOrder.MATERIAL,
-    ];
+    // Check if this is a PMX material that needs special bind group layout
+    if (gpuKey.customShaderId === 'pmx_material_shader') {
+      // PMX Pipeline: TIME + MVP + PMX_MATERIAL (using PMXMaterialProcessor's layout)
 
-    for (const bindGroupOrder of fixedBindGroups) {
-      const layout = await this.getOrCreateBindGroupLayoutByOrder(bindGroupOrder, gpuKey);
-      if (layout) {
-        bindGroupLayouts.push(layout);
+      // Group 0: Time uniforms
+      const timeLayout = await this.getOrCreateBindGroupLayoutByOrder(
+        BindGroupLayoutOrder.TIME,
+        gpuKey,
+      );
+      if (timeLayout) {
+        bindGroupLayouts.push(timeLayout);
       }
-    }
 
-    // Add optional bind groups based on requirements
-    const optionalBindGroups = this.determineOptionalBindGroups(gpuKey, semanticKey);
-    for (const bindGroupOrder of optionalBindGroups) {
-      const layout = await this.getOrCreateBindGroupLayoutByOrder(bindGroupOrder, gpuKey);
-      if (layout) {
-        bindGroupLayouts.push(layout);
+      // Group 1: MVP matrices
+      const mvpLayout = await this.getOrCreateBindGroupLayoutByOrder(
+        BindGroupLayoutOrder.MVP,
+        gpuKey,
+      );
+      if (mvpLayout) {
+        bindGroupLayouts.push(mvpLayout);
+      }
+
+      // Group 2: PMX Material layout (using PMXMaterialProcessor's specialized layout)
+      const pmxMaterialLayout = this.pmxMaterialProcessor.createMaterialBindGroupLayout();
+      bindGroupLayouts.push(pmxMaterialLayout);
+    } else {
+      // Standard Pipeline: Always create the first 4 bind groups in fixed order
+      const fixedBindGroups = [
+        BindGroupLayoutOrder.TIME,
+        BindGroupLayoutOrder.MVP,
+        BindGroupLayoutOrder.TEXTURE,
+        BindGroupLayoutOrder.MATERIAL,
+      ];
+
+      for (const bindGroupOrder of fixedBindGroups) {
+        const layout = await this.getOrCreateBindGroupLayoutByOrder(bindGroupOrder, gpuKey);
+        if (layout) {
+          bindGroupLayouts.push(layout);
+        }
+      }
+
+      // Add optional bind groups based on requirements
+      const optionalBindGroups = this.determineOptionalBindGroups(gpuKey, semanticKey);
+      for (const bindGroupOrder of optionalBindGroups) {
+        const layout = await this.getOrCreateBindGroupLayoutByOrder(bindGroupOrder, gpuKey);
+        if (layout) {
+          bindGroupLayouts.push(layout);
+        }
       }
     }
 
@@ -380,7 +410,9 @@ export class PipelineManager {
   /**
    * Determine optional bind groups from custom shader requirements
    */
-  private determineOptionalBindGroupsFromCustomShader(customShader: any): BindGroupLayoutOrder[] {
+  private determineOptionalBindGroupsFromCustomShader(
+    customShader: CustomShaderDefinition,
+  ): BindGroupLayoutOrder[] {
     const optionalGroups: BindGroupLayoutOrder[] = [];
     const requiredUniforms = customShader.requiredUniforms || [];
 
@@ -500,6 +532,7 @@ export class PipelineManager {
 
       case BindGroupLayoutOrder.MATERIAL:
         // Group 3: Material uniforms (per-object changes)
+        // Standard material layout only - PMX materials use their own layout
         entries.push({
           binding: 0,
           visibility: GPUShaderStage.FRAGMENT,

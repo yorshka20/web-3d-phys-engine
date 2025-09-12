@@ -1,5 +1,7 @@
 import { Color, Vec3 } from '@ecs/types/types';
 
+type MaterialType = 'normal' | 'pmx';
+
 export interface Material3D {
   // Basic material properties
   albedo: Color; // Base color
@@ -28,6 +30,9 @@ export interface Material3D {
   // Custom shader support
   customShaderId?: string; // ID of custom shader to use
   shaderParams?: Record<string, unknown>; // Material-specific shader parameters
+
+  // material type
+  materialType: MaterialType;
 }
 
 /**

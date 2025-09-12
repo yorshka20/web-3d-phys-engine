@@ -2,6 +2,7 @@ import { GeometryData } from '@ecs/components/physics/mesh';
 import { PMXMeshComponent } from '@ecs/components/physics/mesh/PMXMeshComponent';
 import { CameraData, LightData, WebGPUMaterialDescriptor } from '@ecs/components/rendering';
 import { Vec3 } from '@ecs/types/types';
+import { PMXMaterialCacheData } from '@renderer/webGPU/core/PMXMaterialProcessor';
 import { GlobalUniforms, ViewportData } from '@renderer/webGPU/types';
 import { mat3, mat4 } from 'gl-matrix';
 
@@ -16,7 +17,7 @@ export interface RenderData {
   normalMatrix: mat3; // normal transformation matrix
 
   // Material information
-  material: WebGPUMaterialDescriptor;
+  material: WebGPUMaterialDescriptor | PMXMaterialCacheData;
   materialUniforms: Record<string, Any>; // material specific uniforms
 
   // render control
@@ -27,6 +28,7 @@ export interface RenderData {
   // PMX model specific (optional)
   pmxAssetId?: string;
   pmxComponent?: PMXMeshComponent;
+  materialIndex?: number; // Material index for PMX models
 }
 
 export interface EnvironmentData {

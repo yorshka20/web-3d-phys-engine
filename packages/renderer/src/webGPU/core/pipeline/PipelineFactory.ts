@@ -1,7 +1,9 @@
 import { GeometryData, WebGPUMaterialDescriptor } from '@ecs/components';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
+import { PMXMaterialCacheData } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
+import { pmxMaterialShaderDefinition } from '../shaders/PMXMaterialShader';
 import { WebGPUContext } from '../WebGPUContext';
 import { PipelineManager } from './PipelineManager';
 import { PipelineCreationOptions, RenderPurpose, generateSemanticPipelineKey } from './types';
@@ -16,6 +18,9 @@ export interface PredefinedPipelineConfig {
   materialFilter?: (_material: WebGPUMaterialDescriptor) => boolean;
   geometryFilter?: (_geometry: GeometryData) => boolean;
 }
+
+// union type support regular materials and PMX materials
+export type MaterialDescriptor = WebGPUMaterialDescriptor | PMXMaterialCacheData;
 
 /**
  * Pipeline Factory for creating specialized pipelines
@@ -195,26 +200,35 @@ export class PipelineFactory {
 
   /**
    * Create a pipeline based on material properties (auto-detection)
+   * Supports both regular materials and PMX materials
    */
   async createAutoPipeline(
-    material: WebGPUMaterialDescriptor,
+    material: MaterialDescriptor,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
+    // Check if this is a PMX material
+    if (material.materialType === 'pmx') {
+      return this.createPMXPipeline(material as PMXMaterialCacheData, geometry, customOptions);
+    }
+
+    // Regular material handling
+    const regularMaterial = material as WebGPUMaterialDescriptor;
+
     // Add alpha mask handling if needed
     const options =
-      material.alphaMode === 'mask'
+      regularMaterial.alphaMode === 'mask'
         ? {
             ...customOptions,
             shaderDefines: {
               ALPHA_MASK: true,
-              ALPHA_CUTOFF: material.alphaCutoff || 0.5,
+              ALPHA_CUTOFF: regularMaterial.alphaCutoff || 0.5,
               ...customOptions?.shaderDefines,
             },
           }
         : customOptions;
 
-    const semanticKey = generateSemanticPipelineKey(material, geometry, options);
+    const semanticKey = generateSemanticPipelineKey(regularMaterial, geometry, options);
     return this.pipelineManager.getPipeline(semanticKey);
   }
 
@@ -355,6 +369,53 @@ export class PipelineFactory {
         },
       },
     });
+  }
+
+  /**
+   * Create a pipeline specifically for PMX materials using CustomShader pattern
+   */
+  async createPMXPipeline(
+    material: PMXMaterialCacheData,
+    geometry: GeometryData,
+    customOptions?: Partial<PipelineCreationOptions>,
+  ): Promise<GPURenderPipeline> {
+    // Register PMX shader definition with shader manager if not already registered
+    if (!this.shaderManager.getCustomShader('pmx_material_shader')) {
+      this.shaderManager.registerCustomShader(pmxMaterialShaderDefinition);
+    }
+
+    // Create a compatible material descriptor for semantic key generation
+    const materialDescriptor: WebGPUMaterialDescriptor = {
+      albedo: { r: 1, g: 1, b: 1, a: 1 },
+      metallic: 0,
+      roughness: 0.5,
+      emissive: { r: 0, g: 0, b: 0, a: 1 },
+      emissiveIntensity: 0,
+      alphaMode: material.renderOrder === 'transparent' ? 'blend' : 'opaque',
+      doubleSided: false,
+      customShaderId: 'pmx_material_shader',
+      materialType: 'pmx',
+    };
+
+    const options: PipelineCreationOptions = {
+      vertexFormat: geometry.vertexFormat as 'simple' | 'full',
+      cullMode: 'back',
+      frontFace: 'ccw',
+      blendEnabled: material.renderOrder === 'transparent',
+      shaderDefines: {
+        PMX_MATERIAL: true,
+        MULTI_TEXTURE: true,
+        TOON_SHADING: true,
+        ...customOptions?.shaderDefines,
+      },
+      ...customOptions,
+    };
+
+    // Generate semantic key for PMX materials
+    const semanticKey = generateSemanticPipelineKey(materialDescriptor, geometry, options);
+
+    // Use the PMX-specific shader module through pipeline manager
+    return this.pipelineManager.getPipeline(semanticKey);
   }
 
   /**

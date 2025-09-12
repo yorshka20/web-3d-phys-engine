@@ -525,6 +525,7 @@ export class WebGPU3DRenderComponent extends Component {
       emissive: { r: 0, g: 0, b: 0, a: 1 },
       emissiveIntensity: 0,
       doubleSided: false,
+      materialType: 'normal',
     };
 
     this.needsResourceUpdate = true;
@@ -544,6 +545,7 @@ export class WebGPU3DRenderComponent extends Component {
       emissive: { r: 0, g: 0, b: 0, a: 1 },
       emissiveIntensity: 0,
       doubleSided: false,
+      materialType: 'normal',
     };
   }
 
@@ -562,6 +564,7 @@ export class WebGPU3DRenderComponent extends Component {
       emissive: { r: 0, g: 0, b: 0, a: 1 },
       emissiveIntensity: 0,
       doubleSided: false,
+      materialType: 'normal',
     };
   }
 
@@ -579,6 +582,7 @@ export class WebGPU3DRenderComponent extends Component {
       emissive,
       emissiveIntensity: intensity,
       doubleSided: false,
+      materialType: 'normal',
     };
   }
 
