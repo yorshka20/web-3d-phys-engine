@@ -143,6 +143,15 @@ export class GeometryManager {
   }
 
   /**
+   * Get cached geometry by ID
+   * @param geometryId Geometry ID
+   * @returns Cached geometry or undefined
+   */
+  getCachedGeometry(geometryId: string): GeometryCacheItem | undefined {
+    return this.geometryCache.get(geometryId);
+  }
+
+  /**
    * Get cache statistics
    * @returns Cache statistics
    */

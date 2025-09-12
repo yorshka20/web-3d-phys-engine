@@ -742,17 +742,21 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('PMX asset ID or component not provided');
     }
 
+    // Create a unique geometry ID for this material
+    const geometryId = `${pmxAssetId}_material_${materialIndex}`;
+
+    // Check if geometry already exists in cache first
+    const cachedGeometry = this.geometryManager.getCachedGeometry(geometryId);
+    if (cachedGeometry) {
+      console.log(`[WebGPURenderer] Using cached PMX geometry: ${geometryId}`);
+      return cachedGeometry;
+    }
+
     // Get asset data from registry
     const assetDescriptor = pmxComponent.resolveAsset();
     if (!assetDescriptor) {
       throw new Error(`PMX asset not found: ${pmxAssetId}`);
     }
-
-    // Create a unique geometry ID for this material
-    const geometryId = `${pmxAssetId}_material_${materialIndex}`;
-
-    // Check if geometry already exists using getGeometryFromData
-    // We'll create the geometry directly since we need to check if it exists
 
     // Get PMX model data from asset descriptor
     const pmxModel = assetDescriptor.rawData as PMXModel;

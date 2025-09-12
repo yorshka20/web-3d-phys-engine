@@ -65,6 +65,7 @@ export class MaterialManager {
       // WebGPU specific properties
       uniformBufferId: 'default_uniform',
       bindGroupId: 'default_bindgroup',
+      materialType: 'normal',
     });
 
     // Create water material example
@@ -84,6 +85,7 @@ export class MaterialManager {
       uniformBufferId: 'water_uniform',
       bindGroupId: 'water_bindgroup',
       albedoTextureId: 'water_texture',
+      materialType: 'normal',
     });
   }
 
