@@ -1,3 +1,4 @@
+import { VertexFormat } from '@ecs/components/physics/mesh';
 import { Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
@@ -568,7 +569,7 @@ export class ShaderManager {
    */
   generateCustomShaderCode(
     customShader: CustomShaderDefinition,
-    vertexFormat: 'simple' | 'full' | 'colored',
+    vertexFormat: VertexFormat,
     shaderDefines: string[] = [],
     shaderParams: Record<string, any> = {},
   ): string {
@@ -599,11 +600,8 @@ export class ShaderManager {
    * @param vertexFormat Target vertex format
    * @returns Adapted vertex shader code
    */
-  private adaptVertexShaderForFormat(
-    baseCode: string,
-    vertexFormat: 'simple' | 'full' | 'colored',
-  ): string {
-    if (vertexFormat === 'full') {
+  private adaptVertexShaderForFormat(baseCode: string, vertexFormat: VertexFormat): string {
+    if (vertexFormat === 'full' || vertexFormat === 'pmx') {
       return baseCode; // Full format supports all attributes
     }
 

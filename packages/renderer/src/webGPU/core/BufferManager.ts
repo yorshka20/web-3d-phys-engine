@@ -111,9 +111,12 @@ export class BufferManager {
     maxCacheSize: 20,
   })
   createVertexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
+    // Ensure buffer size is multiple of 4 bytes for WebGPU alignment requirement
+    const alignedSize = Math.ceil(data.byteLength / 4) * 4;
+
     const buffer = this.createBuffer({
       type: BufferType.VERTEX,
-      size: data.byteLength,
+      size: alignedSize,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       label,
     });
@@ -134,9 +137,12 @@ export class BufferManager {
     maxCacheSize: 20,
   })
   createIndexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
+    // Ensure buffer size is multiple of 4 bytes for WebGPU alignment requirement
+    const alignedSize = Math.ceil(data.byteLength / 4) * 4;
+
     const buffer = this.createBuffer({
       type: BufferType.INDEX,
-      size: data.byteLength,
+      size: alignedSize,
       usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
       label,
     });
