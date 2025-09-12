@@ -170,6 +170,8 @@ export const ServiceTokens = {
   PIPELINE_FACTORY: 'PipelineFactory',
   // Renderer Initialization
   RENDERER_INITIALIZATION_MANAGER: 'RendererInitializationManager',
+  // GPU Resource Management
+  GPU_RESOURCE_COORDINATOR: 'GPUResourceCoordinator',
   // WebGPU
   WEBGPU_DEVICE: 'WebGPUDevice',
   WEBGPU_CONTEXT: 'WebGPUContext',

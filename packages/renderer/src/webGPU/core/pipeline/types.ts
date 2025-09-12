@@ -1,4 +1,4 @@
-import { GeometryData, WebGPUMaterialDescriptor } from '@ecs/components';
+import { GeometryData, VertexFormat, WebGPUMaterialDescriptor } from '@ecs/components';
 import { mat4, vec3 } from 'gl-matrix';
 import { GeometryCacheItem } from '../types';
 
@@ -69,7 +69,7 @@ export interface SemanticPipelineKey {
   doubleSided: boolean;
 
   // Vertex format (affects shader compilation)
-  vertexFormat: 'simple' | 'full' | 'colored'; // simple=position, full=position+normal+uv, colored=position+color
+  vertexFormat: VertexFormat; // simple=position, full=position+normal+uv, colored=position+color
 
   // Texture usage (affects shader variants)
   hasTextures: boolean;
@@ -367,6 +367,11 @@ function determineVertexAttributes(semanticKey: SemanticPipelineKey): number {
     attributes |= 0x04; // UV
   } else if (semanticKey.vertexFormat === 'colored') {
     attributes |= 0x08; // COLOR
+  } else if (semanticKey.vertexFormat === 'pmx') {
+    // PMX format: position + normal + uv + skinIndices + skinWeights
+    attributes |= 0x02; // NORMAL
+    attributes |= 0x04; // UV
+    attributes |= 0x10; // SKINNING (skinIndices + skinWeights)
   }
 
   return attributes;

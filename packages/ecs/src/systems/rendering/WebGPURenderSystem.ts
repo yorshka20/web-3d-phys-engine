@@ -5,6 +5,7 @@ import {
   GeometryData,
   GeometryFactory,
   Mesh3DComponent,
+  PMXMeshComponent,
   Transform3DComponent,
   WebGPU3DRenderComponent,
 } from '@ecs/components';
@@ -186,13 +187,13 @@ export class WebGPURenderSystem extends System {
   }
 
   private filterEntities(): Entity[] {
-    return this.world.getEntitiesByCondition((entity) => {
-      return (
+    return this.world.getEntitiesByCondition(
+      (entity) =>
         entity.hasComponent(WebGPU3DRenderComponent.componentName) &&
-        entity.hasComponent(Mesh3DComponent.componentName) &&
-        entity.hasComponent(Transform3DComponent.componentName)
-      );
-    });
+        entity.hasComponent(Transform3DComponent.componentName) &&
+        (entity.hasComponent(Mesh3DComponent.componentName) ||
+          entity.hasComponent(PMXMeshComponent.componentName)),
+    );
   }
 
   update(deltaTime: number): void {
@@ -251,7 +252,6 @@ export class WebGPURenderSystem extends System {
    * Extract render data from a single entity
    */
   private extractEntityRenderData(entity: Entity): RenderData | null {
-    const meshComponent = entity.getComponent<Mesh3DComponent>(Mesh3DComponent.componentName);
     const transformComponent = entity.getComponent<Transform3DComponent>(
       Transform3DComponent.componentName,
     );
@@ -259,7 +259,28 @@ export class WebGPURenderSystem extends System {
       WebGPU3DRenderComponent.componentName,
     );
 
-    if (!meshComponent || !transformComponent || !renderComponent) {
+    if (!transformComponent || !renderComponent) {
+      return null;
+    }
+
+    // Check for PMX mesh component first
+    if (entity.hasComponent(PMXMeshComponent.componentName)) {
+      const pmxMeshComponent = entity.getComponent<PMXMeshComponent>(
+        PMXMeshComponent.componentName,
+      );
+      if (pmxMeshComponent) {
+        return this.extractPMXMeshRenderData(
+          entity,
+          pmxMeshComponent,
+          transformComponent,
+          renderComponent,
+        );
+      }
+    }
+
+    // Fall back to regular mesh component
+    const meshComponent = entity.getComponent<Mesh3DComponent>(Mesh3DComponent.componentName);
+    if (!meshComponent) {
       return null;
     }
 
@@ -287,6 +308,63 @@ export class WebGPURenderSystem extends System {
       renderOrder: renderComponent.getLayer() || 0,
       castShadow: renderComponent.getCastShadow() ?? true,
       receiveShadow: renderComponent.getReceiveShadow() ?? true,
+    };
+  }
+
+  /**
+   * Extract render data from PMX mesh component
+   */
+  private extractPMXMeshRenderData(
+    entity: Entity,
+    pmxMeshComponent: PMXMeshComponent,
+    transformComponent: Transform3DComponent,
+    renderComponent: WebGPU3DRenderComponent,
+  ): RenderData | null {
+    const assetDescriptor = pmxMeshComponent.resolveAsset();
+
+    // Check if PMX model is loaded
+    if (!pmxMeshComponent.isLoaded() || !assetDescriptor) {
+      console.warn('[WebGPURenderSystem] PMX model not loaded:', pmxMeshComponent.assetId);
+      return null;
+    }
+
+    // Get world matrix from transform
+    const worldMatrix = transformComponent.getWorldMatrix();
+
+    // Calculate normal matrix (inverse transpose of upper 3x3 world matrix)
+    const normalMatrix = this.calculateNormalMatrix(worldMatrix);
+
+    // For PMX models, we'll use a special geometry ID that includes the asset ID
+    const geometryId = `pmx_${pmxMeshComponent.assetId}_${entity.id}`;
+
+    // Create a placeholder geometry data for PMX models
+    // The actual geometry will be created by the renderer when needed
+    const geometryData: GeometryData = {
+      vertices: new Float32Array(0), // Will be populated by renderer
+      indices: new Uint16Array(0), // Will be populated by renderer
+      vertexCount: 0,
+      indexCount: 0,
+      primitiveType: 'triangle-list',
+      vertexFormat: 'pmx', // PMX format with skinning data
+      bounds: {
+        min: [0, 0, 0],
+        max: [0, 0, 0],
+      },
+    };
+
+    return {
+      geometryId,
+      geometryData,
+      worldMatrix: new Float32Array(worldMatrix),
+      normalMatrix,
+      material: renderComponent.getMaterial(),
+      materialUniforms: renderComponent.getUniforms() || {},
+      renderOrder: renderComponent.getLayer() || 0,
+      castShadow: pmxMeshComponent.castShadow,
+      receiveShadow: pmxMeshComponent.receiveShadow,
+      // Add PMX-specific data
+      pmxAssetId: pmxMeshComponent.assetId,
+      pmxComponent: pmxMeshComponent,
     };
   }
 

@@ -540,8 +540,43 @@ export class PipelineManager {
     const hasNormal = (gpuKey.vertexAttributes & 0x02) !== 0;
     const hasUV = (gpuKey.vertexAttributes & 0x04) !== 0;
     const hasColor = (gpuKey.vertexAttributes & 0x08) !== 0;
+    const hasSkinning = (gpuKey.vertexAttributes & 0x10) !== 0; // New flag for skinning data
 
-    if (hasNormal && hasUV) {
+    if (hasSkinning && hasNormal && hasUV) {
+      // PMX format: position + normal + uv + skinIndices + skinWeights
+      return [
+        {
+          arrayStride: 64, // 16 floats * 4 bytes
+          attributes: [
+            {
+              format: 'float32x3',
+              offset: 0, // position
+              shaderLocation: 0,
+            },
+            {
+              format: 'float32x3',
+              offset: 12, // normal
+              shaderLocation: 1,
+            },
+            {
+              format: 'float32x2',
+              offset: 24, // uv
+              shaderLocation: 2,
+            },
+            {
+              format: 'float32x4',
+              offset: 32, // skinIndices
+              shaderLocation: 3,
+            },
+            {
+              format: 'float32x4',
+              offset: 48, // skinWeights
+              shaderLocation: 4,
+            },
+          ],
+        },
+      ];
+    } else if (hasNormal && hasUV) {
       // Full format: position + normal + uv
       return [
         {
@@ -749,13 +784,15 @@ struct MaterialUniforms {
 struct VertexInput {
     @location(0) position: vec3<f32>,
     ${(gpuKey.vertexAttributes & 0x02) !== 0 ? '@location(1) normal: vec3<f32>,' : ''}
-    ${(gpuKey.vertexAttributes & 0x04) !== 0 ? '@location(2) uv: vec2<f32>' : ''}
+    ${(gpuKey.vertexAttributes & 0x04) !== 0 ? '@location(2) uv: vec2<f32>,' : ''}
+    ${(gpuKey.vertexAttributes & 0x10) !== 0 ? '@location(3) skinIndices: vec4<f32>,' : ''}
+    ${(gpuKey.vertexAttributes & 0x10) !== 0 ? '@location(4) skinWeights: vec4<f32>,' : ''}
 }
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     ${(gpuKey.vertexAttributes & 0x02) !== 0 ? '@location(0) normal: vec3<f32>,' : ''}
-    ${(gpuKey.vertexAttributes & 0x04) !== 0 ? '@location(1) uv: vec2<f32>' : ''}
+    ${(gpuKey.vertexAttributes & 0x04) !== 0 ? '@location(1) uv: vec2<f32>,' : ''}
 }
 
 // Fixed bind group indices
@@ -772,6 +809,9 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     
     ${(gpuKey.vertexAttributes & 0x02) !== 0 ? 'out.normal = input.normal;' : ''}
     ${(gpuKey.vertexAttributes & 0x04) !== 0 ? 'out.uv = input.uv;' : ''}
+    
+    // Note: Skin data (skinIndices, skinWeights) are available but not used in basic rendering
+    // They would be used for skeletal animation in more advanced shaders
     
     return out;
 }

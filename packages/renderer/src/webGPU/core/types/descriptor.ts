@@ -94,7 +94,7 @@ export interface TextureDescriptor {
   height: number;
   format: GPUTextureFormat;
   usage: GPUTextureUsageFlags;
-  initialData?: ImageBitmap | HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas;
+  initialData?: GPUCopyExternalImageSource;
 }
 
 export interface PipelineDescriptor {

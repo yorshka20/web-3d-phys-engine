@@ -1,4 +1,5 @@
 import { GeometryData } from '@ecs/components/physics/mesh';
+import { PMXMeshComponent } from '@ecs/components/physics/mesh/PMXMeshComponent';
 import { CameraData, LightData, WebGPUMaterialDescriptor } from '@ecs/components/rendering';
 import { Vec3 } from '@ecs/types/types';
 import { GlobalUniforms, ViewportData } from '@renderer/webGPU/types';
@@ -22,6 +23,10 @@ export interface RenderData {
   renderOrder: number; // render order
   castShadow: boolean;
   receiveShadow: boolean;
+
+  // PMX model specific (optional)
+  pmxAssetId?: string;
+  pmxComponent?: PMXMeshComponent;
 }
 
 export interface EnvironmentData {
