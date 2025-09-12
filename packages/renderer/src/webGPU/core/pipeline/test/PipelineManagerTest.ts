@@ -79,7 +79,7 @@ export async function testPipelineCreation(): Promise<boolean> {
     };
 
     // Create pipeline
-    const pipeline = await pipelineManager.getPipeline(semanticKey);
+    const pipeline = await pipelineManager.getPipeline(semanticKey as any);
 
     if (!pipeline) {
       console.error('[PipelineManagerTest] Pipeline creation failed');
@@ -128,8 +128,8 @@ export async function testPipelineCaching(): Promise<boolean> {
     };
 
     // Create pipeline twice
-    const pipeline1 = await pipelineManager.getPipeline(semanticKey);
-    const pipeline2 = await pipelineManager.getPipeline(semanticKey);
+    const pipeline1 = await pipelineManager.getPipeline(semanticKey as any);
+    const pipeline2 = await pipelineManager.getPipeline(semanticKey as any);
 
     if (pipeline1 !== pipeline2) {
       console.error('[PipelineManagerTest] Pipeline caching failed - different instances returned');
@@ -198,7 +198,7 @@ export async function testCacheManagement(): Promise<boolean> {
         },
       };
 
-      await pipelineManager.getPipeline(semanticKey);
+      await pipelineManager.getPipeline(semanticKey as any);
     }
 
     const statsAfterOverflow = pipelineManager.getCacheStats();

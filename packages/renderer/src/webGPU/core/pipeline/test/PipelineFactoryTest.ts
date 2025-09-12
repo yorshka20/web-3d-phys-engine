@@ -53,7 +53,7 @@ export async function testBasicPipelineCreation(): Promise<boolean> {
     };
 
     // Test auto pipeline creation
-    const pipeline = await factory.createAutoPipeline(material, geometry);
+    const pipeline = await factory.createAutoPipeline(material as any, geometry as any);
 
     if (!pipeline) {
       console.error('[PipelineFactoryTest] Auto pipeline creation failed');
@@ -109,7 +109,11 @@ export async function testPredefinedConfigurations(): Promise<boolean> {
     ];
 
     for (const configName of configs) {
-      const pipeline = await factory.createPredefinedPipeline(configName, material, geometry);
+      const pipeline = await factory.createPredefinedPipeline(
+        configName,
+        material as any,
+        geometry as any,
+      );
 
       if (!pipeline) {
         console.error(`[PipelineFactoryTest] Predefined pipeline '${configName}' creation failed`);
@@ -155,12 +159,21 @@ export async function testSpecializedPipelines(): Promise<boolean> {
 
     // Test specialized pipeline types
     const specializedPipelines = [
-      { name: 'Opaque', fn: () => factory.createOpaquePipeline(material, geometry) },
-      { name: 'Transparent', fn: () => factory.createTransparentPipeline(material, geometry) },
-      { name: 'Wireframe', fn: () => factory.createWireframePipeline(material, geometry) },
-      { name: 'Shadow', fn: () => factory.createShadowPipeline(material, geometry) },
-      { name: 'UI', fn: () => factory.createUIPipeline(material, geometry) },
-      { name: 'PostProcess', fn: () => factory.createPostProcessPipeline(material, geometry) },
+      { name: 'Opaque', fn: () => factory.createOpaquePipeline(material as any, geometry as any) },
+      {
+        name: 'Transparent',
+        fn: () => factory.createTransparentPipeline(material as any, geometry as any),
+      },
+      {
+        name: 'Wireframe',
+        fn: () => factory.createWireframePipeline(material as any, geometry as any),
+      },
+      { name: 'Shadow', fn: () => factory.createShadowPipeline(material as any, geometry as any) },
+      { name: 'UI', fn: () => factory.createUIPipeline(material as any, geometry as any) },
+      {
+        name: 'PostProcess',
+        fn: () => factory.createPostProcessPipeline(material as any, geometry as any),
+      },
     ];
 
     for (const { name, fn } of specializedPipelines) {
@@ -228,7 +241,7 @@ export async function testBatchPipelineCreation(): Promise<boolean> {
       },
     ];
 
-    const results = await factory.batchCreatePipelines(requests);
+    const results = await factory.batchCreatePipelines(requests as any);
 
     if (results.size !== requests.length) {
       console.error('[PipelineFactoryTest] Batch creation returned wrong number of pipelines');

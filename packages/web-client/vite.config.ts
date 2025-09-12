@@ -20,9 +20,8 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            ecs: ['@ecs/*'],
-            renderer: ['@renderer/*'],
-            webClient: ['@web-client/*'],
+            ecs: ['@ecs'],
+            renderer: ['@renderer'],
           },
         },
       },
@@ -37,7 +36,7 @@ export default defineConfig(({ mode }) => {
         '@ecs/constants': resolve(__dirname, '../ecs/src/constants'),
         '@ecs/types': resolve(__dirname, '../ecs/src/types'),
         '@renderer': resolve(__dirname, '../renderer/src'),
-        '@renderer/*': resolve(__dirname, '../renderer/src/*'),
+        '@renderer/*': resolve(__dirname, '../renderer/src'),
       },
     },
     json: {
