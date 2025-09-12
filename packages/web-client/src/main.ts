@@ -9,6 +9,7 @@ import {
   OrbitCameraControlSystem,
   PhysicsComponent,
   PhysicsSystem,
+  PMXMeshComponent,
   StatsComponent,
   Transform3DComponent,
   Transform3DSystem,
@@ -17,9 +18,12 @@ import {
   WebGPURenderSystem,
   World,
 } from '@ecs';
+import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
 import { GeometryInstanceDescriptor } from '@renderer/webGPU/core/types';
 import chroma from 'chroma-js';
 import { Game } from './game/Game';
+
+import pmxModel from '../assets/endministrator/endministrator.pmx?url';
 
 // Start the application when the page loads
 window.addEventListener('load', () => {
@@ -44,6 +48,10 @@ async function main() {
   createCoordinate(world);
   createGeometryEntities(world);
 
+  createPMXEntity(world);
+
+  await AssetLoader.loadPMXModelFromURL(pmxModel, 'character');
+
   // Initialize the game
   await game.initialize();
 
@@ -54,6 +62,8 @@ async function main() {
 
   // @ts-expect-error - Adding game to window for debugging purposes
   window.game = game;
+  // @ts-expect-error - Adding game to window for debugging purposes
+  window.assetLoader = AssetLoader;
 }
 
 const defaultMaterial = {
@@ -63,6 +73,20 @@ const defaultMaterial = {
   emissive: chroma('#000000'),
   emissiveIntensity: 0,
 };
+
+function createPMXEntity(world: World) {
+  const entity = world.createEntity('object');
+  entity.setLabel('pmx');
+
+  entity.addComponent(world.createComponent(PMXMeshComponent, 'character'));
+  entity.addComponent(world.createComponent(Transform3DComponent, { position: [0, 0, -20] }));
+  entity.addComponent(
+    world.createComponent(WebGPU3DRenderComponent, { material: defaultMaterial }),
+  );
+
+  world.addEntity(entity);
+  return entity;
+}
 
 function create3DCamera(world: World) {
   const camera = world.createEntity('camera');

@@ -52,6 +52,7 @@
     "@web-3d-phys-engine/ecs": "workspace:*",
     "@web-3d-phys-engine/renderer": "workspace:*",
     "gl-matrix": "3.4.4",
+    "mmd-parser": "1.0.4",
     "webgpu-utils": "1.11.0"
   }
 }

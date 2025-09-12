@@ -7,6 +7,7 @@ import { TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { BufferManager } from '../core/BufferManager';
 import { DIContainer, initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
+import { GPUResourceCoordinator } from '../core/GPUResourceCoordinator';
 import { InstanceManager } from '../core/InstanceManager';
 import { MaterialManager } from '../core/MaterialManager';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
@@ -78,6 +79,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private shaderManager!: ShaderManager;
   private textureManager!: TextureManager;
   private resourceManager!: WebGPUResourceManager;
+  private gpuResourceCoordinator!: GPUResourceCoordinator;
   private timeManager!: TimeManager;
   private geometryManager!: GeometryManager;
   private materialManager!: MaterialManager;
@@ -162,6 +164,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   createMesh(geometry: Geometry): Mesh {
     throw new Error('Method not implemented.');
   }
+
   addPostProcessEffect(effect: PostProcessEffect): void {
     throw new Error('Method not implemented.');
   }
@@ -288,6 +291,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Create services using new operator - they will be auto-registered
     this.resourceManager = new WebGPUResourceManager();
+    this.gpuResourceCoordinator = new GPUResourceCoordinator();
     this.bufferManager = new BufferManager();
     this.shaderManager = new ShaderManager();
     this.textureManager = new TextureManager();
@@ -685,11 +689,18 @@ export class WebGPURenderer implements IWebGPURenderer {
     renderable: RenderData,
     frameData: FrameData,
   ): Promise<void> {
-    // Get or create geometry instance
-    const geometry = this.geometryManager.getGeometryFromData(
-      renderable.geometryData,
-      renderable.geometryId,
-    );
+    let geometry;
+
+    // Check if this is a PMX model that needs asset-based geometry creation
+    if (renderable.pmxAssetId) {
+      geometry = await this.getOrCreatePMXGeometry(renderable);
+    } else {
+      // Regular geometry from geometry data
+      geometry = this.geometryManager.getGeometryFromData(
+        renderable.geometryData,
+        renderable.geometryId,
+      );
+    }
 
     // Setup all bind groups for this object
     await this.setupObjectBindGroups(renderPass, renderable, frameData);
@@ -700,6 +711,28 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Draw the object
     renderPass.drawIndexed(geometry.indexCount);
+  }
+
+  /**
+   * Get or create geometry for PMX model from asset data
+   */
+  private async getOrCreatePMXGeometry(renderable: RenderData): Promise<unknown> {
+    const { pmxAssetId, pmxComponent } = renderable;
+
+    if (!pmxAssetId || !pmxComponent) {
+      throw new Error('PMX asset ID or component not provided');
+    }
+
+    // Get asset data from registry
+    const assetDescriptor = pmxComponent.resolveAsset();
+    if (!assetDescriptor) {
+      throw new Error(`PMX asset not found: ${pmxAssetId}`);
+    }
+
+    // Use GPUResourceCoordinator to create geometry
+    const geometry = await this.gpuResourceCoordinator.getOrCreateGPUResource(assetDescriptor);
+
+    return geometry;
   }
 
   /**
