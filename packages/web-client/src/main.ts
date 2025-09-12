@@ -65,7 +65,7 @@ async function main() {
   createPMXEntity(world);
 
   // Load PMX model and its textures
-  await AssetLoader.loadPMXModelFromURL(pmxModel, 'character');
+  await AssetLoader.loadPMXModelFromURL(pmxModel, 'endministrator');
 
   // Load PMX textures based on actual PMX model texture list
   const pmxTextureList = [
@@ -128,16 +128,23 @@ const defaultMaterial = {
   roughness: 0.5,
   emissive: chroma('#000000'),
   emissiveIntensity: 0,
+  materialType: 'normal' as const,
 };
 
 function createPMXEntity(world: World) {
   const entity = world.createEntity('object');
   entity.setLabel('pmx');
 
-  entity.addComponent(world.createComponent(PMXMeshComponent, 'character'));
-  entity.addComponent(world.createComponent(Transform3DComponent, { position: [0, 0, -20] }));
+  entity.addComponent(world.createComponent(PMXMeshComponent, 'endministrator'));
+  entity.addComponent(world.createComponent(Transform3DComponent, { position: [0, 0, -10] }));
   entity.addComponent(
-    world.createComponent(WebGPU3DRenderComponent, { material: defaultMaterial }),
+    world.createComponent(WebGPU3DRenderComponent, {
+      material: {
+        ...defaultMaterial,
+        customShaderId: 'pmx_material_shader',
+        materialType: 'pmx' as const,
+      },
+    }),
   );
 
   world.addEntity(entity);
@@ -223,6 +230,7 @@ function cretePlane(world: World) {
         emissive: chroma('#000000'),
         emissiveIntensity: 0,
         customShaderId: 'checkerboard_shader',
+        materialType: 'normal' as const,
       },
     }),
   );
@@ -347,6 +355,7 @@ function createGeometryEntities(world: World) {
           flickerIntensity: 0.15,
           fireOpacity: 0.95,
         },
+        materialType: 'normal' as const,
       },
     },
   ];

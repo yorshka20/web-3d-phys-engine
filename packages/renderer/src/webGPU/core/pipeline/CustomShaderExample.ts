@@ -268,6 +268,7 @@ export function createWaterMaterial(): Material3D {
       fresnelPower: 2.5,
       waterOpacity: 0.7,
     },
+    materialType: 'normal',
   };
 }
 
@@ -285,6 +286,7 @@ export function createFireMaterial(): Material3D {
       flickerIntensity: 0.15,
       fireOpacity: 0.95,
     },
+    materialType: 'normal',
   };
 }
 

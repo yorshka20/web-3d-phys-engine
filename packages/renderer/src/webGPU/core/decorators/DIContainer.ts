@@ -172,6 +172,8 @@ export const ServiceTokens = {
   RENDERER_INITIALIZATION_MANAGER: 'RendererInitializationManager',
   // GPU Resource Management
   GPU_RESOURCE_COORDINATOR: 'GPUResourceCoordinator',
+  // PMX Material Processing
+  PMX_MATERIAL_PROCESSOR: 'PMXMaterialProcessor',
   // WebGPU
   WEBGPU_DEVICE: 'WebGPUDevice',
   WEBGPU_CONTEXT: 'WebGPUContext',

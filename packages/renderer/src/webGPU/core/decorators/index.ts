@@ -56,6 +56,8 @@ export function initContainer(device: GPUDevice, context: WebGPUContext) {
   globalContainer.registerInstance(ServiceTokens.WEBGPU_DEVICE, device);
   globalContainer.registerInstance(ServiceTokens.WEBGPU_CONTEXT, context);
 
+  // services not used in renderer will be registered here
+
   console.log('DI container initialized with auto-registration support');
   console.log('Services will be created automatically when needed via new operator');
 
