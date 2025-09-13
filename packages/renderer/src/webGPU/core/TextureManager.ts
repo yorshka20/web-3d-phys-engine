@@ -20,7 +20,7 @@ export class TextureManager {
   private textures: Map<string, GPUTexture> = new Map();
   private samplers: Map<SamplerId, GPUSampler> = new Map();
 
-  async init(): Promise<void> {
+  async initialize(): Promise<void> {
     // Load image asynchronously and create texture when ready
     await this.loadAndCreateTexture('water_texture', texture);
 

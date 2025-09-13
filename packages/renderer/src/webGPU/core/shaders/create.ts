@@ -10,6 +10,7 @@ import {
   WATER_MATERIAL_DEFAULT_PARAMS,
   WaterMaterialShaderModule,
 } from './types/material';
+import { ShaderModule } from './types/shader';
 
 /**
  * Create PMX Material Shader Module
@@ -21,6 +22,7 @@ export function createPMXMaterialShaderModule(): PMXMaterialShaderModule {
     description: 'PMX model material shader with multi-texture support and PMX-specific features',
     sourceFile: 'PMXMaterial.wgsl',
     includes: [
+      'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/vertex_types.wgsl',
       'bindings/pmx_bindings.wgsl',
@@ -62,6 +64,7 @@ export function createWaterMaterialShaderModule(): WaterMaterialShaderModule {
     description: 'Animated water with wave effects and fresnel reflection',
     sourceFile: 'WaterMaterial.wgsl',
     includes: [
+      'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/vertex_types.wgsl',
       'bindings/water_bindings.wgsl',
@@ -102,6 +105,7 @@ export function createFireMaterialShaderModule(): FireMaterialShaderModule {
     description: 'Flickering fire with distortion and color gradients',
     sourceFile: 'FireMaterial.wgsl',
     includes: [
+      'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/vertex_types.wgsl',
       'bindings/fire_bindings.wgsl',
@@ -138,7 +142,12 @@ export function createCheckerboardShaderModule(): CheckerboardShaderModule {
     name: 'Checkerboard Shader',
     description: 'Checkerboard pattern shader',
     sourceFile: 'Checkerboard.wgsl',
-    includes: ['core/uniforms.wgsl', 'core/vertex_types.wgsl', 'bindings/simple_bindings.wgsl'],
+    includes: [
+      'core/constants.wgsl',
+      'core/uniforms.wgsl',
+      'core/vertex_types.wgsl',
+      'bindings/simple_bindings.wgsl',
+    ],
     compilationOptions: {
       vertexFormat: ['full'],
       defines: {
@@ -177,7 +186,12 @@ export function createCoordinateShaderModule(): CoordinateShaderModule {
     name: 'Coordinate Shader',
     description: 'Coordinate system visualization shader with color-coded axes',
     sourceFile: 'Coordinate.wgsl',
-    includes: ['core/uniforms.wgsl', 'core/vertex_types.wgsl', 'bindings/simple_bindings.wgsl'],
+    includes: [
+      'core/constants.wgsl',
+      'core/uniforms.wgsl',
+      'core/vertex_types.wgsl',
+      'bindings/simple_bindings.wgsl',
+    ],
     compilationOptions: {
       vertexFormat: ['colored'],
     },
@@ -206,6 +220,7 @@ export function createEmissiveShaderModule(): EmissiveShaderModule {
     description: 'Emissive material with animated color cycling and pulsing effects',
     sourceFile: 'Emissive.wgsl',
     includes: [
+      'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/vertex_types.wgsl',
       'bindings/simple_bindings.wgsl',
@@ -239,6 +254,7 @@ export function createPulsewaveShaderModule(): PulsewaveShaderModule {
     description: 'Animated pulsewave effect with HSV color cycling and wave distortion',
     sourceFile: 'Pulsewave.wgsl',
     includes: [
+      'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/vertex_types.wgsl',
       'bindings/simple_bindings.wgsl',
@@ -259,5 +275,30 @@ export function createPulsewaveShaderModule(): PulsewaveShaderModule {
     version: '1.0.0',
     author: 'WebGPU 3D Physics Engine',
     tags: ['pulsewave', 'animation', 'hsv', 'wave-distortion'],
+  };
+}
+
+export function createDefaultShaderModule(): ShaderModule {
+  return {
+    id: 'default_shader',
+    name: 'Default Shader',
+    description: 'Default shader for fallback',
+    sourceFile: 'Default.wgsl',
+    includes: ['core/constants.wgsl'],
+    compilationOptions: {
+      vertexFormat: ['full'],
+    },
+    runtimeParams: {},
+    renderState: {
+      blendMode: 'replace',
+      depthTest: true,
+      depthWrite: true,
+      cullMode: 'back',
+      frontFace: 'ccw',
+      sampleCount: 1,
+    },
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: ['default', 'fallback'],
   };
 }

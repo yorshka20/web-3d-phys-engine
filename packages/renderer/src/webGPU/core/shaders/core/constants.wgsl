@@ -17,3 +17,22 @@ const AMBIENT_FACTOR: f32 = 0.1;
 
 // Texture sampling constants
 const MAX_MIP_LEVEL: f32 = 12.0;
+
+// Pipeline overridable constants
+// These will be set by the pipeline system based on render state
+override ALPHA_MODE_OPAQUE: f32 = 1.0;
+override ALPHA_MODE_BLEND: f32 = 2.0;
+override ALPHA_MODE_MULTIPLY: f32 = 3.0;
+override ALPHA_MODE_ADD: f32 = 4.0;
+
+override PRIMITIVE_TYPE_TRIANGLE: f32 = 1.0;
+override PRIMITIVE_TYPE_LINE: f32 = 2.0;
+override PRIMITIVE_TYPE_POINT: f32 = 3.0;
+
+override RENDER_PASS_OPAQUE: f32 = 1.0;
+override RENDER_PASS_TRANSPARENT: f32 = 2.0;
+override RENDER_PASS_SHADOW: f32 = 3.0;
+
+// Feature flags
+override HAS_TEXTURES: f32 = 0.0;
+override DOUBLE_SIDED: f32 = 0.0;
