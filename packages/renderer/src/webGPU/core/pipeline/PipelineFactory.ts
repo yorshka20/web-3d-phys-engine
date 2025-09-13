@@ -3,7 +3,6 @@ import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { PMXMaterialCacheData } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
-import { pmxMaterialShaderDefinition } from '../shaders/PMXMaterialShader';
 import { WebGPUContext } from '../WebGPUContext';
 import { PipelineManager } from './PipelineManager';
 import { PipelineCreationOptions, RenderPurpose, generateSemanticPipelineKey } from './types';
@@ -379,11 +378,6 @@ export class PipelineFactory {
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
-    // Register PMX shader definition with shader manager if not already registered
-    if (!this.shaderManager.getCustomShader('pmx_material_shader')) {
-      this.shaderManager.registerCustomShader(pmxMaterialShaderDefinition);
-    }
-
     // Create a compatible material descriptor for semantic key generation
     const materialDescriptor: WebGPUMaterialDescriptor = {
       albedo: { r: 1, g: 1, b: 1, a: 1 },

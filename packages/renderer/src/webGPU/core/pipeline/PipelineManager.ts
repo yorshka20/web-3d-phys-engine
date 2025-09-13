@@ -1,8 +1,10 @@
+import { BindGroupManager } from '../BindGroupManager';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { PMXMaterialProcessor } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
-import { CustomShaderDefinition, ShaderManager } from '../ShaderManager';
-import { BindGroupLayoutDescriptor, ShaderType } from '../types';
+import { ShaderManager } from '../ShaderManager';
+import { CustomShaderDefinition } from '../shaders/types/shader';
+import { BindGroupLayoutDescriptor } from '../types';
 import { WebGPUContext } from '../WebGPUContext';
 import {
   BindGroupLayoutName,
@@ -13,8 +15,6 @@ import {
   generateGpuCacheKey,
   generateSemanticCacheKey,
 } from './types';
-
-import { setupCustomShaders } from './CustomShaderExample';
 
 // Simple cache entry for dual-layer cache
 interface SimpleCacheEntry {
@@ -31,6 +31,21 @@ interface SimpleCacheEntry {
   lifecycle: 'singleton',
 })
 export class PipelineManager {
+  @Inject(ServiceTokens.SHADER_MANAGER)
+  private shaderManager!: ShaderManager;
+
+  @Inject(ServiceTokens.BIND_GROUP_MANAGER)
+  private bindGroupManager!: BindGroupManager;
+
+  @Inject(ServiceTokens.WEBGPU_CONTEXT)
+  private context!: WebGPUContext;
+
+  @Inject(ServiceTokens.RESOURCE_MANAGER)
+  private resourceManager!: WebGPUResourceManager;
+
+  @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
+  private pmxMaterialProcessor!: PMXMaterialProcessor; // PMXMaterialProcessor type
+
   // Dual-layer cache system
   private semanticCache = new Map<string, SimpleCacheEntry>();
   private gpuCache = new Map<string, SimpleCacheEntry>();
@@ -46,21 +61,8 @@ export class PipelineManager {
   private gpuCacheHitCount = 0;
   private gpuCacheMissCount = 0;
 
-  @Inject(ServiceTokens.SHADER_MANAGER)
-  private shaderManager!: ShaderManager;
-  @Inject(ServiceTokens.WEBGPU_CONTEXT)
-  private context!: WebGPUContext;
-  @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
-  @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
-  private pmxMaterialProcessor!: PMXMaterialProcessor; // PMXMaterialProcessor type
-
   private get device(): GPUDevice {
     return this.context.getDevice();
-  }
-
-  constructor() {
-    setupCustomShaders(this);
   }
 
   /**
@@ -136,7 +138,8 @@ export class PipelineManager {
     semanticKey: SemanticPipelineKey,
   ): Promise<GPURenderPipeline> {
     // Create shader modules
-    const shaderModules = await this.createShaderModulesFromGpuKey(gpuKey, semanticKey);
+    // const shaderModules = await this.createShaderModulesFromGpuKey(gpuKey, semanticKey);
+    const shaderModules = this.shaderManager.safeGetShaderModule(gpuKey.customShaderId);
 
     // Create pipeline layout
     const layout = await this.createPipelineLayoutFromGpuKey(gpuKey, semanticKey);
@@ -148,13 +151,13 @@ export class PipelineManager {
     const descriptor: GPURenderPipelineDescriptor = {
       layout,
       vertex: {
-        module: shaderModules.vertex,
+        module: shaderModules,
         entryPoint: 'vs_main',
         buffers: vertexBuffers,
         constants: this.convertShaderDefinesToNumbers(gpuKey.shaderDefines),
       },
       fragment: {
-        module: shaderModules.fragment,
+        module: shaderModules,
         entryPoint: 'fs_main',
         targets: this.createColorTargetsFromGpuKey(gpuKey),
         constants: this.convertShaderDefinesToNumbers(gpuKey.shaderDefines),
@@ -260,59 +263,7 @@ export class PipelineManager {
     }
   }
 
-  /**
-   * Register a custom shader definition
-   * @param definition Custom shader definition
-   */
-  registerCustomShader(definition: CustomShaderDefinition): void {
-    this.shaderManager.registerCustomShader(definition);
-  }
-
-  /**
-   * Get custom shader definition by ID
-   * @param id Shader ID
-   * @returns Custom shader definition or undefined
-   */
-  getCustomShader(id: string): CustomShaderDefinition | undefined {
-    return this.shaderManager.getCustomShader(id);
-  }
-
   // ===== GPU Layer Methods =====
-
-  /**
-   * Create shader modules based on GPU key
-   */
-  private async createShaderModulesFromGpuKey(
-    gpuKey: GpuPipelineKey,
-    semanticKey: SemanticPipelineKey,
-  ): Promise<{ vertex: GPUShaderModule; fragment: GPUShaderModule }> {
-    const shaderId = generateGpuCacheKey(gpuKey);
-
-    // Generate shader code
-    const shaderCode = await this.generateShaderCodeFromGpuKey(gpuKey, semanticKey);
-
-    // Get or create shader modules (fast path with fallback)
-    const vertexShader = this.shaderManager.safeGetShaderModule(`${shaderId}_vertex`, {
-      id: `${shaderId}_vertex`,
-      code: shaderCode,
-      type: ShaderType.VERTEX,
-      entryPoint: 'vs_main',
-      label: `Vertex Shader ${shaderId}`,
-    });
-
-    const fragmentShader = this.shaderManager.safeGetShaderModule(`${shaderId}_fragment`, {
-      id: `${shaderId}_fragment`,
-      code: shaderCode,
-      type: ShaderType.FRAGMENT,
-      entryPoint: 'fs_main',
-      label: `Fragment Shader ${shaderId}`,
-    });
-
-    return {
-      vertex: vertexShader,
-      fragment: fragmentShader,
-    };
-  }
 
   /**
    * Create pipeline layout based on fixed bind group order
@@ -554,14 +505,10 @@ export class PipelineManager {
         return null;
     }
 
-    const layout = this.shaderManager.createCustomBindGroupLayout(layoutId, {
+    const layout = this.bindGroupManager.createBindGroupLayout(layoutId, {
       entries,
       label: layoutId,
     });
-
-    // Cache the layout - Note: This would need to be implemented in ResourceManager
-    // For now, we'll just return the layout without caching
-    // TODO: Implement registerBindGroupLayoutResource in ResourceManager
 
     return layout;
   }

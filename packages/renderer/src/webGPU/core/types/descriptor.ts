@@ -1,19 +1,8 @@
 import { Transform3DComponent, WebGPUMaterialDescriptor } from '@ecs/components';
 import { GeometryType } from '@ecs/components/physics/mesh';
-import { BindGroupLayoutVisibility, BufferType, ResourceType, ShaderType } from './constant';
+import { BindGroupLayoutVisibility, BufferType, ResourceType } from './constant';
 import { GeometryParams } from './geometry';
 import { WebGPUResource } from './resource';
-
-/**
- * shader descriptor interface
- */
-export interface ShaderDescriptor {
-  id: string;
-  label: string;
-  type: ShaderType;
-  code: string;
-  entryPoint?: string;
-}
 
 /**
  * pipeline descriptor interface
