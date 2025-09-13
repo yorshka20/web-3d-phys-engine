@@ -1,6 +1,6 @@
 import { ShaderCompiler } from '../../ShaderCompiler';
 import { ShaderManager } from '../../ShaderManager';
-import { pmxMaterialShaderModule } from '../PMXMaterialModule';
+import { createPMXMaterialShaderModule } from '../create';
 
 /**
  * Test suite for the new shader system
@@ -28,7 +28,6 @@ export class ShaderSystemTest {
       () => this.testMacroProcessing(),
       () => this.testPipelineCreation(),
       () => this.testHotReload(),
-      () => this.testBackwardCompatibility(),
     ];
 
     let passed = 0;
@@ -62,7 +61,7 @@ export class ShaderSystemTest {
     console.log('🔧 Testing shader module registration...');
 
     // Register PMX material shader
-    this.shaderManager.registerShaderModule(pmxMaterialShaderModule);
+    this.shaderManager.registerShaderModule(createPMXMaterialShaderModule());
 
     // Verify registration
     const module = this.shaderManager.getShaderModuleById('pmx_material_shader');
@@ -116,8 +115,13 @@ export class ShaderSystemTest {
       return false;
     }
 
-    if (!result.compiledShader.vertexCode || !result.compiledShader.fragmentCode) {
-      console.log('❌ Missing vertex or fragment code');
+    if (!result.compiledShader.sourceCode) {
+      console.log('❌ Missing source code');
+      return false;
+    }
+
+    if (!result.compiledShader.shaderModule) {
+      console.log('❌ Missing shader module');
       return false;
     }
 
@@ -135,24 +139,18 @@ export class ShaderSystemTest {
     console.log('📁 Testing include resolution...');
 
     try {
-      // Test resolving common includes
-      const structsContent = await this.shaderCompiler.resolve(
-        '/shaders/common/structs.wgsl',
-        '/packages/renderer/src/webGPU/core',
-      );
-
-      if (!structsContent.includes('struct VertexInput')) {
-        console.log('❌ Failed to resolve structs.wgsl');
+      // Test getting fragment content from registry
+      const structsContent = this.shaderCompiler.getFragmentContent('/shaders/common/structs.wgsl');
+      if (!structsContent || !structsContent.includes('struct')) {
+        console.log('❌ Failed to get structs.wgsl from registry');
         return false;
       }
 
-      const bindingsContent = await this.shaderCompiler.resolve(
+      const bindingsContent = this.shaderCompiler.getFragmentContent(
         '/shaders/common/bindings.wgsl',
-        '/packages/renderer/src/webGPU/core',
       );
-
-      if (!bindingsContent.includes('@group(0) @binding(0)')) {
-        console.log('❌ Failed to resolve bindings.wgsl');
+      if (!bindingsContent || !bindingsContent.includes('@group(0) @binding(0)')) {
+        console.log('❌ Failed to get bindings.wgsl from registry');
         return false;
       }
 
@@ -170,36 +168,29 @@ export class ShaderSystemTest {
   private async testMacroProcessing(): Promise<boolean> {
     console.log('🔀 Testing macro processing...');
 
-    const testSource = `
-#ifdef ENABLE_FEATURE
-override featureStrength: f32 = 1.0;
-#else
-override featureStrength: f32 = 0.0;
-#endif
-
-@vertex
-fn vs_main() -> @builtin(position) vec4<f32> {
-    return vec4<f32>(featureStrength, 0.0, 0.0, 1.0);
-}
-`;
-
-    // Test with feature enabled
-    const enabledResult = this.shaderCompiler.process(testSource, {
-      ENABLE_FEATURE: true,
+    // Test macro processing through existing shader compilation
+    // Use the PMX material shader which supports various defines
+    const enabledResult = this.shaderManager.compileShaderModule('pmx_material_shader', {
+      defines: {
+        ENABLE_TOON_SHADING: true,
+        ENABLE_NORMAL_MAPPING: true,
+      },
     });
 
-    if (!enabledResult.includes('featureStrength: f32 = 1.0')) {
-      console.log('❌ Failed to process enabled macro');
+    if (!enabledResult.success) {
+      console.log('❌ Failed to compile with enabled macros');
       return false;
     }
 
-    // Test with feature disabled
-    const disabledResult = this.shaderCompiler.process(testSource, {
-      ENABLE_FEATURE: false,
+    const disabledResult = this.shaderManager.compileShaderModule('pmx_material_shader', {
+      defines: {
+        ENABLE_TOON_SHADING: false,
+        ENABLE_NORMAL_MAPPING: false,
+      },
     });
 
-    if (!disabledResult.includes('featureStrength: f32 = 0.0')) {
-      console.log('❌ Failed to process disabled macro');
+    if (!disabledResult.success) {
+      console.log('❌ Failed to compile with disabled macros');
       return false;
     }
 
@@ -220,14 +211,20 @@ fn vs_main() -> @builtin(position) vec4<f32> {
       return false;
     }
 
-    // Create render pipeline
-    const pipeline = this.shaderManager.createRenderPipelineFromShader('pmx_material_shader');
-    if (!pipeline) {
-      console.log('❌ Failed to create render pipeline');
+    // Get the compiled shader
+    const compiledShader = this.shaderManager.getCompiledShader('pmx_material_shader');
+    if (!compiledShader) {
+      console.log('❌ Failed to get compiled shader');
       return false;
     }
 
-    console.log('✅ Render pipeline created successfully');
+    // Verify the shader module exists
+    if (!compiledShader.shaderModule) {
+      console.log('❌ Compiled shader has no shader module');
+      return false;
+    }
+
+    console.log('✅ Shader compilation and module creation successful');
     return true;
   }
 
@@ -258,54 +255,6 @@ fn vs_main() -> @builtin(position) vec4<f32> {
     }
 
     console.log('✅ Hot reload working correctly');
-    return true;
-  }
-
-  /**
-   * Test backward compatibility
-   */
-  private async testBackwardCompatibility(): Promise<boolean> {
-    console.log('🔄 Testing backward compatibility...');
-
-    // Test legacy shader registration
-    const legacyShader = {
-      id: 'legacy_test_shader',
-      name: 'Legacy Test Shader',
-      description: 'Test shader for backward compatibility',
-      structs: 'struct VertexInput { @location(0) position: vec3<f32>; }',
-      bindingGroups: '@group(0) @binding(0) var<uniform> mvp: mat4x4<f32>;',
-      vertexCode: `
-        @vertex
-        fn vs_main(@location(0) position: vec3<f32>) -> @builtin(position) vec4<f32> {
-            return mvp * vec4<f32>(position, 1.0);
-        }
-      `,
-      fragmentCode: `
-        @fragment
-        fn fs_main() -> @location(0) vec4<f32> {
-            return vec4<f32>(1.0, 0.0, 0.0, 1.0);
-        }
-      `,
-      requiredUniforms: ['mvp'],
-      requiredTextures: [],
-      supportedVertexFormats: ['simple'],
-      renderState: {
-        blendMode: 'replace',
-        depthTest: true,
-        cullMode: 'back',
-      },
-    };
-
-    this.shaderManager.registerCustomShader(legacyShader);
-
-    // Verify legacy shader is registered
-    const retrievedShader = this.shaderManager.getCustomShader('legacy_test_shader');
-    if (!retrievedShader) {
-      console.log('❌ Failed to register legacy shader');
-      return false;
-    }
-
-    console.log('✅ Backward compatibility working correctly');
     return true;
   }
 

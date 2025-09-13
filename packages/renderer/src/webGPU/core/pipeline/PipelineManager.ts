@@ -3,7 +3,7 @@ import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { PMXMaterialProcessor } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
-import { CustomShaderDefinition } from '../shaders/types/shader';
+import { CompiledShader } from '../shaders/types/shader';
 import { BindGroupLayoutDescriptor } from '../types';
 import { WebGPUContext } from '../WebGPUContext';
 import {
@@ -138,7 +138,6 @@ export class PipelineManager {
     semanticKey: SemanticPipelineKey,
   ): Promise<GPURenderPipeline> {
     // Create shader modules
-    // const shaderModules = await this.createShaderModulesFromGpuKey(gpuKey, semanticKey);
     const shaderModules = this.shaderManager.safeGetShaderModule(gpuKey.customShaderId);
 
     // Create pipeline layout
@@ -344,7 +343,7 @@ export class PipelineManager {
 
     // Check if custom shader has specific requirements
     if (semanticKey?.customShaderId) {
-      const customShader = this.shaderManager.getCustomShader(semanticKey.customShaderId);
+      const customShader = this.shaderManager.getCompiledShader(semanticKey.customShaderId);
       if (customShader) {
         return this.determineOptionalBindGroupsFromCustomShader(customShader);
       }
@@ -362,19 +361,29 @@ export class PipelineManager {
    * Determine optional bind groups from custom shader requirements
    */
   private determineOptionalBindGroupsFromCustomShader(
-    customShader: CustomShaderDefinition,
+    customShader: CompiledShader,
   ): BindGroupLayoutOrder[] {
     const optionalGroups: BindGroupLayoutOrder[] = [];
-    const requiredUniforms = customShader.requiredUniforms || [];
+    const defines = customShader.metadata.defines || {};
 
-    // Map uniform requirements to optional bind groups
+    // Map shader defines to optional bind groups
     // Note: TIME, MVP, TEXTURE, MATERIAL are always included, so we only check for additional ones
-    if (requiredUniforms.some((uniform: string) => uniform.includes('light'))) {
+
+    // Check for lighting-related defines
+    if (defines.ENABLE_LIGHTING || defines.LIGHTING || defines.PBR || defines.LIGHT) {
       optionalGroups.push(BindGroupLayoutOrder.LIGHTING);
     }
 
-    // Add more custom bind groups as needed
-    // For now, we only support lighting as an optional group
+    // Check for other optional features that might require additional bind groups
+    if (defines.ENABLE_SHADOWS || defines.SHADOW_MAP) {
+      // Future: Add shadow map bind group when implemented
+      // optionalGroups.push(BindGroupLayoutOrder.SHADOW_MAP);
+    }
+
+    if (defines.ENABLE_ENVIRONMENT_MAPPING || defines.ENVIRONMENT_MAP) {
+      // Future: Add environment map bind group when implemented
+      // optionalGroups.push(BindGroupLayoutOrder.ENVIRONMENT_MAP);
+    }
 
     return optionalGroups;
   }
@@ -699,110 +708,6 @@ export class PipelineManager {
       frontFace: 'ccw',
       cullMode: gpuKey.cullMode,
     };
-  }
-
-  /**
-   * Generate shader code based on GPU key
-   */
-  private async generateShaderCodeFromGpuKey(
-    gpuKey: GpuPipelineKey,
-    semanticKey: SemanticPipelineKey,
-  ): Promise<string> {
-    // Check if we have a custom shader (prioritize gpuKey over semanticKey)
-    const customShaderId = gpuKey.customShaderId || semanticKey?.customShaderId;
-    if (customShaderId) {
-      const customShader = this.shaderManager.getCustomShader(customShaderId);
-      if (customShader) {
-        // Use custom shader with vertex format adaptation
-        const vertexFormat = semanticKey.vertexFormat || 'full';
-        const shaderParams = {}; // TODO: Get shader params from material
-        return this.shaderManager.generateCustomShaderCode(
-          customShader,
-          vertexFormat,
-          gpuKey.shaderDefines,
-          shaderParams,
-        );
-      }
-    }
-
-    // Fallback to default shader generation
-    return this.generateDefaultShaderCode(gpuKey);
-  }
-
-  /**
-   * Generate default shader code (original implementation)
-   */
-  private generateDefaultShaderCode(gpuKey: GpuPipelineKey): string {
-    // Generate WGSL constants for shader defines
-    const overrides = gpuKey.shaderDefines
-      .map((define) => `override ${define}: u32 = 1u;`)
-      .join('\n');
-
-    // Base shader template with fixed bind group indices
-    const baseShader = `
-${overrides}
-
-struct TimeUniforms {
-    time: f32,
-    deltaTime: f32,
-    frameCount: u32,
-    padding: u32,
-}
-
-struct MVPUniforms {
-    mvpMatrix: mat4x4<f32>,
-}
-
-struct MaterialUniforms {
-    albedo: vec4<f32>,
-    metallic: f32,
-    roughness: f32,
-    emissive: vec4<f32>,
-    emissiveIntensity: f32,
-}
-
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    ${(gpuKey.vertexAttributes & 0x02) !== 0 ? '@location(1) normal: vec3<f32>,' : ''}
-    ${(gpuKey.vertexAttributes & 0x04) !== 0 ? '@location(2) uv: vec2<f32>,' : ''}
-    ${(gpuKey.vertexAttributes & 0x10) !== 0 ? '@location(3) skinIndices: vec4<f32>,' : ''}
-    ${(gpuKey.vertexAttributes & 0x10) !== 0 ? '@location(4) skinWeights: vec4<f32>,' : ''}
-}
-
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    ${(gpuKey.vertexAttributes & 0x02) !== 0 ? '@location(0) normal: vec3<f32>,' : ''}
-    ${(gpuKey.vertexAttributes & 0x04) !== 0 ? '@location(1) uv: vec2<f32>,' : ''}
-}
-
-// Fixed bind group indices
-@group(0) @binding(0) var<uniform> timeData: TimeUniforms;           // TIME
-@group(1) @binding(0) var<uniform> mvp: MVPUniforms;                 // MVP
-@group(2) @binding(0) var texture: texture_2d<f32>;                 // TEXTURE
-@group(2) @binding(1) var textureSampler: sampler;                  // TEXTURE
-@group(3) @binding(0) var<uniform> material: MaterialUniforms;      // MATERIAL
-
-@vertex
-fn vs_main(input: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    out.position = mvp.mvpMatrix * vec4<f32>(input.position, 1.0);
-    
-    ${(gpuKey.vertexAttributes & 0x02) !== 0 ? 'out.normal = input.normal;' : ''}
-    ${(gpuKey.vertexAttributes & 0x04) !== 0 ? 'out.uv = input.uv;' : ''}
-    
-    // Note: Skin data (skinIndices, skinWeights) are available but not used in basic rendering
-    // They would be used for skeletal animation in more advanced shaders
-    
-    return out;
-}
-
-@fragment
-fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    ${(gpuKey.vertexAttributes & 0x02) !== 0 ? 'return vec4<f32>(input.normal * 0.5 + 0.5, 1.0);' : 'return vec4<f32>(0.5, 0.5, 0.5, 1.0);'}
-}
-`;
-
-    return baseShader;
   }
 
   /**
