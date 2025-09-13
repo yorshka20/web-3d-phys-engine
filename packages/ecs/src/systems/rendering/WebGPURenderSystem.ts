@@ -72,6 +72,9 @@ export class WebGPURenderSystem extends System {
     const renderer = createWebGPURenderer(this.rootElement, 'webgpu-renderer');
     this.setRenderer(renderer);
 
+    // @ts-ignore
+    window.renderer = renderer;
+
     // Initialize global uniforms and render stats
     this.globalUniforms = {
       time: 0,

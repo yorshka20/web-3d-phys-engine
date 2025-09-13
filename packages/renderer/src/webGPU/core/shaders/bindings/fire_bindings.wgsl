@@ -10,3 +10,6 @@
 // Group 2: Fire material textures
 @group(2) @binding(0) var fire_texture: texture_2d<f32>;
 @group(2) @binding(1) var fire_sampler: sampler;
+
+// Group 3: Fire material uniforms
+@group(3) @binding(0) var<uniform> material: MaterialUniforms;
