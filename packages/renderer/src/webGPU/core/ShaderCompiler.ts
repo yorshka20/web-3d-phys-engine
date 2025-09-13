@@ -21,38 +21,23 @@ export class ShaderCompiler {
   @Inject(ServiceTokens.WEBGPU_DEVICE)
   private device!: GPUDevice;
 
-  private compiledShaders: Map<string, CompiledShader> = new Map();
   private includeCache: Map<string, string> = new Map();
-  private compilationCache: Map<string, CompiledShader> = new Map();
 
   /**
    * Compile a shader module
    */
-  async compileShader(
+  compileShader(
     module: ShaderModule,
     options: {
       defines?: ShaderDefine;
       vertexFormat?: string;
-      forceRecompile?: boolean;
     } = {},
-  ): Promise<ShaderCompilationResult> {
+  ): ShaderCompilationResult {
     const startTime = performance.now();
-    const cacheKey = this.generateCacheKey(module, options);
-
-    // Check cache first
-    if (!options.forceRecompile && this.compilationCache.has(cacheKey)) {
-      const cached = this.compilationCache.get(cacheKey)!;
-      return {
-        success: true,
-        compiledShader: cached,
-        errors: [],
-        warnings: [],
-      };
-    }
 
     try {
       // Load and compose shader code
-      const composedSource = await this.composeShaderCode(module);
+      const composedSource = this.composeShaderCode(module);
 
       // Process defines and macros
       const processedSource = this.processDefines(composedSource, {
@@ -91,10 +76,6 @@ export class ShaderCompiler {
         },
       };
 
-      // Cache the result
-      this.compilationCache.set(cacheKey, compiledShader);
-      this.compiledShaders.set(module.id, compiledShader);
-
       return {
         success: true,
         compiledShader,
@@ -113,17 +94,17 @@ export class ShaderCompiler {
   /**
    * Compose shader code by loading and combining files
    */
-  private async composeShaderCode(module: ShaderModule): Promise<string> {
+  private composeShaderCode(module: ShaderModule): string {
     let composedCode = '';
 
     // Load common includes first
     for (const include of module.includes || []) {
-      const includeCode = await this.loadShaderFile(include);
+      const includeCode = this.loadShaderFile(include);
       composedCode += includeCode + '\n\n';
     }
 
     // Load main shader file
-    const mainCode = await this.loadShaderFile(module.sourceFile);
+    const mainCode = this.loadShaderFile(module.sourceFile);
     composedCode += mainCode;
 
     return composedCode;
@@ -132,7 +113,7 @@ export class ShaderCompiler {
   /**
    * Load shader file content
    */
-  private async loadShaderFile(filePath: string): Promise<string> {
+  private loadShaderFile(filePath: string): string {
     // Check cache first
     if (this.includeCache.has(filePath)) {
       return this.includeCache.get(filePath)!;
@@ -287,33 +268,9 @@ export class ShaderCompiler {
   }
 
   /**
-   * Get compiled shader by ID
-   */
-  getCompiledShader(id: string): CompiledShader | undefined {
-    return this.compiledShaders.get(id);
-  }
-
-  /**
    * Clear compilation cache
    */
   clearCache(): void {
-    this.compilationCache.clear();
     this.includeCache.clear();
-  }
-
-  /**
-   * Generate cache key for compilation
-   */
-  private generateCacheKey(
-    module: ShaderModule,
-    options: {
-      defines?: ShaderDefine;
-      vertexFormat?: string;
-      forceRecompile?: boolean;
-    } = {},
-  ): string {
-    const defines = JSON.stringify(options.defines || {});
-    const vertexFormat = options.vertexFormat || 'full';
-    return `${module.id}_${vertexFormat}_${defines}`;
   }
 }
