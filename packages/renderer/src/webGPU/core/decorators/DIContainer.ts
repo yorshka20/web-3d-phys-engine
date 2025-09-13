@@ -160,6 +160,8 @@ export const ServiceTokens = {
   RESOURCE_MANAGER: 'ResourceManager',
   BUFFER_MANAGER: 'BufferManager',
   SHADER_MANAGER: 'ShaderManager',
+  SHADER_COMPILER: 'ShaderCompiler',
+  BIND_GROUP_MANAGER: 'BindGroupManager',
   TEXTURE_MANAGER: 'TextureManager',
   GEOMETRY_MANAGER: 'GeometryManager',
   TIME_MANAGER: 'TimeManager',

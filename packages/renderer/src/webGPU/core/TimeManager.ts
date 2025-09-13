@@ -1,7 +1,6 @@
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable } from './decorators/ResourceDecorators';
-import { ShaderManager } from './ShaderManager';
 import { BufferType } from './types';
 
 @Injectable(ServiceTokens.TIME_MANAGER, {
@@ -15,9 +14,6 @@ export class TimeManager {
 
   @Inject(ServiceTokens.BUFFER_MANAGER)
   private bufferManager!: BufferManager;
-
-  @Inject(ServiceTokens.SHADER_MANAGER)
-  private shaderManager!: ShaderManager;
 
   private startTime = performance.now();
   private lastTime = 0;

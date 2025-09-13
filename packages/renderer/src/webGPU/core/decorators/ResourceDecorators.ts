@@ -106,14 +106,23 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
       proto.enforceStorageLimit = function (maxSize: number) {
         if (!this.resourceStorage || this.resourceStorage.size <= maxSize) return;
 
+        console.log(
+          `[SmartResource] Enforcing storage limit: ${this.resourceStorage.size} > ${maxSize}`,
+        );
+
         // Get LRU entries that are not in use
         const entries = Array.from(this.resourceStorage.entries())
           .filter(([_, entry]) => !entry.inUse)
           .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
 
+        console.log(
+          `[SmartResource] Found ${entries.length} unused resources to potentially remove`,
+        );
+
         const toRemove = this.resourceStorage.size - maxSize;
         for (let i = 0; i < toRemove && i < entries.length; i++) {
           const [resourceId, entry] = entries[i];
+          console.log(`[SmartResource] Destroying resource: ${resourceId}`);
           entry.resource.destroy?.();
           this.resourceStorage.delete(resourceId);
         }
@@ -359,7 +368,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
           created: Date.now(),
           lastUsed: Date.now(),
           usageCount: 1,
-          inUse: options.pool ? true : false, // Only track usage for pool mode
+          inUse: options.pool ? true : true, // Mark as in use for both pool and cache modes to prevent premature destruction
           destroyed: false,
         };
 
