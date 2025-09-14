@@ -140,13 +140,22 @@ export const perlicaDescriptor: PMXAssetDescriptor = {
         emission: 'textures/T_actor_pelica_cloth_02_E.png',
       },
     },
+    M_eyeshadow_common_01: {
+      textures: {
+        specular: 'textures/T_actor_common_eyeshadow_01_M.png', // 眼影遮罩
+      },
+    },
     M_hairshadow_common_01: {
       textures: {
         specular: 'hair_s.png',
+        diffuse: 'textures/T_actor_common_hairshadow_01_M.png', // 发影遮罩
       },
     },
-    M_eyeshadow_common_01: {
-      textures: {},
+    M_actor_common_face: {
+      textures: {
+        diffuse: 'textures/T_actor_common_face_01_RD.png',
+        specular: 'textures/T_actor_common_face_01_hl_M.png',
+      },
     },
   },
   sharedTextures: {

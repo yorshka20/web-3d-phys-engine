@@ -22,6 +22,7 @@ import chroma from 'chroma-js';
 import { Game } from './game/Game';
 import { createGeometryStage } from './stages/geometry';
 import { createPMXModelStage } from './stages/pmxModel';
+import { createZZZPMXModelStage } from './stages/zzz';
 
 // Start the application when the page loads
 window.addEventListener('load', () => {
@@ -29,11 +30,11 @@ window.addEventListener('load', () => {
   main();
 });
 
-type Stage = 'geometry' | 'pmxModel';
+type Stage = 'geometry' | 'pmxModel' | 'zzz';
 
-const stages: Stage[] = ['geometry', 'pmxModel'];
+const stages: Stage[] = ['geometry', 'pmxModel', 'zzz'];
 
-const stage: Stage = stages[1];
+const stage: Stage = stages[2];
 
 async function main() {
   const rootElement = document.body;
@@ -57,6 +58,9 @@ async function main() {
       break;
     case 'pmxModel':
       await createPMXModelStage(world);
+      break;
+    case 'zzz':
+      await createZZZPMXModelStage(world);
       break;
     default:
       break;

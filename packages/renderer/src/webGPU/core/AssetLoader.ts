@@ -383,13 +383,19 @@ export class AssetLoader {
           // Load texture with namespaced ID
           await this.loadTextureFromURL(textureUrl, texturePath);
         } else {
-          // This is a regular path from PMX file, construct URL from base path
-          const basePath = `/assets/${modelId}/`;
-          const textureUrl = basePath + texturePath;
+          // This is a regular path from PMX file, try to get URL from textureUrlMap first
+          const textureUrl = pmxAssetRegistry.getTextureUrl(modelId, texturePath);
           const namespacedId = `${modelId}/${texturePath}`;
 
-          // Load texture with namespaced ID
-          await this.loadTextureFromURL(textureUrl, namespacedId);
+          if (textureUrl) {
+            // Use URL from textureUrlMap (handles Chinese characters correctly)
+            await this.loadTextureFromURL(textureUrl, namespacedId);
+          } else {
+            // Fallback: construct URL from base path
+            const basePath = `/assets/${modelId}/`;
+            const fallbackUrl = basePath + texturePath;
+            await this.loadTextureFromURL(fallbackUrl, namespacedId);
+          }
         }
       } catch (error) {
         console.error(`[AssetLoader] Failed to load texture ${texturePath}:`, error);

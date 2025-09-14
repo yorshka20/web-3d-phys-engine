@@ -26,3 +26,13 @@ declare module '*.png' {
   const content: string;
   export default content;
 }
+
+declare module '*.tga' {
+  const content: string;
+  export default content;
+}
+
+declare module '*.bmp' {
+  const content: string;
+  export default content;
+}
