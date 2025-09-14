@@ -559,7 +559,12 @@ export class PMXMaterialProcessor {
    * create material uniform buffer
    */
   private createMaterialUniformBuffer(material: PMXMaterial): GPUBuffer {
-    const bufferSize = 96; // match size of PMXMaterialUniforms in shader
+    // calculate actual buffer size
+    // diffuse(16) + specular(12) + shininess(4) + ambient(12) + edgeColor(16) +
+    // edgeSize(4) + alpha(4) + toonFlag(4) + envFlag(4) + sphereMode(4) + padding(4) = 84 bytes
+    // but GPU requires 16 bytes alignment, so use 96 bytes
+    const bufferSize = 96;
+
     const buffer = this.bufferManager.createBuffer({
       type: BufferType.UNIFORM,
       size: bufferSize,
@@ -567,200 +572,164 @@ export class PMXMaterialProcessor {
       label: `pmx_material_uniform_${material.name}`,
     });
 
-    // create uniform data - match size of PMXMaterialUniforms in shader
     const uniformData = new Float32Array(24); // 96 bytes / 4 = 24 floats
     let offset = 0;
 
-    // 1. diffuse color (vec4) - 16 bytes
+    // 1. diffuse: vec4<f32> - 16 bytes
     uniformData[offset++] = material.diffuse[0];
     uniformData[offset++] = material.diffuse[1];
     uniformData[offset++] = material.diffuse[2];
     uniformData[offset++] = material.diffuse[3];
 
-    // 2. specular color (vec3) + padding - 16 bytes
+    // 2. specular: vec3<f32> - 12 bytes
     uniformData[offset++] = material.specular[0];
     uniformData[offset++] = material.specular[1];
     uniformData[offset++] = material.specular[2];
-    uniformData[offset++] = 0.0; // padding
 
-    // 3. shininess (f32) - 4 bytes
+    // 3. shininess: f32 - 4 bytes
     uniformData[offset++] = material.shininess;
 
-    // 4. ambient color (vec3) + padding - 16 bytes
+    // 4. ambient: vec3<f32> - 12 bytes
     uniformData[offset++] = material.ambient[0];
     uniformData[offset++] = material.ambient[1];
     uniformData[offset++] = material.ambient[2];
-    uniformData[offset++] = 0.0; // padding
 
-    // 5. edge color (vec4) - 16 bytes
+    // 5. GPU alignment padding - 4 bytes (because next is vec4, need 16 bytes alignment)
+    uniformData[offset++] = 0.0;
+
+    // 6. edgeColor: vec4<f32> - 16 bytes
     uniformData[offset++] = material.edgeColor[0];
     uniformData[offset++] = material.edgeColor[1];
     uniformData[offset++] = material.edgeColor[2];
     uniformData[offset++] = material.edgeColor[3];
 
-    // 6. edge size (f32) - 4 bytes
+    // 7. edgeSize: f32 - 4 bytes
     uniformData[offset++] = material.edgeSize;
 
-    // 7. alpha (f32) - 4 bytes
-    uniformData[offset++] = material.diffuse[3]; // use diffuse alpha as material alpha
+    // 8. alpha: f32 - 4 bytes
+    uniformData[offset++] = material.diffuse[3]; // use diffuse alpha
 
-    // 8. toonFlag (f32) - 4 bytes
+    // 9. toonFlag: f32 - 4 bytes
     uniformData[offset++] = material.toonFlag;
 
-    // 9. envFlag (f32) - 4 bytes
+    // 10. envFlag: f32 - 4 bytes
     uniformData[offset++] = material.envFlag;
 
-    // 10. sphereMode (f32) - 4 bytes
-    uniformData[offset++] = 0.0; // default sphere mode
+    // 11. sphereMode: f32 - 4 bytes (based on envFlag setting)
+    let sphereMode = 0.0;
+    if (material.envFlag === 1)
+      sphereMode = 1.0; // multiply blending
+    else if (material.envFlag === 2)
+      sphereMode = 2.0; // add blending
+    else if (material.envFlag === 3) sphereMode = 3.0; // subtract blending
+    uniformData[offset++] = sphereMode;
 
-    // 11. padding (f32) - 4 bytes
-    uniformData[offset++] = 0.0; // padding
+    // 12. padding: f32 - 4 bytes
+    uniformData[offset++] = 0.0;
 
-    // upload data
     this.bufferManager.updateBuffer(buffer, uniformData);
-
     return buffer;
   }
 
   /**
    * create PMX material bind group layout - use unique PMX layout ID
    */
-  public createMaterialBindGroupLayout(): GPUBindGroupLayout {
+  createMaterialBindGroupLayout(): GPUBindGroupLayout {
     return this.bindGroupManager.createBindGroupLayout('pmxMaterialBindGroupLayout', {
       entries: [
-        // binding: 0 - Material Uniform Buffer (PMX material properties)
+        // binding: 0 - Material Uniform Buffer
         {
           binding: 0,
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' },
         },
-        // binding: 1 - Diffuse Texture
+        // binding: 1-2 - Diffuse Texture + Sampler
         {
           binding: 1,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {
-            sampleType: 'float',
-          },
+          texture: { sampleType: 'float' },
         },
-        // binding: 2 - Diffuse Sampler
         {
           binding: 2,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: {
-            type: 'filtering',
-          },
+          sampler: { type: 'filtering' },
         },
-        // binding: 3 - Normal Texture
+        // binding: 3-4 - Normal Texture + Sampler
         {
           binding: 3,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {
-            sampleType: 'float',
-          },
+          texture: { sampleType: 'float' },
         },
-        // binding: 4 - Normal Sampler
         {
           binding: 4,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: {
-            type: 'filtering',
-          },
+          sampler: { type: 'filtering' },
         },
-        // binding: 5 - Specular Texture
+        // binding: 5-6 - Specular Texture + Sampler
         {
           binding: 5,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {
-            sampleType: 'float',
-          },
+          texture: { sampleType: 'float' },
         },
-        // binding: 6 - Specular Sampler
         {
           binding: 6,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: {
-            type: 'filtering',
-          },
+          sampler: { type: 'filtering' },
         },
-        // binding: 7 - Sphere/Environment Texture
+        // binding: 7-8 - Sphere/Environment Texture + Sampler
         {
           binding: 7,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {
-            sampleType: 'float',
-          },
+          texture: { sampleType: 'float' },
         },
-        // binding: 8 - Sphere/Environment Sampler
         {
           binding: 8,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: {
-            type: 'filtering',
-          },
+          sampler: { type: 'filtering' },
         },
-        // binding: 9 - Toon Texture
+        // binding: 9-10 - Toon Texture + Sampler
         {
           binding: 9,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {
-            sampleType: 'float',
-          },
+          texture: { sampleType: 'float' },
         },
-        // binding: 10 - Toon Sampler
         {
           binding: 10,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: {
-            type: 'filtering',
-          },
+          sampler: { type: 'filtering' },
         },
-        // binding: 11 - Roughness Texture
+        // binding: 11-12 - Roughness Texture + Sampler
         {
           binding: 11,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {
-            sampleType: 'float',
-          },
+          texture: { sampleType: 'float' },
         },
-        // binding: 12 - Roughness Sampler
         {
           binding: 12,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: {
-            type: 'filtering',
-          },
+          sampler: { type: 'filtering' },
         },
-        // binding: 13 - Metallic Texture
+        // binding: 13-14 - Metallic Texture + Sampler
         {
           binding: 13,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {
-            sampleType: 'float',
-          },
+          texture: { sampleType: 'float' },
         },
-        // binding: 14 - Metallic Sampler
         {
           binding: 14,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: {
-            type: 'filtering',
-          },
+          sampler: { type: 'filtering' },
         },
-        // binding: 15 - Emission Texture
+        // binding: 15-16 - Emission Texture + Sampler
         {
           binding: 15,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {
-            sampleType: 'float',
-          },
+          texture: { sampleType: 'float' },
         },
-        // binding: 16 - Emission Sampler
         {
           binding: 16,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: {
-            type: 'filtering',
-          },
+          sampler: { type: 'filtering' },
         },
       ],
       label: 'PMXMaterialBindGroupLayout',
