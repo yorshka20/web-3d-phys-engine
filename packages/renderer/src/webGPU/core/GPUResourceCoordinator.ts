@@ -6,6 +6,7 @@ import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { GeometryManager } from './GeometryManager';
 import { MaterialManager } from './MaterialManager';
+import { pmxAssetRegistry } from './PMXAssetRegistry';
 import { PMXMaterialCacheData, PMXMaterialProcessor } from './PMXMaterialProcessor';
 import { TextureManager } from './TextureManager';
 import { GeometryCacheItem } from './types/geometry';
@@ -48,6 +49,9 @@ export class GPUResourceCoordinator {
 
   @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
   private pmxMaterialProcessor!: PMXMaterialProcessor;
+
+  // PMX Asset Registry for managing model descriptors
+  private pmxAssetRegistry = pmxAssetRegistry;
 
   /**
    * Get or create GPU resource for an asset
@@ -143,11 +147,18 @@ export class GPUResourceCoordinator {
       console.warn(`No textures found in PMX data for ${assetId}`);
     }
 
-    // Use PMXMaterialProcessor to process all materials
+    // Get PMX asset descriptor from PMXAssetRegistry
+    const pmxAssetDescriptor = this.pmxAssetRegistry.getDescriptor(assetId);
+    if (!pmxAssetDescriptor) {
+      throw new Error(`No PMX asset descriptor found for model: ${assetId}`);
+    }
+
+    // Use PMXMaterialProcessor to process all materials with explicit mapping
     const processedMaterials = await this.pmxMaterialProcessor.processPMXMaterials(
       materials,
       textures || [],
       assetId,
+      pmxAssetDescriptor,
     );
 
     console.log(

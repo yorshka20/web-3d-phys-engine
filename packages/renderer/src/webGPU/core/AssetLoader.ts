@@ -7,6 +7,7 @@ import {
   AssetType,
   RawDataType,
 } from './AssetRegistry';
+import { pmxAssetRegistry } from './PMXAssetRegistry';
 
 /**
  * Asset Loader - Centralized asset loading for the game engine
@@ -54,8 +55,17 @@ export class AssetLoader {
       // Parse PMX file to CPU data
       const pmxData = await this.parsePMXFile(file);
 
-      // Extract texture dependencies from PMX data
-      const textureDependencies = this.extractTextureDependencies(pmxData);
+      // Get texture dependencies from PMXAssetRegistry descriptor instead of PMX file
+      const descriptor = pmxAssetRegistry.getDescriptor(assetId);
+      let textureDependencies: string[] = [];
+
+      if (descriptor) {
+        // Use descriptor-defined texture paths
+        textureDependencies = pmxAssetRegistry.getAllTexturePaths(assetId);
+      } else {
+        // Fallback to PMX file texture dependencies
+        textureDependencies = this.extractTextureDependencies(pmxData);
+      }
 
       // Register with asset registry
       const metadata: AssetMetadata = {
@@ -66,8 +76,8 @@ export class AssetLoader {
 
       assetRegistry.register(assetId, pmxData, metadata);
 
-      // Pre-load texture dependencies
-      await this.preloadTextureDependencies(textureDependencies, url);
+      // Load textures after PMX model is registered
+      await this.loadTexturesForModel(textureDependencies, assetId);
 
       console.log(`[AssetLoader] Successfully loaded PMX model: ${assetId}`);
     } catch (error) {
@@ -215,21 +225,6 @@ export class AssetLoader {
   }
 
   /**
-   * Load a single asset with priority
-   * @param assetId Asset identifier
-   * @param priority Loading priority
-   * @returns Promise that resolves when asset is loaded
-   */
-  static async loadAsset(
-    assetId: string,
-    priority: 'low' | 'normal' | 'high' = 'normal',
-  ): Promise<void> {
-    // This is a placeholder - in a real implementation, this would
-    // look up the asset configuration and load it accordingly
-    console.log(`[AssetLoader] Loading asset: ${assetId} with priority: ${priority}`);
-  }
-
-  /**
    * Parse PMX file to CPU data
    * @param file PMX file
    * @returns Parsed PMX data
@@ -359,25 +354,51 @@ export class AssetLoader {
   }
 
   /**
-   * Pre-load texture dependencies
+   * Load textures for a specific model
    */
-  private static async preloadTextureDependencies(
+  private static async loadTexturesForModel(
     texturePaths: string[],
-    baseUrl: string,
+    modelId: string,
   ): Promise<void> {
-    const basePath = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+    console.log(`[AssetLoader] Loading ${texturePaths.length} textures for model: ${modelId}`);
 
-    for (const texturePath of texturePaths) {
+    // Load all textures in parallel for better performance
+    const loadPromises = texturePaths.map(async (texturePath) => {
       try {
-        const fullUrl = basePath + texturePath;
-        const textureId = `texture_${texturePath.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        // Check if this is a namespaced path (from descriptor)
+        if (texturePath.includes('/') && texturePath.startsWith(`${modelId}/`)) {
+          // This is a namespaced path from descriptor, extract original path
+          const originalPath = texturePath.substring(modelId.length + 1);
 
-        // Load texture as separate asset
-        await this.loadTextureFromURL(fullUrl, textureId);
+          // Get URL from PMXAssetRegistry
+          const textureUrl = pmxAssetRegistry.getTextureUrl(modelId, originalPath);
+
+          if (!textureUrl) {
+            console.warn(
+              `[AssetLoader] No URL found for texture: ${originalPath} (model: ${modelId})`,
+            );
+            return;
+          }
+
+          // Load texture with namespaced ID
+          await this.loadTextureFromURL(textureUrl, texturePath);
+        } else {
+          // This is a regular path from PMX file, construct URL from base path
+          const basePath = `/assets/${modelId}/`;
+          const textureUrl = basePath + texturePath;
+          const namespacedId = `${modelId}/${texturePath}`;
+
+          // Load texture with namespaced ID
+          await this.loadTextureFromURL(textureUrl, namespacedId);
+        }
       } catch (error) {
-        console.warn(`[AssetLoader] Failed to pre-load texture ${texturePath}:`, error);
+        console.error(`[AssetLoader] Failed to load texture ${texturePath}:`, error);
       }
-    }
+    });
+
+    // Wait for all textures to load
+    await Promise.all(loadPromises);
+    console.log(`[AssetLoader] All textures loaded for model: ${modelId}`);
   }
 }
 

@@ -7,7 +7,6 @@
 import { GeometryData } from '@ecs/components/physics/mesh/GeometryFactory';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { WebGPUMaterialDescriptor } from '@ecs/components/rendering/render/types';
-import { AssetLoader } from './AssetLoader';
 
 export interface AssetDescriptor<T extends AssetType = AssetType> {
   id: string;
@@ -153,22 +152,6 @@ export class AssetRegistry {
   getGPUHandle(assetId: string): unknown | null {
     const descriptor = this.assets.get(assetId);
     return descriptor?.gpuHandle || null;
-  }
-
-  /**
-   * Preload dependencies for an asset
-   */
-  async preloadDependencies(assetId: string): Promise<void> {
-    const dependencies = this.dependencyGraph.get(assetId) || [];
-
-    const loadPromises = dependencies.map((depId) => {
-      if (!this.assets.has(depId)) {
-        // Dependencies should be loaded with high priority
-        return AssetLoader.loadAsset(depId, 'high');
-      }
-    });
-
-    await Promise.all(loadPromises.filter(Boolean));
   }
 
   /**
