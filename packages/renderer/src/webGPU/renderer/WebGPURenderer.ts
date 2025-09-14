@@ -23,7 +23,12 @@ import {
 import { PMXMaterialCacheData, PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
-import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
+import {
+  BindGroupLayoutVisibility,
+  BufferType,
+  GeometryCacheItem,
+  RenderBatch,
+} from '../core/types';
 import {
   BindGroup,
   Camera,
@@ -639,7 +644,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     renderable: RenderData,
     frameData: FrameData,
   ): Promise<void> {
-    let geometry;
+    let geometry: GeometryCacheItem;
 
     // Check if this is a PMX model that needs asset-based geometry creation
     if (renderable.pmxAssetId) {
@@ -677,7 +682,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private async getOrCreatePMXGeometry(
     renderable: RenderData,
     materialIndex: number = 0,
-  ): Promise<unknown> {
+  ): Promise<GeometryCacheItem> {
     const { pmxAssetId, pmxComponent } = renderable;
 
     if (!pmxAssetId || !pmxComponent) {
@@ -723,8 +728,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     pmxModel: PMXModel,
     materialIndex: number,
     geometryId: string,
-  ): Promise<unknown> {
-    // Get the material to determine which faces belong to it
+  ): Promise<GeometryCacheItem> {
     const material = pmxModel.materials[materialIndex];
     if (!material) {
       throw new Error(`PMX material ${materialIndex} not found`);
@@ -740,7 +744,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Extract vertices and faces for this material
     const materialVertices: number[] = [];
     const materialIndices: number[] = [];
-    const vertexMap = new Map<number, number>(); // original index -> new index
+    const vertexMap = new Map<number, number>();
 
     // Process faces for this material
     for (let faceIndex = faceStart; faceIndex < faceEnd; faceIndex++) {
@@ -754,31 +758,31 @@ export class WebGPURenderer implements IWebGPURenderer {
         let newVertexIndex = vertexMap.get(originalVertexIndex);
 
         if (newVertexIndex === undefined) {
-          // Add new vertex
-          newVertexIndex = materialVertices.length / 16; // 16 floats per vertex (position + normal + uv + skinIndices + skinWeights)
+          // fix: each vertex has 11 floats (not 16)
+          newVertexIndex = materialVertices.length / 11;
 
           const vertex = pmxModel.vertices[originalVertexIndex];
           if (vertex) {
             // Position (3 floats)
             materialVertices.push(vertex.position[0], vertex.position[1], vertex.position[2]);
+
             // Normal (3 floats)
             materialVertices.push(vertex.normal[0], vertex.normal[1], vertex.normal[2]);
+
             // UV (2 floats)
             materialVertices.push(vertex.uv[0], vertex.uv[1]);
-            // Skin indices (4 floats)
-            materialVertices.push(
-              vertex.skinIndices[0],
-              vertex.skinIndices[1],
-              vertex.skinIndices[2],
-              vertex.skinIndices[3],
-            );
-            // Skin weights (4 floats)
-            materialVertices.push(
-              vertex.skinWeights[0],
-              vertex.skinWeights[1],
-              vertex.skinWeights[2],
-              vertex.skinWeights[3],
-            );
+
+            // fix: according to your data structure, there is only one skinIndex and skinWeight
+            // skinIndex (stored as float, will be converted to uint in shader)
+            const skinIndex = vertex.skinIndices.length > 0 ? vertex.skinIndices[0] : 0;
+            materialVertices.push(skinIndex);
+
+            // skinWeight (1 float)
+            const skinWeight = vertex.skinWeights.length > 0 ? vertex.skinWeights[0] : 1.0;
+            materialVertices.push(skinWeight);
+
+            // edgeRatio (1 float)
+            materialVertices.push(vertex.edgeRatio);
           }
 
           vertexMap.set(originalVertexIndex, newVertexIndex);
@@ -787,15 +791,12 @@ export class WebGPURenderer implements IWebGPURenderer {
         triangleIndices.push(newVertexIndex);
       }
 
-      // Add triangle indices
       materialIndices.push(...triangleIndices);
     }
 
-    // Ensure indices are properly aligned for WebGPU (must be multiple of 2 for Uint16Array)
-    // WebGPU requires buffer sizes to be multiples of 4 bytes
+    // Ensure indices alignment
     const alignedIndices = [...materialIndices];
     if (alignedIndices.length % 2 !== 0) {
-      // Add a duplicate of the last index to make it even
       alignedIndices.push(alignedIndices[alignedIndices.length - 1]);
     }
 
@@ -803,20 +804,53 @@ export class WebGPURenderer implements IWebGPURenderer {
     const geometryData = {
       vertices: new Float32Array(materialVertices),
       indices: new Uint16Array(alignedIndices),
-      vertexCount: materialVertices.length / 16,
+      vertexCount: materialVertices.length / 11, // fix: 11个float per vertex
       indexCount: alignedIndices.length,
       primitiveType: 'triangle-list' as const,
       vertexFormat: 'pmx' as const,
-      bounds: {
-        min: [0, 0, 0] as [number, number, number],
-        max: [0, 0, 0] as [number, number, number],
-      },
+      bounds: this.calculateBounds(materialVertices, 11), // fix bounds calculation
     };
 
-    // Create geometry using geometry manager
     const geometry = this.geometryManager.getGeometryFromData(geometryData, geometryId);
-
     return geometry;
+  }
+
+  // add bounds calculation helper method
+  private calculateBounds(
+    vertices: number[],
+    stride: number,
+  ): {
+    min: [number, number, number];
+    max: [number, number, number];
+  } {
+    if (vertices.length === 0) {
+      return { min: [0, 0, 0], max: [0, 0, 0] };
+    }
+
+    let minX = vertices[0],
+      minY = vertices[1],
+      minZ = vertices[2];
+    let maxX = vertices[0],
+      maxY = vertices[1],
+      maxZ = vertices[2];
+
+    for (let i = 0; i < vertices.length; i += stride) {
+      const x = vertices[i];
+      const y = vertices[i + 1];
+      const z = vertices[i + 2];
+
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      minZ = Math.min(minZ, z);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      maxZ = Math.max(maxZ, z);
+    }
+
+    return {
+      min: [minX, minY, minZ],
+      max: [maxX, maxY, maxZ],
+    };
   }
 
   /**
@@ -903,7 +937,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     const mvpBindGroup = this.createOrGetMVPBindGroup(renderable.geometryId, mvpBuffer);
 
     // Calculate MVP matrix
-    const mvpMatrix = this.calculateMVPMatrix(renderable, frameData);
+    const mvpMatrix = this.calculateCompleteMVPMatrix(renderable, frameData);
 
     // Update MVP buffer
     this.device.queue.writeBuffer(mvpBuffer, 0, mvpMatrix);
@@ -1046,11 +1080,12 @@ export class WebGPURenderer implements IWebGPURenderer {
   private createOrGetMVPBuffer(geometryId: string): GPUBuffer {
     const bufferLabel = `MVP_Buffer_${geometryId}`;
     let buffer = this.bufferManager.getBufferByLabel(bufferLabel);
+    const COMPLETE_MVP_BUFFER_SIZE = 512; // 32 floats × 4 bytes = 512 bytes
 
     if (!buffer) {
       buffer = this.bufferManager.createBuffer({
         type: BufferType.UNIFORM,
-        size: 80, // 4x4 matrix * 4 bytes per float + 3x3 vector * 4 bytes per float
+        size: COMPLETE_MVP_BUFFER_SIZE,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         label: bufferLabel,
       });
@@ -1097,19 +1132,62 @@ export class WebGPURenderer implements IWebGPURenderer {
   /**
    * Calculate MVP matrix for a renderable
    */
-  private calculateMVPMatrix(renderable: RenderData, frameData: FrameData): Float32Array {
-    const projectionMatrix = frameData.scene.camera.projectionMatrix;
-    const viewMatrix = frameData.scene.camera.viewMatrix;
+  private calculateCompleteMVPMatrix(renderable: RenderData, frameData: FrameData): Float32Array {
+    const camera = frameData.scene.camera;
+    const projectionMatrix = camera.projectionMatrix;
+    const viewMatrix = camera.viewMatrix;
     const modelMatrix = renderable.worldMatrix;
 
-    // Calculate MVP matrix using the world matrix from renderData
+    // calculate MVP matrix: Projection × View × Model
     const mvpMatrix = mat4.create();
     mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
     mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
 
-    const cameraPos = frameData.scene.camera.position;
+    // create complete uniform data
+    const uniformData = new Float32Array(80); // 80 floats = 512 bytes / 4 bytes per float
+    let offset = 0;
 
-    return new Float32Array([...mvpMatrix, ...cameraPos, 0]);
+    // mvpMatrix (16 floats)
+    uniformData.set(mvpMatrix, offset);
+    offset += 16;
+
+    // modelMatrix (16 floats)
+    uniformData.set(modelMatrix, offset);
+    offset += 16;
+
+    // viewMatrix (16 floats)
+    uniformData.set(viewMatrix, offset);
+    offset += 16;
+
+    // projectionMatrix (16 floats)
+    uniformData.set(projectionMatrix, offset);
+    offset += 16;
+
+    // cameraPos (4 floats: xyz + padding)
+    uniformData[offset++] = camera.position[0];
+    uniformData[offset++] = camera.position[1];
+    uniformData[offset++] = camera.position[2];
+    uniformData[offset++] = 0.0; // padding
+
+    // cameraForward (4 floats: xyz + padding)
+    uniformData[offset++] = camera.forward[0];
+    uniformData[offset++] = camera.forward[1];
+    uniformData[offset++] = camera.forward[2];
+    uniformData[offset++] = 0.0; // padding
+
+    // cameraUp (4 floats: xyz + padding)
+    uniformData[offset++] = camera.up[0];
+    uniformData[offset++] = camera.up[1];
+    uniformData[offset++] = camera.up[2];
+    uniformData[offset++] = 0.0; // padding
+
+    // cameraRight (4 floats: xyz + padding)
+    uniformData[offset++] = camera.right[0];
+    uniformData[offset++] = camera.right[1];
+    uniformData[offset++] = camera.right[2];
+    uniformData[offset++] = 0.0; // padding
+
+    return uniformData;
   }
 
   getDevice(): GPUDevice {
