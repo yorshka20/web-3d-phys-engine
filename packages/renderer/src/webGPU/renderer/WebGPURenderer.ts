@@ -1,4 +1,4 @@
-import { GeometryType, SystemPriorities, WebGPUMaterialDescriptor } from '@ecs';
+import { SystemPriorities, WebGPUMaterialDescriptor } from '@ecs';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { RectArea } from '@ecs/types/types';
@@ -6,6 +6,7 @@ import chroma from 'chroma-js';
 import { mat4 } from 'gl-matrix';
 import { TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { AssetDescriptor } from '../core/AssetRegistry';
+import { BindGroupManager } from '../core/BindGroupManager';
 import { BufferManager } from '../core/BufferManager';
 import { DIContainer, initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
@@ -22,32 +23,21 @@ import {
 import { PMXMaterialCacheData, PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
-import {
-  BindGroupLayoutVisibility,
-  BufferDescriptor,
-  BufferType,
-  GeometryParams,
-  RenderBatch,
-  ShaderDescriptor,
-} from '../core/types';
+import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
 import {
   BindGroup,
   Camera,
   ComputePass,
   ComputePassDescriptor,
   ContextConfig,
-  Geometry,
   IWebGPURenderer,
-  Material,
-  MaterialDescriptor,
-  Mesh,
   PostProcessEffect,
   RenderPass,
   RenderPassDescriptor,
   RenderPipeline,
   Scene,
-  Texture,
 } from './types/IWebGPURenderer';
+
 // Render group definition - now uses semantic key for more precise grouping
 interface RenderGroup {
   semanticKey: SemanticPipelineKey;
@@ -78,8 +68,6 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   private diContainer!: DIContainer;
 
-  // PMX material cache
-  private pmxMaterials: Map<string, PMXMaterialCacheData> = new Map();
   // resource managers
   private bufferManager!: BufferManager;
   private shaderManager!: ShaderManager;
@@ -90,6 +78,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private geometryManager!: GeometryManager;
   private materialManager!: MaterialManager;
   private pipelineManager!: PipelineManager;
+  private bindGroupManager!: BindGroupManager;
   private pipelineFactory!: PipelineFactory;
   private pmxMaterialProcessor!: PMXMaterialProcessor;
 
@@ -129,41 +118,11 @@ export class WebGPURenderer implements IWebGPURenderer {
   getAdapter(): GPUAdapter {
     return this.context.getAdapter();
   }
-  createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline {
-    return this.device.createRenderPipeline(descriptor);
-  }
-  createComputePipeline(descriptor: GPUComputePipelineDescriptor): GPUComputePipeline {
-    return this.device.createComputePipeline(descriptor);
-  }
-  createBindGroupLayout(descriptor: GPUBindGroupLayoutDescriptor): GPUBindGroupLayout {
-    return this.device.createBindGroupLayout(descriptor);
-  }
-  createBindGroup(descriptor: GPUBindGroupDescriptor): GPUBindGroup {
-    throw new Error('Method not implemented.');
-  }
-  destroyBuffer(bufferId: string): void {
-    throw new Error('Method not implemented.');
-  }
-  destroyTexture(textureId: string): void {
-    // Texture destruction handled by TextureManager
-    console.warn('Texture destruction not implemented yet');
-  }
-  destroyShader(shaderId: string): void {
-    this.shaderManager.reloadShader(shaderId, '');
-  }
+
   renderScene(scene: Scene, camera: Camera): void {
     throw new Error('Method not implemented.');
   }
   renderEntity(entityId: number, world: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  createMaterial(descriptor: MaterialDescriptor): Material {
-    throw new Error('Method not implemented.');
-  }
-  createTexture(data: ImageData | HTMLImageElement): Texture {
-    throw new Error('Method not implemented.');
-  }
-  createMesh(geometry: Geometry): Mesh {
     throw new Error('Method not implemented.');
   }
 
@@ -191,12 +150,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Increment frame counter
     this.frameCount++;
   }
-  destroyMaterial(materialId: string): void {
-    throw new Error('Method not implemented.');
-  }
-  destroyMesh(meshId: string): void {
-    throw new Error('Method not implemented.');
-  }
+
   beginRenderPass(descriptor: RenderPassDescriptor): RenderPass {
     throw new Error('Method not implemented.');
   }
@@ -301,13 +255,16 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.materialManager = new MaterialManager();
     this.geometryManager = new GeometryManager();
     this.pipelineManager = new PipelineManager();
+    this.bindGroupManager = new BindGroupManager();
     this.pipelineFactory = new PipelineFactory();
     this.pmxMaterialProcessor = new PMXMaterialProcessor();
 
     // Ensure essential resources are created for PipelineManager
     this.ensureEssentialResources();
 
-    await this.textureManager.init();
+    await this.textureManager.initialize();
+    await this.shaderManager.initialize();
+    await this.pmxMaterialProcessor.initialize();
 
     console.log('Initialized WebGPU managers with DI container');
 
@@ -336,21 +293,18 @@ export class WebGPURenderer implements IWebGPURenderer {
    */
   private ensureEssentialResources(): void {
     // Create TimeBindGroup layout using shader manager
-    const timeBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
-      'timeBindGroupLayout',
-      {
-        entries: [
-          {
-            binding: 0,
-            visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
-            buffer: { type: 'uniform' },
-          },
-        ],
-        label: 'TimeBindGroup Layout',
-      },
-    );
+    const timeBindGroupLayout = this.bindGroupManager.createBindGroupLayout('timeBindGroupLayout', {
+      entries: [
+        {
+          binding: 0,
+          visibility: BindGroupLayoutVisibility.VERTEX_FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
+      ],
+      label: 'TimeBindGroup Layout',
+    });
 
-    this.shaderManager.createBindGroup('timeBindGroup', {
+    this.bindGroupManager.createBindGroup('timeBindGroup', {
       layout: timeBindGroupLayout,
       entries: [
         {
@@ -362,7 +316,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
 
     // We only need to ensure MVP bind group layout exists
-    this.shaderManager.createCustomBindGroupLayout('mvpBindGroupLayout', {
+    this.bindGroupManager.createBindGroupLayout('mvpBindGroupLayout', {
       entries: [
         {
           binding: 0,
@@ -375,7 +329,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     console.log('[WebGPURenderer] Created MVP bind group layout for PipelineManager');
 
     // Ensure material bind group layout exists for texture support
-    this.shaderManager.createCustomBindGroupLayout('materialBindGroupLayout', {
+    this.bindGroupManager.createBindGroupLayout('materialBindGroupLayout', {
       entries: [
         {
           binding: 0,
@@ -417,7 +371,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
     console.log('[WebGPURenderer] Created default white texture');
 
-    const textureBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+    const textureBindGroupLayout = this.bindGroupManager.createBindGroupLayout(
       'textureBindGroupLayout',
       {
         entries: [
@@ -427,7 +381,7 @@ export class WebGPURenderer implements IWebGPURenderer {
         label: 'TextureBindGroup Layout',
       },
     );
-    this.shaderManager.createBindGroup('textureBindGroup', {
+    this.bindGroupManager.createBindGroup('textureBindGroup', {
       layout: textureBindGroupLayout,
       entries: [
         { binding: 0, resource: texture.createView() },
@@ -446,12 +400,12 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Get the existing material bind group layout (created earlier)
     const materialBindGroupLayout =
-      this.shaderManager.getBindGroupLayout('materialBindGroupLayout');
+      this.bindGroupManager.getBindGroupLayout('materialBindGroupLayout');
     if (!materialBindGroupLayout) {
       throw new Error('Material bind group layout not found');
     }
 
-    this.shaderManager.createBindGroup('materialBindGroup', {
+    this.bindGroupManager.createBindGroup('materialBindGroup', {
       layout: materialBindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: materialBuffer } }, // material buffer
@@ -461,7 +415,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     console.log('[WebGPURenderer] Created material bind group');
 
     // Create lighting bind group layout and bind group
-    const lightingBindGroupLayout = this.shaderManager.createCustomBindGroupLayout(
+    const lightingBindGroupLayout = this.bindGroupManager.createBindGroupLayout(
       'lightingBindGroupLayout',
       {
         entries: [
@@ -483,7 +437,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'default_lighting_buffer',
     });
 
-    this.shaderManager.createBindGroup('lightingBindGroup', {
+    this.bindGroupManager.createBindGroup('lightingBindGroup', {
       layout: lightingBindGroupLayout,
       entries: [
         {
@@ -501,7 +455,6 @@ export class WebGPURenderer implements IWebGPURenderer {
    */
   async render(deltaTime: number, frameData: FrameData): Promise<void> {
     if (!this.initialized) {
-      console.warn('WebGPU not initialized');
       return;
     }
 
@@ -673,20 +626,9 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Group 1: MVP bind group (set per object, but we need a default for unused cases)
     // This will be overridden in renderObject method
 
-    // Group 2: Texture bind group (always required, will be overridden for entities with textures)
-    const textureBindGroup = this.resourceManager.getBindGroupResource('textureBindGroup');
-    if (!textureBindGroup) {
-      throw new Error('Texture bind group not found');
-    }
-    renderPass.setBindGroup(2, textureBindGroup.bindGroup);
-
-    // Group 3: Material bind group - only set for non-PMX materials
-    // PMX materials will set their own material bind group at index 2 in setupMaterialBindGroup
-    const materialBindGroup = this.resourceManager.getBindGroupResource('materialBindGroup');
-    if (!materialBindGroup) {
-      throw new Error('Material bind group not found');
-    }
-    renderPass.setBindGroup(3, materialBindGroup.bindGroup);
+    // Groups 2 and 3: Will be set per object based on material type
+    // - PMX materials: Group 2 = PMX material + textures
+    // - Regular materials: Group 2 = textures, Group 3 = material
   }
 
   /**
@@ -743,12 +685,12 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Create a unique geometry ID for this material
-    const geometryId = `${pmxAssetId}_material_${materialIndex}`;
+    const geometryId = `${pmxAssetId}_material_geometry_${materialIndex}`;
 
     // Check if geometry already exists in cache first
     const cachedGeometry = this.geometryManager.getCachedGeometry(geometryId);
     if (cachedGeometry) {
-      console.log(`[WebGPURenderer] Using cached PMX geometry: ${geometryId}`);
+      // console.log(`[WebGPURenderer] Using cached PMX geometry: ${geometryId}`);
       return cachedGeometry;
     }
 
@@ -927,7 +869,6 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Cache and return the specific material
     const material = materials[materialIndex];
-    this.pmxMaterials.set(materialKey, material);
     return material;
   }
 
@@ -985,8 +926,34 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     const regularMaterial = renderable.material as WebGPUMaterialDescriptor;
     const textureId = regularMaterial.albedoTextureId || regularMaterial.albedoTexture;
+
+    // Always set a texture bind group for non-PMX materials, even if no specific texture
     if (!textureId) {
-      return; // No texture to bind
+      // Use default white texture
+      const defaultTexture = this.textureManager.getTexture('default_white_texture');
+      if (!defaultTexture) {
+        console.error('Default white texture not found');
+        return;
+      }
+
+      const sampler = this.textureManager.getSampler('linear');
+      const textureBindGroupLayout =
+        this.bindGroupManager.getBindGroupLayout('textureBindGroupLayout');
+      if (!textureBindGroupLayout) {
+        throw new Error('Texture bind group layout not found');
+      }
+
+      const textureBindGroup = this.bindGroupManager.createBindGroup('default_textureBindGroup', {
+        layout: textureBindGroupLayout,
+        entries: [
+          { binding: 0, resource: defaultTexture.createView() },
+          { binding: 1, resource: sampler },
+        ],
+        label: 'default_textureBindGroup',
+      });
+
+      renderPass.setBindGroup(2, textureBindGroup);
+      return;
     }
 
     // Get or create texture
@@ -1003,20 +970,24 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Get sampler and bind group layout
     const sampler = this.textureManager.getSampler('linear');
-    const textureBindGroupLayout = this.shaderManager.getBindGroupLayout('textureBindGroupLayout');
+    const textureBindGroupLayout =
+      this.bindGroupManager.getBindGroupLayout('textureBindGroupLayout');
     if (!textureBindGroupLayout) {
       throw new Error('Texture bind group layout not found');
     }
 
     // Create texture bind group
-    const textureBindGroup = this.shaderManager.createBindGroup(`${textureId}_textureBindGroup`, {
-      layout: textureBindGroupLayout,
-      entries: [
-        { binding: 0, resource: texture.createView() },
-        { binding: 1, resource: sampler },
-      ],
-      label: `${textureId}_textureBindGroup`,
-    });
+    const textureBindGroup = this.bindGroupManager.createBindGroup(
+      `${textureId}_textureBindGroup`,
+      {
+        layout: textureBindGroupLayout,
+        entries: [
+          { binding: 0, resource: texture.createView() },
+          { binding: 1, resource: sampler },
+        ],
+        label: `${textureId}_textureBindGroup`,
+      },
+    );
 
     // Set texture bind group
     renderPass.setBindGroup(2, textureBindGroup);
@@ -1035,13 +1006,18 @@ export class WebGPURenderer implements IWebGPURenderer {
       return;
     }
 
-    // Regular material handling
+    // Regular material handling - always set a material bind group
     if (!renderable.material.albedo) {
-      return; // No material properties to bind
+      // Use default material bind group
+      const materialBindGroup = this.resourceManager.getBindGroupResource('materialBindGroup');
+      if (materialBindGroup) {
+        renderPass.setBindGroup(3, materialBindGroup.bindGroup);
+      }
+      return;
     }
 
     const materialBindGroupLayout =
-      this.shaderManager.getBindGroupLayout('materialBindGroupLayout');
+      this.bindGroupManager.getBindGroupLayout('materialBindGroupLayout');
     if (!materialBindGroupLayout) {
       throw new Error('Material bind group layout not found');
     }
@@ -1090,7 +1066,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     const bindGroupLabel = `MVP_BindGroup_${geometryId}`;
 
     // Get or create MVP bind group layout (fast path with fallback)
-    const mvpBindGroupLayout = this.shaderManager.safeGetBindGroupLayout('mvpBindGroupLayout', {
+    const mvpBindGroupLayout = this.bindGroupManager.safeGetBindGroupLayout('mvpBindGroupLayout', {
       entries: [
         {
           binding: 0,
@@ -1104,7 +1080,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
 
     // Get or create bind group (fast path with fallback)
-    const bindGroup = this.shaderManager.safeGetBindGroup(bindGroupLabel, {
+    const bindGroup = this.bindGroupManager.safeGetBindGroup(bindGroupLabel, {
       layout: mvpBindGroupLayout,
       entries: [
         {
@@ -1140,43 +1116,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     return this.device;
   }
 
-  createBuffer(descriptor: BufferDescriptor): GPUBuffer {
-    return this.bufferManager.createBuffer(descriptor);
-  }
-
-  createShader(descriptor: ShaderDescriptor): GPUShaderModule {
-    return this.shaderManager.createShaderModule(descriptor.id, descriptor);
-  }
-
-  /**
-   * Create geometry using geometry manager
-   * @param type Geometry type
-   * @param params Geometry parameters
-   * @returns Geometry cache item
-   */
-  createGeometry<T extends GeometryType>(
-    type: T,
-    params: GeometryParams<T> = {} as GeometryParams<T>,
-  ) {
-    if (!this.geometryManager) {
-      throw new Error('Geometry manager not initialized');
-    }
-    return this.geometryManager.getGeometry(type, params);
-  }
-
-  updateBuffer(id: string, data: ArrayBuffer, offset?: number): void {
-    if (!this.bufferManager) {
-      throw new Error('Buffer manager not initialized');
-    }
-  }
-  updateTexture(id: string, data: ImageData | HTMLImageElement): void {
-    return;
-  }
-
-  update(deltaTime: number, viewport: RectArea, cameraOffset: [number, number]): void {
-    return;
-  }
-
   updateContextConfig(config: ContextConfig): void {
     this.context.getContext().configure({
       device: this.device,
@@ -1192,5 +1131,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   onResize(): void {
     // Recreate depth texture with new size
     this.ensureEssentialResources();
+
+    this.pipelineManager.clearCache();
   }
 }
