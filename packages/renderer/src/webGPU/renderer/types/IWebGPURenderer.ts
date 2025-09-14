@@ -1,6 +1,5 @@
 import { Camera3DComponent, Transform3DComponent } from '@ecs/components';
 import { FrameData } from '@ecs/systems/rendering/types';
-import { BufferDescriptor, ShaderDescriptor } from '@renderer/webGPU/core/types';
 
 // ===== Core WebGPU Types =====
 
@@ -137,11 +136,6 @@ export interface IRenderer {
   renderScene(scene: Scene, camera: Camera): void;
   renderEntity(entityId: number, world: unknown): void; // ECS world reference
 
-  // Resource management
-  createMaterial(descriptor: MaterialDescriptor): Material;
-  createTexture(data: ImageData | HTMLImageElement): Texture;
-  createMesh(geometry: Geometry): Mesh;
-
   // Post processing
   addPostProcessEffect(effect: PostProcessEffect): void;
   removePostProcessEffect(effectId: string): void;
@@ -149,11 +143,6 @@ export interface IRenderer {
   // Frame control
   beginFrame(): void;
   endFrame(): void;
-
-  // Resource cleanup
-  destroyMaterial(materialId: string): void;
-  destroyTexture(textureId: string): void;
-  destroyMesh(meshId: string): void;
 
   onResize(): void;
   destroy(): void;
@@ -219,33 +208,16 @@ export abstract class IWebGPURenderer implements IRenderer, IRenderBackend {
   abstract getContext(): GPUCanvasContext;
   abstract getAdapter(): GPUAdapter;
 
-  // ===== Resource Creation =====
-  abstract createBuffer(descriptor: BufferDescriptor): GPUBuffer;
-  abstract createShader(descriptor: ShaderDescriptor): GPUShaderModule;
-  abstract createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline;
-  abstract createComputePipeline(descriptor: GPUComputePipelineDescriptor): GPUComputePipeline;
-  abstract createBindGroupLayout(descriptor: GPUBindGroupLayoutDescriptor): GPUBindGroupLayout;
-  abstract createBindGroup(descriptor: GPUBindGroupDescriptor): GPUBindGroup;
-
-  // ===== Resource Management =====
-  abstract updateBuffer(id: string, data: ArrayBuffer, offset?: number): void;
-  abstract updateTexture(id: string, data: ImageData | HTMLImageElement): void;
-  abstract destroyBuffer(bufferId: string): void;
-  abstract destroyTexture(textureId: string): void;
-  abstract destroyShader(shaderId: string): void;
-
   // ===== IRenderer Implementation =====
   abstract renderScene(scene: Scene, camera: Camera): void;
   abstract renderEntity(entityId: number, world: unknown): void;
-  abstract createMaterial(descriptor: MaterialDescriptor): Material;
-  abstract createTexture(data: ImageData | HTMLImageElement): Texture;
-  abstract createMesh(geometry: Geometry): Mesh;
+
   abstract addPostProcessEffect(effect: PostProcessEffect): void;
   abstract removePostProcessEffect(effectId: string): void;
+
+  // ===== Frame Control =====
   abstract beginFrame(): void;
   abstract endFrame(): void;
-  abstract destroyMaterial(materialId: string): void;
-  abstract destroyMesh(meshId: string): void;
 
   // ===== IRenderBackend Implementation =====
   abstract beginRenderPass(descriptor: RenderPassDescriptor): RenderPass;

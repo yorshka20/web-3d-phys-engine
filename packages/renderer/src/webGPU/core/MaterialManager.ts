@@ -100,7 +100,6 @@ export class MaterialManager {
   @SmartResource(ResourceType.BUFFER, {
     lifecycle: 'persistent',
     cache: true,
-    maxCacheSize: 100,
   })
   createMaterial(id: string, material: WebGPUMaterialDescriptor): WebGPUMaterialDescriptor {
     // Check if material already exists

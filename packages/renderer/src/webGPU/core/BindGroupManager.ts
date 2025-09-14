@@ -43,7 +43,6 @@ export class BindGroupManager {
   @SmartResource(ResourceType.BIND_GROUP_LAYOUT, {
     lifecycle: 'persistent',
     cache: true,
-    maxCacheSize: 100,
   })
   createBindGroupLayout(id: string, descriptor: BindGroupLayoutDescriptor): GPUBindGroupLayout {
     // Check cache first
@@ -117,7 +116,6 @@ export class BindGroupManager {
   @SmartResource(ResourceType.BIND_GROUP, {
     lifecycle: 'scene',
     cache: true,
-    maxCacheSize: 200,
   })
   createBindGroup(id: string, descriptor: BindGroupDescriptor): GPUBindGroup {
     // Check cache first

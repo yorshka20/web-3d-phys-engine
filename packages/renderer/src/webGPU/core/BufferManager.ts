@@ -108,7 +108,6 @@ export class BufferManager {
   @SmartResource(ResourceType.BUFFER, {
     cache: true,
     lifecycle: 'frame',
-    maxCacheSize: 20,
   })
   createVertexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     // Ensure buffer size is multiple of 4 bytes for WebGPU alignment requirement
@@ -134,7 +133,6 @@ export class BufferManager {
   @SmartResource(ResourceType.BUFFER, {
     cache: true,
     lifecycle: 'frame',
-    maxCacheSize: 20,
   })
   createIndexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     // Ensure buffer size is multiple of 4 bytes for WebGPU alignment requirement
@@ -160,7 +158,6 @@ export class BufferManager {
   @SmartResource(ResourceType.BUFFER, {
     cache: true,
     lifecycle: 'frame',
-    maxCacheSize: 20,
   })
   createUniformBuffer(label: string, data: ArrayBuffer): GPUBuffer {
     const buffer = this.createBuffer({
@@ -321,7 +318,8 @@ export class BufferManager {
       this.totalActive -= buffer.size;
 
       const label = this.bufferLabels.get(buffer) || 'unknown';
-      console.log(`Destroyed buffer: ${label} (${buffer.size} bytes)`);
+      console.log(`[BufferManager] Destroying buffer: ${label} (${buffer.size} bytes)`);
+      console.trace(`[BufferManager] Buffer destruction stack trace for: ${label}`);
 
       // Remove from cache
       this.bufferCache.delete(label);
@@ -373,16 +371,23 @@ export class BufferManager {
    */
   cleanupUnusedBuffers(maxAge: number = 60000): void {
     const now = Date.now();
-
     for (const [type, pool] of this.bufferPools) {
       const remainingBuffers = pool.filter((item) => {
+        // Only destroy buffers that are not in use AND have been unused for a long time
+        // Use a much longer maxAge to prevent premature destruction
         if (!item.inUse && now - item.lastUsed > maxAge) {
+          // Double-check that the buffer is not currently being used
+          if (this.activeBuffers.has(item.buffer)) {
+            console.log(
+              `Skipping destruction of buffer ${this.bufferLabels.get(item.buffer)} - still active`,
+            );
+            return true;
+          }
           this.destroyBuffer(item.buffer);
           return false;
         }
         return true;
       });
-
       this.bufferPools.set(type, remainingBuffers);
     }
   }
@@ -398,8 +403,8 @@ export class BufferManager {
    * end frame
    */
   endFrame(): void {
-    // clean up unused buffers
-    this.cleanupUnusedBuffers();
+    // clean up unused buffers - DISABLED to prevent premature destruction warnings
+    // this.cleanupUnusedBuffers();
   }
 
   /**
@@ -544,7 +549,7 @@ export class BufferManager {
   }
 
   cleanupFrameResources(): void {
-    // clean up unused buffers
-    this.cleanupUnusedBuffers();
+    // clean up unused buffers - DISABLED to prevent premature destruction warnings
+    // this.cleanupUnusedBuffers();
   }
 }

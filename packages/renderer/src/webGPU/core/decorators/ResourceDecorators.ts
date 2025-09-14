@@ -375,7 +375,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
         this.resourceStorage.set(resourceId, entry);
 
         // Handle size limits (applies to both cache and pool)
-        this.enforceStorageLimit(options.maxCacheSize || 50);
+        this.enforceStorageLimit(options.maxCacheSize || 500);
       }
 
       // Register with resource manager

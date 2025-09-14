@@ -68,7 +68,6 @@ export class TextureManager {
   @SmartResource(ResourceType.SAMPLER, {
     lifecycle: 'persistent',
     cache: true,
-    maxCacheSize: 100,
   })
   createSampler(id: SamplerId, descriptor: SamplerDescriptor): GPUSampler {
     if (this.samplers.has(id)) {
@@ -87,19 +86,27 @@ export class TextureManager {
     return sampler;
   }
 
-  updateTexture(id: string, data: ImageData): void {
+  updateTexture(id: string, data: ImageData | Uint8Array, width: number, height: number): void {
     const texture = this.getTexture(id);
-    this.device.queue.copyExternalImageToTexture(
-      { source: data },
-      { texture },
-      { width: data.width, height: data.height },
-    );
+    if (data instanceof ImageData) {
+      this.device.queue.copyExternalImageToTexture(
+        { source: data },
+        { texture },
+        { width, height },
+      );
+    } else {
+      this.device.queue.writeTexture(
+        { texture },
+        data,
+        { bytesPerRow: data.byteLength },
+        { width, height },
+      );
+    }
   }
 
   @SmartResource(ResourceType.TEXTURE, {
     lifecycle: 'persistent',
     cache: true,
-    maxCacheSize: 100,
   })
   createTexture(id: string, descriptor: TextureDescriptor): GPUTexture {
     const texture = this.device.createTexture({
