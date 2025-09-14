@@ -4,10 +4,21 @@ import { defineConfig } from 'vite';
 
 const packageJson = fs.readJSONSync(resolve(__dirname, '../../package.json'));
 
+function wgslLoader() {
+  return {
+    name: 'wgsl-loader',
+    transform(code, id) {
+      if (id.endsWith('.wgsl')) {
+        return `export default ${JSON.stringify(code)};`;
+      }
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   return {
     base: '/',
-    plugins: [],
+    plugins: [wgslLoader()],
     esbuild: {
       target: 'es2022',
       keepNames: true,

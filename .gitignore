@@ -99,3 +99,5 @@ jspm_packages/
 .tern-port
 
 *.local.md
+
+packages/web-client/assets/

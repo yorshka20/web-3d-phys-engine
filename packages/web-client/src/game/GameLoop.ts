@@ -10,7 +10,7 @@ import { PerformanceSystem } from '@ecs/systems/core/PerformanceSystem';
 export class GameLoop {
   private isRunning: boolean = false;
   private lastTime: number = 0;
-  private rafId: number = 0;
+  private renderTickId: number = 0;
   private logicTimerId: NodeJS.Timeout | null = null;
   private speedMultiplier: number = 1; // Add speed multiplier. 1x, 2x, 4x
 
@@ -66,20 +66,29 @@ export class GameLoop {
     this.lastTime = performance.now();
     this.accumulator = 0;
 
-    // Start logic update loop
-    this.startLogicTick();
-    // Start render loop
-    this.startRenderTick();
+    try {
+      // Start logic update loop
+      this.startLogicTick();
+      // Start render loop
+      this.startRenderTick();
+    } catch (error) {
+      console.error('Failed to start game loop:', error);
+      this.stop();
+    }
   }
 
   stop(): void {
     if (!this.isRunning) return;
 
     this.isRunning = false;
-    cancelAnimationFrame(this.rafId);
+
     if (this.logicTimerId) {
       clearTimeout(this.logicTimerId);
       this.logicTimerId = null;
+    }
+    if (this.renderTickId) {
+      cancelAnimationFrame(this.renderTickId);
+      this.renderTickId = 0;
     }
   }
 
@@ -171,10 +180,10 @@ export class GameLoop {
     if (this.renderFrameRate > 0) {
       // Use setTimeout for capped frame rate
       const interval = Math.max(1, Math.floor((1 / this.renderFrameRate) * 1000));
-      this.rafId = window.setTimeout(() => this.startRenderTick(), interval);
+      this.renderTickId = window.setTimeout(() => this.startRenderTick(), interval);
     } else {
       // Use requestAnimationFrame for uncapped frame rate
-      this.rafId = requestAnimationFrame(() => this.startRenderTick());
+      this.renderTickId = requestAnimationFrame(() => this.startRenderTick());
     }
   }
 
