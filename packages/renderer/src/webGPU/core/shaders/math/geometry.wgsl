@@ -2,13 +2,9 @@
 
 // Calculate tangent space basis vectors
 fn calculate_tangent_space(normal: vec3<f32>) -> mat3x3<f32> {
-    var tangent = vec3<f32>(1.0, 0.0, 0.0);
-    if abs(dot(normal, tangent)) > 0.9 {
-        tangent = vec3<f32>(0.0, 1.0, 0.0);
-    }
-    tangent = normalize(cross(normal, tangent));
+    let up = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(normal.y) > 0.9);
+    let tangent = normalize(cross(up, normal));
     let bitangent = cross(normal, tangent);
-
     return mat3x3<f32>(tangent, bitangent, normal);
 }
 

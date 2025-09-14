@@ -15,6 +15,25 @@ const SRGB_THRESHOLD: f32 = 0.0031308;
 const DEFAULT_LIGHT_DIRECTION: vec3<f32> = vec3<f32>(0.5, 1.0, 0.5);
 const AMBIENT_FACTOR: f32 = 0.1;
 
+// Multi-directional lighting constants
+// 主光源：来自右上方的强光
+const MAIN_LIGHT_DIRECTION: vec3<f32> = vec3<f32>(0.5, 1.0, 0.5);
+const MAIN_LIGHT_COLOR: vec3<f32> = vec3<f32>(1.0, 1.0, 0.95);
+const MAIN_LIGHT_INTENSITY: f32 = 1.0;
+
+// 补光源：来自左前方的柔和光，照亮背面
+const FILL_LIGHT_DIRECTION: vec3<f32> = vec3<f32>(-0.3, 0.5, 0.8);
+const FILL_LIGHT_COLOR: vec3<f32> = vec3<f32>(0.8, 0.9, 1.0);
+const FILL_LIGHT_INTENSITY: f32 = 0.4;
+
+// 背光源：来自后方的微弱光，防止完全黑暗
+const BACK_LIGHT_DIRECTION: vec3<f32> = vec3<f32>(0.0, 0.2, -0.8);
+const BACK_LIGHT_COLOR: vec3<f32> = vec3<f32>(0.6, 0.7, 0.9);
+const BACK_LIGHT_INTENSITY: f32 = 0.2;
+
+// 环境光强度
+const ENVIRONMENT_LIGHT_INTENSITY: f32 = 0.3;
+
 // Texture sampling constants
 const MAX_MIP_LEVEL: f32 = 12.0;
 

@@ -14,8 +14,9 @@ struct PMXVertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
-    @location(3) skinIndices: vec4<f32>,  // Bone indices for skinning
-    @location(4) skinWeights: vec4<f32>,  // Bone weights for skinning
+    @location(3) skinIndex: f32, // will be converted to uint in shader
+    @location(4) skinWeight: f32,
+    @location(5) edgeRatio: f32,
 }
 
 // Colored vertex input for vertex-colored geometry

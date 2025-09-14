@@ -11,9 +11,14 @@ struct TimeUniforms {
 
 // MVP matrix uniforms
 struct MVPUniforms {
-    mvpMatrix: mat4x4<f32>,
-    cameraPos: vec3<f32>,
-    padding: f32,
+    mvpMatrix: mat4x4<f32>,           // Model * View * Projection
+    modelMatrix: mat4x4<f32>,         // Model transformation
+    viewMatrix: mat4x4<f32>,          // View transformation  
+    projectionMatrix: mat4x4<f32>,    // Projection transformation
+    cameraPos: vec3<f32>,             // Camera position
+    cameraForward: vec3<f32>,         // Camera forward direction
+    cameraUp: vec3<f32>,              // Camera up direction
+    cameraRight: vec3<f32>,           // Camera right direction
 }
 
 // Standard PBR material uniforms

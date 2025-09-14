@@ -34,7 +34,7 @@ export function createPMXMaterialShaderModule(): PMXMaterialShaderModule {
       defines: {
         ENABLE_TOON_SHADING: false,
         ENABLE_NORMAL_MAPPING: true,
-        ENABLE_ENVIRONMENT_MAPPING: false,
+        ENABLE_ENVIRONMENT_MAPPING: true,
       },
       optimization: 'performance',
       debug: false,

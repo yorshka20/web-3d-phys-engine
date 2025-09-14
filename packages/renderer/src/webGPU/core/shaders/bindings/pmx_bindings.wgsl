@@ -19,3 +19,9 @@
 @group(2) @binding(8) var sphere_sampler: sampler;
 @group(2) @binding(9) var toon_texture: texture_2d<f32>;
 @group(2) @binding(10) var toon_sampler: sampler;
+@group(2) @binding(11) var roughness_texture: texture_2d<f32>;
+@group(2) @binding(12) var roughness_sampler: sampler;
+@group(2) @binding(13) var metallic_texture: texture_2d<f32>;
+@group(2) @binding(14) var metallic_sampler: sampler;
+@group(2) @binding(15) var emission_texture: texture_2d<f32>;
+@group(2) @binding(16) var emission_sampler: sampler;

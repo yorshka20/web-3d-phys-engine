@@ -44,7 +44,7 @@ export interface PMXMaterialShaderModule extends ShaderModule {
 export const PMX_MATERIAL_DEFAULT_PARAMS = {
   toonShading: {
     type: 'f32' as const,
-    defaultValue: 0.0,
+    defaultValue: 1.0,
     description: 'Enable toon shading effect',
     min: 0.0,
     max: 1.0,
