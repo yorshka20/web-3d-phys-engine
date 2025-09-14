@@ -59,7 +59,6 @@ export class BufferManager {
     // Check cache first
     const cachedBuffer = this.bufferCache.get(descriptor.label);
     if (cachedBuffer) {
-      console.log(`Using cached buffer: ${descriptor.label}`);
       return cachedBuffer;
     }
 
@@ -91,10 +90,6 @@ export class BufferManager {
     this.bufferPools.set(descriptor.type, pool);
 
     // Note: Auto-registration is now handled by decorators
-
-    console.log(
-      `Created ${descriptor.type} buffer: ${alignedSize} bytes (original: ${descriptor.size} bytes)`,
-    );
 
     return buffer;
   }
@@ -318,8 +313,6 @@ export class BufferManager {
       this.totalActive -= buffer.size;
 
       const label = this.bufferLabels.get(buffer) || 'unknown';
-      console.log(`[BufferManager] Destroying buffer: ${label} (${buffer.size} bytes)`);
-      console.trace(`[BufferManager] Buffer destruction stack trace for: ${label}`);
 
       // Remove from cache
       this.bufferCache.delete(label);
@@ -378,9 +371,6 @@ export class BufferManager {
         if (!item.inUse && now - item.lastUsed > maxAge) {
           // Double-check that the buffer is not currently being used
           if (this.activeBuffers.has(item.buffer)) {
-            console.log(
-              `Skipping destruction of buffer ${this.bufferLabels.get(item.buffer)} - still active`,
-            );
             return true;
           }
           this.destroyBuffer(item.buffer);
@@ -528,8 +518,6 @@ export class BufferManager {
       lastUsed: Date.now(),
     });
     this.bufferPools.set(BufferType.STORAGE, pool);
-
-    console.log(`Registered external buffer: ${label} (${buffer.size} bytes)`);
   }
 
   /**

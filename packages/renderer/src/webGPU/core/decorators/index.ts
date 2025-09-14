@@ -30,6 +30,8 @@
  * ```
  */
 
+import './ResourceDecorators';
+
 import { ShaderCompiler } from '../ShaderCompiler';
 import { WebGPUContext } from '../WebGPUContext';
 import { globalContainer, ServiceTokens } from './DIContainer';

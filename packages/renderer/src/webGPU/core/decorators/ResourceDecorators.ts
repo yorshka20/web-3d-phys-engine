@@ -13,6 +13,14 @@ import {
 import { globalContainer, ServiceMetadata, ServiceOptions } from './DIContainer';
 import { InjectableClass, ResourceFactoryOptions, SmartResourceOptions } from './types';
 
+const showLog = false;
+
+function log(...args: Any[]) {
+  if (showLog) {
+    console.log(...args);
+  }
+}
+
 /**
  * Injectable decorator for dependency injection with auto-registration support
  * Automatically injects ResourceManager dependency and sets up DI container support
@@ -34,7 +42,7 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
         registeredAt: Date.now(),
       };
       globalContainer.registerServiceMetadata(token, metadata);
-      console.log(`[Injectable] Registered service metadata for ${className} with token: ${token}`);
+      log(`[Injectable] Registered service metadata for ${className} with token: ${token}`);
     }
 
     // Add resource manager property and methods to prototype
@@ -95,7 +103,7 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
         if (entry && entry.inUse) {
           entry.inUse = false;
           entry.lastUsed = Date.now();
-          console.log(`[SmartResource] Released resource: ${resourceId}`);
+          log(`[SmartResource] Released resource: ${resourceId}`);
           return true;
         }
         return false;
@@ -106,23 +114,19 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
       proto.enforceStorageLimit = function (maxSize: number) {
         if (!this.resourceStorage || this.resourceStorage.size <= maxSize) return;
 
-        console.log(
-          `[SmartResource] Enforcing storage limit: ${this.resourceStorage.size} > ${maxSize}`,
-        );
+        log(`[SmartResource] Enforcing storage limit: ${this.resourceStorage.size} > ${maxSize}`);
 
         // Get LRU entries that are not in use
         const entries = Array.from(this.resourceStorage.entries())
           .filter(([_, entry]) => !entry.inUse)
           .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
 
-        console.log(
-          `[SmartResource] Found ${entries.length} unused resources to potentially remove`,
-        );
+        log(`[SmartResource] Found ${entries.length} unused resources to potentially remove`);
 
         const toRemove = this.resourceStorage.size - maxSize;
         for (let i = 0; i < toRemove && i < entries.length; i++) {
           const [resourceId, entry] = entries[i];
-          console.log(`[SmartResource] Destroying resource: ${resourceId}`);
+          log(`[SmartResource] Destroying resource: ${resourceId}`);
           entry.resource.destroy?.();
           this.resourceStorage.delete(resourceId);
         }
@@ -174,7 +178,7 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
           resourceManager
             .createResource(resourceDescriptor)
             .then(() => {
-              console.log(`[Injectable] Successfully registered resource: ${id}, type: ${type}`);
+              log(`[Injectable] Successfully registered resource: ${id}, type: ${type}`);
             })
             .catch((error: Any) => {
               console.error(`[Injectable] Failed to auto-register ${type} ${id}:`, error);
@@ -280,9 +284,7 @@ export function Injectable(token?: string, options: ServiceOptions = {}) {
           // Auto-register instance to container
           try {
             globalContainer.registerInstanceWithOptions(token!, this, options);
-            console.log(
-              `[Injectable] Auto-registered instance of ${className} with token: ${token}`,
-            );
+            log(`[Injectable] Auto-registered instance of ${className} with token: ${token}`);
           } catch (error) {
             console.error(`[Injectable] Failed to auto-register ${className}:`, error);
           }
@@ -333,7 +335,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
       if (existingEntry && !existingEntry.destroyed) {
         // Cache behavior: always return existing
         if (options.cache) {
-          // console.log(`[SmartResource] Using cached resource: ${resourceId}`);
+          // log(`[SmartResource] Using cached resource: ${resourceId}`);
           return existingEntry.resource;
         }
 
@@ -343,7 +345,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
             existingEntry.inUse = true;
             existingEntry.lastUsed = Date.now();
             existingEntry.usageCount++;
-            console.log(`[SmartResource] Acquired pooled resource: ${resourceId}`);
+            log(`[SmartResource] Acquired pooled resource: ${resourceId}`);
             return existingEntry.resource;
           } else {
             console.warn(`[SmartResource] Resource ${resourceId} is currently in use`);
@@ -356,7 +358,7 @@ export function SmartResource<T extends ResourceType>(type: T, options: SmartRes
       }
 
       // Create new resource
-      console.log(`[SmartResource] Creating new resource: ${resourceId}, type: ${type}`);
+      log(`[SmartResource] Creating new resource: ${resourceId}, type: ${type}`);
 
       const resource = originalMethod.apply(this, args);
 
@@ -450,7 +452,7 @@ export function Inject(token: string) {
 
             // Cache the resolved value
             this[privateProp] = resolved;
-            console.log(`[Inject] Successfully injected ${token} into ${propertyName}`);
+            log(`[Inject] Successfully injected ${token} into ${propertyName}`);
             return resolved;
           } catch (error) {
             // Cache the error to avoid repeated resolution attempts
@@ -613,7 +615,7 @@ export function MonitorPerformance(
 
         // Log performance metrics if enabled and above threshold
         if (enableLogging && executionTime >= logThreshold) {
-          console.log(`[Performance] ${methodName} took ${executionTime.toFixed(2)}ms`);
+          log(`[Performance] ${methodName} took ${executionTime.toFixed(2)}ms`);
         }
 
         return result;

@@ -18,6 +18,7 @@ import {
   Mesh3DComponent,
   PhysicsComponent,
   PickupComponent,
+  PMXMeshComponent,
   RenderComponent,
   ShapeComponent,
   SoundEffectComponent,
@@ -77,4 +78,5 @@ export const ComponentPoolList: ComponentConstructor<IComponent>[] = [
   CameraControlComponent,
   Input3DComponent,
   ActiveCameraTag,
+  PMXMeshComponent,
 ];

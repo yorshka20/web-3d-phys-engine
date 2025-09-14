@@ -104,7 +104,6 @@ export class MaterialManager {
   createMaterial(id: string, material: WebGPUMaterialDescriptor): WebGPUMaterialDescriptor {
     // Check if material already exists
     if (this.materials.has(id)) {
-      console.log(`Material ${id} already exists, returning existing descriptor`);
       return this.materialDescriptors.get(id)!;
     }
 
@@ -137,7 +136,6 @@ export class MaterialManager {
     // Update uniform buffer with material data
     this.updateMaterialUniform(id);
 
-    console.log(`Created material: ${id}`);
     return descriptor;
   }
 
@@ -237,7 +235,6 @@ export class MaterialManager {
     // Ensure material is registered first
     if (!this.materials.has(materialId)) {
       this.materials.set(materialId, material);
-      console.log(`Registered material ${materialId} during bind group creation`);
     }
 
     // Get or create uniform buffer for this material
@@ -245,9 +242,6 @@ export class MaterialManager {
     if (!uniformBuffer) {
       // Create uniform buffer if it doesn't exist
       const bufferSize = this.MATERIAL_UNIFORM_SIZE;
-      console.log(
-        `Creating uniform buffer for material ${materialId}, size: ${bufferSize}, type: ${typeof bufferSize}`,
-      );
 
       if (bufferSize === undefined || bufferSize === null || isNaN(bufferSize)) {
         throw new Error(`Invalid buffer size: ${bufferSize} for material ${materialId}`);
@@ -277,7 +271,6 @@ export class MaterialManager {
     });
 
     this.materialBindGroups.set(bindGroupId, bindGroup);
-    console.log(`Created material bind group: ${bindGroupId}`);
 
     return bindGroup;
   }
@@ -311,8 +304,6 @@ export class MaterialManager {
     // Remove from maps
     this.materials.delete(id);
     this.materialDescriptors.delete(id);
-
-    console.log(`Deleted material: ${id}`);
   }
 
   // Helper method to get texture for material
@@ -378,7 +369,5 @@ export class MaterialManager {
     this.materialDescriptors.clear();
     this.uniformBuffers.clear();
     this.materialBindGroups.clear();
-
-    console.log('MaterialManager destroyed');
   }
 }

@@ -100,6 +100,11 @@ export class WebGPURenderSystem extends System {
     }
   }
 
+  init(): void {
+    super.init();
+    this.renderer.init(this.canvas);
+  }
+
   private createCanvas(): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
     const dpr = this.getDPR();
@@ -140,9 +145,8 @@ export class WebGPURenderSystem extends System {
     return this.renderStats;
   }
 
-  async setRenderer(renderer: IWebGPURenderer): Promise<void> {
+  setRenderer(renderer: IWebGPURenderer): void {
     this.renderer = renderer;
-    await this.renderer.init(this.canvas);
   }
 
   getRenderer(): IWebGPURenderer {

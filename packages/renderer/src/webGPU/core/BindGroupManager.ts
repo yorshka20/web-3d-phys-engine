@@ -59,7 +59,6 @@ export class BindGroupManager {
     // Cache bind group layout
     this.bindGroupLayouts.set(id, bindGroupLayout);
 
-    console.log(`Created bind group layout: ${id}`);
     return bindGroupLayout;
   }
 
@@ -133,7 +132,6 @@ export class BindGroupManager {
     // Cache bind group
     this.bindGroups.set(id, bindGroup);
 
-    console.log(`Created bind group: ${id}`);
     return bindGroup;
   }
 
@@ -301,7 +299,6 @@ export class BindGroupManager {
     this.bindGroupLayouts.clear();
     this.layoutCacheHitCount = 0;
     this.layoutCacheMissCount = 0;
-    console.log('Bind group layout cache cleared');
   }
 
   /**
@@ -311,7 +308,6 @@ export class BindGroupManager {
     this.bindGroups.clear();
     this.groupCacheHitCount = 0;
     this.groupCacheMissCount = 0;
-    console.log('Bind group cache cleared');
   }
 
   /**
