@@ -53,10 +53,10 @@ async function main() {
 
   switch (stage) {
     case 'geometry':
-      createGeometryStage(world);
+      await createGeometryStage(world);
       break;
     case 'pmxModel':
-      createPMXModelStage(world);
+      await createPMXModelStage(world);
       break;
     default:
       break;
