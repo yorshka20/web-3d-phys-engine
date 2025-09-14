@@ -529,13 +529,53 @@ export class PipelineManager {
     const hasNormal = (gpuKey.vertexAttributes & 0x02) !== 0;
     const hasUV = (gpuKey.vertexAttributes & 0x04) !== 0;
     const hasColor = (gpuKey.vertexAttributes & 0x08) !== 0;
-    const hasSkinning = (gpuKey.vertexAttributes & 0x10) !== 0; // New flag for skinning data
+    const hasSkinning = (gpuKey.vertexAttributes & 0x10) !== 0;
+    const hasEdgeRatio = (gpuKey.vertexAttributes & 0x20) !== 0;
 
-    if (hasSkinning && hasNormal && hasUV) {
-      // PMX format: position + normal + uv + skinIndices + skinWeights
+    if (hasSkinning && hasNormal && hasUV && hasEdgeRatio) {
+      // PMX format: position + normal + uv + skinIndex + skinWeight + edgeRatio
       return [
         {
-          arrayStride: 64, // 16 floats * 4 bytes
+          arrayStride: 44, // 11 floats * 4 bytes = 44 bytes
+          attributes: [
+            {
+              format: 'float32x3',
+              offset: 0, // position (12 bytes)
+              shaderLocation: 0,
+            },
+            {
+              format: 'float32x3',
+              offset: 12, // normal (12 bytes)
+              shaderLocation: 1,
+            },
+            {
+              format: 'float32x2',
+              offset: 24, // uv (8 bytes)
+              shaderLocation: 2,
+            },
+            {
+              format: 'float32', // single float, not vec4
+              offset: 32, // skinIndex (4 bytes)
+              shaderLocation: 3,
+            },
+            {
+              format: 'float32', // single float, not vec4
+              offset: 36, // skinWeight (4 bytes)
+              shaderLocation: 4,
+            },
+            {
+              format: 'float32',
+              offset: 40, // edgeRatio (4 bytes)
+              shaderLocation: 5,
+            },
+          ],
+        },
+      ];
+    } else if (hasSkinning && hasNormal && hasUV) {
+      // PMX format without edgeRatio: position + normal + uv + skinIndex + skinWeight
+      return [
+        {
+          arrayStride: 40, // 10 floats * 4 bytes = 40 bytes
           attributes: [
             {
               format: 'float32x3',
@@ -553,13 +593,13 @@ export class PipelineManager {
               shaderLocation: 2,
             },
             {
-              format: 'float32x4',
-              offset: 32, // skinIndices
+              format: 'float32',
+              offset: 32, // skinIndex
               shaderLocation: 3,
             },
             {
-              format: 'float32x4',
-              offset: 48, // skinWeights
+              format: 'float32',
+              offset: 36, // skinWeight
               shaderLocation: 4,
             },
           ],

@@ -362,16 +362,23 @@ function determineDepthTest(semanticKey: SemanticPipelineKey): boolean {
 function determineVertexAttributes(semanticKey: SemanticPipelineKey): number {
   let attributes = 0x01; // POSITION
 
-  if (semanticKey.vertexFormat === 'full') {
-    attributes |= 0x02; // NORMAL
-    attributes |= 0x04; // UV
-  } else if (semanticKey.vertexFormat === 'colored') {
-    attributes |= 0x08; // COLOR
-  } else if (semanticKey.vertexFormat === 'pmx') {
-    // PMX format: position + normal + uv + skinIndices + skinWeights
-    attributes |= 0x02; // NORMAL
-    attributes |= 0x04; // UV
-    attributes |= 0x10; // SKINNING (skinIndices + skinWeights)
+  // Use switch-case to determine vertex attributes based on vertex format
+  switch (semanticKey.vertexFormat) {
+    case 'full':
+      attributes |= 0x02; // NORMAL
+      attributes |= 0x04; // UV
+      break;
+    case 'colored':
+      attributes |= 0x08; // COLOR
+      break;
+    case 'pmx':
+      // PMX format: position + normal + uv + skinIndices + skinWeights
+      attributes |= 0x02; // NORMAL
+      attributes |= 0x04; // UV
+      attributes |= 0x10; // SKINNING (skinIndices + skinWeights)
+      attributes |= 0x20; // EDGE_RATIO
+      break;
+    // No additional attributes for 'simple' or unknown formats
   }
 
   return attributes;
