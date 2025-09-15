@@ -76,7 +76,7 @@ export class Transform3DSystem extends System {
 
       // Handle movement
       if (physics) {
-        this.handleVelocityMovement3D(state, physics, stats, deltaTime);
+        this.handleVelocityMovement3D(state, physics, input, deltaTime);
       } else {
         this.handleDirectMovement3D(state, transform, stats, deltaTime);
       }
@@ -332,10 +332,10 @@ export class Transform3DSystem extends System {
   private handleVelocityMovement3D(
     state: Input3DState,
     physics: PhysicsComponent,
-    stats: StatsComponent | undefined,
+    input: Input3DComponent,
     deltaTime: number,
   ): void {
-    const speed = physics.getSpeed() * (stats?.moveSpeedMultiplier ?? 1);
+    const speed = physics.getSpeed() * (input.getMoveSpeedMultiplier() ?? 1);
     const moveDirection = this.getMoveDirectionFromState(state);
 
     // Apply camera-relative movement

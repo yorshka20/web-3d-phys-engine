@@ -95,7 +95,7 @@ export class Input3DComponent extends Component {
   }
 
   getMoveSpeedMultiplier(): number {
-    return this.state.sprint ? 2.0 : 1.0;
+    return this.state.sprint ? 4.0 : 1.0;
   }
 
   reset(): void {
