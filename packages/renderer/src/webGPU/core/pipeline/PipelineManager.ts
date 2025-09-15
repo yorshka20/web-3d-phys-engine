@@ -528,146 +528,95 @@ export class PipelineManager {
   }
 
   /**
-   * Create vertex buffer layouts based on vertex attributes
+   * Create vertex buffer layouts based on vertex attributes in an optimized way.
    */
   private createVertexBufferLayoutsFromGpuKey(gpuKey: GpuPipelineKey): GPUVertexBufferLayout[] {
+    // Extract attribute flags
     const hasNormal = (gpuKey.vertexAttributes & 0x02) !== 0;
     const hasUV = (gpuKey.vertexAttributes & 0x04) !== 0;
     const hasColor = (gpuKey.vertexAttributes & 0x08) !== 0;
     const hasSkinning = (gpuKey.vertexAttributes & 0x10) !== 0;
     const hasEdgeRatio = (gpuKey.vertexAttributes & 0x20) !== 0;
 
-    if (hasSkinning && hasNormal && hasUV && hasEdgeRatio) {
-      // PMX format: position + normal + uv + skinIndex + skinWeight + edgeRatio
+    // Helper to push attribute descriptors
+    const pushAttr = (
+      arr: GPUVertexAttribute[],
+      format: GPUVertexFormat,
+      offset: number,
+      shaderLocation: number,
+    ) => {
+      arr.push({ format, offset, shaderLocation });
+    };
+
+    // PMX format: position + normal + uv + skinIndex + skinWeight (+ edgeRatio)
+    if (hasSkinning && hasNormal && hasUV) {
+      const attributes: GPUVertexAttribute[] = [];
+      let offset = 0;
+      // position
+      pushAttr(attributes, 'float32x3', offset, 0);
+      offset += 12;
+      // normal
+      pushAttr(attributes, 'float32x3', offset, 1);
+      offset += 12;
+      // uv
+      pushAttr(attributes, 'float32x2', offset, 2);
+      offset += 8;
+      // skinIndices
+      pushAttr(attributes, 'float32x4', offset, 3);
+      offset += 16;
+      // skinWeights
+      pushAttr(attributes, 'float32x4', offset, 4);
+      offset += 16;
+      // edgeRatio (optional)
+      if (hasEdgeRatio) {
+        pushAttr(attributes, 'float32', offset, 5);
+        offset += 4;
+      }
+      // PMX with edgeRatio: 68 bytes, without: 64 bytes
       return [
         {
-          arrayStride: 68, // 12 * 2 + 8 + 16 * 2 + 4 = 68 bytes
-          attributes: [
-            {
-              format: 'float32x3',
-              offset: 0, // position (12 bytes)
-              shaderLocation: 0,
-            },
-            {
-              format: 'float32x3',
-              offset: 12, // normal (12 bytes)
-              shaderLocation: 1,
-            },
-            {
-              format: 'float32x2',
-              offset: 24, // uv (8 bytes)
-              shaderLocation: 2,
-            },
-            {
-              format: 'float32x4', // skinIndices vec4f
-              offset: 32, // skinIndices (16 bytes)
-              shaderLocation: 3,
-            },
-            {
-              format: 'float32x4', // skinWeights vec4f
-              offset: 48, // skinWeights (16 bytes)
-              shaderLocation: 4,
-            },
-            {
-              format: 'float32',
-              offset: 64, // edgeRatio (4 bytes)
-              shaderLocation: 5,
-            },
-          ],
+          arrayStride: offset,
+          attributes,
         },
       ];
-    } else if (hasSkinning && hasNormal && hasUV) {
-      // PMX format without edgeRatio: position + normal + uv + skinIndex + skinWeight
-      return [
-        {
-          arrayStride: 40, // 10 floats * 4 bytes = 40 bytes
-          attributes: [
-            {
-              format: 'float32x3',
-              offset: 0, // position
-              shaderLocation: 0,
-            },
-            {
-              format: 'float32x3',
-              offset: 12, // normal
-              shaderLocation: 1,
-            },
-            {
-              format: 'float32x2',
-              offset: 24, // uv
-              shaderLocation: 2,
-            },
-            {
-              format: 'uint32',
-              offset: 32, // skinIndices
-              shaderLocation: 3,
-            },
-            {
-              format: 'float32',
-              offset: 48, // skinWeights
-              shaderLocation: 4,
-            },
-          ],
-        },
-      ];
-    } else if (hasNormal && hasUV) {
-      // Full format: position + normal + uv
+    }
+
+    // Standard format: position + normal + uv
+    if (hasNormal && hasUV) {
       return [
         {
           arrayStride: 32, // 8 floats * 4 bytes
           attributes: [
-            {
-              format: 'float32x3',
-              offset: 0, // position
-              shaderLocation: 0,
-            },
-            {
-              format: 'float32x3',
-              offset: 12, // normal
-              shaderLocation: 1,
-            },
-            {
-              format: 'float32x2',
-              offset: 24, // uv
-              shaderLocation: 2,
-            },
-          ],
-        },
-      ];
-    } else if (hasColor) {
-      // Colored format: position + color
-      return [
-        {
-          arrayStride: 28, // 7 floats * 4 bytes
-          attributes: [
-            {
-              format: 'float32x3',
-              offset: 0, // position
-              shaderLocation: 0,
-            },
-            {
-              format: 'float32x4',
-              offset: 12, // color
-              shaderLocation: 1,
-            },
-          ],
-        },
-      ];
-    } else {
-      // Simple format: position only
-      return [
-        {
-          arrayStride: 12, // 3 floats * 4 bytes
-          attributes: [
-            {
-              format: 'float32x3',
-              offset: 0,
-              shaderLocation: 0,
-            },
+            { format: 'float32x3', offset: 0, shaderLocation: 0 }, // position
+            { format: 'float32x3', offset: 12, shaderLocation: 1 }, // normal
+            { format: 'float32x2', offset: 24, shaderLocation: 2 }, // uv
           ],
         },
       ];
     }
+
+    // Colored format: position + color
+    if (hasColor) {
+      return [
+        {
+          arrayStride: 28, // 7 floats * 4 bytes
+          attributes: [
+            { format: 'float32x3', offset: 0, shaderLocation: 0 }, // position
+            { format: 'float32x4', offset: 12, shaderLocation: 1 }, // color
+          ],
+        },
+      ];
+    }
+
+    // Simple format: position only
+    return [
+      {
+        arrayStride: 12, // 3 floats * 4 bytes
+        attributes: [
+          { format: 'float32x3', offset: 0, shaderLocation: 0 }, // position
+        ],
+      },
+    ];
   }
 
   /**
