@@ -8,6 +8,9 @@ import { mat3, mat4 } from 'gl-matrix';
 
 // core render data - replace direct Entity passing
 export interface RenderData {
+  // Entity information
+  entityId: number; // Entity numeric ID for animation and other systems
+
   // Geometry information
   geometryId: string; // for resource cache
   geometryData: GeometryData;
@@ -29,6 +32,11 @@ export interface RenderData {
   pmxAssetId?: string;
   pmxComponent?: PMXMeshComponent;
   materialIndex?: number; // Material index for PMX models
+
+  // Animation data (optional)
+  boneMatrices?: Float32Array; // Bone transformation matrices
+  morphWeights?: Float32Array; // Morph weights
+  morphData?: Float32Array; // Morph vertex data
 }
 
 export interface EnvironmentData {

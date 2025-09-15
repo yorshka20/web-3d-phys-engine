@@ -20,6 +20,7 @@ import {
   generateSemanticPipelineKey,
   SemanticPipelineKey,
 } from '../core/pipeline/types';
+import { PMXAnimationBufferManager } from '../core/PMXAnimationBufferManager';
 import { PMXMaterialCacheData, PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
 import { ShaderManager } from '../core/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
@@ -86,6 +87,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private bindGroupManager!: BindGroupManager;
   private pipelineFactory!: PipelineFactory;
   private pmxMaterialProcessor!: PMXMaterialProcessor;
+  private pmxAnimationBufferManager!: PMXAnimationBufferManager;
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
@@ -109,6 +111,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.aspectRatio = width / height;
     // this.updateContextConfig({ width, height, dpr });
   }
+
   destroy(): void {
     // Clean up all managers
     if (this.diContainer) {
@@ -263,6 +266,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.bindGroupManager = new BindGroupManager();
     this.pipelineFactory = new PipelineFactory();
     this.pmxMaterialProcessor = new PMXMaterialProcessor();
+    this.pmxAnimationBufferManager = new PMXAnimationBufferManager();
 
     // Ensure essential resources are created for PipelineManager
     this.ensureEssentialResources();
@@ -270,6 +274,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     await this.textureManager.initialize();
     await this.shaderManager.initialize();
     await this.pmxMaterialProcessor.initialize();
+    await this.pmxAnimationBufferManager.initialize();
 
     console.log('Initialized WebGPU managers with DI container');
 
@@ -631,8 +636,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Group 1: MVP bind group (set per object, but we need a default for unused cases)
     // This will be overridden in renderObject method
 
-    // Groups 2 and 3: Will be set per object based on material type
-    // - PMX materials: Group 2 = PMX material + textures
+    // Groups 2, 3, and 4: Will be set per object based on material type
+    // - PMX materials: Group 2 = PMX material + textures, Group 3 = animation data
     // - Regular materials: Group 2 = textures, Group 3 = material
   }
 
@@ -746,6 +751,11 @@ export class WebGPURenderer implements IWebGPURenderer {
     const materialIndices: number[] = [];
     const vertexMap = new Map<number, number>();
 
+    // normalize vertices to fix skinning data
+    const normalizedVertices = this.gpuResourceCoordinator.normalizeVertexData(pmxModel.vertices);
+
+    const floatsPerVertex = 17; // 3+3+2+4+4+1
+
     // Process faces for this material
     for (let faceIndex = faceStart; faceIndex < faceEnd; faceIndex++) {
       const face = pmxModel.faces[faceIndex];
@@ -758,30 +768,32 @@ export class WebGPURenderer implements IWebGPURenderer {
         let newVertexIndex = vertexMap.get(originalVertexIndex);
 
         if (newVertexIndex === undefined) {
-          // fix: each vertex has 11 floats (not 16)
-          newVertexIndex = materialVertices.length / 11;
+          // 17 floats per vertex
+          newVertexIndex = materialVertices.length / floatsPerVertex;
 
-          const vertex = pmxModel.vertices[originalVertexIndex];
+          const vertex = normalizedVertices[originalVertexIndex];
           if (vertex) {
             // Position (3 floats)
             materialVertices.push(vertex.position[0], vertex.position[1], vertex.position[2]);
-
             // Normal (3 floats)
             materialVertices.push(vertex.normal[0], vertex.normal[1], vertex.normal[2]);
-
             // UV (2 floats)
             materialVertices.push(vertex.uv[0], vertex.uv[1]);
-
-            // fix: according to your data structure, there is only one skinIndex and skinWeight
-            // skinIndex (stored as float, will be converted to uint in shader)
-            const skinIndex = vertex.skinIndices.length > 0 ? vertex.skinIndices[0] : 0;
-            materialVertices.push(skinIndex);
-
-            // skinWeight (1 float)
-            const skinWeight = vertex.skinWeights.length > 0 ? vertex.skinWeights[0] : 1.0;
-            materialVertices.push(skinWeight);
-
-            // edgeRatio (1 float)
+            // Skin indices (4 floats)
+            materialVertices.push(
+              vertex.skinIndices[0],
+              vertex.skinIndices[1],
+              vertex.skinIndices[2],
+              vertex.skinIndices[3],
+            );
+            // Skin weights (4 floats)
+            materialVertices.push(
+              vertex.skinWeights[0],
+              vertex.skinWeights[1],
+              vertex.skinWeights[2],
+              vertex.skinWeights[3],
+            );
+            // Edge ratio (1 float)
             materialVertices.push(vertex.edgeRatio);
           }
 
@@ -804,11 +816,11 @@ export class WebGPURenderer implements IWebGPURenderer {
     const geometryData = {
       vertices: new Float32Array(materialVertices),
       indices: new Uint16Array(alignedIndices),
-      vertexCount: materialVertices.length / 11, // fix: 11个float per vertex
+      vertexCount: materialVertices.length / floatsPerVertex,
       indexCount: alignedIndices.length,
       primitiveType: 'triangle-list' as const,
       vertexFormat: 'pmx' as const,
-      bounds: this.calculateBounds(materialVertices, 11), // fix bounds calculation
+      bounds: this.calculateBounds(materialVertices, floatsPerVertex),
     };
 
     const geometry = this.geometryManager.getGeometryFromData(geometryData, geometryId);
@@ -922,6 +934,11 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Setup material bind group (Group 3)
     this.setupMaterialBindGroup(renderPass, renderable);
+
+    // Setup PMX animation bind group (Group 4) if this is a PMX model
+    if (renderable.pmxAssetId) {
+      await this.setupPMXAnimationBindGroup(renderPass, renderable);
+    }
   }
 
   /**
@@ -1028,13 +1045,112 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
+   * Setup PMX animation bind group for morph and bone data
+   */
+  private async setupPMXAnimationBindGroup(
+    renderPass: GPURenderPassEncoder,
+    renderable: RenderData,
+  ): Promise<void> {
+    if (!renderable.pmxAssetId) return;
+
+    // Get or create animation buffers for this PMX model
+    const pmxComponent = renderable.pmxComponent;
+    if (!pmxComponent) return;
+
+    const assetDescriptor = pmxComponent.resolveAsset();
+    if (!assetDescriptor) return;
+
+    const pmxModel = assetDescriptor.rawData as PMXModel; // PMXModel type
+    if (!pmxModel) return;
+
+    // Get bone count and vertex count from PMX model
+    const boneCount = pmxModel.bones?.length || 0;
+    const vertexCount = pmxModel.vertices?.length || 0;
+
+    // Get or create animation buffers
+    const animationBuffers = this.pmxAnimationBufferManager.getOrCreateAnimationBuffers(
+      renderable.pmxAssetId,
+      boneCount,
+      vertexCount,
+    );
+
+    // Update animation data if needed
+    await this.updatePMXAnimationData(
+      renderable.pmxAssetId,
+      renderable.entityId,
+      renderable.boneMatrices,
+      renderable.morphWeights,
+      renderable.morphData,
+    );
+
+    // Set animation bind group
+    renderPass.setBindGroup(3, animationBuffers.animationBindGroup);
+  }
+
+  /**
+   * Update PMX animation data for a specific model
+   */
+  private async updatePMXAnimationData(
+    assetId: string,
+    entityId: number,
+    boneMatrices?: Float32Array,
+    morphWeights?: Float32Array,
+    morphData?: Float32Array,
+  ): Promise<void> {
+    // Use provided animation data or create defaults
+    const finalBoneMatrices = boneMatrices || this.createDefaultBoneMatrices();
+    const finalMorphWeights = morphWeights || this.createDefaultMorphWeights();
+    const finalMorphData = morphData;
+
+    // Update buffers
+    this.pmxAnimationBufferManager.updateBoneMatrices(assetId, finalBoneMatrices);
+    this.pmxAnimationBufferManager.updateMorphWeights(assetId, finalMorphWeights);
+    if (finalMorphData) {
+      this.pmxAnimationBufferManager.updateMorphData(assetId, finalMorphData);
+    }
+  }
+
+  /**
+   * Create default bone matrices (identity matrices)
+   */
+  private createDefaultBoneMatrices(): Float32Array {
+    const boneCount = 50; // Default bone count
+    const boneMatrices = new Float32Array(boneCount * 16);
+    for (let i = 0; i < boneCount; i++) {
+      const matrixIndex = i * 16;
+      // Set identity matrix
+      boneMatrices[matrixIndex] = 1; // [0,0]
+      boneMatrices[matrixIndex + 5] = 1; // [1,1]
+      boneMatrices[matrixIndex + 10] = 1; // [2,2]
+      boneMatrices[matrixIndex + 15] = 1; // [3,3]
+    }
+    return boneMatrices;
+  }
+
+  /**
+   * Create default morph weights (all zeros)
+   */
+  private createDefaultMorphWeights(): Float32Array {
+    const morphCount = 64; // Default morph count
+    return new Float32Array(morphCount);
+  }
+
+  /**
+   * Create default morph data (all zeros)
+   */
+  private createDefaultMorphData(): Float32Array {
+    const vertexCount = 1000; // Default vertex count
+    return new Float32Array(vertexCount * 3);
+  }
+
+  /**
    * Setup material bind group for material properties
    */
   private setupMaterialBindGroup(renderPass: GPURenderPassEncoder, renderable: RenderData): void {
     // Check if this is a PMX material (has PMX-specific data)
     if (renderable.material.materialType === 'pmx') {
       // This is a PMX material with pre-created bind group
-      // PMX materials use bind group index 2 (TIME=0, MVP=1, PMX_MATERIAL=2)
+      // PMX materials use bind group index 2 (TIME=0, MVP=1, PMX_MATERIAL=2, ANIMATION=3)
       const pmxMaterial = renderable.material as PMXMaterialCacheData;
       renderPass.setBindGroup(2, pmxMaterial.bindGroup);
       return;

@@ -5,7 +5,9 @@ import {
   GeometryData,
   GeometryFactory,
   Mesh3DComponent,
+  PMXBoneComponent,
   PMXMeshComponent,
+  PMXMorphComponent,
   Transform3DComponent,
   WebGPU3DRenderComponent,
 } from '@ecs/components';
@@ -72,7 +74,7 @@ export class WebGPURenderSystem extends System {
     const renderer = createWebGPURenderer(this.rootElement, 'webgpu-renderer');
     this.setRenderer(renderer);
 
-    // @ts-ignore
+    // @ts-expect-error - Adding renderer to window for debugging
     window.renderer = renderer;
 
     // Initialize global uniforms and render stats
@@ -308,6 +310,7 @@ export class WebGPURenderSystem extends System {
 
     return [
       {
+        entityId: entity.numericId,
         geometryId,
         geometryData: meshComponent.geometryData,
         worldMatrix: new Float32Array(worldMatrix),
@@ -351,6 +354,21 @@ export class WebGPURenderSystem extends System {
     // Calculate normal matrix (inverse transpose of upper 3x3 world matrix)
     const normalMatrix = this.calculateNormalMatrix(worldMatrix);
 
+    // Extract animation data from entity components
+    let morphComponent: PMXMorphComponent | undefined;
+    let boneComponent: PMXBoneComponent | undefined;
+    if (entity.hasComponent(PMXMorphComponent.componentName)) {
+      morphComponent = entity.getComponent<PMXMorphComponent>(PMXMorphComponent.componentName);
+    }
+    if (entity.hasComponent(PMXBoneComponent.componentName)) {
+      boneComponent = entity.getComponent<PMXBoneComponent>(PMXBoneComponent.componentName);
+    }
+
+    // Get animation data
+    const boneMatrices = boneComponent ? this.extractBoneMatrices(boneComponent) : undefined;
+    const morphWeights = morphComponent ? this.extractMorphWeights(morphComponent) : undefined;
+    const morphData = morphComponent ? this.extractMorphData(morphComponent) : undefined;
+
     // Create a renderable for each material
     const renderDataList: RenderData[] = [];
 
@@ -374,6 +392,7 @@ export class WebGPURenderSystem extends System {
       };
 
       renderDataList.push({
+        entityId: entity.numericId,
         geometryId,
         geometryData,
         worldMatrix: new Float32Array(worldMatrix),
@@ -387,6 +406,10 @@ export class WebGPURenderSystem extends System {
         pmxAssetId: pmxMeshComponent.assetId,
         pmxComponent: pmxMeshComponent,
         materialIndex, // Add material index
+        // Add animation data
+        boneMatrices,
+        morphWeights,
+        morphData,
       });
     }
 
@@ -401,6 +424,45 @@ export class WebGPURenderSystem extends System {
       meshComponent.descriptor,
       meshComponent.getPrimitiveType(),
     );
+  }
+
+  /**
+   * Extract bone matrices from bone component
+   */
+  private extractBoneMatrices(boneComponent: PMXBoneComponent): Float32Array | undefined {
+    if (!boneComponent.needsGPUUpdate()) {
+      return undefined;
+    }
+
+    // Get bone matrices from component
+    const boneMatrices = boneComponent.getBoneMatricesArray();
+    return boneMatrices;
+  }
+
+  /**
+   * Extract morph weights from morph component
+   */
+  private extractMorphWeights(morphComponent: PMXMorphComponent): Float32Array | undefined {
+    if (!morphComponent.needsGPUUpdate()) {
+      return undefined;
+    }
+
+    // Get morph weights from component
+    const morphWeights = morphComponent.getMorphWeightsArray();
+    return morphWeights;
+  }
+
+  /**
+   * Extract morph data from morph component
+   */
+  private extractMorphData(morphComponent: PMXMorphComponent): Float32Array | undefined {
+    if (!morphComponent.needsGPUUpdate()) {
+      return undefined;
+    }
+
+    // Get morph data from component
+    const morphData = morphComponent.getMorphDataArray();
+    return morphData.length > 0 ? morphData : undefined;
   }
 
   /**
