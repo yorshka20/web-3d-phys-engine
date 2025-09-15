@@ -157,6 +157,15 @@ export class World implements IWorld {
     return this.entitiesById.get(id);
   }
 
+  getEntityByNumericId(numericId: number): Entity | undefined {
+    for (const entity of this.entities) {
+      if (entity.numericId === numericId) {
+        return entity;
+      }
+    }
+    return undefined;
+  }
+
   addSystem(system: ISystem): void {
     system.setWorld(this);
     if (this.systems.has(system.name)) {

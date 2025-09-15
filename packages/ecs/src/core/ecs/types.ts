@@ -1,5 +1,6 @@
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { IPoolable, IPoolableConfig } from '../pool/IPoolable';
+import { ComponentData } from './Component';
 import { World } from './World';
 
 // define component constructor type
@@ -26,7 +27,7 @@ export interface IEntity extends IPoolable {
 
   addComponent(component: IComponent): void;
   removeComponent(componentName: string): void;
-  getComponent<T extends IComponent>(componentName: string): T;
+  getComponent<T extends IComponent<any>>(componentName: string): T;
   hasComponent(componentName: string): boolean;
   isType(type: EntityType): boolean;
 
@@ -42,7 +43,7 @@ export interface IEntity extends IPoolable {
 /**
  * Component interface
  */
-export interface IComponent extends IPoolable {
+export interface IComponent<T = ComponentData> extends IPoolable {
   readonly name: string;
   entity: IEntity | null;
   enabled: boolean;
@@ -53,6 +54,11 @@ export interface IComponent extends IPoolable {
 
   reset(): void;
   recreate(props: any): void;
+
+  getData(): T;
+  setData(data: T): void;
+  updateData<K extends keyof T>(key: K, value: T[K]): void;
+  getDataProperty<K extends keyof T>(key: K): T[K];
 }
 
 /**
@@ -100,6 +106,8 @@ export interface IWorld {
 
   addEntity(entity: IEntity): void;
   removeEntity(entity: IEntity): void;
+  getEntityById(id: string): IEntity | undefined;
+  getEntityByNumericId(numericId: number): IEntity | undefined;
   createEntity(type: EntityType): IEntity;
   createComponent<T extends IComponent, C extends ComponentConstructor<T>>(
     ComponentClass: C,

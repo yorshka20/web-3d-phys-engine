@@ -6,10 +6,13 @@ export interface ComponentConfig {
   maxSize: number;
 }
 
+export type ComponentData = Record<string, any>;
+
 /**
  * Base Component class that implements the Component interface
+ * Supports generic data type for component-specific data
  */
-export abstract class Component implements IComponent {
+export abstract class Component<T = ComponentData> implements IComponent<T> {
   static componentName: string;
   static poolConfig: IPoolableConfig = {
     initialSize: 0,
@@ -20,8 +23,12 @@ export abstract class Component implements IComponent {
   entity: IEntity | null = null;
   enabled: boolean = true;
 
-  constructor(name: string) {
+  // Generic data property for component-specific data
+  data: T;
+
+  constructor(name: string, data: T = {} as T) {
     this.name = name;
+    this.data = data;
   }
 
   onAttach(entity: IEntity): void {
@@ -39,6 +46,40 @@ export abstract class Component implements IComponent {
   reset(): void {
     this.entity = null;
     this.enabled = true;
+  }
+
+  /**
+   * Get component data
+   * @returns The component's data
+   */
+  getData(): T {
+    return this.data;
+  }
+
+  /**
+   * Set component data
+   * @param data New data to set
+   */
+  setData(data: T): void {
+    this.data = data;
+  }
+
+  /**
+   * Update specific property in component data
+   * @param key Property key to update
+   * @param value New value for the property
+   */
+  updateData<K extends keyof T>(key: K, value: T[K]): void {
+    this.data[key] = value;
+  }
+
+  /**
+   * Get specific property from component data
+   * @param key Property key to get
+   * @returns The property value
+   */
+  getDataProperty<K extends keyof T>(key: K): T[K] {
+    return this.data[key];
   }
 
   /**
@@ -115,6 +156,11 @@ export abstract class Component implements IComponent {
     if (props) {
       const clonedProps = this.safeClone(props, this.name);
       Object.assign(this, clonedProps);
+
+      // If props contains data property, update the component data
+      if (clonedProps.data !== undefined) {
+        this.data = clonedProps.data;
+      }
     }
   }
 }

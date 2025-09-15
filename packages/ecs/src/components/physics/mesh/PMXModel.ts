@@ -92,6 +92,7 @@ export interface PMXBone {
 export interface PMXMorphElement {
   index: number; // vertex index
   position: [number, number, number]; // morph offset
+  rotation: [number, number, number]; // morph rotation
 }
 
 // PMX morph data interface
