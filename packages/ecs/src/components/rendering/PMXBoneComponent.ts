@@ -5,7 +5,9 @@
 
 import { PMXBone } from '@ecs/components/physics/mesh/PMXModel';
 import { Component } from '@ecs/core/ecs/Component';
+import { Vec3 } from '@ecs/types/types';
 import { mat4 } from 'gl-matrix';
+import { BoneOffset } from './PMXMorphComponent';
 
 export interface PMXBoneTransform {
   boneIndex: number;
@@ -22,7 +24,7 @@ export interface PMXBoneComponentData extends Record<string, any> {
   hierarchy: Map<number, number[]>; // parent -> children mapping
   rootBones: number[]; // root bones
   bindPose: Map<number, PMXBoneTransform>; // original bind pose
-  activeMorphOffsets: Map<number, [number, number, number]>; // current morph offsets
+  activeMorphOffsets: Map<number, BoneOffset>; // current morph offsets
   needsUpdate: boolean; // Flag to indicate if GPU data needs updating
   boneCount: number; // Total number of bones in the model
 }
@@ -172,35 +174,82 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
   /**
    * Apply morph offset to bone (for Type 2 morphs)
    * @param boneIndex Index of the bone
-   * @param offset Position offset to apply
+   * @param offset Position and rotation offset to apply
    * @param weight Weight of the morph (0.0 to 1.0)
    */
-  applyMorphOffset(boneIndex: number, offset: [number, number, number], weight: number): void {
-    const weightedOffset: [number, number, number] = [
-      offset[0] * weight,
-      offset[1] * weight,
-      offset[2] * weight,
-    ];
-    this.data.activeMorphOffsets.set(boneIndex, weightedOffset);
+  applyBoneMorphOffset(boneIndex: number, offset: BoneOffset, weight: number): void {
+    if (boneIndex < 0 || boneIndex >= this.data.boneCount) return;
 
-    // recalculate final transform
-    this.updateBoneTransform(boneIndex);
+    const weightedPositionOffset: [number, number, number] = [
+      offset.positionOffset[0] * weight,
+      offset.positionOffset[1] * weight,
+      offset.positionOffset[2] * weight,
+    ];
+
+    const weightedRotationOffset: [number, number, number] = [
+      offset.rotationOffset[0] * weight,
+      offset.rotationOffset[1] * weight,
+      offset.rotationOffset[2] * weight,
+    ];
+
+    // Store both position and rotation offsets
+    this.data.activeMorphOffsets.set(boneIndex, {
+      positionOffset: weightedPositionOffset,
+      rotationOffset: weightedRotationOffset,
+    });
+
+    this.updateBoneWithMorphOffset(boneIndex);
   }
 
-  private updateBoneTransform(boneIndex: number): void {
-    const bindPose = this.data.bindPose.get(boneIndex);
-    const morphOffset = this.data.activeMorphOffsets.get(boneIndex) || [0, 0, 0];
+  /**
+   * clear morph offset
+   * @param boneIndex bone index
+   */
+  clearBoneMorphOffset(boneIndex: number): void {
+    this.data.activeMorphOffsets.delete(boneIndex);
+    this.updateBoneWithMorphOffset(boneIndex);
+  }
 
-    if (!bindPose) return;
+  /**
+   * update bone transform with morph offset
+   */
+  private updateBoneWithMorphOffset(boneIndex: number): void {
+    const baseTransform = this.data.boneTransforms.get(boneIndex);
+    const morphOffset = this.data.activeMorphOffsets.get(boneIndex) || {
+      positionOffset: [0, 0, 0],
+      rotationOffset: [0, 0, 0],
+    };
 
-    // final position = bind pose + morph offset
-    const finalPosition: [number, number, number] = [
-      bindPose.position[0] + morphOffset[0],
-      bindPose.position[1] + morphOffset[1],
-      bindPose.position[2] + morphOffset[2],
+    if (!baseTransform) return;
+
+    // apply morph offset to current position
+    const finalPosition: Vec3 = [
+      baseTransform.position[0] + morphOffset.positionOffset[0],
+      baseTransform.position[1] + morphOffset.positionOffset[1],
+      baseTransform.position[2] + morphOffset.positionOffset[2],
     ];
 
-    this.setBonePosition(boneIndex, finalPosition);
+    // apply morph offset to current rotation
+    const finalRotation: Vec3 = [
+      baseTransform.rotation[0] + morphOffset.rotationOffset[0],
+      baseTransform.rotation[1] + morphOffset.rotationOffset[1],
+      baseTransform.rotation[2] + morphOffset.rotationOffset[2],
+    ];
+
+    // update transform without triggering recursive update
+    baseTransform.position = finalPosition;
+    baseTransform.rotation = finalRotation;
+    this.data.needsUpdate = true;
+  }
+
+  /**
+   * recalculate all bones with morph offset
+   */
+  applyAllMorphOffsets(): void {
+    for (const [boneIndex] of this.data.activeMorphOffsets) {
+      this.updateBoneWithMorphOffset(boneIndex);
+    }
+    this.calculateBoneMatrices();
   }
 
   /**
