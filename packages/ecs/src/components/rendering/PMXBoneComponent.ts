@@ -5,15 +5,15 @@
 
 import { PMXBone } from '@ecs/components/physics/mesh/PMXModel';
 import { Component } from '@ecs/core/ecs/Component';
-import { Vec3 } from '@ecs/types/types';
+import { Vec3, Vec4 } from '@ecs/types/types';
 import { mat4 } from 'gl-matrix';
 import { BoneOffset } from './PMXMorphComponent';
 
 export interface PMXBoneTransform {
   boneIndex: number;
-  position: [number, number, number];
-  rotation: [number, number, number]; // Euler angles in radians
-  scale: [number, number, number];
+  position: Vec3;
+  rotation: Vec3 | Vec4; // Euler angles in radians
+  scale: Vec3;
   enabled: boolean;
 }
 
@@ -36,6 +36,8 @@ interface PMXBoneComponentProps {
 
 export class PMXBoneComponent extends Component<PMXBoneComponentData> {
   static readonly componentName = 'PMXBoneComponent';
+
+  private originalTransforms: Map<number, PMXBoneTransform> = new Map();
 
   constructor(props: PMXBoneComponentProps) {
     const boneCount = props.bones?.length || 0;
@@ -79,7 +81,15 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
       // Initialize bone transform with default values
       this.data.boneTransforms.set(i, {
         boneIndex: i,
-        position: [...bone.position],
+        position: [0, 0, 0], // do not use bone.position because it may have different coordinate system
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        enabled: true,
+      });
+
+      this.originalTransforms.set(i, {
+        boneIndex: i,
+        position: [0, 0, 0],
         rotation: [0, 0, 0],
         scale: [1, 1, 1],
         enabled: true,
@@ -180,17 +190,20 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
   applyBoneMorphOffset(boneIndex: number, offset: BoneOffset, weight: number): void {
     if (boneIndex < 0 || boneIndex >= this.data.boneCount) return;
 
-    const weightedPositionOffset: [number, number, number] = [
+    const weightedPositionOffset: Vec3 = [
       offset.positionOffset[0] * weight,
       offset.positionOffset[1] * weight,
       offset.positionOffset[2] * weight,
     ];
 
-    const weightedRotationOffset: [number, number, number] = [
+    const weightedRotationOffset: Vec3 | Vec4 = [
       offset.rotationOffset[0] * weight,
       offset.rotationOffset[1] * weight,
       offset.rotationOffset[2] * weight,
     ];
+    if (offset.rotationOffset && offset.rotationOffset.length === 4) {
+      weightedRotationOffset.push(offset.rotationOffset[3] * weight);
+    }
 
     // Store both position and rotation offsets
     this.data.activeMorphOffsets.set(boneIndex, {
@@ -214,31 +227,45 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
    * update bone transform with morph offset
    */
   private updateBoneWithMorphOffset(boneIndex: number): void {
-    const baseTransform = this.data.boneTransforms.get(boneIndex);
-    const morphOffset = this.data.activeMorphOffsets.get(boneIndex) || {
-      positionOffset: [0, 0, 0],
-      rotationOffset: [0, 0, 0],
-    };
+    const currentTransform = this.data.boneTransforms.get(boneIndex);
+    const originalTransform = this.originalTransforms.get(boneIndex);
+    const morphOffset = this.data.activeMorphOffsets.get(boneIndex);
 
-    if (!baseTransform) return;
+    if (!currentTransform || !originalTransform) return;
 
-    // apply morph offset to current position
-    const finalPosition: Vec3 = [
-      baseTransform.position[0] + morphOffset.positionOffset[0],
-      baseTransform.position[1] + morphOffset.positionOffset[1],
-      baseTransform.position[2] + morphOffset.positionOffset[2],
+    // if no morph offset, restore to original state
+    if (!morphOffset) {
+      currentTransform.position = [...originalTransform.position];
+      currentTransform.rotation = [...originalTransform.rotation];
+      this.data.needsUpdate = true;
+      return;
+    }
+
+    // apply offset from original state
+    currentTransform.position = [
+      originalTransform.position[0] + morphOffset.positionOffset[0],
+      originalTransform.position[1] + morphOffset.positionOffset[1],
+      originalTransform.position[2] + morphOffset.positionOffset[2],
     ];
 
-    // apply morph offset to current rotation
-    const finalRotation: Vec3 = [
-      baseTransform.rotation[0] + morphOffset.rotationOffset[0],
-      baseTransform.rotation[1] + morphOffset.rotationOffset[1],
-      baseTransform.rotation[2] + morphOffset.rotationOffset[2],
-    ];
+    // handle rotation offset
+    if (morphOffset.rotationOffset.length === 4) {
+      // quaternion format: directly use morph's quaternion (because original rotation should be [0,0,0])
+      currentTransform.rotation = [...morphOffset.rotationOffset] as [
+        number,
+        number,
+        number,
+        number,
+      ];
+    } else {
+      // Euler angle format: add offset from original state
+      currentTransform.rotation = [
+        originalTransform.rotation[0] + morphOffset.rotationOffset[0],
+        originalTransform.rotation[1] + morphOffset.rotationOffset[1],
+        originalTransform.rotation[2] + morphOffset.rotationOffset[2],
+      ];
+    }
 
-    // update transform without triggering recursive update
-    baseTransform.position = finalPosition;
-    baseTransform.rotation = finalRotation;
     this.data.needsUpdate = true;
   }
 
@@ -282,9 +309,16 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
     const scale = mat4.create();
 
     mat4.translate(translation, translation, transform.position);
-    mat4.rotateX(rotation, rotation, transform.rotation[0]);
-    mat4.rotateY(rotation, rotation, transform.rotation[1]);
-    mat4.rotateZ(rotation, rotation, transform.rotation[2]);
+    if (transform.rotation && transform.rotation.length === 4) {
+      // quaternion format
+      const quat = transform.rotation as Vec4;
+      mat4.fromQuat(rotation, quat);
+    } else {
+      // Euler angle format
+      mat4.rotateX(rotation, rotation, transform.rotation[0]);
+      mat4.rotateY(rotation, rotation, transform.rotation[1]);
+      mat4.rotateZ(rotation, rotation, transform.rotation[2]);
+    }
     mat4.scale(scale, scale, transform.scale);
 
     // T * R * S
@@ -394,5 +428,16 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
     }
 
     this.data.needsUpdate = true;
+  }
+
+  clearAllBoneMorphOffsets(): void {
+    // restore all bones to original state
+    for (const [boneIndex, originalTransform] of this.originalTransforms) {
+      const currentTransform = this.data.boneTransforms.get(boneIndex);
+      if (currentTransform) {
+        currentTransform.position = [...originalTransform.position];
+        currentTransform.rotation = [...originalTransform.rotation];
+      }
+    }
   }
 }

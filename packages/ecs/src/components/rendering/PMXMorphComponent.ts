@@ -5,7 +5,7 @@
 
 import { PMXMorph } from '@ecs/components/physics/mesh/PMXModel';
 import { Component } from '@ecs/core/ecs/Component';
-import { Vec3 } from '@ecs/types/types';
+import { Vec3, Vec4 } from '@ecs/types/types';
 
 export interface PMXMorphState {
   morphIndex: number;
@@ -21,6 +21,8 @@ export interface PMXMorphComponentData extends Record<string, any> {
   morphWeights: Float32Array; // Current weights for all morphs (max 64)
   morphData: Float32Array; // Vertex morph data (position offsets)
   needsUpdate: boolean; // Flag to indicate if GPU data needs updating
+  maxVertexCount: number;
+  maxMorphCount: number;
 }
 
 interface VertexMorphData {
@@ -37,7 +39,7 @@ interface BoneMorphData {
 
 export interface BoneOffset {
   positionOffset: Vec3;
-  rotationOffset: Vec3;
+  rotationOffset: Vec3 | Vec4; // Euler angles in radians
 }
 
 interface PMXMorphComponentProps {
@@ -56,7 +58,9 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
       boneMorphs: new Map(),
       morphWeights: new Float32Array(64),
       morphData: new Float32Array(0),
-      needsUpdate: false,
+      needsUpdate: true,
+      maxVertexCount: 1e10, // TODO: fix max vertexCount
+      maxMorphCount: 64,
     });
 
     this.initializeMorphs(props.morphs);
@@ -72,6 +76,44 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
     this.data.boneMorphs = new Map();
 
     this.categorizeMorphs(morphs);
+
+    // build GPU data
+    this.buildMorphDataArray();
+  }
+
+  /**
+   * build dense morphData array to fill all empty vertices
+   * layout: [vertex0_morph0_offset(3), vertex0_morph1_offset(3), ..., vertex1_morph0_offset(3), ...]
+   */
+  private buildMorphDataArray(): void {
+    const vertexCount = this.data.maxVertexCount;
+    const morphCount = Math.min(this.data.vertexMorphs.size, this.data.maxMorphCount);
+
+    if (morphCount === 0 || vertexCount === 0) {
+      this.data.morphData = new Float32Array(0);
+      return;
+    }
+
+    // each vertex * each morph * 3 components(x,y,z)
+    const totalSize = vertexCount * morphCount * 3;
+    this.data.morphData = new Float32Array(totalSize);
+
+    // fill data
+    let morphIndex = 0;
+    for (const [originalMorphIndex, vertexMorph] of this.data.vertexMorphs) {
+      if (morphIndex >= this.data.maxMorphCount) break;
+
+      // set offset for each vertex
+      for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
+        const offset = vertexMorph.vertexOffsets.get(vertexIndex) || [0, 0, 0];
+        const dataIndex = (vertexIndex * morphCount + morphIndex) * 3;
+
+        this.data.morphData[dataIndex + 0] = offset[0]; // x
+        this.data.morphData[dataIndex + 1] = offset[1]; // y
+        this.data.morphData[dataIndex + 2] = offset[2]; // z
+      }
+      morphIndex++;
+    }
   }
 
   private categorizeMorphs(morphs: PMXMorph[]): void {
@@ -101,15 +143,11 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
     morph.elements.forEach((element) => {
       boneOffsets.set(element.index, {
         positionOffset: [...element.position],
-        rotationOffset: element.rotation ? [...element.rotation] : [0, 0, 0],
+        rotationOffset: element.rotation ? [...element.rotation] : ([0, 0, 0] as Vec3),
       });
     });
 
-    return {
-      name: morph.name,
-      boneOffsets: boneOffsets,
-      elementCount: morph.elements.length,
-    };
+    return { name: morph.name, boneOffsets, elementCount: morph.elements.length };
   }
 
   /**

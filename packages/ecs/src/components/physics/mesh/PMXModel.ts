@@ -3,6 +3,8 @@
  * Based on actual PMX file analysis with proper TypeScript definitions
  */
 
+import { Vec3, Vec4 } from '@ecs/types/types';
+
 // PMX model metadata interface
 export interface PMXMetadata {
   format: string;
@@ -91,8 +93,8 @@ export interface PMXBone {
 // PMX morph element interface
 export interface PMXMorphElement {
   index: number; // vertex index
-  position: [number, number, number]; // morph offset
-  rotation: [number, number, number]; // morph rotation
+  position: Vec3; // morph offset
+  rotation: Vec3 | Vec4; // morph rotation. can be quaternion or Euler angles
 }
 
 // PMX morph data interface
