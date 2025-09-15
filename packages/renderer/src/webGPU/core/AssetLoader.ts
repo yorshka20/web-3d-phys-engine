@@ -1,4 +1,5 @@
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { mat4 } from 'gl-matrix';
 import { Parser } from 'mmd-parser';
 import {
   AssetDescriptor,
@@ -236,11 +237,109 @@ export class AssetLoader {
       // Parse PMX file using mmd-parser
       const pmxData = this.parser.parsePmx(arrayBuffer) as PMXModel;
 
+      // transform PMX coordinates
+      this.transformPMXCoordinates(pmxData);
+
       return pmxData;
     } catch (error) {
       console.error('[AssetLoader] Failed to parse PMX file:', error);
       throw new Error('Invalid PMX file format');
     }
+  }
+
+  private static transformPMXCoordinates(pmxData: PMXModel): void {
+    // 1. vertex position and normal
+    if (pmxData.vertices) {
+      for (const vertex of pmxData.vertices) {
+        if (vertex.position) {
+          vertex.position[2] = -vertex.position[2]; // flip Z axis
+        }
+        if (vertex.normal) {
+          vertex.normal[2] = -vertex.normal[2]; // flip normal Z axis
+        }
+      }
+    }
+
+    // bone position and tail position
+    if (pmxData.bones) {
+      for (const bone of pmxData.bones) {
+        // convert bone position
+        if (bone.position) {
+          bone.position[2] = -bone.position[2];
+        }
+
+        // convert bone tail position
+        if (bone.tailPosition) {
+          bone.tailPosition[2] = -bone.tailPosition[2];
+        }
+
+        // convert bone offset position
+        if (bone.offsetPosition) {
+          bone.offsetPosition[2] = -bone.offsetPosition[2];
+        }
+
+        // convert bone transform matrix (if exists)
+        if (bone.transform) {
+          this.transformBoneMatrix(bone.transform);
+        }
+
+        // convert inverse bind matrix (for skinning)
+        if (bone.inverseBindMatrix) {
+          this.transformBoneMatrix(bone.inverseBindMatrix);
+        }
+      }
+    }
+
+    if (pmxData.morphs) {
+      for (const morph of pmxData.morphs) {
+        if (morph.type === 1) {
+          // vertex morph
+          for (const element of morph.elements) {
+            if (element.offset) {
+              element.offset[2] = -element.offset[2]; // flip Z axis offset
+            }
+          }
+        } else if (morph.type === 2) {
+          // bone morph
+          for (const element of morph.elements) {
+            if (element.position) {
+              element.position[2] = -element.position[2]; // flip position offset
+            }
+          }
+        }
+      }
+    }
+
+    // 4. other data that needs to be converted (rigid bodies, joints, etc.)
+    if (pmxData.rigidBodies) {
+      for (const rigidBody of pmxData.rigidBodies) {
+        if (rigidBody.position) {
+          rigidBody.position[2] = -rigidBody.position[2];
+        }
+        if (rigidBody.rotation) {
+          rigidBody.rotation[2] = -rigidBody.rotation[2];
+        }
+      }
+    }
+  }
+
+  // transform 4x4 matrix's Z axis related components
+  private static transformBoneMatrix(matrix: mat4): void {
+    // matrix is 16 element array stored in row-major or column-major
+    // assume it is column-major (OpenGL/WebGPU standard):
+    // [0  4  8  12]   [M00 M01 M02 M03]
+    // [1  5  9  13] = [M10 M11 M12 M13]
+    // [2  6  10 14]   [M20 M21 M22 M23]
+    // [3  7  11 15]   [M30 M31 M32 M33]
+
+    // flip Z axis related matrix elements
+    matrix[8] = -matrix[8]; // M02 (column 3, row 1)
+    matrix[9] = -matrix[9]; // M12 (column 3, row 2)
+    matrix[10] = -matrix[10]; // M22 (column 3, row 3)
+    matrix[11] = -matrix[11]; // M32 (column 3, row 4)
+
+    // flip Z axis related translation components
+    matrix[14] = -matrix[14]; // M23 (Z axis translation)
   }
 
   /**

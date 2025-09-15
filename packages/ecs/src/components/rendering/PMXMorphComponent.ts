@@ -13,7 +13,7 @@ export interface PMXMorphState {
   enabled: boolean;
 }
 
-export interface PMXMorphComponentData extends Record<string, any> {
+export interface PMXMorphComponentData extends Record<string, unknown> {
   assetId: string; // PMX model asset ID
   activeMorphs: Map<number, PMXMorphState>; // morphIndex -> state
   vertexMorphs: Map<number, VertexMorphData>;
@@ -142,24 +142,17 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
 
     morph.elements.forEach((element) => {
       let rotationOffset: Vec3 | Vec4 = element.rotation ? [...element.rotation] : [0, 0, 0];
+
       if (element.rotation && element.rotation.length === 4) {
-        const [x, y, z, w] = element.rotation;
         // quaternion to euler angles
-        const sinr_cosp = 2 * (w * x + y * z);
-        const cosr_cosp = 1 - 2 * (x * x + y * y);
-        const roll = Math.atan2(sinr_cosp, cosr_cosp);
-
-        const sinp = 2 * (w * y - z * x);
-        const pitch = Math.abs(sinp) >= 1 ? (Math.sign(sinp) * Math.PI) / 2 : Math.asin(sinp);
-
-        const siny_cosp = 2 * (w * z + x * y);
-        const cosy_cosp = 1 - 2 * (y * y + z * z);
-        const yaw = Math.atan2(siny_cosp, cosy_cosp);
-
-        rotationOffset = [roll, pitch, yaw];
+        const transformedQuat = this.transformQuaternionForCoordinateSystem(
+          element.rotation as Vec4,
+        );
+        rotationOffset = this.quaternionToEulerZXY(transformedQuat);
       }
+
       boneOffsets.set(element.index, {
-        positionOffset: [...element.position],
+        positionOffset: element.position,
         rotationOffset: rotationOffset,
       });
     });
@@ -167,6 +160,58 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
     return { name: morph.name, boneOffsets, elementCount: morph.elements.length };
   }
 
+  /**
+   * Transform quaternion for coordinate system conversion (MMD to WebGPU)
+   * @param quaternion Original quaternion [x, y, z, w]
+   * @returns Transformed quaternion for WebGPU coordinate system
+   */
+  private transformQuaternionForCoordinateSystem(quaternion: Vec4): Vec4 {
+    const [x, y, z, w] = quaternion;
+
+    // For Z-axis flip coordinate system conversion:
+    // Flip Z and W components to maintain proper rotation
+    return [x, y, -z, -w];
+  }
+
+  /**
+   * Convert quaternion to Euler angles using ZXY rotation order (MMD standard)
+   * Based on the technical guide in pmx-convert.md
+   * @param quaternion Quaternion [x, y, z, w]
+   * @returns Euler angles [pitch, yaw, roll] in radians
+   */
+  private quaternionToEulerZXY(quaternion: Vec4): Vec3 {
+    const [qx, qy, qz, qw] = quaternion;
+
+    // Convert to rotation matrix elements
+    const r11 = 2.0 * (qw * qw + qx * qx) - 1.0;
+    const r12 = 2.0 * (qx * qy - qw * qz);
+    const r13 = 2.0 * (qx * qz + qw * qy);
+    const r23 = 2.0 * (qy * qz - qw * qx);
+    const r21 = 2.0 * (qx * qy + qw * qz);
+    const r22 = 2.0 * (qw * qw + qy * qy) - 1.0;
+    const r33 = 2.0 * (qw * qw + qz * qz) - 1.0;
+
+    // Extract Euler angles in ZXY order
+    let euler: Vec3;
+    const sin_x = -r23;
+
+    if (Math.abs(sin_x) >= 1.0) {
+      // Gimbal lock case
+      euler = [
+        (Math.sign(sin_x) * Math.PI) / 2, // pitch (X rotation)
+        0.0, // yaw (Y rotation)
+        Math.atan2(-r12, r11), // roll (Z rotation)
+      ];
+    } else {
+      euler = [
+        Math.asin(sin_x), // pitch (X rotation)
+        Math.atan2(r13, r33), // yaw (Y rotation)
+        Math.atan2(r21, r22), // roll (Z rotation)
+      ];
+    }
+
+    return euler;
+  }
   /**
    * Set morph weight for a specific morph
    * @param morphIndex Index of the morph in the PMX model
