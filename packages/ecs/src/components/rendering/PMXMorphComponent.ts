@@ -141,9 +141,26 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
     const boneOffsets = new Map<number, BoneOffset>();
 
     morph.elements.forEach((element) => {
+      let rotationOffset: Vec3 | Vec4 = element.rotation ? [...element.rotation] : [0, 0, 0];
+      if (element.rotation && element.rotation.length === 4) {
+        const [x, y, z, w] = element.rotation;
+        // quaternion to euler angles
+        const sinr_cosp = 2 * (w * x + y * z);
+        const cosr_cosp = 1 - 2 * (x * x + y * y);
+        const roll = Math.atan2(sinr_cosp, cosr_cosp);
+
+        const sinp = 2 * (w * y - z * x);
+        const pitch = Math.abs(sinp) >= 1 ? (Math.sign(sinp) * Math.PI) / 2 : Math.asin(sinp);
+
+        const siny_cosp = 2 * (w * z + x * y);
+        const cosy_cosp = 1 - 2 * (y * y + z * z);
+        const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+        rotationOffset = [roll, pitch, yaw];
+      }
       boneOffsets.set(element.index, {
         positionOffset: [...element.position],
-        rotationOffset: element.rotation ? [...element.rotation] : ([0, 0, 0] as Vec3),
+        rotationOffset: rotationOffset,
       });
     });
 

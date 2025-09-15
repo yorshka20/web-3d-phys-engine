@@ -249,22 +249,12 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
     ];
 
     // handle rotation offset
-    if (morphOffset.rotationOffset.length === 4) {
-      // quaternion format: directly use morph's quaternion (because original rotation should be [0,0,0])
-      currentTransform.rotation = [...morphOffset.rotationOffset] as [
-        number,
-        number,
-        number,
-        number,
-      ];
-    } else {
-      // Euler angle format: add offset from original state
-      currentTransform.rotation = [
-        originalTransform.rotation[0] + morphOffset.rotationOffset[0],
-        originalTransform.rotation[1] + morphOffset.rotationOffset[1],
-        originalTransform.rotation[2] + morphOffset.rotationOffset[2],
-      ];
-    }
+    // Euler angle format: add offset from original state
+    currentTransform.rotation = [
+      originalTransform.rotation[0] + morphOffset.rotationOffset[0],
+      originalTransform.rotation[1] + morphOffset.rotationOffset[1],
+      originalTransform.rotation[2] + morphOffset.rotationOffset[2],
+    ];
 
     this.data.needsUpdate = true;
   }
