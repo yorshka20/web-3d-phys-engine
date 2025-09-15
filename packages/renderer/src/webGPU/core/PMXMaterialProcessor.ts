@@ -4,6 +4,7 @@ import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
 import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
+import { PMXAnimationBufferManager } from './PMXAnimationBufferManager';
 import { PMXAssetDescriptor } from './PMXAssetDescriptor';
 import { TextureManager } from './TextureManager';
 import { BufferType } from './types';
@@ -51,6 +52,9 @@ export class PMXMaterialProcessor {
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
   private bindGroupManager!: BindGroupManager;
 
+  @Inject(ServiceTokens.PMX_ANIMATION_BUFFER_MANAGER)
+  private animationBufferManager!: PMXAnimationBufferManager;
+
   private defaultTextures: Map<number, PMXMaterialTextureResource> = new Map();
   private materialCache: Map<string, PMXMaterialCacheData> = new Map();
 
@@ -59,6 +63,8 @@ export class PMXMaterialProcessor {
 
   initialize(): void {
     this.analyzeAllAvailableTextures();
+
+    this.createMaterialBindGroupLayout();
   }
 
   private analyzeAllAvailableTextures(): void {

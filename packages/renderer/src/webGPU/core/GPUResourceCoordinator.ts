@@ -290,7 +290,7 @@ export class GPUResourceCoordinator {
     };
   }
 
-  private normalizeVertexData(vertices: PMXVertex[]): PMXVertex[] {
+  normalizeVertexData(vertices: PMXVertex[]): PMXVertex[] {
     return vertices.map((vertex) => {
       // uniform to 4 bones indices and weights
       const indices = [0, 0, 0, 0];
