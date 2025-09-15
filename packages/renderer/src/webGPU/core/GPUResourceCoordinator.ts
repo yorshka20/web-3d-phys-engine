@@ -1,5 +1,5 @@
 import { VertexFormat, WebGPUMaterialDescriptor } from '@ecs';
-import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { PMXModel, PMXVertex } from '@ecs/components/physics/mesh/PMXModel';
 import { AssetDescriptor, AssetType } from './AssetRegistry';
 import { BufferManager } from './BufferManager';
 import { Inject, Injectable } from './decorators';
@@ -194,7 +194,7 @@ export class GPUResourceCoordinator {
       maxZ = -Infinity;
 
     // Convert vertices - based on actual PMX data structure
-    const pmxVertices = pmxModel.vertices;
+    const pmxVertices = this.normalizeVertexData(pmxModel.vertices);
 
     // Process vertices
 
@@ -205,8 +205,8 @@ export class GPUResourceCoordinator {
       const uv = vertex.uv || [0, 0];
 
       // Use correct property names: skinIndices and skinWeights
-      const skinIndices = vertex.skinIndices || [0, 0, 0, 0];
-      const skinWeights = vertex.skinWeights || [1, 0, 0, 0];
+      const skinIndices = vertex.skinIndices;
+      const skinWeights = vertex.skinWeights;
 
       // Position (3 floats)
       vertices.push(position[0], position[1], position[2]);
@@ -265,5 +265,56 @@ export class GPUResourceCoordinator {
         max: [maxX, maxY, maxZ],
       },
     };
+  }
+
+  private normalizeVertexData(vertices: PMXVertex[]): PMXVertex[] {
+    return vertices.map((vertex) => {
+      // uniform to 4 bones indices and weights
+      const indices = [0, 0, 0, 0];
+      const weights = [0, 0, 0, 0];
+
+      switch (vertex.type) {
+        case 0: // BDEF1
+          indices[0] = vertex.skinIndices[0];
+          weights[0] = 1.0;
+          break;
+
+        case 1: // BDEF2
+          indices[0] = vertex.skinIndices[0];
+          indices[1] = vertex.skinIndices[1];
+          weights[0] = vertex.skinWeights[0];
+          weights[1] = vertex.skinWeights[1];
+          break;
+
+        case 2: // BDEF4
+          indices[0] = vertex.skinIndices[0];
+          indices[1] = vertex.skinIndices[1];
+          indices[2] = vertex.skinIndices[2];
+          indices[3] = vertex.skinIndices[3];
+          weights[0] = vertex.skinWeights[0];
+          weights[1] = vertex.skinWeights[1];
+          weights[2] = vertex.skinWeights[2];
+          weights[3] = vertex.skinWeights[3];
+          break;
+
+        case 3: // SDEF - simplified to BDEF2
+          indices[0] = vertex.skinIndices[0];
+          indices[1] = vertex.skinIndices[1];
+          weights[0] = vertex.skinWeights[0];
+          weights[1] = vertex.skinWeights[1];
+          break;
+      }
+
+      return {
+        position: vertex.position,
+        normal: vertex.normal,
+        uv: vertex.uv,
+        auvs: vertex.auvs,
+        type: vertex.type,
+        skinIndices: indices,
+        skinWeights: weights,
+        edgeRatio: vertex.edgeRatio,
+      } as PMXVertex;
+    });
   }
 }

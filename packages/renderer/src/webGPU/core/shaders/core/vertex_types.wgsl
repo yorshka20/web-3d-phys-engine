@@ -9,14 +9,22 @@ struct VertexInput {
 }
 
 
-// PMX vertex input with skinning data
+/**
+ * PMX vertex input with skinning data.  
+ * can have type 0,1,2,3, but we will uniform it to vec4f for skin_index and skin_weight.
+ * 
+ * BDEF1 (type=0): 1 bone，skinIndices=[index]
+ * BDEF2 (type=1): 2 bones，skinIndices=[index1, index2]
+ * BDEF4 (type=2): 4 bones，skinIndices=[index1, index2, index3, index4]
+ * SDEF (type=3): 2 bones+sphere deformation，skinIndices=[index1, index2]
+ */
 struct PMXVertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
-    @location(3) skinIndex: f32, // will be converted to uint in shader
-    @location(4) skinWeight: f32,
-    @location(5) edgeRatio: f32,
+    @location(3) skin_index: vec4f,
+    @location(4) skin_weight: vec4f,
+    @location(5) edge_ratio: f32,
 }
 
 // Colored vertex input for vertex-colored geometry
