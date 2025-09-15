@@ -25,3 +25,8 @@
 @group(2) @binding(14) var metallic_sampler: sampler;
 @group(2) @binding(15) var emission_texture: texture_2d<f32>;
 @group(2) @binding(16) var emission_sampler: sampler;
+
+// Group 3: PMX Animation data (Bone matrices and Morph weights)
+@group(3) @binding(0) var<storage, read> bone_matrices: array<mat4x4<f32>>;
+@group(3) @binding(1) var<uniform> morph_weights: array<vec4<f32>, 16>; // 64/4=16
+@group(3) @binding(2) var<storage, read> morph_data: array<vec3<f32>>;

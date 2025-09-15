@@ -185,6 +185,28 @@ export class GPUResourceCoordinator {
     const vertices: number[] = [];
     const indices: number[] = [];
 
+    // define vertex format constants
+    const VERTEX_FORMAT = {
+      POSITION_SIZE: 3, // vec3<f32>
+      NORMAL_SIZE: 3, // vec3<f32>
+      UV_SIZE: 2, // vec2<f32>
+      SKIN_INDICES_SIZE: 4, // vec4<f32>
+      SKIN_WEIGHTS_SIZE: 4, // vec4<f32>
+      EDGE_RATIO_SIZE: 1, // f32
+    } as const;
+
+    // calculate the total number of floats per vertex
+    const FLOATS_PER_VERTEX =
+      VERTEX_FORMAT.POSITION_SIZE +
+      VERTEX_FORMAT.NORMAL_SIZE +
+      VERTEX_FORMAT.UV_SIZE +
+      VERTEX_FORMAT.SKIN_INDICES_SIZE +
+      VERTEX_FORMAT.SKIN_WEIGHTS_SIZE +
+      VERTEX_FORMAT.EDGE_RATIO_SIZE;
+
+    // calculate the stride
+    // const VERTEX_STRIDE = FLOATS_PER_VERTEX * 4; // 4 bytes per float
+
     // Calculate bounds
     let minX = Infinity,
       minY = Infinity,
@@ -203,10 +225,9 @@ export class GPUResourceCoordinator {
       const position = vertex.position || [0, 0, 0];
       const normal = vertex.normal || [0, 1, 0];
       const uv = vertex.uv || [0, 0];
-
-      // Use correct property names: skinIndices and skinWeights
       const skinIndices = vertex.skinIndices;
       const skinWeights = vertex.skinWeights;
+      const edgeRatio = vertex.edgeRatio;
 
       // Position (3 floats)
       vertices.push(position[0], position[1], position[2]);
@@ -218,6 +239,8 @@ export class GPUResourceCoordinator {
       vertices.push(skinIndices[0], skinIndices[1], skinIndices[2], skinIndices[3]);
       // Skin weights (4 floats)
       vertices.push(skinWeights[0], skinWeights[1], skinWeights[2], skinWeights[3]);
+      // Edge ratio (1 float)
+      vertices.push(edgeRatio);
 
       // Update bounds
       minX = Math.min(minX, position[0]);
@@ -256,7 +279,7 @@ export class GPUResourceCoordinator {
     return {
       vertices: new Float32Array(vertices),
       indices: new Uint16Array(indices),
-      vertexCount: vertices.length / 16, // 16 floats per vertex
+      vertexCount: vertices.length / FLOATS_PER_VERTEX, // 17 floats per vertex
       indexCount: indices.length,
       primitiveType: 'triangle-list',
       vertexFormat: 'pmx', // PMX format with skinning data

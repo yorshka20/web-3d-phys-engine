@@ -1,6 +1,6 @@
 import { Transform3DComponent, WebGPUMaterialDescriptor } from '@ecs/components';
 import { GeometryType } from '@ecs/components/physics/mesh';
-import { BindGroupLayoutVisibility, BufferType, ResourceType } from './constant';
+import { BufferType, ResourceType } from './constant';
 import { GeometryParams } from './geometry';
 import { WebGPUResource } from './resource';
 
@@ -27,18 +27,7 @@ export interface ComputePipelineDescriptor {
  * bind group layout descriptor interface
  */
 export interface BindGroupLayoutDescriptor {
-  // TODO: use GPUBindGroupLayoutEntry
-  entries: Array<{
-    binding: number;
-    visibility: BindGroupLayoutVisibility;
-    buffer?: { type: GPUBufferBindingType };
-    sampler?: { type: GPUSamplerBindingType };
-    texture?: { sampleType: GPUTextureSampleType };
-    storageTexture?: {
-      access: GPUStorageTextureAccess;
-      format: GPUTextureFormat;
-    };
-  }>;
+  entries: GPUBindGroupLayoutEntry[];
   label?: string;
 }
 
@@ -47,11 +36,7 @@ export interface BindGroupLayoutDescriptor {
  */
 export interface BindGroupDescriptor {
   layout: GPUBindGroupLayout;
-  // TODO: use GPUBindGroupEntry
-  entries: Array<{
-    binding: number;
-    resource: GPUBindingResource;
-  }>;
+  entries: GPUBindGroupEntry[];
   label?: string;
 }
 

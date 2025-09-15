@@ -22,8 +22,8 @@ struct PMXVertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
-    @location(3) skin_index: vec4f,
-    @location(4) skin_weight: vec4f,
+    @location(3) skin_indices: vec4f, // use float to keep the same format as the input. convert to uint in shader.
+    @location(4) skin_weights: vec4f,
     @location(5) edge_ratio: f32,
 }
 

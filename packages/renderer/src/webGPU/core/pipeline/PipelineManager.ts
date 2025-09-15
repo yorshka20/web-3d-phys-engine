@@ -51,9 +51,6 @@ export class PipelineManager {
   private gpuCache = new Map<string, SimpleCacheEntry>();
   private semanticToGpuMap = new Map<string, string>();
 
-  // Bind group layout cache
-  private bindGroupLayoutCache = new Map<string, GPUBindGroupLayout>();
-
   // Cache statistics
   private maxCacheSize = 100;
   private semanticCacheHitCount = 0;
@@ -296,9 +293,25 @@ export class PipelineManager {
         bindGroupLayouts.push(mvpLayout);
       }
 
+      // TODO: use getOrCreateBindGroupLayoutByOrder to generate pmx layout
+
       // Group 2: PMX Material layout (using PMXMaterialProcessor's specialized layout)
-      const pmxMaterialLayout = this.pmxMaterialProcessor.createMaterialBindGroupLayout();
+      const pmxMaterialLayout = this.bindGroupManager.getBindGroupLayout(
+        'pmxMaterialBindGroupLayout',
+      );
+      if (!pmxMaterialLayout) {
+        throw new Error('PMX Material bind group layout not found');
+      }
       bindGroupLayouts.push(pmxMaterialLayout);
+
+      // Group 3: PMX Animation layout (using PMXAnimationBufferManager's specialized layout)
+      const pmxAnimationLayout = this.bindGroupManager.getBindGroupLayout(
+        'pmxAnimationBindGroupLayout',
+      );
+      if (!pmxAnimationLayout) {
+        throw new Error('PMX Animation bind group layout not found');
+      }
+      bindGroupLayouts.push(pmxAnimationLayout);
     } else {
       // Standard Pipeline: Always create the first 4 bind groups in fixed order
       const fixedBindGroups = [
@@ -406,23 +419,15 @@ export class PipelineManager {
   ): Promise<GPUBindGroupLayout | null> {
     const layoutId = this.getBindGroupLayoutId(bindGroupOrder);
 
-    // Try to get existing layout from cache
-    if (this.bindGroupLayoutCache.has(layoutId)) {
-      return this.bindGroupLayoutCache.get(layoutId)!;
-    }
-
     // Try to get existing layout from resource manager
     const existingLayout = this.resourceManager.getBindGroupLayoutResource(layoutId);
     if (existingLayout) {
-      this.bindGroupLayoutCache.set(layoutId, existingLayout.layout);
       return existingLayout.layout;
     }
 
     // Create new layout based on order
     const layout = this.createBindGroupLayoutByOrder(bindGroupOrder, gpuKey);
-    if (layout) {
-      this.bindGroupLayoutCache.set(layoutId, layout);
-    }
+
     return layout;
   }
 
@@ -536,7 +541,7 @@ export class PipelineManager {
       // PMX format: position + normal + uv + skinIndex + skinWeight + edgeRatio
       return [
         {
-          arrayStride: 44, // 11 floats * 4 bytes = 44 bytes
+          arrayStride: 68, // 12 * 2 + 8 + 16 * 2 + 4 = 68 bytes
           attributes: [
             {
               format: 'float32x3',
@@ -554,18 +559,18 @@ export class PipelineManager {
               shaderLocation: 2,
             },
             {
-              format: 'float32', // single float, not vec4
-              offset: 32, // skinIndex (4 bytes)
+              format: 'float32x4', // skinIndices vec4f
+              offset: 32, // skinIndices (16 bytes)
               shaderLocation: 3,
             },
             {
-              format: 'float32', // single float, not vec4
-              offset: 36, // skinWeight (4 bytes)
+              format: 'float32x4', // skinWeights vec4f
+              offset: 48, // skinWeights (16 bytes)
               shaderLocation: 4,
             },
             {
               format: 'float32',
-              offset: 40, // edgeRatio (4 bytes)
+              offset: 64, // edgeRatio (4 bytes)
               shaderLocation: 5,
             },
           ],
@@ -593,13 +598,13 @@ export class PipelineManager {
               shaderLocation: 2,
             },
             {
-              format: 'float32',
-              offset: 32, // skinIndex
+              format: 'uint32',
+              offset: 32, // skinIndices
               shaderLocation: 3,
             },
             {
               format: 'float32',
-              offset: 36, // skinWeight
+              offset: 48, // skinWeights
               shaderLocation: 4,
             },
           ],
