@@ -6,6 +6,7 @@
 - Use pnpm as the package manager for all dependency management
 - Always run commands in zsh terminal
 - Prefer pnpm over npm or yarn for package operations
+- Do not launch project in dev mode in terminal because it's a web frontend project and no logs will be displayed in terminal
 
 ## Package Management Commands
 

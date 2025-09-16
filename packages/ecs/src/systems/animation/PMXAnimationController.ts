@@ -67,14 +67,17 @@ export class PMXAnimationController {
     const assetDescriptor = pmxMeshComponent.resolveAsset();
     const { assetId } = pmxMeshComponent;
     const pmxModel = assetDescriptor?.rawData as PMXModel;
-    const { bones, morphs } = pmxModel;
-    const vertexCount = pmxModel.metadata.vertexCount;
+    const { bones, morphs, metadata } = pmxModel;
+    const vertexCount = metadata.vertexCount;
 
     // Create morph component
     const morphComponent = new PMXMorphComponent({
       assetId,
-      morphs,
+      morphCount: metadata.morphCount,
+      boneCount: metadata.boneCount,
+      frameCount: metadata.frameCount,
       vertexCount,
+      morphs,
     });
 
     // Create bone component
@@ -143,24 +146,9 @@ export class PMXAnimationController {
     weight: number,
     enabled: boolean,
   ): void {
-    const boneMorphData = morphComponent.getBoneMorphData(morphIndex);
-    if (!boneMorphData) return;
-
-    if (!enabled || weight <= 0) {
-      // Clear morph offsets for all affected bones
-      for (const [boneIndex] of boneMorphData.boneOffsets) {
-        boneComponent.clearBoneMorphOffset(boneIndex);
-      }
-      return;
-    }
-
-    // Apply bone offsets (both position and rotation)
-    for (const [boneIndex, offset] of boneMorphData.boneOffsets) {
-      boneComponent.applyBoneMorphOffset(boneIndex, offset, weight);
-    }
-
-    // Recalculate bone matrices
-    boneComponent.calculateBoneMatrices();
+    // For Type 2 morphs, we just set the weight in the morph component
+    // The PMXMorphSystem will handle the actual bone transformation
+    morphComponent.setMorphWeight(morphIndex, weight, enabled);
   }
 
   /**

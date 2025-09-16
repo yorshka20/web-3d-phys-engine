@@ -1,6 +1,14 @@
 /**
- * PMX Morph System - Updates morph weights and manages GPU data for vertex morphs
- * Handles Type 1 morphs (vertex position changes) for facial expressions and shape changes
+ * PMX Morph System - Handles both Type 1 and Type 2 morphs
+ *
+ * Type 1 (Vertex) Morphs:
+ * - Managed by PMXMorphComponent
+ * - Applied directly in GPU shader
+ * - No CPU processing needed
+ *
+ * Type 2 (Bone) Morphs:
+ * - Accumulated and applied to bone transformations
+ * - Processed every frame by this system
  */
 
 import { PMXBoneComponent } from '@ecs/components';
@@ -22,86 +30,109 @@ export class PMXMorphSystem extends System {
         PMXMorphComponent.componentName,
       );
       const boneComponent = entity.getComponent<PMXBoneComponent>(PMXBoneComponent.componentName);
+
       if (!morphComponent || !boneComponent) continue;
 
-      // 1. Reset all bone transforms to their base animated state (currently the bind pose).
+      // Process Type 2 (Bone) morphs only
+      this.processBoneMorphs(morphComponent, boneComponent);
+    }
+  }
+
+  /**
+   * Process Type 2 (Bone) morphs
+   */
+  private processBoneMorphs(
+    morphComponent: PMXMorphComponent,
+    boneComponent: PMXBoneComponent,
+  ): void {
+    // Get active bone morphs
+    const activeBoneMorphs = morphComponent.getActiveBoneMorphs();
+
+    if (activeBoneMorphs.length === 0) {
+      // No active bone morphs, reset bones to base state
       boneComponent.resetAllBones();
+      return;
+    }
 
-      // 2. Accumulate all active bone morph offsets.
-      const accumulatedOffsets = new Map<number, { position: Vec3; rotation: Vec3 }>();
-      const activeMorphs = morphComponent.getActiveMorphs();
+    // Reduce log frequency - only log when processing significant changes
+    if (activeBoneMorphs.length > 0 && activeBoneMorphs[0].weight > 0.9) {
+      console.log(`[PMXMorphSystem] Processing ${activeBoneMorphs.length} active bone morphs`);
+    }
 
-      for (const morphState of activeMorphs) {
-        if (morphComponent.isBoneMorph(morphState.morphIndex) && morphState.weight > 0) {
-          const boneMorphData = morphComponent.getBoneMorphData(morphState.morphIndex);
-          if (boneMorphData) {
-            for (const [boneIndex, offset] of boneMorphData.boneOffsets) {
-              if (!accumulatedOffsets.has(boneIndex)) {
-                accumulatedOffsets.set(boneIndex, { position: [0, 0, 0], rotation: [0, 0, 0] });
-              }
-              const acc = accumulatedOffsets.get(boneIndex)!;
-              acc.position[0] += offset.positionOffset[0] * morphState.weight;
-              acc.position[1] += offset.positionOffset[1] * morphState.weight;
-              acc.position[2] += offset.positionOffset[2] * morphState.weight;
-              acc.rotation[0] += offset.rotationOffset[0] * morphState.weight;
-              acc.rotation[1] += offset.rotationOffset[1] * morphState.weight;
-              acc.rotation[2] += offset.rotationOffset[2] * morphState.weight;
-            }
-          }
-        }
+    // Accumulate bone morph offsets
+    const accumulatedOffsets = new Map<number, { position: Vec3; rotation: Vec3 }>();
+
+    for (const morphState of activeBoneMorphs) {
+      if (morphState.weight <= 0) continue;
+
+      const boneMorphData = morphComponent.getBoneMorphData(morphState.morphIndex);
+      if (!boneMorphData) {
+        console.log(`[PMXMorphSystem] Morph ${morphState.morphIndex} not found in boneMorphs!`);
+        continue;
       }
 
-      // 3. Apply the accumulated offsets to the bones.
-      boneComponent.applyAccumulatedBoneMorphs(accumulatedOffsets);
+      // Accumulate offsets for each bone affected by this morph
+      for (const [boneIndex, offset] of boneMorphData.boneOffsets) {
+        if (!accumulatedOffsets.has(boneIndex)) {
+          accumulatedOffsets.set(boneIndex, { position: [0, 0, 0], rotation: [0, 0, 0] });
+        }
+
+        const acc = accumulatedOffsets.get(boneIndex)!;
+        const weight = morphState.weight;
+
+        // Accumulate position offset with scale factor for debugging
+        // PMX morph offsets might be in different units than expected
+        const positionScale = 1.0; // Try reducing this if positions are too extreme
+        acc.position[0] += offset.positionOffset[0] * weight * positionScale;
+        acc.position[1] += offset.positionOffset[1] * weight * positionScale;
+        acc.position[2] += offset.positionOffset[2] * weight * positionScale;
+
+        // Accumulate rotation offset
+        const rotationScale = 1.0; // Try reducing this if rotations are too extreme
+        acc.rotation[0] += offset.rotationOffset[0] * weight * rotationScale;
+        acc.rotation[1] += offset.rotationOffset[1] * weight * rotationScale;
+        acc.rotation[2] += offset.rotationOffset[2] * weight * rotationScale;
+      }
     }
+
+    // Apply accumulated offsets to bones
+    if (accumulatedOffsets.size > 0 && activeBoneMorphs[0].weight > 0.9) {
+      console.log(`[PMXMorphSystem] Applying ${accumulatedOffsets.size} bone morph offsets`);
+      for (const [boneIndex, offset] of accumulatedOffsets) {
+        console.log(
+          `  Bone ${boneIndex}: pos [${offset.position.map((v) => v.toFixed(3)).join(', ')}], rot [${offset.rotation.map((v) => v.toFixed(3)).join(', ')}]`,
+        );
+      }
+    }
+    boneComponent.applyAccumulatedBoneMorphs(accumulatedOffsets);
   }
 
   /**
-   * Update GPU data for morph component
-   * This would typically upload morph weights to GPU buffers
-   * @param morphComponent Morph component to update
-   */
-  private updateMorphGPUData(morphComponent: PMXMorphComponent): void {
-    // Get current morph weights
-    const morphWeights = morphComponent.getMorphWeightsArray();
-
-    // In a real implementation, this would upload to GPU buffers
-    // For now, we just log the update
-    const activeMorphs = morphComponent.getActiveMorphs();
-    if (activeMorphs.length > 0) {
-      console.log(
-        `[PMXMorphSystem] Updated ${activeMorphs.length} active morphs for entity ${morphComponent.data.assetId}`,
-      );
-    }
-  }
-
-  /**
-   * Get morph statistics for debugging
-   * @returns Morph system statistics
+   * Get system statistics for debugging
    */
   getStats(): {
     totalEntities: number;
-    activeMorphs: number;
-    totalMorphWeights: number;
+    activeVertexMorphs: number;
+    activeBoneMorphs: number;
   } {
     const entities = this.world.getEntitiesWithComponents([PMXMorphComponent]);
-    let activeMorphs = 0;
-    let totalMorphWeights = 0;
+    let activeVertexMorphs = 0;
+    let activeBoneMorphs = 0;
 
     for (const entity of entities) {
-      const morphComponent = entity.getComponent<PMXMorphComponent>(
+      const morphComponent = entity.getComponent(
         PMXMorphComponent.componentName,
-      );
+      ) as PMXMorphComponent;
       if (morphComponent) {
-        activeMorphs += morphComponent.getActiveMorphs().length;
-        totalMorphWeights += morphComponent.getMorphWeightsArray().length;
+        activeVertexMorphs += morphComponent.getActiveVertexMorphs().length;
+        activeBoneMorphs += morphComponent.getActiveBoneMorphs().length;
       }
     }
 
     return {
       totalEntities: entities.length,
-      activeMorphs,
-      totalMorphWeights,
+      activeVertexMorphs,
+      activeBoneMorphs,
     };
   }
 }

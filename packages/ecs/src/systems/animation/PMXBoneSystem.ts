@@ -22,13 +22,7 @@ export class PMXBoneSystem extends System {
       // Only update bone matrices if needed (e.g., after animation or morph updates)
       if (boneComponent.needsGPUUpdate()) {
         boneComponent.calculateBoneMatrices();
-        // The needsUpdate flag is consumed by the renderer, so we don't reset it here.
-        // boneComponent.markAsUpdated();
-
-        const assetId = boneComponent.data.assetId;
-        console.log(
-          `[PMXBoneSystem] Updated ${boneComponent.getBoneCount()} bone matrices for entity ${assetId}`,
-        );
+        boneComponent.markAsUpdated(); // Reset the flag after calculation
       }
     }
   }
