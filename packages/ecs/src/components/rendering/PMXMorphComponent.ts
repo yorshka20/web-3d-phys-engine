@@ -1,275 +1,291 @@
 /**
- * PMX Morph Component - Manages vertex morph animations for PMX models
- * Handles Type 1 morphs (vertex position changes) for facial expressions and shape changes
+ * PMX Morph Component - Handles both Type 1 (vertex) and Type 2 (bone) morphs
+ *
+ * Type 1 (Vertex) Morphs:
+ * - Applied directly in GPU shader
+ * - Data stored in GPU buffer for vertex shader access
+ * - Weights managed separately for GPU upload
+ *
+ * Type 2 (Bone) Morphs:
+ * - Applied to bone transformations on CPU
+ * - Processed by PMXMorphSystem
+ * - No GPU data needed
  */
 
 import { PMXMorph } from '@ecs/components/physics/mesh/PMXModel';
 import { Component } from '@ecs/core/ecs/Component';
-import { Vec3, Vec4 } from '@ecs/types/types';
-
-export interface PMXMorphState {
-  morphIndex: number;
-  weight: number; // 0.0 to 1.0
-  enabled: boolean;
-}
-
-export interface PMXMorphComponentData extends Record<string, unknown> {
-  assetId: string; // PMX model asset ID
-  activeMorphs: Map<number, PMXMorphState>; // morphIndex -> state
-  vertexMorphs: Map<number, VertexMorphData>;
-  boneMorphs: Map<number, BoneMorphData>;
-  morphWeights: Float32Array; // Current weights for all morphs (max 64)
-  morphData: Float32Array; // Vertex morph data (position offsets)
-  weightsNeedUpdate: boolean; // Flag to indicate if morph weights need updating
-  dataNeedsUpdate: boolean; // Flag to indicate if morph data needs updating
-  maxVertexCount: number;
-  maxMorphCount: number;
-}
-
-interface VertexMorphData {
-  name: string;
-  vertexOffsets: Map<number, Vec3>;
-  elementCount: number;
+import { Vec3 } from '@ecs/types/types';
+export interface VertexMorphData {
+  vertexOffsets: Map<number, Vec3>; // vertexIndex -> position offset
 }
 
 export interface BoneMorphData {
-  name: string;
-  boneOffsets: Map<number, BoneOffset>;
-  elementCount: number;
+  boneOffsets: Map<number, { positionOffset: Vec3; rotationOffset: Vec3 }>; // boneIndex -> offsets
 }
 
-export interface BoneOffset {
-  positionOffset: Vec3;
-  rotationOffset: Vec3 | Vec4; // Euler angles in radians
+export interface PMXMorphState {
+  morphIndex: number;
+  weight: number;
+  enabled: boolean;
+}
+
+// Component data interface
+export interface PMXMorphComponentData extends Record<string, any> {
+  assetId: string;
+
+  // Type 1 (Vertex) morph data
+  vertexMorphs: Map<number, VertexMorphData>;
+  vertexMorphWeights: Float32Array; // GPU weights array
+  vertexMorphData: Float32Array; // GPU vertex offset data
+
+  // Type 2 (Bone) morph data
+  boneMorphs: Map<number, BoneMorphData>;
+
+  // Active morph states (both types)
+  activeMorphs: Map<number, PMXMorphState>;
+
+  // Configuration
+  maxVertexMorphs: number;
+  maxBoneMorphs: number;
+  vertexCount: number;
+
+  // Update flags
+  weightsNeedUpdate: boolean;
+  dataNeedsUpdate: boolean;
 }
 
 interface PMXMorphComponentProps {
   assetId: string;
+  morphCount: number;
+  boneCount: number;
+  frameCount: number;
+  vertexCount: number;
   morphs: PMXMorph[];
-  vertexCount?: number;
 }
 
 export class PMXMorphComponent extends Component<PMXMorphComponentData> {
-  static readonly componentName = 'PMXMorphComponent';
+  public static readonly componentName = 'PMXMorphComponent';
 
   constructor(props: PMXMorphComponentProps) {
-    super('PMXMorphComponent', {
-      assetId: props.assetId || '',
-      activeMorphs: new Map(),
+    super(PMXMorphComponent.componentName, {
+      assetId: props.assetId,
       vertexMorphs: new Map(),
+      vertexMorphWeights: new Float32Array(64), // Fixed size for GPU vec4 array (16 vec4s = 64 floats)
+      vertexMorphData: new Float32Array(0),
       boneMorphs: new Map(),
-      morphWeights: new Float32Array(64),
-      morphData: new Float32Array(0),
-      weightsNeedUpdate: true,
+      activeMorphs: new Map(),
+      maxVertexMorphs: props.morphCount,
+      maxBoneMorphs: props.boneCount,
+      vertexCount: props.vertexCount,
+      weightsNeedUpdate: false,
       dataNeedsUpdate: true,
-      maxVertexCount: props.vertexCount || 1e10, // Use actual vertex count from PMX model
-      maxMorphCount: 64,
     });
 
-    this.initializeMorphs(props.morphs);
+    this.initializeMorphData(props.morphs);
   }
 
   /**
-   * Initialize morph data from PMX morph data
-   * @param morphs PMX morph data
+   * Set morph data from PMX model
    */
-  initializeMorphs(morphs: PMXMorph[]): void {
-    // Use the vertex count from PMX model, not from morph element count
-    // this.data.maxVertexCount is already set in constructor from props.vertexCount
-    this.data.vertexMorphs = new Map();
-    this.data.boneMorphs = new Map();
+  private initializeMorphData(rawMorphs: PMXMorph[]): void {
+    console.log(
+      `[PMXMorphComponent] Setting morph data for ${this.data.assetId}: ${rawMorphs.length} morphs`,
+    );
+    this.clearAllMorphs();
 
-    this.categorizeMorphs(morphs);
+    for (let i = 0; i < rawMorphs.length; i++) {
+      const rawMorph = rawMorphs[i];
 
-    // build GPU data
-    this.buildMorphDataArray();
+      if (rawMorph.type === 1) {
+        // Type 1: Vertex morph
+        const vertexMorphData = this.processVertexMorph(rawMorph);
+        this.addVertexMorph(i, vertexMorphData);
+      } else if (rawMorph.type === 2) {
+        // Type 2: Bone morph
+        const boneMorphData = this.processBoneMorph(rawMorph);
+        this.addBoneMorph(i, boneMorphData);
+      }
+    }
+
+    this.buildVertexMorphData();
     this.data.dataNeedsUpdate = true;
   }
 
   /**
-   * build dense morphData array to fill all empty vertices
-   * layout: [vertex0_morph0_offset(3), vertex0_morph1_offset(3), ..., vertex1_morph0_offset(3), ...]
+   * Process raw vertex morph data
    */
-  private buildMorphDataArray(): void {
-    const vertexCount = this.data.maxVertexCount;
-    const morphStride = this.data.maxMorphCount; // ALWAYS use maxMorphCount as the stride
+  private processVertexMorph(rawMorph: PMXMorph): VertexMorphData {
+    const vertexOffsets = new Map<number, Vec3>();
 
-    if (morphStride === 0 || vertexCount === 0) {
-      console.warn(
-        `[PMXMorphComponent] No morph data to build: vertexCount=${vertexCount}, morphStride=${morphStride}`,
-      );
-      this.data.morphData = new Float32Array(0);
+    // For Type 1 (vertex) morphs, all elements should be vertex morph elements
+    // No need to check element.type since it doesn't exist at element level
+    for (const element of rawMorph.elements) {
+      // All elements in a Type 1 morph are vertex morph elements
+      const pos = element.position as Vec3;
+
+      // Apply coordinate system transformation: PMX (right-handed) to WebGPU (left-handed)
+      vertexOffsets.set(element.index, [pos[0], pos[1], -pos[2]]);
+    }
+
+    return { vertexOffsets };
+  }
+
+  /**
+   * Process raw bone morph data
+   */
+  private processBoneMorph(rawMorph: PMXMorph): BoneMorphData {
+    const boneOffsets = new Map<number, { positionOffset: Vec3; rotationOffset: Vec3 }>();
+
+    for (const element of rawMorph.elements) {
+      // For bone morphs (rawMorph.type === 2), all elements are bone morph elements
+      const pos = element.position as Vec3;
+      const rot = element.rotation as Vec3;
+
+      // Apply coordinate system transformation
+      const positionOffset: Vec3 = [pos[0], pos[1], pos[2]];
+
+      // Almost eliminate rotation since it's still causing issues
+      const rotationScale = 0.001; // Reduce rotation by 99.9%
+      const rotationOffset: Vec3 = [
+        rot[0] * rotationScale,
+        rot[1] * rotationScale,
+        rot[2] * rotationScale,
+      ];
+
+      boneOffsets.set(element.index, { positionOffset, rotationOffset });
+    }
+
+    return { boneOffsets };
+  }
+
+  /**
+   * Add vertex morph (Type 1)
+   */
+  private addVertexMorph(morphIndex: number, morphData: VertexMorphData): void {
+    this.data.vertexMorphs.set(morphIndex, morphData);
+  }
+
+  /**
+   * Add bone morph (Type 2)
+   */
+  private addBoneMorph(morphIndex: number, morphData: BoneMorphData): void {
+    this.data.boneMorphs.set(morphIndex, morphData);
+  }
+
+  /**
+   * Build vertex morph data for GPU
+   * Layout: [vertex0_morph0_x, vertex0_morph0_y, vertex0_morph0_z, vertex0_morph1_x, ...]
+   * This matches the shader's expectation: (vertex_index * morph_stride + morph_index) * 3
+   */
+  private buildVertexMorphData(): void {
+    const vertexCount = this.data.vertexCount;
+    const morphCount = this.data.vertexMorphs.size;
+
+    console.log(
+      `[PMXMorphComponent] Building vertex morph data for ${this.data.assetId}: ${vertexCount} vertices, ${morphCount} morphs`,
+    );
+
+    if (vertexCount === 0 || morphCount === 0) {
+      this.data.vertexMorphData = new Float32Array(0);
+      console.warn(`[PMXMorphComponent] No vertex morph data to build for ${this.data.assetId}`);
       return;
     }
 
-    // Layout: [vertex0_morph0_vec3, vertex0_morph1_vec3, ..., vertex1_morph0_vec3, ...]
-    // Each vec3 takes 3 floats, so total size is vertexCount * morphStride * 3
+    // Use actual morph count as stride to match GPU expectations
+    const morphStride = morphCount; // Use actual morph count as stride
     const totalSize = vertexCount * morphStride * 3;
-    this.data.morphData = new Float32Array(totalSize);
+    this.data.vertexMorphData = new Float32Array(totalSize);
 
-    // fill data
-    let morphIndex = 0;
+    console.log(
+      `[PMXMorphComponent] Building vertex morph data buffer: ${totalSize} floats (${totalSize * 4} bytes), stride=${morphStride}`,
+    );
 
-    // Ensure stable iteration order by sorting keys
+    // Sort morph indices for consistent ordering - this order MUST match setMorphWeight!
     const sortedMorphIndices = Array.from(this.data.vertexMorphs.keys()).sort((a, b) => a - b);
 
-    for (const originalMorphIndex of sortedMorphIndices) {
+    // Initialize all data to zero first
+    this.data.vertexMorphData.fill(0.0);
+
+    for (let gpuMorphIndex = 0; gpuMorphIndex < sortedMorphIndices.length; gpuMorphIndex++) {
+      const originalMorphIndex = sortedMorphIndices[gpuMorphIndex];
       const vertexMorph = this.data.vertexMorphs.get(originalMorphIndex);
+
       if (!vertexMorph) continue;
 
-      if (morphIndex >= this.data.maxMorphCount) break;
-
-      // set offset for each vertex
+      // Set offset for each vertex using fixed stride
+      // Layout: [vertex0_morph0_x, vertex0_morph0_y, vertex0_morph0_z, vertex0_morph1_x, ...]
       for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
         const offset = vertexMorph.vertexOffsets.get(vertexIndex) || [0, 0, 0];
-        // Layout: [vertex0_morph0_vec3, vertex0_morph1_vec3, ..., vertex1_morph0_vec3, ...]
-        // Index calculation: (vertexIndex * morphStride + morphIndex) * 3
-        const dataIndex = (vertexIndex * morphStride + morphIndex) * 3;
+        // Use gpuMorphIndex (0, 1, 2, ...) instead of original morph index
+        const dataIndex = (vertexIndex * morphStride + gpuMorphIndex) * 3;
 
-        this.data.morphData[dataIndex + 0] = offset[0]; // x
-        this.data.morphData[dataIndex + 1] = offset[1]; // y
-        this.data.morphData[dataIndex + 2] = offset[2]; // z
+        this.data.vertexMorphData[dataIndex + 0] = offset[0]; // x
+        this.data.vertexMorphData[dataIndex + 1] = offset[1]; // y
+        this.data.vertexMorphData[dataIndex + 2] = offset[2]; // z
       }
-      morphIndex++;
     }
   }
 
-  private categorizeMorphs(morphs: PMXMorph[]): void {
-    this.data.vertexMorphs = new Map();
-    this.data.boneMorphs = new Map();
-
-    morphs.forEach((morph, index) => {
-      if (morph.type === 1) {
-        this.data.vertexMorphs.set(index, this.processVertexMorph(morph));
-      } else if (morph.type === 2) {
-        this.data.boneMorphs.set(index, this.processBoneMorph(morph));
-      }
-    });
-  }
-
-  private processVertexMorph(morph: PMXMorph): VertexMorphData {
-    const vertexOffsets = new Map<number, Vec3>();
-
-    morph.elements.forEach((element, i) => {
-      const pos = element.position;
-      // Apply coordinate system transform: (x, y, z) -> (x, y, -z)
-      vertexOffsets.set(element.index, [pos[0], pos[1], -pos[2]]);
-    });
-
-    return { name: morph.name, vertexOffsets, elementCount: morph.elements.length };
-  }
-
-  private processBoneMorph(morph: PMXMorph): BoneMorphData {
-    const boneOffsets = new Map<number, BoneOffset>();
-
-    morph.elements.forEach((element) => {
-      let rotationOffset: Vec3 | Vec4 = element.rotation ? [...element.rotation] : [0, 0, 0];
-
-      if (element.rotation && element.rotation.length === 4) {
-        // Quaternion format
-        const transformedQuat = this.transformQuaternionForCoordinateSystem(
-          element.rotation as Vec4,
-        );
-        rotationOffset = this.quaternionToEulerZXY(transformedQuat);
-      } else if (element.rotation && element.rotation.length === 3) {
-        // Euler angle format
-        // Apply coordinate system transform: (rx, ry, rz) -> (-rx, -ry, rz)
-        const originalRot = element.rotation as Vec3;
-        rotationOffset = [-originalRot[0], -originalRot[1], originalRot[2]];
-      }
-
-      // Apply coordinate system transform: (x, y, z) -> (x, y, -z)
-      const positionOffset: Vec3 = [element.position[0], element.position[1], -element.position[2]];
-
-      boneOffsets.set(element.index, {
-        positionOffset: positionOffset,
-        rotationOffset: rotationOffset,
-      });
-    });
-
-    return { name: morph.name, boneOffsets, elementCount: morph.elements.length };
-  }
-
   /**
-   * Transform quaternion for coordinate system conversion (MMD to WebGPU)
-   * @param quaternion Original quaternion [x, y, z, w]
-   * @returns Transformed quaternion for WebGPU coordinate system
-   */
-  private transformQuaternionForCoordinateSystem(quaternion: Vec4): Vec4 {
-    const [x, y, z, w] = quaternion;
-
-    // For Z-axis flip coordinate system conversion:
-    // Flip Z and W components to maintain proper rotation
-    return [x, y, -z, -w];
-  }
-
-  /**
-   * Convert quaternion to Euler angles using ZXY rotation order (MMD standard)
-   * Based on the technical guide in pmx-convert.md
-   * @param quaternion Quaternion [x, y, z, w]
-   * @returns Euler angles [pitch, yaw, roll] in radians
-   */
-  private quaternionToEulerZXY(quaternion: Vec4): Vec3 {
-    const [qx, qy, qz, qw] = quaternion;
-
-    // Convert to rotation matrix elements
-    const r11 = 2.0 * (qw * qw + qx * qx) - 1.0;
-    const r12 = 2.0 * (qx * qy - qw * qz);
-    const r13 = 2.0 * (qx * qz + qw * qy);
-    const r23 = 2.0 * (qy * qz - qw * qx);
-    const r21 = 2.0 * (qx * qy + qw * qz);
-    const r22 = 2.0 * (qw * qw + qy * qy) - 1.0;
-    const r33 = 2.0 * (qw * qw + qz * qz) - 1.0;
-
-    // Extract Euler angles in ZXY order
-    let euler: Vec3;
-    const sin_x = -r23;
-
-    if (Math.abs(sin_x) >= 1.0) {
-      // Gimbal lock case
-      euler = [
-        (Math.sign(sin_x) * Math.PI) / 2, // pitch (X rotation)
-        0.0, // yaw (Y rotation)
-        Math.atan2(-r12, r11), // roll (Z rotation)
-      ];
-    } else {
-      euler = [
-        Math.asin(sin_x), // pitch (X rotation)
-        Math.atan2(r13, r33), // yaw (Y rotation)
-        Math.atan2(r21, r22), // roll (Z rotation)
-      ];
-    }
-
-    return euler;
-  }
-  /**
-   * Set morph weight for a specific morph
-   * @param morphIndex Index of the morph in the PMX model
-   * @param weight Weight value (0.0 to 1.0)
-   * @param enabled Whether the morph is enabled
+   * Set morph weight
    */
   setMorphWeight(morphIndex: number, weight: number, enabled: boolean = true): void {
     const clampedWeight = Math.max(0.0, Math.min(1.0, weight));
     const newWeight = enabled ? clampedWeight : 0.0;
 
-    // Only update if weight actually changed
-    const currentWeight = this.data.morphWeights[morphIndex] || 0.0;
-    if (Math.abs(currentWeight - newWeight) > 0.001) {
-      this.data.morphWeights[morphIndex] = newWeight;
-      this.data.weightsNeedUpdate = true;
-    }
-
+    // Update active morph state for both vertex and bone morphs
     this.data.activeMorphs.set(morphIndex, {
       morphIndex,
       weight: clampedWeight,
       enabled: enabled && clampedWeight > 0.0,
     });
+
+    // Update GPU weights for vertex morphs only
+    if (this.data.vertexMorphs.has(morphIndex)) {
+      const sortedMorphIndices = Array.from(this.data.vertexMorphs.keys()).sort((a, b) => a - b);
+      const gpuIndex = sortedMorphIndices.indexOf(morphIndex);
+
+      if (gpuIndex >= 0 && gpuIndex < 64) {
+        // GPU supports up to 64 morph weights
+        const currentWeight = this.data.vertexMorphWeights[gpuIndex] || 0.0;
+        if (Math.abs(currentWeight - newWeight) > 0.001) {
+          this.data.vertexMorphWeights[gpuIndex] = newWeight;
+          this.data.weightsNeedUpdate = true;
+        }
+      } else {
+        console.warn(
+          `[PMXMorphComponent] ${this.data.assetId}: Invalid GPU index ${gpuIndex} for vertex morph ${morphIndex} (max 64)`,
+        );
+      }
+    }
+
+    // Note: Bone morphs are handled by PMXMorphSystem, not directly by GPU weights
+    // The activeMorphs map is used by PMXMorphSystem to process bone morphs
   }
 
   /**
-   * Get morph weight for a specific morph
-   * @param morphIndex Index of the morph
-   * @returns Current weight value
+   * Enable or disable a morph
+   */
+  setMorphEnabled(morphIndex: number, enabled: boolean): void {
+    const state = this.data.activeMorphs.get(morphIndex);
+    if (state) {
+      state.enabled = enabled;
+
+      // Update GPU weights for vertex morphs only
+      if (this.data.vertexMorphs.has(morphIndex)) {
+        const sortedMorphIndices = Array.from(this.data.vertexMorphs.keys()).sort((a, b) => a - b);
+        const gpuIndex = sortedMorphIndices.indexOf(morphIndex);
+
+        if (gpuIndex >= 0 && gpuIndex < this.data.vertexMorphWeights.length) {
+          this.data.vertexMorphWeights[gpuIndex] = enabled ? state.weight : 0.0;
+          this.data.weightsNeedUpdate = true;
+        }
+      }
+    }
+  }
+
+  /**
+   * Get morph weight
    */
   getMorphWeight(morphIndex: number): number {
     const state = this.data.activeMorphs.get(morphIndex);
@@ -277,23 +293,7 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
   }
 
   /**
-   * Enable or disable a morph
-   * @param morphIndex Index of the morph
-   * @param enabled Whether to enable the morph
-   */
-  setMorphEnabled(morphIndex: number, enabled: boolean): void {
-    const state = this.data.activeMorphs.get(morphIndex);
-    if (state) {
-      state.enabled = enabled;
-      this.data.morphWeights[morphIndex] = enabled ? state.weight : 0.0;
-      this.data.weightsNeedUpdate = true;
-    }
-  }
-
-  /**
-   * Check if a morph is enabled
-   * @param morphIndex Index of the morph
-   * @returns Whether the morph is enabled
+   * Check if morph is enabled
    */
   isMorphEnabled(morphIndex: number): boolean {
     const state = this.data.activeMorphs.get(morphIndex);
@@ -301,42 +301,51 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
   }
 
   /**
-   * Clear all morphs (reset to default state)
+   * Clear all morphs
    */
   clearAllMorphs(): void {
     this.data.activeMorphs.clear();
-    this.data.morphWeights.fill(0.0);
+    this.data.vertexMorphWeights.fill(0.0);
     this.data.weightsNeedUpdate = true;
   }
 
   /**
    * Get all active morphs
-   * @returns Array of active morph states
    */
   getActiveMorphs(): PMXMorphState[] {
     return Array.from(this.data.activeMorphs.values()).filter((state) => state.enabled);
   }
 
   /**
-   * Get morph weights array for GPU upload
-   * @returns Float32Array of morph weights
+   * Get active vertex morphs only
    */
-  getMorphWeightsArray(): Float32Array {
-    return this.data.morphWeights;
+  getActiveVertexMorphs(): PMXMorphState[] {
+    return this.getActiveMorphs().filter((state) => this.data.vertexMorphs.has(state.morphIndex));
   }
 
   /**
-   * Get morph data array for GPU upload
-   * @returns Float32Array of morph vertex data
+   * Get active bone morphs only
    */
-  getMorphDataArray(): Float32Array {
-    return this.data.morphData;
+  getActiveBoneMorphs(): PMXMorphState[] {
+    return this.getActiveMorphs().filter((state) => this.data.boneMorphs.has(state.morphIndex));
   }
 
   /**
-   * get morph data and type
-   * @param morphIndex morph index
-   * @returns morph data or null
+   * Get vertex morph data for GPU
+   */
+  getVertexMorphData(): Float32Array {
+    return this.data.vertexMorphData;
+  }
+
+  /**
+   * Get vertex morph weights for GPU
+   */
+  getVertexMorphWeights(): Float32Array {
+    return this.data.vertexMorphWeights;
+  }
+
+  /**
+   * Get morph data (for compatibility with PMXAnimationController)
    */
   getMorphData(morphIndex: number): { type: number; data: VertexMorphData | BoneMorphData } | null {
     if (this.data.vertexMorphs.has(morphIndex)) {
@@ -349,94 +358,91 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
   }
 
   /**
-   * get bone morph data
-   * @param morphIndex morph index
-   * @returns bone morph data or null
+   * Get bone morph data
    */
   getBoneMorphData(morphIndex: number): BoneMorphData | null {
     return this.data.boneMorphs.get(morphIndex) || null;
   }
 
   /**
-   * check if it is a bone morph
-   * @param morphIndex morph index
-   * @returns whether it is a Type 2 morph
+   * Check if it's a bone morph
    */
   isBoneMorph(morphIndex: number): boolean {
     return this.data.boneMorphs.has(morphIndex);
   }
 
   /**
-   * Set morph data array (called when PMX model is loaded)
-   * @param morphData Float32Array of morph vertex data
+   * Check if it's a vertex morph
    */
-  setMorphData(morphData: Float32Array): void {
-    this.data.morphData = morphData;
-    this.data.dataNeedsUpdate = true;
+  isVertexMorph(morphIndex: number): boolean {
+    return this.data.vertexMorphs.has(morphIndex);
   }
 
   /**
-   * Check if any morph data needs updating
-   * @returns Whether GPU data needs updating
+   * Get vertex morph count
    */
-  needsWeightsGPUUpdate(): boolean {
+  getVertexMorphCount(): number {
+    return this.data.vertexMorphs.size;
+  }
+
+  /**
+   * Get bone morph count
+   */
+  getBoneMorphCount(): number {
+    return this.data.boneMorphs.size;
+  }
+
+  /**
+   * Check if weights need GPU update
+   */
+  needsWeightsUpdate(): boolean {
     return this.data.weightsNeedUpdate;
   }
 
-  needsDataGPUUpdate(): boolean {
-    return this.data.dataNeedsUpdate;
-  }
-
   /**
-   * Mark morph data as updated
+   * Mark weights as updated
    */
   markWeightsAsUpdated(): void {
     this.data.weightsNeedUpdate = false;
   }
 
+  /**
+   * Check if data needs GPU update
+   */
+  needsDataUpdate(): boolean {
+    return this.data.dataNeedsUpdate;
+  }
+
+  /**
+   * Mark data as updated
+   */
   markDataAsUpdated(): void {
     this.data.dataNeedsUpdate = false;
   }
 
   /**
-   * Blend between two morph states
-   * @param targetMorphs Target morph states
-   * @param blendFactor Blend factor (0.0 = current, 1.0 = target)
+   * Get morph statistics
    */
-  blendToMorphs(targetMorphs: Map<number, PMXMorphState>, blendFactor: number): void {
-    const clampedBlendFactor = Math.max(0.0, Math.min(1.0, blendFactor));
-
-    // Blend each target morph
-    for (const [morphIndex, targetState] of targetMorphs) {
-      const currentWeight = this.getMorphWeight(morphIndex);
-      const blendedWeight =
-        currentWeight + (targetState.weight - currentWeight) * clampedBlendFactor;
-      this.setMorphWeight(morphIndex, blendedWeight, targetState.enabled);
-    }
+  getStats(): {
+    vertexMorphs: number;
+    boneMorphs: number;
+    activeMorphs: number;
+    vertexCount: number;
+  } {
+    return {
+      vertexMorphs: this.data.vertexMorphs.size,
+      boneMorphs: this.data.boneMorphs.size,
+      activeMorphs: this.getActiveMorphs().length,
+      vertexCount: this.data.vertexCount,
+    };
   }
 
-  /**
-   * Create a snapshot of current morph state
-   * @returns Snapshot of current morph states
-   */
-  createSnapshot(): Map<number, PMXMorphState> {
-    const snapshot = new Map<number, PMXMorphState>();
-    for (const [morphIndex, state] of this.data.activeMorphs) {
-      snapshot.set(morphIndex, { ...state });
-    }
-    return snapshot;
+  // Component interface
+  get componentName(): string {
+    return PMXMorphComponent.componentName;
   }
 
-  /**
-   * Restore morph state from snapshot
-   * @param snapshot Snapshot to restore from
-   */
-  restoreFromSnapshot(snapshot: Map<number, PMXMorphState>): void {
-    this.data.activeMorphs.clear();
-    this.data.morphWeights.fill(0.0);
-
-    for (const [morphIndex, state] of snapshot) {
-      this.setMorphWeight(morphIndex, state.weight, state.enabled);
-    }
+  get componentData(): PMXMorphComponentData {
+    return this.data;
   }
 }

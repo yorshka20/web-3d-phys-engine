@@ -957,7 +957,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     const mvpMatrix = this.calculateCompleteMVPMatrix(renderable, frameData);
 
     // Update MVP buffer
-    this.device.queue.writeBuffer(mvpBuffer, 0, mvpMatrix);
+    this.device.queue.writeBuffer(mvpBuffer, 0, mvpMatrix.buffer);
 
     // Set MVP bind group
     renderPass.setBindGroup(1, mvpBindGroup);
@@ -1066,7 +1066,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Get bone count, vertex count, and morph count from PMX model
     const boneCount = pmxModel.bones?.length || 0;
     const vertexCount = pmxModel.vertices?.length || 0;
-    const morphCount = pmxModel.morphs?.length || 0;
+    const morphCount = renderable.morphCount || pmxModel.morphs?.length || 0;
 
     // Get or create animation buffers
     const animationBuffers = this.pmxAnimationBufferManager.getOrCreateAnimationBuffers(
@@ -1077,13 +1077,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     );
 
     // Update animation data if needed
-    await this.updatePMXAnimationData(
-      renderable.pmxAssetId,
-      renderable.entityId,
-      renderable.boneMatrices,
-      renderable.morphWeights,
-      renderable.morphData,
-    );
+    await this.updatePMXAnimationData(renderable, morphCount);
 
     // Set animation bind group
     renderPass.setBindGroup(3, animationBuffers.animationBindGroup);
@@ -1092,59 +1086,27 @@ export class WebGPURenderer implements IWebGPURenderer {
   /**
    * Update PMX animation data for a specific model
    */
-  private async updatePMXAnimationData(
-    assetId: string,
-    entityId: number,
-    boneMatrices?: Float32Array,
-    morphWeights?: Float32Array,
-    morphData?: Float32Array,
-  ): Promise<void> {
-    // Use provided animation data or create defaults
-    const finalBoneMatrices = boneMatrices || this.createDefaultBoneMatrices();
-    const finalMorphWeights = morphWeights || this.createDefaultMorphWeights();
-    const finalMorphData = morphData;
+  private async updatePMXAnimationData(renderable: RenderData, morphCount?: number): Promise<void> {
+    const { pmxAssetId, boneMatrices, morphWeights, morphData } = renderable;
+    if (!pmxAssetId) return;
 
     // Update buffers
-    this.pmxAnimationBufferManager.updateBoneMatrices(assetId, finalBoneMatrices);
-    this.pmxAnimationBufferManager.updateMorphWeights(assetId, finalMorphWeights);
+    if (boneMatrices) {
+      this.pmxAnimationBufferManager.updateBoneMatrices(pmxAssetId, boneMatrices);
+    }
+    if (morphWeights) {
+      this.pmxAnimationBufferManager.updateMorphWeights(pmxAssetId, morphWeights);
+    }
+
+    // Update morph count information
+    if (morphCount) {
+      this.pmxAnimationBufferManager.updateMorphCount(pmxAssetId, morphCount, morphCount); // Use actual morph count as stride
+    }
 
     // Only update morph data if it's provided (it's static and large)
-    if (finalMorphData) {
-      this.pmxAnimationBufferManager.updateMorphData(assetId, finalMorphData);
+    if (morphData) {
+      this.pmxAnimationBufferManager.updateMorphData(pmxAssetId, morphData);
     }
-  }
-
-  /**
-   * Create default bone matrices (identity matrices)
-   */
-  private createDefaultBoneMatrices(): Float32Array {
-    const boneCount = 50; // Default bone count
-    const boneMatrices = new Float32Array(boneCount * 16);
-    for (let i = 0; i < boneCount; i++) {
-      const matrixIndex = i * 16;
-      // Set identity matrix
-      boneMatrices[matrixIndex] = 1; // [0,0]
-      boneMatrices[matrixIndex + 5] = 1; // [1,1]
-      boneMatrices[matrixIndex + 10] = 1; // [2,2]
-      boneMatrices[matrixIndex + 15] = 1; // [3,3]
-    }
-    return boneMatrices;
-  }
-
-  /**
-   * Create default morph weights (all zeros)
-   */
-  private createDefaultMorphWeights(): Float32Array {
-    const morphCount = 64; // Default morph count
-    return new Float32Array(morphCount);
-  }
-
-  /**
-   * Create default morph data (all zeros)
-   */
-  private createDefaultMorphData(): Float32Array {
-    const vertexCount = 1000; // Default vertex count
-    return new Float32Array(vertexCount * 3);
   }
 
   /**

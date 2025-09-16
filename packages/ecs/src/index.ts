@@ -13,6 +13,7 @@ export { GameStore } from './core/store/GameStore';
 
 export * from './components';
 export * from './entities';
+export * from './helpers';
 export * from './systems';
 export * from './types/types';
 export * from './utils';
