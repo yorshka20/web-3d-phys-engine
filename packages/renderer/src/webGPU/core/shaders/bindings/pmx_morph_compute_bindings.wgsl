@@ -1,5 +1,5 @@
-@group(0) @binding(0) var<uniform> morphInfo: MorphInfo;
-@group(0) @binding(1) var<storage, read> baseVertices: array<VertexInput>;
-@group(0) @binding(2) var<storage, read> morphTargets: array<VertexInput>;
-@group(0) @binding(3) var<storage, read> morphWeights: array<f32>;
-@group(0) @binding(4) var<storage, read_write> outputVertices: array<VertexInput>;
+@group(0) @binding(0) var<uniform> morph_info: MorphInfo;
+@group(0) @binding(1) var<storage, read> base_vertices: array<VertexInput>;
+@group(0) @binding(2) var<storage, read> morph_targets: array<VertexInput>;
+@group(0) @binding(3) var<storage, read> morph_weights: array<f32>;
+@group(0) @binding(4) var<storage, read_write> output_vertices: array<VertexInput>;

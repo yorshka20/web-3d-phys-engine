@@ -522,9 +522,6 @@ function generateComputeShaderDefines(
 ): string[] {
   const defines: string[] = [];
 
-  // Purpose defines
-  defines.push(`COMPUTE_PURPOSE_${purpose.toUpperCase()}`);
-
   // Custom defines from options
   if (options.shaderDefines) {
     Object.entries(options.shaderDefines).forEach(([key, value]) => {

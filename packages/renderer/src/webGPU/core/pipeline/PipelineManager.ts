@@ -217,11 +217,11 @@ export class PipelineManager {
     const shaderModule = this.shaderManager.safeGetShaderModule(computeKey.customShaderId);
 
     // Create pipeline layout
-    // const layout = await this.createComputePipelineLayout(computeKey);
+    const layout = await this.createComputePipelineLayout(computeKey);
 
     // Create compute pipeline descriptor
     const descriptor: GPUComputePipelineDescriptor = {
-      layout: 'auto', // TODO: use real layout.
+      layout,
       compute: {
         module: shaderModule,
         entryPoint: 'main',
@@ -877,6 +877,46 @@ export class PipelineManager {
     computeKey: ComputePipelineKey,
   ): Promise<GPUPipelineLayout> {
     const bindGroupLayouts: GPUBindGroupLayout[] = [];
+
+    if (computeKey.customShaderId === 'pmx_morph_compute_shader') {
+      const layout = this.bindGroupManager.createBindGroupLayout('pmxMorphComputeBindGroupLayout', {
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: 'uniform' },
+          },
+          {
+            binding: 1,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: 'read-only-storage' },
+          },
+
+          {
+            binding: 2,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: 'read-only-storage' },
+          },
+
+          {
+            binding: 3,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: 'read-only-storage' },
+          },
+
+          {
+            binding: 4,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: 'storage' },
+          },
+        ],
+      });
+
+      return this.device.createPipelineLayout({
+        bindGroupLayouts: [layout],
+        label: `compute_pipeline_layout_${generateComputeCacheKey(computeKey)}`,
+      });
+    }
 
     // Create bind groups based on requirements
     for (const bindGroupOrder of computeKey.requiredBindGroups) {

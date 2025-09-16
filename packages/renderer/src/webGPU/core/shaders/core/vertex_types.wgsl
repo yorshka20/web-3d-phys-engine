@@ -29,8 +29,8 @@ struct PMXVertexInput {
 
 
 struct MorphInfo {
-    vertexCount: u32,
-    morphCount: u32,
+    vertex_count: u32,
+    morph_count: u32,
 }
 
 // Colored vertex input for vertex-colored geometry

@@ -318,13 +318,23 @@ export class ShaderCompiler {
     const suggestions: string[] = [];
 
     // Basic syntax validation
-    if (!source.includes('@vertex') && !source.includes('@fragment')) {
-      errors.push('Shader must contain at least one @vertex or @fragment function');
+    if (
+      !source.includes('@vertex') &&
+      !source.includes('@fragment') &&
+      !source.includes('@compute')
+    ) {
+      errors.push('Shader must contain at least one @vertex or @fragment or @compute function');
     }
 
     // Check for common issues
-    if (source.includes('@location(') && !source.includes('@builtin(position)')) {
-      warnings.push('Consider adding @builtin(position) for vertex output');
+    if (
+      source.includes('@location(') &&
+      !source.includes('@builtin(position)') &&
+      !source.includes('@builtin(global_invocation_id)')
+    ) {
+      warnings.push(
+        'Consider adding @builtin(position) or @builtin(global_invocation_id) for vertex output',
+      );
     }
 
     // Check for undefined variables
