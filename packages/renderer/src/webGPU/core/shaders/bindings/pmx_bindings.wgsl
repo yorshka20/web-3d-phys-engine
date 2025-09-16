@@ -29,4 +29,5 @@
 // Group 3: PMX Animation data (Bone matrices and Morph weights)
 @group(3) @binding(0) var<storage, read> bone_matrices: array<mat4x4<f32>>;
 @group(3) @binding(1) var<uniform> morph_weights: array<vec4<f32>, 16>; // 64/4=16
-@group(3) @binding(2) var<storage, read> morph_data: array<vec3<f32>>;
+@group(3) @binding(2) var<storage, read> morph_data: array<f32>;
+@group(3) @binding(3) var<uniform> morph_info: MorphInfo; // Actual morph count and stride

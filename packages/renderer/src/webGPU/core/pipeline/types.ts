@@ -332,6 +332,7 @@ function determineCullMode(semanticKey: SemanticPipelineKey): 'none' | 'front' |
   if (semanticKey.doubleSided || semanticKey.renderPass === 'wireframe') {
     return 'none';
   }
+
   return 'back';
 }
 

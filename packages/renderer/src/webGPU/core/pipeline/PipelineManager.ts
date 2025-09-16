@@ -699,7 +699,7 @@ export class PipelineManager {
   private createPrimitiveStateFromGpuKey(gpuKey: GpuPipelineKey): GPUPrimitiveState {
     return {
       topology: gpuKey.topology,
-      frontFace: 'ccw',
+      frontFace: gpuKey.customShaderId === 'pmx_material_shader' ? 'cw' : 'ccw',
       cullMode: gpuKey.cullMode,
     };
   }

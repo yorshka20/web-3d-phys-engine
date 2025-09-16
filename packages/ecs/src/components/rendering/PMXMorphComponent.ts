@@ -20,7 +20,8 @@ export interface PMXMorphComponentData extends Record<string, unknown> {
   boneMorphs: Map<number, BoneMorphData>;
   morphWeights: Float32Array; // Current weights for all morphs (max 64)
   morphData: Float32Array; // Vertex morph data (position offsets)
-  needsUpdate: boolean; // Flag to indicate if GPU data needs updating
+  weightsNeedUpdate: boolean; // Flag to indicate if morph weights need updating
+  dataNeedsUpdate: boolean; // Flag to indicate if morph data needs updating
   maxVertexCount: number;
   maxMorphCount: number;
 }
@@ -31,7 +32,7 @@ interface VertexMorphData {
   elementCount: number;
 }
 
-interface BoneMorphData {
+export interface BoneMorphData {
   name: string;
   boneOffsets: Map<number, BoneOffset>;
   elementCount: number;
@@ -45,6 +46,7 @@ export interface BoneOffset {
 interface PMXMorphComponentProps {
   assetId: string;
   morphs: PMXMorph[];
+  vertexCount?: number;
 }
 
 export class PMXMorphComponent extends Component<PMXMorphComponentData> {
@@ -58,8 +60,9 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
       boneMorphs: new Map(),
       morphWeights: new Float32Array(64),
       morphData: new Float32Array(0),
-      needsUpdate: true,
-      maxVertexCount: 1e10, // TODO: fix max vertexCount
+      weightsNeedUpdate: true,
+      dataNeedsUpdate: true,
+      maxVertexCount: props.vertexCount || 1e10, // Use actual vertex count from PMX model
       maxMorphCount: 64,
     });
 
@@ -71,7 +74,8 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
    * @param morphs PMX morph data
    */
   initializeMorphs(morphs: PMXMorph[]): void {
-    this.data.maxVertexCount = morphs.reduce((max, morph) => Math.max(max, morph.elementCount), 0);
+    // Use the vertex count from PMX model, not from morph element count
+    // this.data.maxVertexCount is already set in constructor from props.vertexCount
     this.data.vertexMorphs = new Map();
     this.data.boneMorphs = new Map();
 
@@ -79,6 +83,7 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
 
     // build GPU data
     this.buildMorphDataArray();
+    this.data.dataNeedsUpdate = true;
   }
 
   /**
@@ -87,26 +92,39 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
    */
   private buildMorphDataArray(): void {
     const vertexCount = this.data.maxVertexCount;
-    const morphCount = Math.min(this.data.vertexMorphs.size, this.data.maxMorphCount);
+    const morphStride = this.data.maxMorphCount; // ALWAYS use maxMorphCount as the stride
 
-    if (morphCount === 0 || vertexCount === 0) {
+    if (morphStride === 0 || vertexCount === 0) {
+      console.warn(
+        `[PMXMorphComponent] No morph data to build: vertexCount=${vertexCount}, morphStride=${morphStride}`,
+      );
       this.data.morphData = new Float32Array(0);
       return;
     }
 
-    // each vertex * each morph * 3 components(x,y,z)
-    const totalSize = vertexCount * morphCount * 3;
+    // Layout: [vertex0_morph0_vec3, vertex0_morph1_vec3, ..., vertex1_morph0_vec3, ...]
+    // Each vec3 takes 3 floats, so total size is vertexCount * morphStride * 3
+    const totalSize = vertexCount * morphStride * 3;
     this.data.morphData = new Float32Array(totalSize);
 
     // fill data
     let morphIndex = 0;
-    for (const [originalMorphIndex, vertexMorph] of this.data.vertexMorphs) {
+
+    // Ensure stable iteration order by sorting keys
+    const sortedMorphIndices = Array.from(this.data.vertexMorphs.keys()).sort((a, b) => a - b);
+
+    for (const originalMorphIndex of sortedMorphIndices) {
+      const vertexMorph = this.data.vertexMorphs.get(originalMorphIndex);
+      if (!vertexMorph) continue;
+
       if (morphIndex >= this.data.maxMorphCount) break;
 
       // set offset for each vertex
       for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
         const offset = vertexMorph.vertexOffsets.get(vertexIndex) || [0, 0, 0];
-        const dataIndex = (vertexIndex * morphCount + morphIndex) * 3;
+        // Layout: [vertex0_morph0_vec3, vertex0_morph1_vec3, ..., vertex1_morph0_vec3, ...]
+        // Index calculation: (vertexIndex * morphStride + morphIndex) * 3
+        const dataIndex = (vertexIndex * morphStride + morphIndex) * 3;
 
         this.data.morphData[dataIndex + 0] = offset[0]; // x
         this.data.morphData[dataIndex + 1] = offset[1]; // y
@@ -131,9 +149,13 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
 
   private processVertexMorph(morph: PMXMorph): VertexMorphData {
     const vertexOffsets = new Map<number, Vec3>();
-    morph.elements.forEach((element) => {
-      vertexOffsets.set(element.index, element.position);
+
+    morph.elements.forEach((element, i) => {
+      const pos = element.position;
+      // Apply coordinate system transform: (x, y, z) -> (x, y, -z)
+      vertexOffsets.set(element.index, [pos[0], pos[1], -pos[2]]);
     });
+
     return { name: morph.name, vertexOffsets, elementCount: morph.elements.length };
   }
 
@@ -144,15 +166,23 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
       let rotationOffset: Vec3 | Vec4 = element.rotation ? [...element.rotation] : [0, 0, 0];
 
       if (element.rotation && element.rotation.length === 4) {
-        // quaternion to euler angles
+        // Quaternion format
         const transformedQuat = this.transformQuaternionForCoordinateSystem(
           element.rotation as Vec4,
         );
         rotationOffset = this.quaternionToEulerZXY(transformedQuat);
+      } else if (element.rotation && element.rotation.length === 3) {
+        // Euler angle format
+        // Apply coordinate system transform: (rx, ry, rz) -> (-rx, -ry, rz)
+        const originalRot = element.rotation as Vec3;
+        rotationOffset = [-originalRot[0], -originalRot[1], originalRot[2]];
       }
 
+      // Apply coordinate system transform: (x, y, z) -> (x, y, -z)
+      const positionOffset: Vec3 = [element.position[0], element.position[1], -element.position[2]];
+
       boneOffsets.set(element.index, {
-        positionOffset: element.position,
+        positionOffset: positionOffset,
         rotationOffset: rotationOffset,
       });
     });
@@ -220,16 +250,20 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
    */
   setMorphWeight(morphIndex: number, weight: number, enabled: boolean = true): void {
     const clampedWeight = Math.max(0.0, Math.min(1.0, weight));
+    const newWeight = enabled ? clampedWeight : 0.0;
+
+    // Only update if weight actually changed
+    const currentWeight = this.data.morphWeights[morphIndex] || 0.0;
+    if (Math.abs(currentWeight - newWeight) > 0.001) {
+      this.data.morphWeights[morphIndex] = newWeight;
+      this.data.weightsNeedUpdate = true;
+    }
 
     this.data.activeMorphs.set(morphIndex, {
       morphIndex,
       weight: clampedWeight,
       enabled: enabled && clampedWeight > 0.0,
     });
-
-    // Update the weights array for GPU
-    this.data.morphWeights[morphIndex] = enabled ? clampedWeight : 0.0;
-    this.data.needsUpdate = true;
   }
 
   /**
@@ -252,7 +286,7 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
     if (state) {
       state.enabled = enabled;
       this.data.morphWeights[morphIndex] = enabled ? state.weight : 0.0;
-      this.data.needsUpdate = true;
+      this.data.weightsNeedUpdate = true;
     }
   }
 
@@ -272,7 +306,7 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
   clearAllMorphs(): void {
     this.data.activeMorphs.clear();
     this.data.morphWeights.fill(0.0);
-    this.data.needsUpdate = true;
+    this.data.weightsNeedUpdate = true;
   }
 
   /**
@@ -338,22 +372,30 @@ export class PMXMorphComponent extends Component<PMXMorphComponentData> {
    */
   setMorphData(morphData: Float32Array): void {
     this.data.morphData = morphData;
-    this.data.needsUpdate = true;
+    this.data.dataNeedsUpdate = true;
   }
 
   /**
    * Check if any morph data needs updating
    * @returns Whether GPU data needs updating
    */
-  needsGPUUpdate(): boolean {
-    return this.data.needsUpdate;
+  needsWeightsGPUUpdate(): boolean {
+    return this.data.weightsNeedUpdate;
+  }
+
+  needsDataGPUUpdate(): boolean {
+    return this.data.dataNeedsUpdate;
   }
 
   /**
    * Mark morph data as updated
    */
-  markAsUpdated(): void {
-    this.data.needsUpdate = false;
+  markWeightsAsUpdated(): void {
+    this.data.weightsNeedUpdate = false;
+  }
+
+  markDataAsUpdated(): void {
+    this.data.dataNeedsUpdate = false;
   }
 
   /**

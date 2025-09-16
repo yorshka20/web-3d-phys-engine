@@ -1063,15 +1063,17 @@ export class WebGPURenderer implements IWebGPURenderer {
     const pmxModel = assetDescriptor.rawData as PMXModel; // PMXModel type
     if (!pmxModel) return;
 
-    // Get bone count and vertex count from PMX model
+    // Get bone count, vertex count, and morph count from PMX model
     const boneCount = pmxModel.bones?.length || 0;
     const vertexCount = pmxModel.vertices?.length || 0;
+    const morphCount = pmxModel.morphs?.length || 0;
 
     // Get or create animation buffers
     const animationBuffers = this.pmxAnimationBufferManager.getOrCreateAnimationBuffers(
       renderable.pmxAssetId,
       boneCount,
       vertexCount,
+      morphCount,
     );
 
     // Update animation data if needed
@@ -1105,6 +1107,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Update buffers
     this.pmxAnimationBufferManager.updateBoneMatrices(assetId, finalBoneMatrices);
     this.pmxAnimationBufferManager.updateMorphWeights(assetId, finalMorphWeights);
+
+    // Only update morph data if it's provided (it's static and large)
     if (finalMorphData) {
       this.pmxAnimationBufferManager.updateMorphData(assetId, finalMorphData);
     }

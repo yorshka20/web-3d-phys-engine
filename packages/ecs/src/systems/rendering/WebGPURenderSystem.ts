@@ -443,12 +443,13 @@ export class WebGPURenderSystem extends System {
    * Extract morph weights from morph component
    */
   private extractMorphWeights(morphComponent: PMXMorphComponent): Float32Array | undefined {
-    if (!morphComponent.needsGPUUpdate()) {
+    // Only get morph weights if they need updating
+    if (!morphComponent.needsWeightsGPUUpdate()) {
       return undefined;
     }
 
-    // Get morph weights from component
     const morphWeights = morphComponent.getMorphWeightsArray();
+    morphComponent.markWeightsAsUpdated();
     return morphWeights;
   }
 
@@ -456,12 +457,13 @@ export class WebGPURenderSystem extends System {
    * Extract morph data from morph component
    */
   private extractMorphData(morphComponent: PMXMorphComponent): Float32Array | undefined {
-    if (!morphComponent.needsGPUUpdate()) {
+    // Only get morph data if it needs updating
+    if (!morphComponent.needsDataGPUUpdate()) {
       return undefined;
     }
 
-    // Get morph data from component
     const morphData = morphComponent.getMorphDataArray();
+    morphComponent.markDataAsUpdated();
     return morphData.length > 0 ? morphData : undefined;
   }
 

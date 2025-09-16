@@ -27,6 +27,12 @@ struct PMXVertexInput {
     @location(5) edge_ratio: f32,
 }
 
+
+struct MorphInfo {
+    actual_morph_count: u32,
+    max_morph_stride: u32,
+};
+
 // Colored vertex input for vertex-colored geometry
 struct ColoredVertexInput {
     @location(0) position: vec3<f32>,

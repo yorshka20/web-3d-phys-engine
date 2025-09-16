@@ -20,7 +20,7 @@ export interface PMXBoneTransform {
 export interface PMXBoneComponentData extends Record<string, any> {
   assetId: string; // PMX model asset ID
   boneTransforms: Map<number, PMXBoneTransform>; // boneIndex -> transform
-  boneMatrices: Float32Array; // 4x4 matrices for all bones (boneCount * 16 floats)
+  boneMatrices: Float32Array; // Final skinning matrices for all bones
   hierarchy: Map<number, number[]>; // parent -> children mapping
   rootBones: number[]; // root bones
   bindPose: Map<number, PMXBoneTransform>; // original bind pose
@@ -38,6 +38,7 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
   static readonly componentName = 'PMXBoneComponent';
 
   private originalTransforms: Map<number, PMXBoneTransform> = new Map();
+  private inverseBindMatrices: mat4[] = [];
 
   constructor(props: PMXBoneComponentProps) {
     const boneCount = props.bones?.length || 0;
@@ -65,8 +66,9 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
     this.data.boneMatrices = new Float32Array(bones.length * 16);
     this.data.hierarchy.clear();
     this.data.boneTransforms.clear();
+    this.inverseBindMatrices = [];
 
-    // Build hierarchy
+    // Build hierarchy and set initial transforms
     for (let i = 0; i < bones.length; i++) {
       const bone = bones[i];
       if (bone.parentIndex >= 0) {
@@ -78,28 +80,51 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
         this.data.rootBones.push(i);
       }
 
-      // Initialize bone transform with default values
-      this.data.boneTransforms.set(i, {
+      const initialPosition: Vec3 = [bone.position[0], bone.position[1], -bone.position[2]];
+      const transform = {
         boneIndex: i,
-        position: [0, 0, 0], // do not use bone.position because it may have different coordinate system
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
+        position: initialPosition,
+        rotation: [0, 0, 0] as Vec3,
+        scale: [1, 1, 1] as Vec3,
         enabled: true,
-      });
+      };
 
-      this.originalTransforms.set(i, {
-        boneIndex: i,
-        position: [0, 0, 0],
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-        enabled: true,
-      });
+      this.data.boneTransforms.set(i, { ...transform });
+      this.originalTransforms.set(i, { ...transform });
     }
 
-    // calculate initial bone matrices
+    // Calculate and store inverse bind pose matrices once
+    this.calculateInverseBindMatrices();
+
+    // Calculate initial bone matrices for the T-pose
     this.calculateBoneMatrices();
 
     this.data.needsUpdate = true;
+  }
+
+  /**
+   * Calculates the inverse bind pose matrices for all bones.
+   * This should be called only once during initialization.
+   */
+  private calculateInverseBindMatrices(): void {
+    const bindWorldMatrices: mat4[] = [];
+    // First, calculate the world matrix for each bone in the bind pose
+    for (const rootIndex of this.data.rootBones) {
+      this.calculateBoneWorldMatrix(
+        rootIndex,
+        mat4.create(),
+        bindWorldMatrices,
+        this.originalTransforms,
+      );
+    }
+
+    // Then, invert each world matrix to get the inverse bind matrix
+    for (let i = 0; i < this.data.boneCount; i++) {
+      const worldMatrix = bindWorldMatrices[i] || mat4.create();
+      const inverseBindMatrix = mat4.create();
+      mat4.invert(inverseBindMatrix, worldMatrix);
+      this.inverseBindMatrices[i] = inverseBindMatrix;
+    }
   }
 
   /**
@@ -190,28 +215,24 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
   applyBoneMorphOffset(boneIndex: number, offset: BoneOffset, weight: number): void {
     if (boneIndex < 0 || boneIndex >= this.data.boneCount) return;
 
-    const weightedPositionOffset: Vec3 = [
-      offset.positionOffset[0] * weight,
-      offset.positionOffset[1] * weight,
-      offset.positionOffset[2] * weight,
+    const currentTransform = this.data.boneTransforms.get(boneIndex);
+    const originalTransform = this.originalTransforms.get(boneIndex);
+    if (!currentTransform || !originalTransform) return;
+
+    // Apply offset from original state, blended by weight
+    currentTransform.position = [
+      originalTransform.position[0] + offset.positionOffset[0] * weight,
+      originalTransform.position[1] + offset.positionOffset[1] * weight,
+      originalTransform.position[2] + offset.positionOffset[2] * weight,
     ];
 
-    const weightedRotationOffset: Vec3 | Vec4 = [
-      offset.rotationOffset[0] * weight,
-      offset.rotationOffset[1] * weight,
-      offset.rotationOffset[2] * weight,
+    currentTransform.rotation = [
+      originalTransform.rotation[0] + offset.rotationOffset[0] * weight,
+      originalTransform.rotation[1] + offset.rotationOffset[1] * weight,
+      originalTransform.rotation[2] + offset.rotationOffset[2] * weight,
     ];
-    if (offset.rotationOffset && offset.rotationOffset.length === 4) {
-      weightedRotationOffset.push(offset.rotationOffset[3] * weight);
-    }
 
-    // Store both position and rotation offsets
-    this.data.activeMorphOffsets.set(boneIndex, {
-      positionOffset: weightedPositionOffset,
-      rotationOffset: weightedRotationOffset,
-    });
-
-    this.updateBoneWithMorphOffset(boneIndex);
+    this.data.needsUpdate = true;
   }
 
   /**
@@ -270,29 +291,87 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
   }
 
   /**
-   * Calculate bone matrices for GPU upload
-   * This should be called by the bone system after all transforms are set
+   * Applies the accumulated morph offsets to the bones.
+   * This is called by the PMXMorphSystem after accumulating all bone morphs for a frame.
+   * @param accumulatedOffsets A map of bone index to accumulated position and rotation offsets.
+   */
+  applyAccumulatedBoneMorphs(
+    accumulatedOffsets: Map<number, { position: Vec3; rotation: Vec3 }>,
+  ): void {
+    for (const [boneIndex, offset] of accumulatedOffsets) {
+      const transform = this.data.boneTransforms.get(boneIndex);
+      if (transform) {
+        transform.position[0] += offset.position[0];
+        transform.position[1] += offset.position[1];
+        transform.position[2] += offset.position[2];
+        transform.rotation[0] += offset.rotation[0];
+        transform.rotation[1] += offset.rotation[1];
+        transform.rotation[2] += offset.rotation[2];
+      }
+    }
+    this.data.needsUpdate = true;
+  }
+
+  /**
+   * Calculate bone matrices for GPU upload. This now calculates the final skinning matrix.
+   * finalMatrix = animatedWorldMatrix * inverseBindPoseMatrix
    */
   calculateBoneMatrices(): void {
-    // Reset all matrices to identity
-    for (let i = 0; i < this.data.boneCount; i++) {
-      const matrixIndex = i * 16;
-      mat4.identity(this.data.boneMatrices.subarray(matrixIndex, matrixIndex + 16) as mat4);
+    const animatedWorldMatrices: mat4[] = [];
+    // Calculate the world matrix for each bone in the current animated pose
+    for (const rootIndex of this.data.rootBones) {
+      this.calculateBoneWorldMatrix(
+        rootIndex,
+        mat4.create(),
+        animatedWorldMatrices,
+        this.data.boneTransforms,
+      );
     }
 
-    // Calculate matrices from root bones
-    for (const rootIndex of this.data.rootBones) {
-      this.calculateBoneMatrix(rootIndex, mat4.create());
+    // Calculate final skinning matrices and flatten them into the array for the GPU
+    for (let i = 0; i < this.data.boneCount; i++) {
+      const animatedMatrix = animatedWorldMatrices[i] || mat4.create();
+      const inverseBindMatrix = this.inverseBindMatrices[i] || mat4.create();
+      const finalMatrix = mat4.create();
+
+      mat4.multiply(finalMatrix, animatedMatrix, inverseBindMatrix);
+
+      this.data.boneMatrices.set(finalMatrix, i * 16);
     }
 
     this.data.needsUpdate = true;
   }
 
-  private calculateBoneMatrix(boneIndex: number, parentMatrix: mat4): void {
-    const transform = this.data.boneTransforms.get(boneIndex);
-    if (!transform || !transform.enabled) return;
+  private calculateBoneWorldMatrix(
+    boneIndex: number,
+    parentMatrix: mat4,
+    worldMatrices: mat4[],
+    transforms: Map<number, PMXBoneTransform>,
+  ): void {
+    const transform = transforms.get(boneIndex);
+    if (!transform || !transform.enabled) {
+      worldMatrices[boneIndex] = parentMatrix;
+      return;
+    }
 
     // create local transformation matrix
+    const localMatrix = this.createLocalMatrix(transform);
+
+    // world transformation = parent transformation * local transformation
+    const worldMatrix = mat4.create();
+    mat4.multiply(worldMatrix, parentMatrix, localMatrix);
+
+    // store to array
+    worldMatrices[boneIndex] = worldMatrix;
+
+    // recursively process children
+    const children = this.data.hierarchy.get(boneIndex) || [];
+    children.forEach((childIndex) => {
+      this.calculateBoneWorldMatrix(childIndex, worldMatrix, worldMatrices, transforms);
+    });
+  }
+
+  private createLocalMatrix(transform: PMXBoneTransform): mat4 {
     const localMatrix = mat4.create();
     const translation = mat4.create();
     const rotation = mat4.create();
@@ -305,8 +384,10 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
       mat4.fromQuat(rotation, quat);
     } else {
       // Euler angle format
-      mat4.rotateX(rotation, rotation, transform.rotation[0]);
+      // Use YXZ order which is common for character models to avoid gimbal lock
+      mat4.identity(rotation);
       mat4.rotateY(rotation, rotation, transform.rotation[1]);
+      mat4.rotateX(rotation, rotation, transform.rotation[0]);
       mat4.rotateZ(rotation, rotation, transform.rotation[2]);
     }
     mat4.scale(scale, scale, transform.scale);
@@ -314,20 +395,7 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
     // T * R * S
     mat4.multiply(localMatrix, translation, rotation);
     mat4.multiply(localMatrix, localMatrix, scale);
-
-    // world transformation = parent transformation * local transformation
-    const worldMatrix = mat4.create();
-    mat4.multiply(worldMatrix, parentMatrix, localMatrix);
-
-    // store to array
-    const matrixIndex = boneIndex * 16;
-    this.data.boneMatrices.set(worldMatrix, matrixIndex);
-
-    // recursively process children
-    const children = this.data.hierarchy.get(boneIndex) || [];
-    children.forEach((childIndex) => {
-      this.calculateBoneMatrix(childIndex, worldMatrix);
-    });
+    return localMatrix;
   }
 
   /**
@@ -357,11 +425,14 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
    * Reset all bones to default state
    */
   resetAllBones(): void {
-    for (const transform of this.data.boneTransforms.values()) {
-      transform.position = [0, 0, 0];
-      transform.rotation = [0, 0, 0];
-      transform.scale = [1, 1, 1];
-      transform.enabled = true;
+    for (const [i, original] of this.originalTransforms) {
+      const current = this.data.boneTransforms.get(i);
+      if (current) {
+        current.position = [...original.position];
+        current.rotation = [...original.rotation];
+        current.scale = [...original.scale];
+        current.enabled = original.enabled;
+      }
     }
     this.data.needsUpdate = true;
   }
