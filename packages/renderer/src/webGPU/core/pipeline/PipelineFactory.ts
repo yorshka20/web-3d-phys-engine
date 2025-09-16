@@ -5,7 +5,14 @@ import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../ShaderManager';
 import { WebGPUContext } from '../WebGPUContext';
 import { PipelineManager } from './PipelineManager';
-import { PipelineCreationOptions, RenderPurpose, generateSemanticPipelineKey } from './types';
+import {
+  ComputePipelineCreationOptions,
+  ComputePurpose,
+  PipelineCreationOptions,
+  RenderPurpose,
+  generateComputePipelineKey,
+  generateSemanticPipelineKey,
+} from './types';
 
 /**
  * Predefined pipeline configurations for common use cases
@@ -16,6 +23,17 @@ export interface PredefinedPipelineConfig {
   options: Partial<PipelineCreationOptions>;
   materialFilter?: (_material: WebGPUMaterialDescriptor) => boolean;
   geometryFilter?: (_geometry: GeometryData) => boolean;
+}
+
+/**
+ * Predefined compute pipeline configurations for common use cases
+ */
+export interface PredefinedComputePipelineConfig {
+  name: string;
+  description: string;
+  purpose: ComputePurpose;
+  customShaderId: string;
+  options: Partial<ComputePipelineCreationOptions>;
 }
 
 // union type support regular materials and PMX materials
@@ -30,6 +48,7 @@ export type MaterialDescriptor = WebGPUMaterialDescriptor | PMXMaterialCacheData
 })
 export class PipelineFactory {
   private predefinedConfigs: Map<string, PredefinedPipelineConfig> = new Map();
+  private predefinedComputeConfigs: Map<string, PredefinedComputePipelineConfig> = new Map();
 
   @Inject(ServiceTokens.PIPELINE_MANAGER)
   private pipelineManager!: PipelineManager;
@@ -144,6 +163,96 @@ export class PipelineFactory {
     return this.pipelineManager.getPipeline(semanticKey);
   }
 
+  // ===== Compute Pipeline Methods =====
+
+  /**
+   * Create a compute pipeline for particle systems
+   */
+  async createParticleSystemPipeline(
+    customShaderId: string,
+    customOptions?: Partial<ComputePipelineCreationOptions>,
+  ): Promise<GPUComputePipeline> {
+    const options = {
+      shaderDefines: {
+        ENABLE_PARTICLE_SYSTEM: true,
+        ...customOptions?.shaderDefines,
+      },
+      workgroupSize: [64, 1, 1] as [number, number, number], // Default workgroup size for particles
+      ...customOptions,
+    };
+    const computeKey = generateComputePipelineKey('particle_system', customShaderId, options);
+    return this.pipelineManager.getComputePipeline(computeKey);
+  }
+
+  /**
+   * Create a compute pipeline for physics simulation
+   */
+  async createPhysicsSimulationPipeline(
+    customShaderId: string,
+    customOptions?: Partial<ComputePipelineCreationOptions>,
+  ): Promise<GPUComputePipeline> {
+    const options = {
+      shaderDefines: {
+        ENABLE_PHYSICS_SIMULATION: true,
+        ...customOptions?.shaderDefines,
+      },
+      workgroupSize: [32, 1, 1] as [number, number, number], // Default workgroup size for physics
+      ...customOptions,
+    };
+    const computeKey = generateComputePipelineKey('physics_simulation', customShaderId, options);
+    return this.pipelineManager.getComputePipeline(computeKey);
+  }
+
+  /**
+   * Create a compute pipeline for post-processing effects
+   */
+  async createPostProcessComputePipeline(
+    customShaderId: string,
+    customOptions?: Partial<ComputePipelineCreationOptions>,
+  ): Promise<GPUComputePipeline> {
+    const options = {
+      shaderDefines: {
+        ENABLE_POST_PROCESSING: true,
+        ...customOptions?.shaderDefines,
+      },
+      workgroupSize: [8, 8, 1] as [number, number, number], // Default workgroup size for image processing
+      ...customOptions,
+    };
+    const computeKey = generateComputePipelineKey('post_processing', customShaderId, options);
+    return this.pipelineManager.getComputePipeline(computeKey);
+  }
+
+  /**
+   * Create a compute pipeline for data processing
+   */
+  async createDataProcessingPipeline(
+    customShaderId: string,
+    customOptions?: Partial<ComputePipelineCreationOptions>,
+  ): Promise<GPUComputePipeline> {
+    const options = {
+      shaderDefines: {
+        ENABLE_DATA_PROCESSING: true,
+        ...customOptions?.shaderDefines,
+      },
+      workgroupSize: [64, 1, 1] as [number, number, number], // Default workgroup size for data processing
+      ...customOptions,
+    };
+    const computeKey = generateComputePipelineKey('data_processing', customShaderId, options);
+    return this.pipelineManager.getComputePipeline(computeKey);
+  }
+
+  /**
+   * Create a custom compute pipeline
+   */
+  async createCustomComputePipeline(
+    customShaderId: string,
+    purpose: ComputePurpose = 'custom',
+    customOptions?: Partial<ComputePipelineCreationOptions>,
+  ): Promise<GPUComputePipeline> {
+    const computeKey = generateComputePipelineKey(purpose, customShaderId, customOptions);
+    return this.pipelineManager.getComputePipeline(computeKey);
+  }
+
   /**
    * Create a pipeline using predefined configuration
    */
@@ -184,6 +293,13 @@ export class PipelineFactory {
   }
 
   /**
+   * Register a new predefined compute pipeline configuration
+   */
+  registerPredefinedComputeConfig(config: PredefinedComputePipelineConfig): void {
+    this.predefinedComputeConfigs.set(config.name, config);
+  }
+
+  /**
    * Get all available predefined configuration names
    */
   getPredefinedConfigNames(): string[] {
@@ -195,6 +311,41 @@ export class PipelineFactory {
    */
   getPredefinedConfig(name: string): PredefinedPipelineConfig | undefined {
     return this.predefinedConfigs.get(name);
+  }
+
+  /**
+   * Get all available predefined compute configuration names
+   */
+  getPredefinedComputeConfigNames(): string[] {
+    return Array.from(this.predefinedComputeConfigs.keys());
+  }
+
+  /**
+   * Get predefined compute configuration by name
+   */
+  getPredefinedComputeConfig(name: string): PredefinedComputePipelineConfig | undefined {
+    return this.predefinedComputeConfigs.get(name);
+  }
+
+  /**
+   * Create a compute pipeline using predefined configuration
+   */
+  async createPredefinedComputePipeline(
+    configName: string,
+    customOptions?: Partial<ComputePipelineCreationOptions>,
+  ): Promise<GPUComputePipeline> {
+    const config = this.predefinedComputeConfigs.get(configName);
+    if (!config) {
+      throw new Error(`Predefined compute pipeline configuration '${configName}' not found`);
+    }
+
+    const options: Partial<ComputePipelineCreationOptions> = {
+      ...config.options,
+      ...customOptions,
+    };
+
+    const computeKey = generateComputePipelineKey(config.purpose, config.customShaderId, options);
+    return this.pipelineManager.getComputePipeline(computeKey);
   }
 
   /**
@@ -365,6 +516,74 @@ export class PipelineFactory {
           DEBUG_MODE: true,
           SHOW_NORMALS: true,
           SHOW_UVS: true,
+        },
+      },
+    });
+
+    // Initialize predefined compute pipeline configurations
+    this.initializePredefinedComputeConfigs();
+  }
+
+  /**
+   * Initialize predefined compute pipeline configurations
+   */
+  private initializePredefinedComputeConfigs(): void {
+    // Particle system compute pipeline
+    this.registerPredefinedComputeConfig({
+      name: 'particle_system_basic',
+      description: 'Basic particle system compute pipeline',
+      purpose: 'particle_system',
+      customShaderId: 'particle_system_shader',
+      options: {
+        workgroupSize: [64, 1, 1] as [number, number, number],
+        shaderDefines: {
+          ENABLE_PARTICLE_SYSTEM: true,
+          PARTICLE_COUNT: 10000,
+        },
+      },
+    });
+
+    // Physics simulation compute pipeline
+    this.registerPredefinedComputeConfig({
+      name: 'physics_simulation_basic',
+      description: 'Basic physics simulation compute pipeline',
+      purpose: 'physics_simulation',
+      customShaderId: 'physics_simulation_shader',
+      options: {
+        workgroupSize: [32, 1, 1] as [number, number, number],
+        shaderDefines: {
+          ENABLE_PHYSICS_SIMULATION: true,
+          GRAVITY_ENABLED: true,
+        },
+      },
+    });
+
+    // Post-processing compute pipeline
+    this.registerPredefinedComputeConfig({
+      name: 'post_process_blur',
+      description: 'Gaussian blur post-processing compute pipeline',
+      purpose: 'post_processing',
+      customShaderId: 'blur_compute_shader',
+      options: {
+        workgroupSize: [8, 8, 1] as [number, number, number],
+        shaderDefines: {
+          ENABLE_POST_PROCESSING: true,
+          BLUR_RADIUS: 5,
+        },
+      },
+    });
+
+    // Data processing compute pipeline
+    this.registerPredefinedComputeConfig({
+      name: 'data_processing_basic',
+      description: 'Basic data processing compute pipeline',
+      purpose: 'data_processing',
+      customShaderId: 'data_processing_shader',
+      options: {
+        workgroupSize: [64, 1, 1] as [number, number, number],
+        shaderDefines: {
+          ENABLE_DATA_PROCESSING: true,
+          BATCH_SIZE: 1024,
         },
       },
     });

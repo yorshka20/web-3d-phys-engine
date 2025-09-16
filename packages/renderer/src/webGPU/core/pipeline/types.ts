@@ -24,6 +24,16 @@ export type RenderPurpose =
   | 'postprocess';
 
 /**
+ * Compute purpose - determines the compute shader usage
+ */
+export type ComputePurpose =
+  | 'particle_system'
+  | 'physics_simulation'
+  | 'post_processing'
+  | 'data_processing'
+  | 'custom';
+
+/**
  * Bind Group Layout Order - defines the fixed order of bind groups in pipeline layout
  * This ensures consistent resource indexing across all shaders
  */
@@ -33,7 +43,8 @@ export enum BindGroupLayoutOrder {
   TEXTURE = 2, // Group 2: Texture resources (material type changes)
   MATERIAL = 3, // Group 3: Material uniforms (per-object changes)
   LIGHTING = 4, // Group 4: Lighting uniforms (optional)
-  CUSTOM = 5, // Group 5+: Custom bind groups (optional)
+  COMPUTE_DATA = 5, // Group 5: Compute data buffers (for compute shaders)
+  CUSTOM = 6, // Group 6+: Custom bind groups (optional)
 }
 
 export enum BindGroupLayoutName {
@@ -42,6 +53,7 @@ export enum BindGroupLayoutName {
   TEXTURE = 'textureBindGroupLayout',
   MATERIAL = 'materialBindGroupLayout',
   LIGHTING = 'lightingBindGroupLayout',
+  COMPUTE_DATA = 'computeDataBindGroupLayout',
 }
 
 /**
@@ -100,6 +112,24 @@ export interface GpuPipelineKey {
 }
 
 /**
+ * Compute Pipeline Key - WebGPU compute shader specific
+ * Defines compute shader characteristics and resource requirements
+ */
+export interface ComputePipelineKey {
+  // Compute shader identification
+  customShaderId: string; // Required for compute shaders
+
+  // Shader compilation parameters
+  shaderDefines: string[]; // ['ENABLE_PARTICLE_SYSTEM', 'USE_DOUBLE_PRECISION']
+
+  // Compute workgroup configuration
+  workgroupSize: [number, number, number]; // [x, y, z] workgroup dimensions
+
+  // Resource requirements
+  requiredBindGroups: BindGroupLayoutOrder[]; // Which bind groups are needed
+}
+
+/**
  * Pipeline descriptor for creating WebGPU render pipelines
  */
 export interface PipelineDescriptor {
@@ -130,11 +160,34 @@ export interface PipelineDescriptor {
 }
 
 /**
+ * Compute pipeline descriptor for creating WebGPU compute pipelines
+ */
+export interface ComputePipelineDescriptor {
+  shaderModule: GPUShaderModule;
+  computeState: {
+    entryPoint: string;
+    constants?: Record<string, number>;
+  };
+  layout: GPUPipelineLayout;
+  label?: string;
+}
+
+/**
  * Pipeline cache entry
  */
 export interface PipelineCacheEntry {
   pipeline: GPURenderPipeline;
   descriptor: PipelineDescriptor;
+  lastUsed: number;
+  useCount: number;
+}
+
+/**
+ * Compute pipeline cache entry
+ */
+export interface ComputePipelineCacheEntry {
+  pipeline: GPUComputePipeline;
+  descriptor: ComputePipelineDescriptor;
   lastUsed: number;
   useCount: number;
 }
@@ -162,6 +215,26 @@ export interface PipelineCreationOptions {
   blendEnabled?: boolean;
   blendColor?: GPUBlendComponent;
   blendAlpha?: GPUBlendComponent;
+
+  // Custom pipeline layout
+  customLayout?: GPUPipelineLayout;
+
+  // Bind group layouts (for automatic layout generation)
+  bindGroupLayouts?: GPUBindGroupLayout[];
+}
+
+/**
+ * Compute pipeline creation options
+ */
+export interface ComputePipelineCreationOptions {
+  // Shader configuration
+  shaderDefines?: Record<string, string | number | boolean>;
+
+  // Workgroup configuration
+  workgroupSize?: [number, number, number];
+
+  // Resource requirements
+  requiredBindGroups?: BindGroupLayoutOrder[];
 
   // Custom pipeline layout
   customLayout?: GPUPipelineLayout;
@@ -411,4 +484,91 @@ function generateShaderDefines(semanticKey: SemanticPipelineKey): string[] {
   defines.push(`RENDER_PASS_${semanticKey.renderPass.toUpperCase()}`);
 
   return defines;
+}
+
+/**
+ * Generate compute pipeline key from compute purpose and options
+ */
+export function generateComputePipelineKey(
+  purpose: ComputePurpose,
+  customShaderId: string,
+  options: Partial<ComputePipelineCreationOptions> = {},
+): ComputePipelineKey {
+  return {
+    customShaderId,
+    shaderDefines: generateComputeShaderDefines(purpose, options),
+    workgroupSize: options.workgroupSize || [1, 1, 1],
+    requiredBindGroups: options.requiredBindGroups || determineRequiredBindGroups(purpose),
+  };
+}
+
+/**
+ * Generate compute cache key from compute pipeline key
+ */
+export function generateComputeCacheKey(key: ComputePipelineKey): string {
+  const defines = key.shaderDefines.sort().join(',');
+  const workgroup = key.workgroupSize.join('x');
+  const bindGroups = key.requiredBindGroups.join(',');
+
+  return [key.customShaderId, defines, workgroup, bindGroups].join('_');
+}
+
+/**
+ * Generate shader defines for compute shaders
+ */
+function generateComputeShaderDefines(
+  purpose: ComputePurpose,
+  options: Partial<ComputePipelineCreationOptions> = {},
+): string[] {
+  const defines: string[] = [];
+
+  // Purpose defines
+  defines.push(`COMPUTE_PURPOSE_${purpose.toUpperCase()}`);
+
+  // Custom defines from options
+  if (options.shaderDefines) {
+    Object.entries(options.shaderDefines).forEach(([key, value]) => {
+      if (typeof value === 'boolean') {
+        if (value) defines.push(key.toUpperCase());
+      } else if (typeof value === 'number') {
+        defines.push(`${key.toUpperCase()}_${value}`);
+      } else {
+        defines.push(`${key.toUpperCase()}_${value.toString().toUpperCase()}`);
+      }
+    });
+  }
+
+  return defines;
+}
+
+/**
+ * Determine required bind groups for compute purpose
+ */
+function determineRequiredBindGroups(purpose: ComputePurpose): BindGroupLayoutOrder[] {
+  const groups: BindGroupLayoutOrder[] = [];
+
+  // All compute shaders typically need time uniforms
+  groups.push(BindGroupLayoutOrder.TIME);
+
+  // Add purpose-specific bind groups
+  switch (purpose) {
+    case 'particle_system':
+      groups.push(BindGroupLayoutOrder.COMPUTE_DATA);
+      break;
+    case 'physics_simulation':
+      groups.push(BindGroupLayoutOrder.COMPUTE_DATA);
+      break;
+    case 'post_processing':
+      groups.push(BindGroupLayoutOrder.TEXTURE);
+      groups.push(BindGroupLayoutOrder.COMPUTE_DATA);
+      break;
+    case 'data_processing':
+      groups.push(BindGroupLayoutOrder.COMPUTE_DATA);
+      break;
+    case 'custom':
+      // Custom shaders define their own requirements
+      break;
+  }
+
+  return groups;
 }

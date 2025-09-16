@@ -9,9 +9,11 @@ import { WebGPUContext } from '../WebGPUContext';
 import {
   BindGroupLayoutName,
   BindGroupLayoutOrder,
+  ComputePipelineKey,
   GpuPipelineKey,
   SemanticPipelineKey,
   convertToGpuPipelineKey,
+  generateComputeCacheKey,
   generateGpuCacheKey,
   generateSemanticCacheKey,
 } from './types';
@@ -19,6 +21,13 @@ import {
 // Simple cache entry for dual-layer cache
 interface SimpleCacheEntry {
   pipeline: GPURenderPipeline;
+  lastUsed: number;
+  useCount: number;
+}
+
+// Simple cache entry for compute pipelines
+interface SimpleComputeCacheEntry {
+  pipeline: GPUComputePipeline;
   lastUsed: number;
   useCount: number;
 }
@@ -46,10 +55,13 @@ export class PipelineManager {
   @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
   private pmxMaterialProcessor!: PMXMaterialProcessor; // PMXMaterialProcessor type
 
-  // Dual-layer cache system
+  // Dual-layer cache system for render pipelines
   private semanticCache = new Map<string, SimpleCacheEntry>();
   private gpuCache = new Map<string, SimpleCacheEntry>();
   private semanticToGpuMap = new Map<string, string>();
+
+  // Compute pipeline cache system
+  private computeCache = new Map<string, SimpleComputeCacheEntry>();
 
   // Cache statistics
   private maxCacheSize = 100;
@@ -57,6 +69,8 @@ export class PipelineManager {
   private semanticCacheMissCount = 0;
   private gpuCacheHitCount = 0;
   private gpuCacheMissCount = 0;
+  private computeCacheHitCount = 0;
+  private computeCacheMissCount = 0;
 
   private get device(): GPUDevice {
     return this.context.getDevice();
@@ -94,6 +108,34 @@ export class PipelineManager {
 
     // Cache in semantic layer
     this.cacheSemanticPipeline(semanticId, pipeline);
+
+    return pipeline;
+  }
+
+  /**
+   * Get compute pipeline using compute pipeline key
+   * This is the main method for compute shader systems
+   */
+  async getComputePipeline(computeKey: ComputePipelineKey): Promise<GPUComputePipeline> {
+    const cacheId = generateComputeCacheKey(computeKey);
+
+    // Check compute cache
+    const cacheEntry = this.computeCache.get(cacheId);
+    if (cacheEntry) {
+      this.computeCacheHitCount++;
+      cacheEntry.lastUsed = Date.now();
+      cacheEntry.useCount++;
+      return cacheEntry.pipeline;
+    }
+
+    // Compute cache miss
+    this.computeCacheMissCount++;
+
+    // Create new compute pipeline
+    const pipeline = await this.createComputePipeline(computeKey);
+
+    // Cache the pipeline
+    this.cacheComputePipeline(cacheId, pipeline);
 
     return pipeline;
   }
@@ -168,6 +210,30 @@ export class PipelineManager {
   }
 
   /**
+   * Create compute pipeline from compute key
+   */
+  private async createComputePipeline(computeKey: ComputePipelineKey): Promise<GPUComputePipeline> {
+    // Get shader module
+    const shaderModule = this.shaderManager.safeGetShaderModule(computeKey.customShaderId);
+
+    // Create pipeline layout
+    const layout = await this.createComputePipelineLayout(computeKey);
+
+    // Create compute pipeline descriptor
+    const descriptor: GPUComputePipelineDescriptor = {
+      layout,
+      compute: {
+        module: shaderModule,
+        entryPoint: 'cs_main',
+        constants: this.convertShaderDefinesToNumbers(computeKey.shaderDefines),
+      },
+      label: `compute_pipeline_${generateComputeCacheKey(computeKey)}`,
+    };
+
+    return this.device.createComputePipeline(descriptor);
+  }
+
+  /**
    * Create multisample state
    */
   private createMultisampleState(): GPUMultisampleState {
@@ -205,12 +271,19 @@ export class PipelineManager {
       missCount: number;
       hitRate: number;
     };
+    compute: {
+      size: number;
+      hitCount: number;
+      missCount: number;
+      hitRate: number;
+    };
     mapping: {
       size: number;
     };
   } {
     const semanticTotal = this.semanticCacheHitCount + this.semanticCacheMissCount;
     const gpuTotal = this.gpuCacheHitCount + this.gpuCacheMissCount;
+    const computeTotal = this.computeCacheHitCount + this.computeCacheMissCount;
 
     return {
       semantic: {
@@ -225,6 +298,12 @@ export class PipelineManager {
         missCount: this.gpuCacheMissCount,
         hitRate: gpuTotal > 0 ? this.gpuCacheHitCount / gpuTotal : 0,
       },
+      compute: {
+        size: this.computeCache.size,
+        hitCount: this.computeCacheHitCount,
+        missCount: this.computeCacheMissCount,
+        hitRate: computeTotal > 0 ? this.computeCacheHitCount / computeTotal : 0,
+      },
       mapping: {
         size: this.semanticToGpuMap.size,
       },
@@ -237,11 +316,14 @@ export class PipelineManager {
   clearCache(): void {
     this.semanticCache.clear();
     this.gpuCache.clear();
+    this.computeCache.clear();
     this.semanticToGpuMap.clear();
     this.semanticCacheHitCount = 0;
     this.semanticCacheMissCount = 0;
     this.gpuCacheHitCount = 0;
     this.gpuCacheMissCount = 0;
+    this.computeCacheHitCount = 0;
+    this.computeCacheMissCount = 0;
   }
 
   /**
@@ -466,7 +548,7 @@ export class PipelineManager {
         // Group 0: Time uniforms (per-frame changes)
         entries.push({
           binding: 0,
-          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
           buffer: { type: 'uniform' },
         });
         break;
@@ -485,12 +567,12 @@ export class PipelineManager {
         // This group is always present but may be empty for non-textured materials
         entries.push({
           binding: 0,
-          visibility: GPUShaderStage.FRAGMENT,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
           texture: { sampleType: 'float' },
         });
         entries.push({
           binding: 1,
-          visibility: GPUShaderStage.FRAGMENT,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
           sampler: { type: 'filtering' },
         });
         break;
@@ -511,6 +593,20 @@ export class PipelineManager {
           binding: 0,
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' },
+        });
+        break;
+
+      case BindGroupLayoutOrder.COMPUTE_DATA:
+        // Group 5: Compute data buffers (for compute shaders)
+        entries.push({
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        });
+        entries.push({
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
         });
         break;
 
@@ -769,6 +865,74 @@ export class PipelineManager {
 
     if (oldestId) {
       this.gpuCache.delete(oldestId);
+    }
+  }
+
+  // ===== Compute Pipeline Methods =====
+
+  /**
+   * Create compute pipeline layout from compute key
+   */
+  private async createComputePipelineLayout(
+    computeKey: ComputePipelineKey,
+  ): Promise<GPUPipelineLayout> {
+    const bindGroupLayouts: GPUBindGroupLayout[] = [];
+
+    // Create bind groups based on requirements
+    for (const bindGroupOrder of computeKey.requiredBindGroups) {
+      const layout = await this.getOrCreateBindGroupLayoutByOrder(bindGroupOrder, {
+        customShaderId: computeKey.customShaderId,
+        shaderDefines: computeKey.shaderDefines,
+        blendState: 'replace',
+        cullMode: 'back',
+        topology: 'triangle-list',
+        depthWrite: false,
+        depthTest: false,
+        vertexAttributes: 0,
+      } as GpuPipelineKey);
+
+      if (layout) {
+        bindGroupLayouts.push(layout);
+      }
+    }
+
+    return this.device.createPipelineLayout({
+      bindGroupLayouts,
+      label: `compute_pipeline_layout_${generateComputeCacheKey(computeKey)}`,
+    });
+  }
+
+  /**
+   * Cache compute pipeline
+   */
+  private cacheComputePipeline(cacheId: string, pipeline: GPUComputePipeline): void {
+    if (this.computeCache.size >= this.maxCacheSize) {
+      this.evictLeastUsedComputePipeline();
+    }
+
+    this.computeCache.set(cacheId, {
+      pipeline,
+      lastUsed: Date.now(),
+      useCount: 1,
+    });
+  }
+
+  /**
+   * Evict least recently used compute pipeline
+   */
+  private evictLeastUsedComputePipeline(): void {
+    let oldestTime = Date.now();
+    let oldestId = '';
+
+    for (const [id, entry] of this.computeCache.entries()) {
+      if (entry.lastUsed < oldestTime) {
+        oldestTime = entry.lastUsed;
+        oldestId = id;
+      }
+    }
+
+    if (oldestId) {
+      this.computeCache.delete(oldestId);
     }
   }
 }

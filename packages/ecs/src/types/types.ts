@@ -2,6 +2,8 @@
  * Common utility types used across the codebase
  */
 
+import { vec2, vec3, vec4 } from 'gl-matrix';
+
 /**
  * Represents a 2D point with x and y coordinates
  */
@@ -21,11 +23,11 @@ export type RectArea = [number, number, number, number];
 /**
  * Represents a 2D vector with x and y components
  */
-export type Vec2 = [number, number];
+export type Vec2 = vec2;
 
-export type Vec3 = [number, number, number];
+export type Vec3 = vec3;
 
-export type Vec4 = [number, number, number, number];
+export type Vec4 = vec4;
 
 export interface Resolution {
   width: number;

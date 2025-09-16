@@ -294,6 +294,32 @@ export class ShaderManager {
   }
 
   /**
+   * Get compute shader module by ID
+   * @param id Shader ID
+   * @returns Compute shader module or undefined
+   */
+  getComputeShaderModule(id: string): GPUShaderModule | undefined {
+    const compiledShader = this.compiledShaders.get(id);
+    if (compiledShader) {
+      const shaderModule = this.shaderModules.get(id);
+      if (shaderModule && shaderModule.type === 'compute') {
+        return compiledShader.shaderModule;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Check if a shader module is a compute shader
+   * @param id Shader ID
+   * @returns True if the shader is a compute shader
+   */
+  isComputeShader(id: string): boolean {
+    const shaderModule = this.shaderModules.get(id);
+    return shaderModule?.type === 'compute';
+  }
+
+  /**
    * Hot reload shader module (recompile shader only)
    * @param moduleId Module ID
    * @param options Compilation options
