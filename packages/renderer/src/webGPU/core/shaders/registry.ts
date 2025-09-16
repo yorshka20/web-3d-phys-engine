@@ -9,7 +9,7 @@ import pulsewaveShader from './materials/Pulsewave.wgsl';
 import waterMaterialShader from './materials/WaterMaterial.wgsl';
 
 // Compute shaders
-import pmxMorphComputeShader from './materials/PMXMorphCompute.wgsl';
+import pmxMorphComputeShader from './compute/PMXMorphCompute.wgsl';
 
 // Core fragments
 import constantsFragment from './core/constants.wgsl';

@@ -1,5 +1,5 @@
-import { ShaderCompiler } from '../../ShaderCompiler';
-import { ShaderManager } from '../../ShaderManager';
+import { ShaderCompiler } from '../ShaderCompiler';
+import { ShaderManager } from '../ShaderManager';
 import { createPMXMaterialShaderModule } from '../create';
 
 /**

@@ -1,8 +1,7 @@
 import { VertexFormat } from '@ecs/components/physics/mesh';
-import { Inject, Injectable } from './decorators';
-import { ServiceTokens } from './decorators/DIContainer';
-import { WebGPUResourceManager } from './ResourceManager';
-import { ShaderCompiler } from './ShaderCompiler';
+import { Inject, Injectable } from '../decorators';
+import { ServiceTokens } from '../decorators/DIContainer';
+import { WebGPUResourceManager } from '../ResourceManager';
 import {
   createCheckerboardShaderModule,
   createCoordinateShaderModule,
@@ -10,17 +9,19 @@ import {
   createEmissiveShaderModule,
   createFireMaterialShaderModule,
   createPMXMaterialShaderModule,
+  createPMXMorphComputeShaderModule,
   createPulsewaveShaderModule,
   createWaterMaterialShaderModule,
-} from './shaders/create';
-import { shaderFragmentRegistry } from './shaders/registry';
+} from './create';
+import { shaderFragmentRegistry } from './registry';
+import { ShaderCompiler } from './ShaderCompiler';
 import {
   CompiledShader,
   CustomShaderDefinition,
   ShaderCompilationResult,
   ShaderDefine,
   ShaderModule,
-} from './shaders/types/shader';
+} from './types/shader';
 
 /**
  * WebGPU shader manager
@@ -90,6 +91,10 @@ export class ShaderManager {
     this.registerShaderModule(createPMXMaterialShaderModule());
     console.log('✓ Registered PMX Material Shader');
 
+    // Register PMX Morph Compute Shader
+    this.registerShaderModule(createPMXMorphComputeShaderModule());
+    console.log('✓ Registered PMX Morph Compute Shader');
+
     // Register Water Material Shader
     this.registerShaderModule(createWaterMaterialShaderModule());
     console.log('✓ Registered Water Material Shader');
@@ -143,6 +148,12 @@ export class ShaderManager {
         ENABLE_TOON_SHADING: false,
         ENABLE_NORMAL_MAPPING: true,
         ENABLE_ENVIRONMENT_MAPPING: false,
+      },
+    });
+
+    this.compileShaderModule('pmx_morph_compute_shader', {
+      defines: {
+        ENABLE_PMX_MORPH_COMPUTE: true,
       },
     });
 

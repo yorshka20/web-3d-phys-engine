@@ -1,13 +1,13 @@
-import { Inject, Injectable } from './decorators';
-import { ServiceTokens } from './decorators/DIContainer';
-import { shaderFragmentRegistry } from './shaders/registry';
+import { Inject, Injectable } from '../decorators';
+import { ServiceTokens } from '../decorators/DIContainer';
+import { shaderFragmentRegistry } from './registry';
 import {
   CompiledShader,
   ShaderCompilationResult,
   ShaderDefine,
   ShaderModule,
   ShaderValidationResult,
-} from './shaders/types/shader';
+} from './types/shader';
 
 /**
  * WebGPU Shader Compiler
