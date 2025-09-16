@@ -20,7 +20,7 @@ import {
   SerializedLight,
 } from '../../../rayTracing/base/types';
 import { BufferManager } from '../../core/BufferManager';
-import { ShaderManager } from '../../core/ShaderManager';
+import { ShaderManager } from '../../core/shaders/ShaderManager';
 import { ShaderType } from '../../core/types';
 import { WebGPUContext } from '../../core/WebGPUContext';
 import { WebGPUProgressiveRenderer } from './WebGPUProgressiveRenderer';

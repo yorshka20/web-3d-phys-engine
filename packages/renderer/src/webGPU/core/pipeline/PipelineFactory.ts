@@ -2,7 +2,7 @@ import { GeometryData, WebGPUMaterialDescriptor } from '@ecs/components';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { PMXMaterialCacheData } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
-import { ShaderManager } from '../ShaderManager';
+import { ShaderManager } from '../shaders/ShaderManager';
 import { WebGPUContext } from '../WebGPUContext';
 import { PipelineManager } from './PipelineManager';
 import {

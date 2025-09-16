@@ -7,7 +7,7 @@ export * from './GPUResourceCoordinator';
 export * from './InstanceManager';
 export * from './RendererInitializationManager';
 export * from './ResourceManager';
-export * from './ShaderManager';
+export * from './shaders/ShaderManager';
 export * from './TextureManager';
 export * from './TimeManager';
 export * from './types';

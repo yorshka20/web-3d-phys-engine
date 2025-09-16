@@ -2,7 +2,7 @@ import { BindGroupManager } from '../BindGroupManager';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { PMXMaterialProcessor } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
-import { ShaderManager } from '../ShaderManager';
+import { ShaderManager } from '../shaders/ShaderManager';
 import { CompiledShader } from '../shaders/types/shader';
 import { BindGroupLayoutDescriptor } from '../types';
 import { WebGPUContext } from '../WebGPUContext';
@@ -217,14 +217,14 @@ export class PipelineManager {
     const shaderModule = this.shaderManager.safeGetShaderModule(computeKey.customShaderId);
 
     // Create pipeline layout
-    const layout = await this.createComputePipelineLayout(computeKey);
+    // const layout = await this.createComputePipelineLayout(computeKey);
 
     // Create compute pipeline descriptor
     const descriptor: GPUComputePipelineDescriptor = {
-      layout,
+      layout: 'auto', // TODO: use real layout.
       compute: {
         module: shaderModule,
-        entryPoint: 'cs_main',
+        entryPoint: 'main',
         constants: this.convertShaderDefinesToNumbers(computeKey.shaderDefines),
       },
       label: `compute_pipeline_${generateComputeCacheKey(computeKey)}`,

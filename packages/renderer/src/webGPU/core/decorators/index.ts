@@ -32,7 +32,7 @@
 
 import './ResourceDecorators';
 
-import { ShaderCompiler } from '../ShaderCompiler';
+import { ShaderCompiler } from '../shaders/ShaderCompiler';
 import { WebGPUContext } from '../WebGPUContext';
 import { globalContainer, ServiceTokens } from './DIContainer';
 

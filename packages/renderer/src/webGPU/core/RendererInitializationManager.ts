@@ -4,7 +4,7 @@ import { GeometryManager } from './GeometryManager';
 import { PipelineFactory } from './pipeline/PipelineFactory';
 import { PipelineManager } from './pipeline/PipelineManager';
 import { WebGPUResourceManager } from './ResourceManager';
-import { ShaderManager } from './ShaderManager';
+import { ShaderManager } from './shaders/ShaderManager';
 import { TextureManager } from './TextureManager';
 import { TimeManager } from './TimeManager';
 import { WebGPUContext } from './WebGPUContext';
