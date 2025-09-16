@@ -43,9 +43,13 @@ export interface ShaderModule {
   id: string;
   name: string;
   description: string;
+  type: 'render' | 'compute';
+
+  // Original file name
+  fileName: string;
 
   // File path to the main shader source
-  sourceFile: string;
+  sourceCode: string;
 
   // Dependencies - other shader files to include
   includes?: string[];

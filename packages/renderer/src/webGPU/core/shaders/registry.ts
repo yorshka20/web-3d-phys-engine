@@ -8,6 +8,9 @@ import pmxMaterialShader from './materials/PMXMaterial.wgsl';
 import pulsewaveShader from './materials/Pulsewave.wgsl';
 import waterMaterialShader from './materials/WaterMaterial.wgsl';
 
+// Compute shaders
+import pmxMorphComputeShader from './materials/PMXMorphCompute.wgsl';
+
 // Core fragments
 import constantsFragment from './core/constants.wgsl';
 import uniformsFragment from './core/uniforms.wgsl';
@@ -32,6 +35,7 @@ import shadowFragment from './passes/shadow.wgsl';
 // Binding fragments
 import fireBindingsFragment from './bindings/fire_bindings.wgsl';
 import pmxBindingsFragment from './bindings/pmx_bindings.wgsl';
+import pmxMorphComputeBindingsFragment from './bindings/pmx_morph_compute_bindings.wgsl';
 import simpleBindingsFragment from './bindings/simple_bindings.wgsl';
 import waterBindingsFragment from './bindings/water_bindings.wgsl';
 
@@ -63,6 +67,7 @@ export const shaderFragmentRegistry = new Map([
   ['bindings/water_bindings.wgsl', waterBindingsFragment],
   ['bindings/fire_bindings.wgsl', fireBindingsFragment],
   ['bindings/simple_bindings.wgsl', simpleBindingsFragment],
+  ['bindings/pmx_morph_compute_bindings.wgsl', pmxMorphComputeBindingsFragment],
 
   // Material shaders
   ['PMXMaterial.wgsl', pmxMaterialShader],
@@ -72,6 +77,9 @@ export const shaderFragmentRegistry = new Map([
   ['Checkerboard.wgsl', checkerboardShader],
   ['Emissive.wgsl', emissiveShader],
   ['Pulsewave.wgsl', pulsewaveShader],
+
+  // Compute shaders
+  ['PMXMorphCompute.wgsl', pmxMorphComputeShader],
 
   // Default shader for fallback
   ['Default.wgsl', defaultShader],

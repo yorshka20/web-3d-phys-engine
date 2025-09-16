@@ -8,7 +8,8 @@ export interface PMXMaterialShaderModule extends ShaderModule {
   id: 'pmx_material_shader';
   name: 'PMX Material Shader';
   description: 'PMX model material shader with multi-texture support and PMX-specific features';
-  sourceFile: string;
+  type: 'render';
+  sourceCode: string;
   includes: string[];
   compilationOptions: {
     vertexFormat: VertexFormat[];
@@ -25,6 +26,36 @@ export interface PMXMaterialShaderModule extends ShaderModule {
     normalMapping: ShaderParamDefinition;
     environmentMapping: ShaderParamDefinition;
   };
+  renderState: {
+    blendMode: 'alpha-blend';
+    depthTest: true;
+    depthWrite: true;
+    cullMode: 'back';
+    frontFace: 'cw';
+    sampleCount: 1;
+  };
+  version: string;
+  author: string;
+  tags: string[];
+}
+
+/**
+ * PMX Morph Compute Shader Module Definition
+ */
+export interface PMXMorphComputeShaderModule extends ShaderModule {
+  id: 'pmx_morph_compute_shader';
+  name: 'PMX Morph Compute Shader';
+  description: 'PMX morph compute shader';
+  type: 'compute';
+  sourceCode: string;
+  includes: string[];
+  compilationOptions: {
+    vertexFormat: VertexFormat[];
+    defines?: {
+      ENABLE_PMX_MORPH_COMPUTE?: boolean;
+    };
+  };
+  runtimeParams: Record<string, never>;
   renderState: {
     blendMode: 'alpha-blend';
     depthTest: true;
@@ -75,7 +106,8 @@ export interface WaterMaterialShaderModule extends ShaderModule {
   id: 'water_material_shader';
   name: 'Water Material Shader';
   description: 'Animated water with wave effects and fresnel reflection';
-  sourceFile: string;
+  type: 'render';
+  sourceCode: string;
   includes: string[];
   compilationOptions: {
     vertexFormat: VertexFormat[];
@@ -113,7 +145,8 @@ export interface FireMaterialShaderModule extends ShaderModule {
   id: 'fire_material_shader';
   name: 'Fire Material Shader';
   description: 'Flickering fire with distortion and color gradients';
-  sourceFile: string;
+  type: 'render';
+  sourceCode: string;
   includes: string[];
   compilationOptions: {
     vertexFormat: VertexFormat[];
@@ -234,7 +267,8 @@ export interface CheckerboardShaderModule extends ShaderModule {
   id: 'checkerboard_shader';
   name: 'Checkerboard Shader';
   description: 'Checkerboard pattern shader';
-  sourceFile: string;
+  type: 'render';
+  sourceCode: string;
   includes: string[];
   compilationOptions: {
     vertexFormat: VertexFormat[];
@@ -261,7 +295,8 @@ export interface CoordinateShaderModule extends ShaderModule {
   id: 'coordinate_shader';
   name: 'Coordinate Shader';
   description: 'Coordinate system visualization shader with color-coded axes';
-  sourceFile: string;
+  type: 'render';
+  sourceCode: string;
   includes: string[];
   compilationOptions: {
     vertexFormat: VertexFormat[];
@@ -288,7 +323,8 @@ export interface EmissiveShaderModule extends ShaderModule {
   id: 'emissive_shader';
   name: 'Emissive Shader';
   description: 'Emissive material with animated color cycling and pulsing effects';
-  sourceFile: string;
+  type: 'render';
+  sourceCode: string;
   includes: string[];
   compilationOptions: {
     vertexFormat: VertexFormat[];
@@ -315,7 +351,8 @@ export interface PulsewaveShaderModule extends ShaderModule {
   id: 'pulsewave_shader';
   name: 'Pulsewave Shader';
   description: 'Animated pulsewave effect with HSV color cycling and wave distortion';
-  sourceFile: string;
+  type: 'render';
+  sourceCode: string;
   includes: string[];
   compilationOptions: {
     vertexFormat: VertexFormat[];

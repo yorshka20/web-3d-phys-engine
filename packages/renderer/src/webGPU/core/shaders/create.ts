@@ -1,3 +1,4 @@
+import { shaderFragmentRegistry } from './registry';
 import {
   CheckerboardShaderModule,
   CoordinateShaderModule,
@@ -6,6 +7,7 @@ import {
   FireMaterialShaderModule,
   PMX_MATERIAL_DEFAULT_PARAMS,
   PMXMaterialShaderModule,
+  PMXMorphComputeShaderModule,
   PulsewaveShaderModule,
   WATER_MATERIAL_DEFAULT_PARAMS,
   WaterMaterialShaderModule,
@@ -20,7 +22,9 @@ export function createPMXMaterialShaderModule(): PMXMaterialShaderModule {
     id: 'pmx_material_shader',
     name: 'PMX Material Shader',
     description: 'PMX model material shader with multi-texture support and PMX-specific features',
-    sourceFile: 'PMXMaterial.wgsl',
+    type: 'render',
+    fileName: 'PMXMaterial.wgsl',
+    sourceCode: shaderFragmentRegistry.get('PMXMaterial.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -45,12 +49,50 @@ export function createPMXMaterialShaderModule(): PMXMaterialShaderModule {
       depthTest: true,
       depthWrite: true,
       cullMode: 'back',
-      frontFace: 'ccw',
+      frontFace: 'cw',
       sampleCount: 1,
     },
     version: '1.0.0',
     author: 'WebGPU 3D Physics Engine',
     tags: ['pmx', 'material', 'multi-texture', 'toon-shading'],
+  };
+}
+
+/**
+ * Create PMX Morph Compute Shader Module
+ */
+export function createPMXMorphComputeShaderModule(): PMXMorphComputeShaderModule {
+  return {
+    id: 'pmx_morph_compute_shader',
+    name: 'PMX Morph Compute Shader',
+    description: 'PMX morph compute shader',
+    type: 'compute',
+    fileName: 'PMXMorphCompute.wgsl',
+    sourceCode: shaderFragmentRegistry.get('PMXMorphCompute.wgsl') || '',
+    includes: [
+      'core/constants.wgsl',
+      'core/uniforms.wgsl',
+      'core/vertex_types.wgsl',
+      'bindings/pmx_morph_compute_bindings.wgsl',
+    ],
+    compilationOptions: {
+      vertexFormat: ['full'],
+      defines: {
+        ENABLE_PMX_MORPH_COMPUTE: true,
+      },
+    },
+    runtimeParams: {},
+    renderState: {
+      blendMode: 'alpha-blend',
+      depthTest: true,
+      depthWrite: true,
+      cullMode: 'back',
+      frontFace: 'ccw',
+      sampleCount: 1,
+    },
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: ['pmx', 'morph', 'compute'],
   };
 }
 
@@ -62,7 +104,9 @@ export function createWaterMaterialShaderModule(): WaterMaterialShaderModule {
     id: 'water_material_shader',
     name: 'Water Material Shader',
     description: 'Animated water with wave effects and fresnel reflection',
-    sourceFile: 'WaterMaterial.wgsl',
+    type: 'render',
+    fileName: 'WaterMaterial.wgsl',
+    sourceCode: shaderFragmentRegistry.get('WaterMaterial.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -103,7 +147,9 @@ export function createFireMaterialShaderModule(): FireMaterialShaderModule {
     id: 'fire_material_shader',
     name: 'Fire Material Shader',
     description: 'Flickering fire with distortion and color gradients',
-    sourceFile: 'FireMaterial.wgsl',
+    type: 'render',
+    fileName: 'FireMaterial.wgsl',
+    sourceCode: shaderFragmentRegistry.get('FireMaterial.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -141,7 +187,9 @@ export function createCheckerboardShaderModule(): CheckerboardShaderModule {
     id: 'checkerboard_shader',
     name: 'Checkerboard Shader',
     description: 'Checkerboard pattern shader',
-    sourceFile: 'Checkerboard.wgsl',
+    type: 'render',
+    fileName: 'Checkerboard.wgsl',
+    sourceCode: shaderFragmentRegistry.get('Checkerboard.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -185,7 +233,9 @@ export function createCoordinateShaderModule(): CoordinateShaderModule {
     id: 'coordinate_shader',
     name: 'Coordinate Shader',
     description: 'Coordinate system visualization shader with color-coded axes',
-    sourceFile: 'Coordinate.wgsl',
+    type: 'render',
+    fileName: 'Coordinate.wgsl',
+    sourceCode: shaderFragmentRegistry.get('Coordinate.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -218,7 +268,9 @@ export function createEmissiveShaderModule(): EmissiveShaderModule {
     id: 'emissive_shader',
     name: 'Emissive Shader',
     description: 'Emissive material with animated color cycling and pulsing effects',
-    sourceFile: 'Emissive.wgsl',
+    type: 'render',
+    fileName: 'Emissive.wgsl',
+    sourceCode: shaderFragmentRegistry.get('Emissive.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -252,7 +304,9 @@ export function createPulsewaveShaderModule(): PulsewaveShaderModule {
     id: 'pulsewave_shader',
     name: 'Pulsewave Shader',
     description: 'Animated pulsewave effect with HSV color cycling and wave distortion',
-    sourceFile: 'Pulsewave.wgsl',
+    type: 'render',
+    fileName: 'Pulsewave.wgsl',
+    sourceCode: shaderFragmentRegistry.get('Pulsewave.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -283,7 +337,9 @@ export function createDefaultShaderModule(): ShaderModule {
     id: 'default_shader',
     name: 'Default Shader',
     description: 'Default shader for fallback',
-    sourceFile: 'Default.wgsl',
+    type: 'render',
+    fileName: 'Default.wgsl',
+    sourceCode: shaderFragmentRegistry.get('Default.wgsl') || '',
     includes: ['core/constants.wgsl'],
     compilationOptions: {
       vertexFormat: ['full'],

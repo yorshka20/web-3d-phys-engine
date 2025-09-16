@@ -76,7 +76,7 @@ export class ShaderSystemTest {
       return false;
     }
 
-    if (module.sourceFile !== '/shaders/materials/PMXMaterial.wgsl') {
+    if (module.sourceCode !== '/shaders/materials/PMXMaterial.wgsl') {
       console.log('❌ Incorrect source file path');
       return false;
     }

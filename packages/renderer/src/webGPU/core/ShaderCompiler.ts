@@ -126,7 +126,7 @@ export class ShaderCompiler {
         compilationLog,
         module: {
           id: module.id,
-          sourceFile: module.sourceFile,
+          sourceCode: module.fileName,
           includes: module.includes,
         },
         options,
@@ -153,7 +153,7 @@ export class ShaderCompiler {
       composedCode += `// Composed shader: ${module.id}\n`;
       composedCode += `// Generated at: ${new Date().toISOString()}\n`;
       composedCode += `// Includes: ${(module.includes || []).join(', ')}\n`;
-      composedCode += `// Main file: ${module.sourceFile}\n\n`;
+      composedCode += `// Main file: ${module.fileName}\n\n`;
 
       // Load and compose include fragments in order
       if (module.includes && module.includes.length > 0) {
@@ -163,7 +163,7 @@ export class ShaderCompiler {
           compositionLog.push(`[${index + 1}/${module.includes.length}] Loading: ${include}`);
 
           try {
-            const includeCode = this.loadShaderFile(include);
+            const includeCode = this.loadShaderFragment(include);
             composedCode += `// === ${include} ===\n`;
             composedCode += includeCode.trim() + '\n\n';
             compositionLog.push(`✓ Successfully loaded: ${include}`);
@@ -178,14 +178,14 @@ export class ShaderCompiler {
       }
 
       // Load main shader file
-      compositionLog.push(`Loading main shader: ${module.sourceFile}`);
+      compositionLog.push(`Loading main shader: ${module.fileName}`);
       try {
-        const mainCode = this.loadShaderFile(module.sourceFile);
-        composedCode += `// === ${module.sourceFile} (main) ===\n`;
+        const mainCode = module.sourceCode;
+        composedCode += `// === ${module.fileName} (main) ===\n`;
         composedCode += mainCode.trim();
-        compositionLog.push(`✓ Successfully loaded main shader: ${module.sourceFile}`);
+        compositionLog.push(`✓ Successfully loaded main shader: ${module.fileName}`);
       } catch (error) {
-        const errorMsg = `Failed to load main shader: ${module.sourceFile}`;
+        const errorMsg = `Failed to load main shader: ${module.fileName}`;
         compositionLog.push(`✗ ${errorMsg}`);
         throw new Error(
           `${errorMsg}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -205,16 +205,16 @@ export class ShaderCompiler {
         error: error instanceof Error ? error.message : 'Unknown error',
         compositionLog,
         includes: module.includes,
-        sourceFile: module.sourceFile,
+        sourceFile: module.fileName,
       });
       throw error;
     }
   }
 
   /**
-   * Load shader file content from fragment registry
+   * Load shader fragment content from fragment registry
    */
-  private loadShaderFile(filePath: string): string {
+  private loadShaderFragment(filePath: string): string {
     // Check cache first
     if (this.includeCache.has(filePath)) {
       return this.includeCache.get(filePath)!;
@@ -369,8 +369,8 @@ export class ShaderCompiler {
     const missingFragments: string[] = [];
 
     // Check main source file
-    if (!shaderFragmentRegistry.has(module.sourceFile)) {
-      missingFragments.push(module.sourceFile);
+    if (!shaderFragmentRegistry.has(module.fileName)) {
+      missingFragments.push(module.fileName);
     }
 
     // Check includes
@@ -401,8 +401,8 @@ export class ShaderCompiler {
     let estimatedSize = 0;
 
     // Estimate size by checking fragment lengths
-    if (shaderFragmentRegistry.has(module.sourceFile)) {
-      estimatedSize += shaderFragmentRegistry.get(module.sourceFile)!.length;
+    if (shaderFragmentRegistry.has(module.fileName)) {
+      estimatedSize += shaderFragmentRegistry.get(module.fileName)!.length;
     }
 
     for (const include of includes) {
@@ -412,7 +412,7 @@ export class ShaderCompiler {
     }
 
     return {
-      sourceFile: module.sourceFile,
+      sourceFile: module.fileName,
       includes,
       totalFragments: includes.length + 1,
       estimatedSize,
