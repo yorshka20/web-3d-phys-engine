@@ -30,6 +30,7 @@ export interface CameraControlConfig {
     panSensitivity: number; // Mouse pan sensitivity
     zoomSensitivity: number; // Mouse wheel zoom sensitivity
     rotationSensitivity: number; // Mouse rotation sensitivity
+    moveSpeed: number; // WASD keyboard movement speed
     enablePan: boolean; // Allow panning with right mouse button
     enableZoom: boolean; // Allow zooming with mouse wheel
     enableRotation: boolean; // Allow rotation with left mouse button
@@ -97,8 +98,9 @@ export const DEFAULT_CAMERA_CONTROLS: Record<CameraControlMode, CameraControlCon
       minDistance: 1,
       maxDistance: 100,
       panSensitivity: 0.01,
-      zoomSensitivity: 0.0001,
+      zoomSensitivity: 0.002,
       rotationSensitivity: 0.005,
+      moveSpeed: 5.0,
       enablePan: true,
       enableZoom: true,
       enableRotation: true,

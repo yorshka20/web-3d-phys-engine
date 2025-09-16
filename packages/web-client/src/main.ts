@@ -21,6 +21,7 @@ import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
 import chroma from 'chroma-js';
 import { Game } from './game/Game';
 import { createGeometryStage } from './stages/geometry';
+import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 import { createPMXModelStage } from './stages/pmxModel';
 import { createZZZPMXModelStage } from './stages/zzz';
 
@@ -30,11 +31,11 @@ window.addEventListener('load', () => {
   main();
 });
 
-type Stage = 'geometry' | 'pmxModel' | 'zzz';
+type Stage = 'geometry' | 'pmxModel' | 'zzz' | 'pmxAnimationExample';
 
-const stages: Stage[] = ['geometry', 'pmxModel', 'zzz'];
+const stages: Stage[] = ['geometry', 'pmxModel', 'zzz', 'pmxAnimationExample'];
 
-const stage: Stage = stages[2];
+const stage: Stage = stages[3];
 
 async function main() {
   const rootElement = document.body;
@@ -61,6 +62,9 @@ async function main() {
       break;
     case 'zzz':
       await createZZZPMXModelStage(world);
+      break;
+    case 'pmxAnimationExample':
+      await createPMXAnimationExample(world);
       break;
     default:
       break;
@@ -89,61 +93,147 @@ const defaultMaterial = {
   materialType: 'normal' as const,
 };
 
-function create3DCamera(world: World) {
+// Camera configuration interface for easy parameter adjustment
+interface CameraConfig {
+  // Position and orientation
+  target?: [number, number, number];
+  distance?: number;
+  azimuthDegrees?: number; // Horizontal angle (0 = front, 90 = right, 180 = back, 270 = left)
+  elevationDegrees?: number; // Vertical angle (0 = horizontal, 90 = straight up, -90 = straight down)
+
+  // Camera properties
+  fov?: number;
+  aspectRatio?: number;
+  near?: number;
+  far?: number;
+
+  // Control sensitivity
+  zoomSensitivity?: number;
+  panSensitivity?: number;
+  rotationSensitivity?: number;
+  moveSpeed?: number;
+
+  // Control options
+  enablePan?: boolean;
+  enableZoom?: boolean;
+  enableRotation?: boolean;
+
+  // Distance limits
+  minDistance?: number;
+  maxDistance?: number;
+}
+
+function create3DCamera(world: World, config: CameraConfig = {}) {
+  // Default configuration with easy-to-adjust parameters
+  const {
+    // Position and orientation
+    target = [0, 10, 8],
+    distance = 12,
+    azimuthDegrees = 0,
+    elevationDegrees = 10,
+
+    // Camera properties
+    fov = 75,
+    aspectRatio = 16 / 9,
+    near = 0.1,
+    far = 1000,
+
+    // Control sensitivity (optimized for better UX)
+    zoomSensitivity = 0.005, // Faster zoom
+    panSensitivity = 0.02, // Faster panning
+    rotationSensitivity = 0.008, // Slightly faster rotation
+    moveSpeed = 15.0, // Faster WASD movement
+
+    // Control options
+    enablePan = true,
+    enableZoom = true,
+    enableRotation = true,
+
+    // Distance limits
+    minDistance = 1,
+    maxDistance = 100,
+  } = config;
+
+  // Convert degrees to radians
+  const azimuth = (azimuthDegrees * Math.PI) / 180;
+  const elevation = (elevationDegrees * Math.PI) / 180;
+
+  // Calculate initial position using spherical coordinates
+  const position: [number, number, number] = [
+    target[0] + distance * Math.cos(elevation) * Math.sin(azimuth),
+    target[1] + distance * Math.sin(elevation),
+    target[2] + distance * Math.cos(elevation) * Math.cos(azimuth),
+  ];
+
+  // Create camera entity
   const camera = world.createEntity('camera');
   camera.setLabel('camera');
 
-  // Add camera component with 3D properties
+  // Add camera component
   camera.addComponent(
     world.createComponent(Camera3DComponent, {
-      fov: 75,
-      aspectRatio: 16 / 9,
-      near: 0.1,
-      far: 1000,
+      fov,
+      aspectRatio,
+      near,
+      far,
       projectionMode: 'perspective',
       cameraMode: 'custom',
       controlMode: 'orbit',
-      target: [0, 0, 0],
+      target,
     }),
   );
-  camera.addComponent(
-    world.createComponent(CameraControlComponent, {
-      mode: 'orbit',
-      config: {
-        orbit: {
-          target: [0, 0, 0],
-          distance: 10,
-          minDistance: 1,
-          maxDistance: 100,
-          panSensitivity: 0.01,
-          zoomSensitivity: 0.001,
-          rotationSensitivity: 0.005,
-          enablePan: true,
-          enableZoom: true,
-          enableRotation: true,
-        },
-      },
-    }),
-  );
-  // Add transform component for position/rotation
+
+  // Add transform component
   camera.addComponent(
     world.createComponent(Transform3DComponent, {
-      position: [0, 3, -10], // Position to see all geometry objects
-      rotation: [0, 0, 0], // Look straight ahead towards the objects
+      position,
+      rotation: [0, 0, 0],
     }),
   );
+
+  // Add control component with configured parameters
+  const controlComponent = world.createComponent(CameraControlComponent, {
+    mode: 'orbit',
+    config: {
+      orbit: {
+        target,
+        distance,
+        minDistance,
+        maxDistance,
+        panSensitivity,
+        zoomSensitivity,
+        rotationSensitivity,
+        moveSpeed,
+        enablePan,
+        enableZoom,
+        enableRotation,
+      },
+    },
+  });
+
+  // Set initial orbit state with custom angles before adding to camera
+  const state = (controlComponent as CameraControlComponent).getOrbitState();
+  if (state) {
+    state.azimuth = azimuth;
+    state.elevation = elevation;
+    state.distance = distance;
+  }
+
+  camera.addComponent(controlComponent);
+
+  // Add input component
+  camera.addComponent(world.createComponent(Input3DComponent, {}));
 
   // Mark as active camera
   camera.addComponent(world.createComponent(ActiveCameraTag, {}));
 
+  // Add additional components for physics and stats
   camera.addComponent(world.createComponent(PhysicsComponent, { velocity: [0, 0, 0] }));
-
-  // Add input component for camera control
-  camera.addComponent(world.createComponent(Input3DComponent, {}));
-
   camera.addComponent(world.createComponent(StatsComponent, { moveSpeedMultiplier: 5 }));
 
+  // Add camera to world
   world.addEntity(camera);
+
   return camera;
 }
 

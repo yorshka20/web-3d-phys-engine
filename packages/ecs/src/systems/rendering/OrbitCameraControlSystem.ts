@@ -197,7 +197,9 @@ export class OrbitCameraControlSystem extends System {
     deltaTime: number,
   ): void {
     const inputState = input.getState();
-    const moveSpeed = 5.0; // units per second
+    const baseMoveSpeed = config.moveSpeed || 5.0; // units per second
+    const sprintMultiplier = inputState.sprint ? 3.0 : 1.0; // Sprint speed multiplier
+    const moveSpeed = baseMoveSpeed * sprintMultiplier;
 
     let moveX = 0,
       moveY = 0,

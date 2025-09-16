@@ -14,7 +14,7 @@ export interface WebGPUGeometry {
     min: Vec3;
     max: Vec3;
   };
-  vertexFormat: 'simple' | 'full' | 'colored';
+  vertexFormat: 'simple' | 'full' | 'colored' | 'pmx';
   primitiveTopology: GPUPrimitiveTopology;
 }
 

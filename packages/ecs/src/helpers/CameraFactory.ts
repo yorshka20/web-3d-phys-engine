@@ -75,11 +75,22 @@ export class CameraFactory {
     fov: number = 75,
     aspectRatio: number = 16 / 9,
   ): Entity {
-    const camera = world.createEntity('camera');
+    return this.createOrbitCameraWithAngles(world, target, distance, 0, 0, fov, aspectRatio);
+  }
 
-    // Initial orbit parameters
-    const azimuth = 0; // Start looking from the front
-    const elevation = 0; // Start at same height as target
+  /**
+   * Create a complete orbit camera entity with custom initial angles
+   */
+  static createOrbitCameraWithAngles(
+    world: World,
+    target: Vec3 = [0, 0, 0],
+    distance: number = 10,
+    azimuth: number = 0, // Horizontal angle in radians
+    elevation: number = 0, // Vertical angle in radians
+    fov: number = 75,
+    aspectRatio: number = 16 / 9,
+  ): Entity {
+    const camera = world.createEntity('camera');
 
     // Calculate initial position using spherical coordinates
     const position: Vec3 = [
@@ -121,8 +132,9 @@ export class CameraFactory {
             minDistance: 1,
             maxDistance: 100,
             panSensitivity: 0.01,
-            zoomSensitivity: 0.0001,
+            zoomSensitivity: 0.002,
             rotationSensitivity: 0.005,
+            moveSpeed: 5.0,
             enablePan: true,
             enableZoom: true,
             enableRotation: true,
@@ -137,7 +149,51 @@ export class CameraFactory {
     // Mark as active camera
     camera.addComponent(world.createComponent(ActiveCameraTag, {}));
 
+    // Set initial orbit state with custom angles
+    const control = camera.getComponent<CameraControlComponent>(
+      CameraControlComponent.componentName,
+    );
+    if (control) {
+      const state = control.getOrbitState();
+      if (state) {
+        state.azimuth = azimuth;
+        state.elevation = elevation;
+        state.distance = distance;
+      }
+    }
+
+    // Add camera to world
+    world.addEntity(camera);
+
     return camera;
+  }
+
+  /**
+   * Create a complete orbit camera entity with custom initial angles in degrees
+   * This is more user-friendly as it accepts degrees instead of radians
+   */
+  static createOrbitCameraWithDegrees(
+    world: World,
+    target: Vec3 = [0, 0, 0],
+    distance: number = 10,
+    azimuthDegrees: number = 0, // Horizontal angle in degrees
+    elevationDegrees: number = 0, // Vertical angle in degrees
+    fov: number = 75,
+    aspectRatio: number = 16 / 9,
+  ): Entity {
+    // Convert degrees to radians
+    const azimuth = (azimuthDegrees * Math.PI) / 180;
+    const elevation = (elevationDegrees * Math.PI) / 180;
+
+    return this.createOrbitCameraWithAngles(
+      world,
+      target,
+      distance,
+      azimuth,
+      elevation,
+      fov,
+      aspectRatio,
+    );
   }
 
   /**
