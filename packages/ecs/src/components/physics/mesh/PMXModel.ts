@@ -4,6 +4,7 @@
  */
 
 import { Vec3, Vec4 } from '@ecs/types/types';
+import { mat4 } from 'gl-matrix';
 
 // PMX model metadata interface
 export interface PMXMetadata {
@@ -82,18 +83,22 @@ export interface PMXTexture {
 export interface PMXBone {
   name: string;
   englishName: string;
-  position: [number, number, number]; // bone position
+  position: Vec3; // bone position
+  transform?: mat4;
+  inverseBindMatrix?: mat4;
+  tailPosition?: Vec3; // bone tail position
   parentIndex: number; // parent bone index (-1 for root)
   transformationClass: number; // transformation level
   flag: number; // bone flags
-  offsetPosition?: [number, number, number]; // offset position (optional)
+  offsetPosition?: Vec3; // offset position (optional)
   connectIndex?: number; // connected bone index (optional)
 }
 
 // PMX morph element interface
 export interface PMXMorphElement {
   index: number; // vertex index
-  position: Vec3; // morph offset
+  offset?: Vec3; // morph offset
+  position: Vec3; // morph position
   rotation: Vec3 | Vec4; // morph rotation. can be quaternion or Euler angles
 }
 
