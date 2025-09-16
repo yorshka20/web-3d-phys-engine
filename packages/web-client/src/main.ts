@@ -140,7 +140,7 @@ function create3DCamera(world: World, config: CameraConfig = {}) {
 
     // Control sensitivity (optimized for better UX)
     zoomSensitivity = 0.005, // Faster zoom
-    panSensitivity = 0.02, // Faster panning
+    panSensitivity = 0.01, // Faster panning
     rotationSensitivity = 0.008, // Slightly faster rotation
     moveSpeed = 15.0, // Faster WASD movement
 

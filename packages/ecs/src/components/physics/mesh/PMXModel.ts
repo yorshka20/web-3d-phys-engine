@@ -99,7 +99,7 @@ export interface PMXMorphElement {
   index: number; // vertex index
   offset?: Vec3; // morph offset
   position: Vec3; // morph position
-  rotation: Vec3 | Vec4; // morph rotation. can be quaternion or Euler angles
+  rotation: Vec4; // morph rotation. can be quaternion or Euler angles
 }
 
 // PMX morph data interface
