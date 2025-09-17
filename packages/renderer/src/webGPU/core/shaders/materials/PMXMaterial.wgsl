@@ -1,7 +1,7 @@
-// PMX Material Shader - Complete shader with all functionality
-// Supports multiple texture types and PMX-specific features
+// PMX Material Shader - Performance Optimized Version
+// Supports multiple texture types and PMX-specific features with performance optimizations
 
-// Shader parameters (can be overridden at runtime)
+// Performance optimization flags
 #ifdef ENABLE_TOON_SHADING
 override toonShading: f32 = 1.0;
 #else
@@ -20,36 +20,186 @@ override environmentMapping: f32 = 1.0;
 override environmentMapping: f32 = 0.0;
 #endif
 
-// Vertex shader
-@vertex
-fn vs_main(input: PMXVertexInput) -> PMXVertexOutput {
+#ifdef ENABLE_MORPH_PROCESSING
+override morphProcessing: f32 = 1.0;
+#else
+override morphProcessing: f32 = 0.0;
+#endif
+
+
+/**
+ * vertex shader processing order: 
+ * Morph -> Skinning -> World Transform -> Material Data
+ */
+
+
+// PMX Vertex Shader - Modular Functions for Compute Shader Pipeline
+// Processing Order: Read Morphed Data → Skinning → World Transform → Material Data
+// Uses injected utility functions, only defines processing logic
+
+// Add this binding to your pmx_bindings.wgsl:
+// @group(3) @binding(4) var<storage, read> morphed_vertices: array<VertexInput>;
+
+// ============================================================================
+// GROUP 1: MORPHED DATA READING
+// Read pre-computed morph results from compute shader
+// ============================================================================
+
+/**
+ * Read morphed vertex data from compute shader output
+ */
+fn read_morphed_data(
+    vertex_index: u32,
+    out_position: ptr<function, vec3<f32>>,
+    out_normal: ptr<function, vec3<f32>>
+) {
+    if vertex_index < arrayLength(&morphed_vertices) {
+        let morphed_vertex = morphed_vertices[vertex_index];
+        *out_position = morphed_vertex.position;
+        *out_normal = morphed_vertex.normal;
+    } else {
+        // Fallback to zero if index out of bounds
+        *out_position = vec3<f32>(0.0);
+        *out_normal = vec3<f32>(0.0, 1.0, 0.0);
+    }
+}
+
+// ============================================================================
+// GROUP 2: BONE SKINNING PROCESSING
+// Apply bone transformations to morphed vertices
+// ============================================================================
+
+/**
+ * Apply bone skinning to morphed vertex data
+ */
+fn apply_bone_skinning(
+    morphed_position: vec3<f32>,
+    morphed_normal: vec3<f32>,
+    skin_indices: vec4<f32>,
+    skin_weights: vec4<f32>,
+    out_position: ptr<function, vec3<f32>>,
+    out_normal: ptr<function, vec3<f32>>
+) {
+    let total_weight = skin_weights.x + skin_weights.y + skin_weights.z + skin_weights.w;
+
+    if total_weight < 0.001 {
+        *out_position = morphed_position;
+        *out_normal = morphed_normal;
+        return;
+    }
+
+    *out_position = vec3<f32>(0.0);
+    *out_normal = vec3<f32>(0.0);
+
+    for (var i = 0u; i < 4u; i++) {
+        let weight = skin_weights[i];
+
+        if weight > 0.0 {
+            let bone_index = u32(skin_indices[i]);
+
+            if bone_index < arrayLength(&bone_matrices) {
+                let bone_matrix = bone_matrices[bone_index];
+                *out_position += weight * (bone_matrix * vec4<f32>(morphed_position, 1.0)).xyz;
+                *out_normal += weight * (bone_matrix * vec4<f32>(morphed_normal, 0.0)).xyz;
+            }
+        }
+    }
+
+    if total_weight > 0.001 {
+        *out_position /= total_weight;
+        *out_normal /= total_weight;
+    }
+
+    *out_normal = normalize(*out_normal);
+}
+
+// ============================================================================
+// GROUP 3: WORLD SPACE TRANSFORMATION
+// Transform from model space to world space
+// ============================================================================
+
+/**
+ * Transform skinned vertex data to world space
+ */
+fn transform_to_world_space(
+    final_position: vec3<f32>,
+    final_normal: vec3<f32>,
+    out_world_position: ptr<function, vec3<f32>>,
+    out_world_normal: ptr<function, vec3<f32>>,
+    out_clip_position: ptr<function, vec4<f32>>
+) {
+    *out_world_position = (mvp.modelMatrix * vec4<f32>(final_position, 1.0)).xyz;
+    *out_world_normal = normalize((mvp.modelMatrix * vec4<f32>(final_normal, 0.0)).xyz);
+    *out_clip_position = mvp.mvpMatrix * vec4<f32>(final_position, 1.0);
+}
+
+// ============================================================================
+// GROUP 4: MATERIAL DATA PREPARATION
+// Prepare all data required for material rendering (uses injected utility functions)
+// ============================================================================
+
+/**
+ * Prepare final vertex output with all material-required data
+ * Uses calculate_tangent_space() utility function injected during compilation
+ */
+fn prepare_material_data(
+    world_position: vec3<f32>,
+    world_normal: vec3<f32>,
+    clip_position: vec4<f32>,
+    uv: vec2<f32>
+) -> PMXVertexOutput {
     var output: PMXVertexOutput;
     
-    // use mvp matrix to transform vertex position
-    output.clip_position = mvp.mvpMatrix * vec4<f32>(input.position, 1.0);
+    // === CRITICAL MATERIAL DATA - DO NOT MODIFY ===
+    output.clip_position = clip_position;     // Required for rasterization
+    output.world_position = world_position;   // Required for lighting calculations
+    output.world_normal = world_normal;       // Required for lighting and normal mapping
+    output.uv = uv;                          // Required for texture sampling
     
-    // calculate world space position
-    let world_position_4 = mvp.modelMatrix * vec4<f32>(input.position, 1.0);
-    output.world_position = world_position_4.xyz;
-    
-    // transform normal to world space
-    output.world_normal = normalize((mvp.modelMatrix * vec4<f32>(input.normal, 0.0)).xyz);
-    
-    // since there is no tangent input, use normal to calculate tangent space
-    let normal = normalize(input.normal);
-    let TBN = calculate_tangent_space(normal);
-    
-    // transform tangent and bitangent to world space
-    let world_tangent_4 = mvp.modelMatrix * vec4<f32>(TBN[0], 0.0);
-    let world_bitangent_4 = mvp.modelMatrix * vec4<f32>(TBN[1], 0.0);
+    // === TANGENT SPACE DATA - Uses injected utility function ===
+    let tangent_basis = calculate_tangent_space(world_normal);
+    output.world_tangent = tangent_basis[0];
+    output.world_bitangent = tangent_basis[1];
 
-    output.world_tangent = normalize(world_tangent_4.xyz);
-    output.world_bitangent = normalize(world_bitangent_4.xyz);
-
-    output.uv = input.uv;
     return output;
 }
 
+// ============================================================================
+// MAIN VERTEX SHADER
+// Orchestrates all processing groups in correct order
+// ============================================================================
+
+/**
+ * Main vertex shader entry point for compute shader pipeline
+ * Processing order: Read Morphed Data → Skinning → World Transform → Material Data
+ */
+@vertex
+fn vs_main(input: PMXVertexInput, @builtin(vertex_index) vertex_index: u32) -> PMXVertexOutput {
+    // Working variables for each processing group
+    var morphed_position: vec3<f32>;
+    var morphed_normal: vec3<f32>;
+    var final_position: vec3<f32>;
+    var final_normal: vec3<f32>;
+    var world_position: vec3<f32>;
+    var world_normal: vec3<f32>;
+    var clip_position: vec4<f32>;
+    
+    // GROUP 1: Read pre-computed morph data from compute shader
+    read_morphed_data(vertex_index, &morphed_position, &morphed_normal);
+    
+    // GROUP 2: Apply bone skinning to morphed vertices
+    apply_bone_skinning(
+        morphed_position, morphed_normal,
+        input.skin_indices, input.skin_weights,
+        &final_position, &final_normal
+    );
+    
+    // GROUP 3: Transform to world space and calculate clip position
+    transform_to_world_space(final_position, final_normal, &world_position, &world_normal, &clip_position);
+    
+    // GROUP 4: Prepare all material-required data (uses injected utilities)
+    return prepare_material_data(world_position, world_normal, clip_position, input.uv);
+}
 
 @fragment
 fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {

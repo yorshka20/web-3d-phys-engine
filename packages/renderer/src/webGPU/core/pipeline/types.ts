@@ -402,7 +402,11 @@ function determineBlendState(
  * Determine cull mode from semantic key
  */
 function determineCullMode(semanticKey: SemanticPipelineKey): 'none' | 'front' | 'back' {
-  if (semanticKey.doubleSided || semanticKey.renderPass === 'wireframe') {
+  if (
+    semanticKey.doubleSided ||
+    semanticKey.renderPass === 'wireframe' ||
+    semanticKey.vertexFormat === 'pmx'
+  ) {
     return 'none';
   }
 
