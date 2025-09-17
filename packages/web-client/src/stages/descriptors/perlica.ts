@@ -6,7 +6,7 @@
 import { PMXAssetDescriptor } from '@renderer/webGPU/core/PMXAssetDescriptor';
 
 // Import texture URLs
-import perlicaTex1 from '../../../assets/perlica/hair_s.png?url';
+import perlicaTex1 from '../../../assets/perlica/hair_s.bmp?url';
 import perlicaTex2 from '../../../assets/perlica/ls.png?url';
 import perlicaTex3 from '../../../assets/perlica/st-1g1.jpg?url';
 import perlicaTex4 from '../../../assets/perlica/textures/T_actor_common_body_01_RD.png?url';
