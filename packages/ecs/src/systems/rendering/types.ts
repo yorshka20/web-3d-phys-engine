@@ -36,8 +36,8 @@ export interface RenderData {
   // Animation data (optional)
   boneMatrices?: Float32Array; // Bone transformation matrices
   morphWeights?: Float32Array; // Morph weights
-  morphData?: Float32Array; // Morph vertex data
   morphCount?: number; // Actual morph count for shader
+  vertexCount?: number; // Vertex count for morph data layout
 }
 
 export interface EnvironmentData {
@@ -73,6 +73,7 @@ export interface RenderConfig {
   enableFrustumCulling: boolean;
   enableOcclusion: boolean;
   maxDrawCalls: number;
+  computePass?: boolean;
 }
 
 // new renderContext interface

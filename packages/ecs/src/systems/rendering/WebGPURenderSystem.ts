@@ -216,6 +216,8 @@ export class WebGPURenderSystem extends System {
       height: this.viewport[3],
     };
 
+    const renderables = this.generateRenderData();
+
     const frameData: FrameData = {
       scene: {
         camera: this.prepareCameraData(), // Pass the camera entity
@@ -225,13 +227,14 @@ export class WebGPURenderSystem extends System {
           ambientIntensity: 0,
         },
       },
-      renderables: this.generateRenderData(), // all renderable entities
+      renderables, // all renderable entities
       config: {
         viewport: viewportData,
         renderMode: this.renderMode,
         enableFrustumCulling: true,
         enableOcclusion: false,
         maxDrawCalls: 1000,
+        computePass: this.prepareComputePass(renderables),
       },
       globalUniforms: this.globalUniforms,
     };
@@ -367,7 +370,8 @@ export class WebGPURenderSystem extends System {
     // Get animation data
     const boneMatrices = boneComponent ? this.extractBoneMatrices(boneComponent) : undefined;
     const morphWeights = morphComponent ? this.extractMorphWeights(morphComponent) : undefined;
-    const morphData = morphComponent ? this.extractMorphData(morphComponent) : undefined;
+    const morphCount = morphComponent ? morphComponent.getVertexMorphCount() : undefined;
+    const vertexCount = pmxModel.metadata.vertexCount;
 
     // Create a renderable for each material
     const renderDataList: RenderData[] = [];
@@ -409,7 +413,8 @@ export class WebGPURenderSystem extends System {
         // Add animation data
         boneMatrices,
         morphWeights,
-        morphData,
+        morphCount,
+        vertexCount,
       });
     }
 
@@ -430,12 +435,14 @@ export class WebGPURenderSystem extends System {
    * Extract bone matrices from bone component
    */
   private extractBoneMatrices(boneComponent: PMXBoneComponent): Float32Array | undefined {
-    if (!boneComponent.needsGPUUpdate()) {
-      return undefined;
+    // Always get bone matrices to ensure morphs are applied correctly
+    // This is necessary for proper morph animation
+    const boneMatrices = boneComponent.getBoneMatricesArray();
+
+    if (boneComponent.needsGPUUpdate()) {
+      boneComponent.markAsUpdated();
     }
 
-    // Get bone matrices from component
-    const boneMatrices = boneComponent.getBoneMatricesArray();
     return boneMatrices;
   }
 
@@ -444,28 +451,18 @@ export class WebGPURenderSystem extends System {
    */
   private extractMorphWeights(morphComponent: PMXMorphComponent): Float32Array | undefined {
     // Only get morph weights if they need updating
-    if (!morphComponent.needsWeightsGPUUpdate()) {
+    if (!morphComponent.needsWeightsUpdate()) {
       return undefined;
     }
 
-    const morphWeights = morphComponent.getMorphWeightsArray();
+    const morphWeights = morphComponent.getVertexMorphWeights();
+
     morphComponent.markWeightsAsUpdated();
     return morphWeights;
   }
 
   /**
-   * Extract morph data from morph component
-   */
-  private extractMorphData(morphComponent: PMXMorphComponent): Float32Array | undefined {
-    // Only get morph data if it needs updating
-    if (!morphComponent.needsDataGPUUpdate()) {
-      return undefined;
-    }
-
-    const morphData = morphComponent.getMorphDataArray();
-    morphComponent.markDataAsUpdated();
-    return morphData.length > 0 ? morphData : undefined;
-  }
+ 
 
   /**
    * Generate unique geometry ID for resource caching
@@ -490,6 +487,10 @@ export class WebGPURenderSystem extends System {
     mat3.transpose(normalMatrix, normalMatrix);
 
     return new Float32Array(normalMatrix);
+  }
+
+  private prepareComputePass(renderables: RenderData[]): boolean {
+    return renderables.some((renderable) => renderable.morphCount && renderable.morphCount > 0);
   }
 
   onDestroy(): void {
