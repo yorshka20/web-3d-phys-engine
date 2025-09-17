@@ -128,10 +128,111 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
     // Then, invert each world matrix to get the inverse bind matrix
     for (let i = 0; i < this.data.boneCount; i++) {
       const worldMatrix = bindWorldMatrices[i] || mat4.create();
+      // inverseBindMatrix will not change once created from worldMatrix.
       const inverseBindMatrix = mat4.create();
       mat4.invert(inverseBindMatrix, worldMatrix);
       this.inverseBindMatrices[i] = inverseBindMatrix;
     }
+  }
+
+  /**
+   * Calculate bone matrices for GPU upload. This now calculates the final skinning matrix.
+   * finalMatrix = animatedWorldMatrix * inverseBindPoseMatrix
+   */
+  calculateBoneMatrices(): void {
+    const animatedWorldMatrices: mat4[] = [];
+    // Calculate the world matrix for each bone in the current animated pose
+    for (const rootIndex of this.data.rootBones) {
+      this.calculateBoneWorldMatrix(
+        rootIndex,
+        mat4.create(),
+        animatedWorldMatrices,
+        this.data.boneTransforms,
+      );
+    }
+
+    // Calculate final skinning matrices and flatten them into the array for the GPU
+    for (let i = 0; i < this.data.boneCount; i++) {
+      const animatedMatrix = animatedWorldMatrices[i] || mat4.create();
+      const inverseBindMatrix = this.inverseBindMatrices[i] || mat4.create();
+      const finalMatrix = mat4.create();
+
+      mat4.multiply(finalMatrix, animatedMatrix, inverseBindMatrix);
+
+      this.data.boneMatrices.set(finalMatrix, i * 16);
+    }
+
+    this.data.needsUpdate = false;
+  }
+
+  private calculateBoneWorldMatrix(
+    boneIndex: number,
+    parentMatrix: mat4,
+    worldMatrices: mat4[],
+    transforms: Map<number, PMXBoneTransform>,
+  ): void {
+    const transform = transforms.get(boneIndex);
+    if (!transform) {
+      // If no transform data, use parent matrix
+      worldMatrices[boneIndex] = parentMatrix;
+      return;
+    }
+
+    // create local transformation matrix
+    const localMatrix = this.createLocalMatrix(transform);
+
+    if (!transform.enabled) {
+      // If disabled, use parent matrix but still process children
+      worldMatrices[boneIndex] = parentMatrix;
+      const children = this.data.hierarchy.get(boneIndex) || [];
+      children.forEach((childIndex) => {
+        this.calculateBoneWorldMatrix(childIndex, parentMatrix, worldMatrices, transforms);
+      });
+      return;
+    }
+
+    // world transformation = parent transformation * local transformation
+    const worldMatrix = mat4.create();
+    mat4.multiply(worldMatrix, parentMatrix, localMatrix);
+
+    // store to array
+    worldMatrices[boneIndex] = worldMatrix;
+
+    // recursively process children
+    const children = this.data.hierarchy.get(boneIndex) || [];
+    children.forEach((childIndex) => {
+      this.calculateBoneWorldMatrix(childIndex, worldMatrix, worldMatrices, transforms);
+    });
+  }
+
+  private createLocalMatrix(transform: PMXBoneTransform): mat4 {
+    const localMatrix = mat4.create();
+    const translation = mat4.create();
+    const rotation = mat4.create();
+    const scale = mat4.create();
+
+    mat4.translate(translation, translation, transform.position);
+
+    if (transform.rotation && transform.rotation.length === 4) {
+      // quaternion format
+      const quat = transform.rotation as Vec4;
+      mat4.fromQuat(rotation, quat);
+    } else {
+      // Euler angle format
+      // Try different rotation orders to fix bone transformation issues
+      // Testing XYZ order instead of ZXY
+      mat4.identity(rotation);
+      mat4.rotateX(rotation, rotation, transform.rotation[0]);
+      mat4.rotateY(rotation, rotation, transform.rotation[1]);
+      mat4.rotateZ(rotation, rotation, transform.rotation[2]);
+    }
+    mat4.scale(scale, scale, transform.scale);
+
+    // T * R * S (Translation * Rotation * Scale)
+    mat4.multiply(localMatrix, translation, rotation);
+    mat4.multiply(localMatrix, localMatrix, scale);
+
+    return localMatrix;
   }
 
   /**
@@ -328,106 +429,6 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
     // Recalculate bone matrices after applying morphs
     this.calculateBoneMatrices();
     this.data.needsUpdate = true;
-  }
-
-  /**
-   * Calculate bone matrices for GPU upload. This now calculates the final skinning matrix.
-   * finalMatrix = animatedWorldMatrix * inverseBindPoseMatrix
-   */
-  calculateBoneMatrices(): void {
-    const animatedWorldMatrices: mat4[] = [];
-    // Calculate the world matrix for each bone in the current animated pose
-    for (const rootIndex of this.data.rootBones) {
-      this.calculateBoneWorldMatrix(
-        rootIndex,
-        mat4.create(),
-        animatedWorldMatrices,
-        this.data.boneTransforms,
-      );
-    }
-
-    // Calculate final skinning matrices and flatten them into the array for the GPU
-    for (let i = 0; i < this.data.boneCount; i++) {
-      const animatedMatrix = animatedWorldMatrices[i] || mat4.create();
-      const inverseBindMatrix = this.inverseBindMatrices[i] || mat4.create();
-      const finalMatrix = mat4.create();
-
-      mat4.multiply(finalMatrix, animatedMatrix, inverseBindMatrix);
-
-      this.data.boneMatrices.set(finalMatrix, i * 16);
-    }
-
-    this.data.needsUpdate = false;
-  }
-
-  private calculateBoneWorldMatrix(
-    boneIndex: number,
-    parentMatrix: mat4,
-    worldMatrices: mat4[],
-    transforms: Map<number, PMXBoneTransform>,
-  ): void {
-    const transform = transforms.get(boneIndex);
-    if (!transform) {
-      // If no transform data, use parent matrix
-      worldMatrices[boneIndex] = parentMatrix;
-      return;
-    }
-
-    // create local transformation matrix
-    const localMatrix = this.createLocalMatrix(transform);
-
-    if (!transform.enabled) {
-      // If disabled, use parent matrix but still process children
-      worldMatrices[boneIndex] = parentMatrix;
-      const children = this.data.hierarchy.get(boneIndex) || [];
-      children.forEach((childIndex) => {
-        this.calculateBoneWorldMatrix(childIndex, parentMatrix, worldMatrices, transforms);
-      });
-      return;
-    }
-
-    // world transformation = parent transformation * local transformation
-    const worldMatrix = mat4.create();
-    mat4.multiply(worldMatrix, parentMatrix, localMatrix);
-
-    // store to array
-    worldMatrices[boneIndex] = worldMatrix;
-
-    // recursively process children
-    const children = this.data.hierarchy.get(boneIndex) || [];
-    children.forEach((childIndex) => {
-      this.calculateBoneWorldMatrix(childIndex, worldMatrix, worldMatrices, transforms);
-    });
-  }
-
-  private createLocalMatrix(transform: PMXBoneTransform): mat4 {
-    const localMatrix = mat4.create();
-    const translation = mat4.create();
-    const rotation = mat4.create();
-    const scale = mat4.create();
-
-    mat4.translate(translation, translation, transform.position);
-
-    if (transform.rotation && transform.rotation.length === 4) {
-      // quaternion format
-      const quat = transform.rotation as Vec4;
-      mat4.fromQuat(rotation, quat);
-    } else {
-      // Euler angle format
-      // Try different rotation orders to fix bone transformation issues
-      // Testing XYZ order instead of ZXY
-      mat4.identity(rotation);
-      mat4.rotateX(rotation, rotation, transform.rotation[0]);
-      mat4.rotateY(rotation, rotation, transform.rotation[1]);
-      mat4.rotateZ(rotation, rotation, transform.rotation[2]);
-    }
-    mat4.scale(scale, scale, transform.scale);
-
-    // T * R * S (Translation * Rotation * Scale)
-    mat4.multiply(localMatrix, translation, rotation);
-    mat4.multiply(localMatrix, localMatrix, scale);
-
-    return localMatrix;
   }
 
   /**

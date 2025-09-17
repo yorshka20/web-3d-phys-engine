@@ -14,11 +14,9 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 
             result.position += morphVertex.position * weight;
             result.normal += morphVertex.normal * weight;
-            // UV does not participate in morph
         }
     }
-        
-    // re-normalize normal
+
     result.normal = normalize(result.normal);
     output_vertices[vertexIndex] = result;
 }
