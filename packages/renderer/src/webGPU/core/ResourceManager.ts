@@ -40,6 +40,7 @@ export class WebGPUResourceManager {
   private resourceMetadata: Map<string, ResourceMetadata> = new Map();
   private pendingResources: Set<string> = new Set();
   private creatingResources: Set<string> = new Set();
+  private enableLogging: boolean = false;
 
   constructor() {
     if (WebGPUResourceManager.instance) {
@@ -47,7 +48,30 @@ export class WebGPUResourceManager {
     }
 
     WebGPUResourceManager.instance = this;
-    console.log('WebGPUResourceManager initialized');
+    this.log('WebGPUResourceManager initialized');
+  }
+
+  /**
+   * Enable logging
+   */
+  showLogs(): void {
+    this.enableLogging = true;
+  }
+
+  /**
+   * Disable logging
+   */
+  hideLogs(): void {
+    this.enableLogging = false;
+  }
+
+  /**
+   * Internal logging method
+   */
+  private log(message: string, ...args: unknown[]): void {
+    if (this.enableLogging) {
+      console.log(message, ...args);
+    }
   }
 
   /**
@@ -85,7 +109,7 @@ export class WebGPUResourceManager {
       // Update metadata
       this.updateResourceMetadata(descriptor.id, ResourceState.READY);
 
-      console.log(`Resource created successfully: ${descriptor.id}`);
+      this.log(`Resource created successfully: ${descriptor.id}`);
       return resource;
     } catch (error) {
       this.creatingResources.delete(descriptor.id);
@@ -296,7 +320,7 @@ export class WebGPUResourceManager {
       resource.destroy();
       this.resources.delete(id);
       this.resourceMetadata.delete(id);
-      console.log(`Resource with ID '${id}' released.`);
+      this.log(`Resource with ID '${id}' released.`);
     }
   }
 
@@ -312,7 +336,7 @@ export class WebGPUResourceManager {
     this.resourceGraph.clear();
     this.pendingResources.clear();
     this.creatingResources.clear();
-    console.log('All WebGPU resources cleared.');
+    this.log('All WebGPU resources cleared.');
   }
 
   /**

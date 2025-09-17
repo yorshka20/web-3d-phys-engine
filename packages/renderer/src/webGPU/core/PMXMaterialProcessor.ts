@@ -60,6 +60,30 @@ export class PMXMaterialProcessor {
 
   private textureInferencer = new PMXTextureInferencer();
   private availableTextureMappings: Map<string, TextureMapping> = new Map();
+  private enableLogging: boolean = false;
+
+  /**
+   * Enable logging
+   */
+  showLogs(): void {
+    this.enableLogging = true;
+  }
+
+  /**
+   * Disable logging
+   */
+  hideLogs(): void {
+    this.enableLogging = false;
+  }
+
+  /**
+   * Internal logging method
+   */
+  private log(message: string, ...args: unknown[]): void {
+    if (this.enableLogging) {
+      console.log(message, ...args);
+    }
+  }
 
   initialize(): void {
     this.analyzeAllAvailableTextures();
@@ -74,12 +98,12 @@ export class PMXMaterialProcessor {
       .filter((asset) => asset.type === 'texture')
       .map((asset) => asset.id);
 
-    console.log(`[PMXMaterialProcessor] Found ${allTextureFiles.length} texture files`);
+    this.log(`[PMXMaterialProcessor] Found ${allTextureFiles.length} texture files`);
 
     this.availableTextureMappings =
       this.textureInferencer.analyzeAvailableTextures(allTextureFiles);
 
-    console.log(
+    this.log(
       `[PMXMaterialProcessor] Created ${this.availableTextureMappings.size} texture mappings`,
     );
   }
@@ -133,10 +157,10 @@ export class PMXMaterialProcessor {
     // 1. high priority: use descriptor definition (based on material name)
     const materialDef = assetDescriptor.materialDefinitions[material.name];
     if (materialDef) {
-      console.log(`[PMXMaterialProcessor] Using descriptor definition for: ${material.name}`);
+      this.log(`[PMXMaterialProcessor] Using descriptor definition for: ${material.name}`);
       await this.loadMappedTextures(materialDef, textureSlots, assetDescriptor.modelId);
     } else {
-      console.log(
+      this.log(
         `[PMXMaterialProcessor] No descriptor found for material: ${material.name}, falling back to PMX textures`,
       );
       // 2. low priority: use PMX textures (maintain compatibility)
@@ -276,7 +300,7 @@ export class PMXMaterialProcessor {
         const resource = await this.getTextureForSlot(`${modelId}/${src}`, slot);
         if (resource) {
           textureSlots.set(slot, resource);
-          console.log(`[PMXMaterialProcessor] Loaded descriptor texture: ${src} for slot ${slot}`);
+          this.log(`[PMXMaterialProcessor] Loaded descriptor texture: ${src} for slot ${slot}`);
         }
       }
     }
@@ -385,7 +409,7 @@ export class PMXMaterialProcessor {
 
       // if texture does not exist, create GPU texture
       if (!gpuTexture) {
-        console.log(`[PMXMaterialProcessor] Creating GPU texture: ${texturePath}`);
+        this.log(`[PMXMaterialProcessor] Creating GPU texture: ${texturePath}`);
 
         // get texture data from AssetRegistry
         const textureData = textureAsset.rawData;
@@ -633,7 +657,7 @@ export class PMXMaterialProcessor {
     // 12. padding: f32 - 4 bytes
     uniformData[offset++] = 0.0;
 
-    this.bufferManager.updateBuffer(buffer, uniformData);
+    this.bufferManager.updateBuffer(buffer, uniformData.buffer);
     return buffer;
   }
 
