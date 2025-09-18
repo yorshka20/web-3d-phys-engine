@@ -595,11 +595,10 @@ export class PMXMaterialProcessor {
     // but GPU requires 16 bytes alignment, so use 96 bytes
     const bufferSize = 96;
 
-    const buffer = this.bufferManager.createBuffer({
+    const buffer = this.bufferManager.createCustomBuffer(`pmx_material_uniform_${material.name}`, {
       type: BufferType.UNIFORM,
       size: bufferSize,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      label: `pmx_material_uniform_${material.name}`,
     });
 
     const uniformData = new Float32Array(24); // 96 bytes / 4 = 24 floats

@@ -248,7 +248,11 @@ export class BufferManager {
     const alignedReadSize = Math.ceil(readSize / 4) * 4;
 
     // create staging buffer. will be destroyed after use
-    const stagingBuffer = this.createStagingBuffer('stagingBuffer', { size: alignedReadSize });
+    const stagingBuffer = this.device.createBuffer({
+      size: alignedReadSize,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+      label: 'stagingBuffer',
+    });
     // copy data to staging buffer
     const commandEncoder = this.device.createCommandEncoder();
     commandEncoder.copyBufferToBuffer(buffer, alignedOffset, stagingBuffer, 0, alignedReadSize);
@@ -261,7 +265,7 @@ export class BufferManager {
     stagingBuffer.unmap();
 
     // clean up staging buffer
-    this.destroyBuffer(stagingBuffer);
+    stagingBuffer.destroy();
 
     return result;
   }
@@ -310,8 +314,6 @@ export class BufferManager {
     if (this.activeBuffers.has(buffer)) {
       this.activeBuffers.delete(buffer);
       this.totalActive -= buffer.size;
-
-      const label = this.bufferLabels.get(buffer) || 'unknown';
 
       // Remove from tracking
       this.bufferLabels.delete(buffer);
