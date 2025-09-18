@@ -53,6 +53,7 @@ export interface PMXMorphComputeShaderModule extends ShaderModule {
     vertexFormat: VertexFormat[];
     defines?: {
       ENABLE_PMX_MORPH_COMPUTE?: boolean;
+      ENABLE_MORPH_PROCESSING?: boolean;
     };
   };
   runtimeParams: Record<string, never>;

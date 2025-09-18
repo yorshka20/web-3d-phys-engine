@@ -79,6 +79,7 @@ export function createPMXMorphComputeShaderModule(): PMXMorphComputeShaderModule
       vertexFormat: ['full'],
       defines: {
         ENABLE_PMX_MORPH_COMPUTE: true,
+        ENABLE_MORPH_PROCESSING: true,
       },
     },
     runtimeParams: {},

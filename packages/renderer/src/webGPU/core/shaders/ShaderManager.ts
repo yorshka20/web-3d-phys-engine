@@ -154,6 +154,7 @@ export class ShaderManager {
     this.compileShaderModule('pmx_morph_compute_shader', {
       defines: {
         ENABLE_PMX_MORPH_COMPUTE: true,
+        ENABLE_MORPH_PROCESSING: true,
       },
     });
 
