@@ -48,7 +48,6 @@ export interface BufferDescriptor {
   size: number;
   usage: GPUBufferUsageFlags;
   dynamic?: boolean;
-  label: string;
   mappedAtCreation?: boolean;
 }
 

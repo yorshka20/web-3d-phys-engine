@@ -88,7 +88,7 @@ export class GeometryManager {
     const vertexCount = geometryData.vertexCount;
     const indexCount = geometryData.indexCount;
     const bounds = geometryData.bounds;
-    return `data_${vertexCount}_${indexCount}_${bounds.min.join(',')}_${bounds.max.join(',')}`;
+    return `data_${vertexCount}_${indexCount}_${bounds.min[0]}_${bounds.min[1]}_${bounds.min[2]}_${bounds.max[0]}_${bounds.max[1]}_${bounds.max[2]}`;
   }
 
   /**
@@ -109,20 +109,18 @@ export class GeometryManager {
    */
   private createCacheItem(geometry: GeometryData, cacheKey: string): GeometryCacheItem {
     // Create vertex buffer
-    const vertexBuffer = this.bufferManager.createVertexBuffer(
-      `${cacheKey}_vertices`,
-      geometry.vertices.buffer,
-    );
+    const vertexBuffer = this.bufferManager.createVertexBuffer(`${cacheKey}_vertices`, {
+      data: geometry.vertices.buffer as ArrayBuffer,
+    });
 
     if (!vertexBuffer) {
       throw new Error(`Failed to create vertex buffer for ${cacheKey}`);
     }
 
     // Create index buffer
-    const indexBuffer = this.bufferManager.createIndexBuffer(
-      `${cacheKey}_indices`,
-      geometry.indices.buffer,
-    );
+    const indexBuffer = this.bufferManager.createIndexBuffer(`${cacheKey}_indices`, {
+      data: geometry.indices.buffer as ArrayBuffer,
+    });
 
     if (!indexBuffer) {
       throw new Error(`Failed to create index buffer for ${cacheKey}`);

@@ -97,7 +97,7 @@ export class TextureManager {
     } else {
       this.device.queue.writeTexture(
         { texture },
-        data,
+        data.buffer,
         { bytesPerRow: data.byteLength },
         { width, height },
       );

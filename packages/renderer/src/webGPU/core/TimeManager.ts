@@ -29,11 +29,10 @@ export class TimeManager {
   getBuffer() {
     let buffer = this.bufferManager.getBufferByLabel(TimeManager.TimeBufferLabel);
     if (!buffer) {
-      buffer = this.bufferManager.createBuffer({
+      buffer = this.bufferManager.createCustomBuffer(TimeManager.TimeBufferLabel, {
         type: BufferType.UNIFORM,
         size: 16,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        label: TimeManager.TimeBufferLabel,
       });
       // todo: auto register
     }

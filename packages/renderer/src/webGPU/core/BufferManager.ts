@@ -21,7 +21,6 @@ export class BufferManager {
   private bufferPools: Map<BufferType, BufferPoolItem[]> = new Map();
   private activeBuffers: Set<GPUBuffer> = new Set();
   private bufferLabels: Map<GPUBuffer, string> = new Map();
-  private bufferCache: Map<string, GPUBuffer> = new Map(); // Internal cache for quick lookup
 
   //  statistics
   private totalAllocated: number = 0;
@@ -48,20 +47,28 @@ export class BufferManager {
   }
 
   /**
-   * create buffer with automatic resource registration
+   * create custom buffer with automatic resource registration
    *
-   * this method will not be decorated with `@AutoRegisterResource`
-   *
+   * @param label buffer label
    * @param descriptor buffer descriptor
    * @returns created GPU buffer
    */
-  createBuffer(descriptor: BufferDescriptor): GPUBuffer {
-    // Check cache first
-    const cachedBuffer = this.bufferCache.get(descriptor.label);
-    if (cachedBuffer) {
-      return cachedBuffer;
-    }
+  @SmartResource(ResourceType.BUFFER, {
+    cache: true,
+    lifecycle: 'persistent',
+  })
+  createCustomBuffer(label: string, descriptor: BufferDescriptor): GPUBuffer {
+    return this.createBuffer(label, descriptor);
+  }
 
+  /**
+   * create buffer (private method - no caching)
+   *
+   * @param label buffer label
+   * @param descriptor buffer descriptor
+   * @returns created GPU buffer
+   */
+  private createBuffer(label: string, descriptor: BufferDescriptor): GPUBuffer {
     // WebGPU requires buffer sizes to be aligned to 4-byte boundaries
     const alignedSize = Math.ceil(descriptor.size / 4) * 4;
 
@@ -69,13 +76,12 @@ export class BufferManager {
       size: alignedSize,
       usage: descriptor.usage,
       mappedAtCreation: descriptor.mappedAtCreation || false,
-      label: descriptor.label,
+      label,
     });
 
     // record buffer information
     this.activeBuffers.add(buffer);
-    this.bufferLabels.set(buffer, descriptor.label);
-    this.bufferCache.set(descriptor.label, buffer);
+    this.bufferLabels.set(buffer, label);
     this.totalAllocated += alignedSize;
     this.totalActive += alignedSize;
 
@@ -89,120 +95,113 @@ export class BufferManager {
     });
     this.bufferPools.set(descriptor.type, pool);
 
-    // Note: Auto-registration is now handled by decorators
-
     return buffer;
   }
 
   /**
    * create vertex buffer
-   * @param data vertex data
-   * @param label label
+   * @param label buffer label
+   * @param descriptor vertex buffer descriptor
    * @returns vertex buffer
    */
   @SmartResource(ResourceType.BUFFER, {
     cache: true,
     lifecycle: 'frame',
   })
-  createVertexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
+  createVertexBuffer(label: string, descriptor: { data: ArrayBuffer }): GPUBuffer {
     // Ensure buffer size is multiple of 4 bytes for WebGPU alignment requirement
-    const alignedSize = Math.ceil(data.byteLength / 4) * 4;
+    const alignedSize = Math.ceil(descriptor.data.byteLength / 4) * 4;
 
-    const buffer = this.createBuffer({
+    const buffer = this.createBuffer(label, {
       type: BufferType.VERTEX,
       size: alignedSize,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      label,
     });
 
-    this.device.queue.writeBuffer(buffer, 0, data);
+    this.device.queue.writeBuffer(buffer, 0, descriptor.data);
     return buffer;
   }
 
   /**
    * create index buffer
-   * @param data index data
-   * @param label label
+   * @param label buffer label
+   * @param descriptor index buffer descriptor
    * @returns index buffer
    */
   @SmartResource(ResourceType.BUFFER, {
     cache: true,
     lifecycle: 'frame',
   })
-  createIndexBuffer(label: string, data: ArrayBuffer): GPUBuffer {
+  createIndexBuffer(label: string, descriptor: { data: ArrayBuffer }): GPUBuffer {
     // Ensure buffer size is multiple of 4 bytes for WebGPU alignment requirement
-    const alignedSize = Math.ceil(data.byteLength / 4) * 4;
+    const alignedSize = Math.ceil(descriptor.data.byteLength / 4) * 4;
 
-    const buffer = this.createBuffer({
+    const buffer = this.createBuffer(label, {
       type: BufferType.INDEX,
       size: alignedSize,
       usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-      label,
     });
 
-    this.device.queue.writeBuffer(buffer, 0, data);
+    this.device.queue.writeBuffer(buffer, 0, descriptor.data);
     return buffer;
   }
 
   /**
    * create uniform buffer
-   * @param data uniform data
-   * @param label label
+   * @param label buffer label
+   * @param descriptor uniform buffer descriptor
    * @returns uniform buffer
    */
   @SmartResource(ResourceType.BUFFER, {
     cache: true,
     lifecycle: 'frame',
   })
-  createUniformBuffer(label: string, data: ArrayBuffer): GPUBuffer {
-    const buffer = this.createBuffer({
+  createUniformBuffer(label: string, descriptor: { data: ArrayBuffer }): GPUBuffer {
+    const buffer = this.createBuffer(label, {
       type: BufferType.UNIFORM,
-      size: data.byteLength,
+      size: descriptor.data.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      label,
     });
 
-    this.device.queue.writeBuffer(buffer, 0, data);
+    this.device.queue.writeBuffer(buffer, 0, descriptor.data);
     return buffer;
   }
 
   /**
    * create storage buffer
-   * @param data storage data
-   * @param label label
+   * @param label buffer label
+   * @param descriptor storage buffer descriptor
    * @returns storage buffer
    */
   @SmartResource(ResourceType.BUFFER, {
     lifecycle: 'persistent',
   })
-  createStorageBuffer(label: string, data: ArrayBuffer): GPUBuffer {
-    const buffer = this.createBuffer({
+  createStorageBuffer(label: string, descriptor: { data: ArrayBuffer }): GPUBuffer {
+    const buffer = this.createBuffer(label, {
       type: BufferType.STORAGE,
-      size: data.byteLength,
+      size: descriptor.data.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
-      label,
     });
 
-    this.device.queue.writeBuffer(buffer, 0, data);
+    this.device.queue.writeBuffer(buffer, 0, descriptor.data);
     return buffer;
   }
 
   /**
    * create staging buffer
-   * @param size size
-   * @param label label
+   * @param label buffer label
+   * @param descriptor staging buffer descriptor
    * @returns staging buffer
    */
   @SmartResource(ResourceType.BUFFER, {
     pool: true,
     lifecycle: 'frame',
   })
-  createStagingBuffer(label: string, size: number): GPUBuffer {
-    return this.createBuffer({
+  createStagingBuffer(label: string, descriptor: { size: number }): GPUBuffer {
+    return this.createBuffer(label, {
       type: BufferType.STAGING,
-      size,
+      size: descriptor.size,
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-      label,
     });
   }
 
@@ -249,7 +248,7 @@ export class BufferManager {
     const alignedReadSize = Math.ceil(readSize / 4) * 4;
 
     // create staging buffer. will be destroyed after use
-    const stagingBuffer = this.createStagingBuffer('stagingBuffer', alignedReadSize);
+    const stagingBuffer = this.createStagingBuffer('stagingBuffer', { size: alignedReadSize });
     // copy data to staging buffer
     const commandEncoder = this.device.createCommandEncoder();
     commandEncoder.copyBufferToBuffer(buffer, alignedOffset, stagingBuffer, 0, alignedReadSize);
@@ -314,8 +313,7 @@ export class BufferManager {
 
       const label = this.bufferLabels.get(buffer) || 'unknown';
 
-      // Remove from cache
-      this.bufferCache.delete(label);
+      // Remove from tracking
       this.bufferLabels.delete(buffer);
       buffer.destroy();
     }
@@ -431,15 +429,9 @@ export class BufferManager {
    * @returns buffer or undefined
    */
   getBufferByLabel(label: string): GPUBuffer | undefined {
-    // Check cache first for performance
-    const cachedBuffer = this.bufferCache.get(label);
-    if (cachedBuffer && this.activeBuffers.has(cachedBuffer)) {
-      return cachedBuffer;
-    }
-
-    // Fallback to label lookup
+    // Look up buffer by label
     for (const [buffer, bufferLabel] of this.bufferLabels) {
-      if (bufferLabel === label) {
+      if (bufferLabel === label && this.activeBuffers.has(buffer)) {
         return buffer;
       }
     }
@@ -507,7 +499,6 @@ export class BufferManager {
     // record buffer information
     this.activeBuffers.add(buffer);
     this.bufferLabels.set(buffer, label);
-    this.bufferCache.set(label, buffer);
 
     // add to the corresponding pool
     const pool = this.bufferPools.get(BufferType.STORAGE) || [];
@@ -530,7 +521,6 @@ export class BufferManager {
 
     this.activeBuffers.clear();
     this.bufferLabels.clear();
-    this.bufferCache.clear();
     this.bufferPools.clear();
     this.totalAllocated = 0;
     this.totalActive = 0;
