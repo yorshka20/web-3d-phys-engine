@@ -1,6 +1,6 @@
 // Standard geometry pipeline bindings
 // Group 0: Time uniforms
-@group(0) @binding(0) var<uniform> timeData: TimeUniforms;
+@group(0) @binding(0) var<uniform> time_data: TimeUniforms;
 
 // Group 1: MVP uniforms  
 @group(1) @binding(0) var<uniform> mvp: MVPUniforms;

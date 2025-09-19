@@ -2,7 +2,7 @@
 // This file defines the binding layout for water material shaders
 
 // Group 0: Global uniforms (Time)
-@group(0) @binding(0) var<uniform> timeData: TimeUniforms;
+@group(0) @binding(0) var<uniform> time_data: TimeUniforms;
 
 // Group 1: Transform uniforms (MVP)
 @group(1) @binding(0) var<uniform> mvp: MVPUniforms;

@@ -13,10 +13,10 @@ struct VertexInput {
  * PMX vertex input with skinning data.  
  * can have type 0,1,2,3, but we will uniform it to vec4f for skin_index and skin_weight.
  * 
- * BDEF1 (type=0): 1 bone，skinIndices=[index]
- * BDEF2 (type=1): 2 bones，skinIndices=[index1, index2]
- * BDEF4 (type=2): 4 bones，skinIndices=[index1, index2, index3, index4]
- * SDEF (type=3): 2 bones+sphere deformation，skinIndices=[index1, index2]
+ * BDEF1 (type=0): 1 bone，skin_indices=[index]
+ * BDEF2 (type=1): 2 bones，skin_indices=[index1, index2]
+ * BDEF4 (type=2): 4 bones，skin_indices=[index1, index2, index3, index4]
+ * SDEF (type=3): 2 bones+sphere deformation，skin_indices=[index1, index2]
  */
 struct PMXVertexInput {
     @location(0) position: vec3<f32>,
@@ -67,16 +67,16 @@ struct PMXVertexOutput {
 // Water-specific vertex output
 struct WaterVertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) worldPos: vec3<f32>,
+    @location(0) world_pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
-    @location(3) viewDir: vec3<f32>,
+    @location(3) view_dir: vec3<f32>,
 }
 
 // Fire-specific vertex output
 struct FireVertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) worldPos: vec3<f32>,
+    @location(0) world_pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
     @location(3) flicker: f32,

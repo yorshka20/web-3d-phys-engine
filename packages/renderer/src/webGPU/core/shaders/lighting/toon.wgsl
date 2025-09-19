@@ -29,22 +29,22 @@ fn calculate_toon_shading(
     rimPower: f32,
     specularThreshold: f32
 ) -> vec3<f32> {
-    let nDotL = max(dot(normal, lightDir), 0.0);
-    let nDotV = max(dot(normal, viewDir), 0.0);
-    let halfDir = normalize(lightDir + viewDir);
-    let nDotH = max(dot(normal, halfDir), 0.0);
+    let n_dot_l = max(dot(normal, lightDir), 0.0);
+    let n_dot_v = max(dot(normal, viewDir), 0.0);
+    let half_dir = normalize(lightDir + viewDir);
+    let n_dot_h = max(dot(normal, half_dir), 0.0);
     
     // Toon diffuse
-    let toonDiffuse = calculate_toon_lighting(nDotL, steps);
-    let diffuse = baseColor * toonDiffuse;
+    let toon_diffuse = calculate_toon_lighting(n_dot_l, steps);
+    let diffuse = baseColor * toon_diffuse;
     
     // Toon specular
-    let toonSpecular = calculate_toon_specular(nDotH, 32.0, specularThreshold);
-    let specular = specularColor * toonSpecular;
+    let toon_specular = calculate_toon_specular(n_dot_h, 32.0, specularThreshold);
+    let specular = specularColor * toon_specular;
     
     // Rim lighting
-    let rim = calculate_rim_lighting(nDotV, rimPower);
-    let rimColor = vec3<f32>(0.2, 0.4, 0.8) * rim;
+    let rim = calculate_rim_lighting(n_dot_v, rimPower);
+    let rim_color = vec3<f32>(0.2, 0.4, 0.8) * rim;
 
-    return diffuse + specular + rimColor;
+    return diffuse + specular + rim_color;
 }

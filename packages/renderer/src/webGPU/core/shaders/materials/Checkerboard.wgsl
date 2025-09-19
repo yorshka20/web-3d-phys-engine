@@ -3,7 +3,7 @@
 @vertex
 fn vs_main(input: VertexInput) -> SimpleVertexOutput {
     var out: SimpleVertexOutput;
-    out.clip_position = mvp.mvpMatrix * vec4<f32>(input.position, 1.0);
+    out.clip_position = mvp.mvp_matrix * vec4<f32>(input.position, 1.0);
     out.uv = input.uv;
     return out;
 }

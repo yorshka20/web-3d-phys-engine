@@ -3,27 +3,27 @@
 
 // Performance optimization flags
 #ifdef ENABLE_TOON_SHADING
-override toonShading: f32 = 1.0;
+override toon_shading: f32 = 1.0;
 #else
-override toonShading: f32 = 0.0;
+override toon_shading: f32 = 0.0;
 #endif
 
 #ifdef ENABLE_NORMAL_MAPPING
-override normalMapping: f32 = 1.0;
+override normal_mapping: f32 = 1.0;
 #else
-override normalMapping: f32 = 0.0;
+override normal_mapping: f32 = 0.0;
 #endif
 
 #ifdef ENABLE_ENVIRONMENT_MAPPING
-override environmentMapping: f32 = 1.0;
+override environment_mapping: f32 = 1.0;
 #else
-override environmentMapping: f32 = 0.0;
+override environment_mapping: f32 = 0.0;
 #endif
 
 #ifdef ENABLE_MORPH_PROCESSING
-override morphProcessing: f32 = 1.0;
+override morph_processing: f32 = 1.0;
 #else
-override morphProcessing: f32 = 0.0;
+override morph_processing: f32 = 0.0;
 #endif
 
 
@@ -128,9 +128,9 @@ fn transform_to_world_space(
     out_world_normal: ptr<function, vec3<f32>>,
     out_clip_position: ptr<function, vec4<f32>>
 ) {
-    *out_world_position = (mvp.modelMatrix * vec4<f32>(final_position, 1.0)).xyz;
-    *out_world_normal = normalize((mvp.modelMatrix * vec4<f32>(final_normal, 0.0)).xyz);
-    *out_clip_position = mvp.mvpMatrix * vec4<f32>(final_position, 1.0);
+    *out_world_position = (mvp.model_matrix * vec4<f32>(final_position, 1.0)).xyz;
+    *out_world_normal = normalize((mvp.model_matrix * vec4<f32>(final_normal, 0.0)).xyz);
+    *out_clip_position = mvp.mvp_matrix * vec4<f32>(final_position, 1.0);
 }
 
 // ============================================================================
@@ -187,6 +187,11 @@ fn vs_main(input: PMXVertexInput, @builtin(vertex_index) vertex_index: u32) -> P
     // GROUP 1: Read pre-computed morph data from compute shader
     read_morphed_data(vertex_index, &morphed_position, &morphed_normal);
     
+    // skip compute shader result.
+    // morphed_position = input.position;
+    // morphed_normal = input.normal;
+
+
     // GROUP 2: Apply bone skinning to morphed vertices
     apply_bone_skinning(
         morphed_position, morphed_normal,
@@ -205,7 +210,7 @@ fn vs_main(input: PMXVertexInput, @builtin(vertex_index) vertex_index: u32) -> P
 fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
     // 1. basic texture sampling - get the base color of the material
     let diffuse_sample = textureSample(diffuse_texture, diffuse_sampler, input.uv);
-    var base_color = pmxMaterial.diffuse * diffuse_sample;
+    var base_color = pmx_material.diffuse * diffuse_sample;
     
     // 2. normal map processing - calculate the surface detail normal
     var final_normal = normalize(input.world_normal);
@@ -235,21 +240,21 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
 
     // 4. basic lighting calculation
     let light_dir = normalize(vec3<f32>(0.5, 0.8, 0.3));
-    let view_dir = normalize(mvp.cameraPos - input.world_position);
-    let NdotL = max(dot(final_normal, light_dir), 0.0);
-    let NdotV = max(dot(final_normal, view_dir), 0.0);
+    let view_dir = normalize(mvp.camera_pos - input.world_position);
+    let n_dot_l = max(dot(final_normal, light_dir), 0.0);
+    let n_dot_v = max(dot(final_normal, view_dir), 0.0);
 
-    let ambient = pmxMaterial.ambient * 1.0;
-    let diffuse_strength = max(NdotL, 0.3); // ensure minimum brightness, avoid completely dark
+    let ambient = pmx_material.ambient * 1.0;
+    let diffuse_strength = max(n_dot_l, 0.3); // ensure minimum brightness, avoid completely dark
     
     // 5. PBR specular calculation - based on physical rendering
     let specular_sample = textureSample(specular_texture, specular_sampler, input.uv);
     let half_dir = normalize(light_dir + view_dir);
-    let NdotH = max(dot(final_normal, half_dir), 0.0);
-    let VdotH = max(dot(view_dir, half_dir), 0.0);
+    let n_dot_h = max(dot(final_normal, half_dir), 0.0);
+    let v_dot_h = max(dot(view_dir, half_dir), 0.0);
 
     // adjust shininess based on roughness - rough surface has wider specular
-    let material_shininess = pmxMaterial.shininess;
+    let material_shininess = pmx_material.shininess;
     let roughness_influenced_shininess = material_shininess * (1.0 - roughness * 0.8);
     let adaptive_shininess = select(
         max(roughness_influenced_shininess, 4.0),
@@ -259,14 +264,14 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
 
     // Fresnel reflection - adjust reflection behavior based on metallic
     let F0 = mix(vec3<f32>(0.04), base_color.rgb, metallic); // non-metallic use 0.04, metallic use material color
-    let fresnel = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
+    let fresnel = F0 + (1.0 - F0) * pow(1.0 - v_dot_h, 5.0);
 
     let specular_intensity = length(specular_sample.rgb);
-    let specular_power = pow(NdotH, adaptive_shininess);
+    let specular_power = pow(n_dot_h, adaptive_shininess);
     let specular_mask = select(0.0, 1.0, specular_intensity > 0.05);
 
     // combine PBR specular calculation
-    let specular_contribution = fresnel * specular_power * NdotL * specular_mask * (1.0 - roughness * 0.5);
+    let specular_contribution = fresnel * specular_power * n_dot_l * specular_mask * (1.0 - roughness * 0.5);
 
     let base_luminance = dot(base_color.rgb, vec3<f32>(0.299, 0.587, 0.114));
     let specular_scale = select(0.3, 0.1, base_luminance > 0.8);
@@ -299,5 +304,5 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
     let luminance = dot(final_color, vec3<f32>(0.299, 0.587, 0.114));
     final_color = mix(vec3<f32>(luminance), final_color, 1.0);
 
-    return vec4<f32>(final_color, base_color.a * pmxMaterial.alpha);
+    return vec4<f32>(final_color, base_color.a * pmx_material.alpha);
 }

@@ -2,13 +2,13 @@
 // This file defines the binding layout for PMX material shaders
 
 // Group 0: Global uniforms (Time)
-@group(0) @binding(0) var<uniform> timeData: TimeUniforms;
+@group(0) @binding(0) var<uniform> time_data: TimeUniforms;
 
 // Group 1: Transform uniforms (MVP)
 @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
 
 // Group 2: PMX Material uniforms and textures
-@group(2) @binding(0) var<uniform> pmxMaterial: PMXMaterialUniforms;
+@group(2) @binding(0) var<uniform> pmx_material: PMXMaterialUniforms;
 @group(2) @binding(1) var diffuse_texture: texture_2d<f32>;
 @group(2) @binding(2) var diffuse_sampler: sampler;
 @group(2) @binding(3) var normal_texture: texture_2d<f32>;

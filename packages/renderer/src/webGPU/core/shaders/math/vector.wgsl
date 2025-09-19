@@ -23,15 +23,15 @@ fn reflect_vector(incident: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
 
 // Vector refraction
 fn refract_vector(incident: vec3<f32>, normal: vec3<f32>, eta: f32) -> vec3<f32> {
-    let cosI = -dot(normal, incident);
-    let sinT2 = eta * eta * (1.0 - cosI * cosI);
+    let cos_i = -dot(normal, incident);
+    let sin_t2 = eta * eta * (1.0 - cos_i * cos_i);
 
-    if sinT2 > 1.0 {
+    if sin_t2 > 1.0 {
         return vec3<f32>(0.0); // Total internal reflection
     }
 
-    let cosT = sqrt(1.0 - sinT2);
-    return eta * incident + (eta * cosI - cosT) * normal;
+    let cos_t = sqrt(1.0 - sin_t2);
+    return eta * incident + (eta * cos_i - cos_t) * normal;
 }
 
 // Distance between two points

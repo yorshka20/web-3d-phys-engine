@@ -4,12 +4,12 @@
 @vertex
 fn vs_main(input: VertexInput) -> ColoredVertexOutputWithNormal {
     var out: ColoredVertexOutputWithNormal;
-    out.clip_position = mvp.mvpMatrix * vec4<f32>(input.position, 1.0);
+    out.clip_position = mvp.mvp_matrix * vec4<f32>(input.position, 1.0);
         
     // Use normal for better lighting/coloring
-    let lightDir = normalize(vec3<f32>(1.0, 1.0, 1.0));
-    let lightAmount = max(dot(input.normal, lightDir), 0.2);
-    out.color = vec4<f32>(input.normal * 0.5 + 0.5, 1.0) * lightAmount;
+    let light_dir = normalize(vec3<f32>(1.0, 1.0, 1.0));
+    let light_amount = max(dot(input.normal, light_dir), 0.2);
+    out.color = vec4<f32>(input.normal * 0.5 + 0.5, 1.0) * light_amount;
 
     out.normal = input.normal;
     out.uv = input.uv;
@@ -18,12 +18,12 @@ fn vs_main(input: VertexInput) -> ColoredVertexOutputWithNormal {
 
 @fragment
 fn fs_main(@location(0) color: vec4<f32>, @location(1) normal: vec3<f32>, @location(2) uv: vec2<f32>) -> @location(0) vec4<f32> {
-    let t = timeData.time;
+    let t = time_data.time;
 
     let pulse = sin(t * 2.0) * 0.2 + 0.8;  // more stable pulse
 
     let hue = (t * 0.5) % 1.0;
-    let animatedColor = hsv_to_rgb(vec3<f32>(hue, 0.8, 1.0));  // slightly lower saturation
+    let animated_color = hsv_to_rgb(vec3<f32>(hue, 0.8, 1.0));  // slightly lower saturation
 
     let dist = length(color.xy - vec2<f32>(0.5));
     let wave = sin(dist * 10.0 - t * 5.0) * 0.25 + 0.75;  // brighter wave

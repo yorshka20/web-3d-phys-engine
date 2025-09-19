@@ -16,8 +16,8 @@ fn calculate_fresnel_pbr(cosTheta: f32, metallic: f32, albedo: vec3<f32>) -> vec
 fn calculate_ndf_ggx(nDotH: f32, roughness: f32) -> f32 {
     let a = roughness * roughness;
     let a2 = a * a;
-    let nDotH2 = nDotH * nDotH;
-    let denominator = nDotH2 * (a2 - 1.0) + 1.0;
+    let n_dot_h2 = nDotH * nDotH;
+    let denominator = n_dot_h2 * (a2 - 1.0) + 1.0;
     return a2 / (PI * denominator * denominator);
 }
 

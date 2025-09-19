@@ -13,25 +13,25 @@ struct FragmentOutput {
 }
 
 struct MVPUniforms {
-    mvpMatrix: mat4x4<f32>,
-    cameraPos: vec3<f32>,
+    mvp_matrix: mat4x4<f32>,
+    camera_pos: vec3<f32>,
     padding: f32,
 }
 
 struct TimeUniforms {
     time: f32,
-    deltaTime: f32,
-    frameCount: u32,
+    delta_time: f32,
+    frame_count: u32,
     padding: u32,
 }
 
-@group(0) @binding(0) var<uniform> timeData: TimeUniforms;
+@group(0) @binding(0) var<uniform> time_data: TimeUniforms;
 @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.position = mvp.mvpMatrix * vec4<f32>(input.position, 1.0);
+    out.position = mvp.mvp_matrix * vec4<f32>(input.position, 1.0);
     out.uv = input.uv;
     return out;
 }
