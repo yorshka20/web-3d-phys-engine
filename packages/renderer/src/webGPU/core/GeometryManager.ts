@@ -160,14 +160,7 @@ export class GeometryManager {
     return geometry;
   }
 
-  // add bounds calculation helper method
-  private calculateBounds(
-    vertices: number[],
-    stride: number,
-  ): {
-    min: [number, number, number];
-    max: [number, number, number];
-  } {
+  private calculateBounds(vertices: number[], stride: number) {
     if (vertices.length === 0) {
       return { min: [0, 0, 0], max: [0, 0, 0] };
     }

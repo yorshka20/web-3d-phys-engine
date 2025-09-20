@@ -5,7 +5,6 @@ import { BufferManager } from './BufferManager';
 import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { GPUResourceCoordinator } from './GPUResourceCoordinator';
-import { PMXAnimationBufferManager } from './PMXAnimationBufferManager';
 import { PMXAssetDescriptor } from './PMXAssetDescriptor';
 import { TextureManager } from './TextureManager';
 import { BufferType } from './types';
@@ -58,17 +57,12 @@ export class PMXMaterialProcessor {
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
   private bindGroupManager!: BindGroupManager;
 
-  @Inject(ServiceTokens.PMX_ANIMATION_BUFFER_MANAGER)
-  private animationBufferManager!: PMXAnimationBufferManager;
-
   @Inject(ServiceTokens.GPU_RESOURCE_COORDINATOR)
   private gpuResourceCoordinator!: GPUResourceCoordinator;
 
   private defaultTextures: Map<number, PMXMaterialTextureResource> = new Map();
   private materialCache: Map<string, PMXMaterialCacheData> = new Map();
 
-  private textureInferencer = new PMXTextureInferencer();
-  private availableTextureMappings: Map<string, TextureMapping> = new Map();
   private enableLogging: boolean = false;
 
   /**
@@ -95,26 +89,7 @@ export class PMXMaterialProcessor {
   }
 
   initialize(): void {
-    this.analyzeAllAvailableTextures();
-
     this.createMaterialBindGroupLayout();
-  }
-
-  private analyzeAllAvailableTextures(): void {
-    // get all texture files from AssetRegistry
-    const allTextureFiles = assetRegistry
-      .getAllAssets()
-      .filter((asset) => asset.type === 'texture')
-      .map((asset) => asset.id);
-
-    this.log(`[PMXMaterialProcessor] Found ${allTextureFiles.length} texture files`);
-
-    this.availableTextureMappings =
-      this.textureInferencer.analyzeAvailableTextures(allTextureFiles);
-
-    this.log(
-      `[PMXMaterialProcessor] Created ${this.availableTextureMappings.size} texture mappings`,
-    );
   }
 
   /**
@@ -908,65 +883,5 @@ export class PMXMaterialProcessor {
       materialData.uniformBuffer.destroy();
     }
     this.materialCache.clear();
-  }
-}
-
-// infer missing texture logic
-interface TextureMapping {
-  base: string; // base name
-  diffuse?: string; // _D.png
-  normal?: string; // _N.png
-  specular?: string; // _S.png
-  roughness?: string; // _R.png
-  metallic?: string; // _M.png
-  emission?: string; // _E.png
-}
-
-class PMXTextureInferencer {
-  // analyze all available textures, establish mapping relationship
-  analyzeAvailableTextures(allTextureFiles: string[]): Map<string, TextureMapping> {
-    const mappings = new Map<string, TextureMapping>();
-
-    for (const texturePath of allTextureFiles) {
-      const fileName = this.getFileName(texturePath);
-
-      // parse texture type and base name
-      const match = fileName.match(/(.+)_([DNSRME])\.png$/i);
-      if (match) {
-        const [, baseName, type] = match;
-
-        if (!mappings.has(baseName)) {
-          mappings.set(baseName, { base: baseName });
-        }
-
-        const mapping = mappings.get(baseName)!;
-        switch (type.toUpperCase()) {
-          case 'D':
-            mapping.diffuse = texturePath;
-            break;
-          case 'N':
-            mapping.normal = texturePath;
-            break;
-          case 'S':
-            mapping.specular = texturePath;
-            break;
-          case 'R':
-            mapping.roughness = texturePath;
-            break;
-          case 'M':
-            mapping.metallic = texturePath;
-            break;
-          case 'E':
-            mapping.emission = texturePath;
-            break;
-        }
-      }
-    }
-
-    return mappings;
-  }
-
-  private getFileName(path: string): string {
-    return path.split(/[\\/]/).pop() || path;
   }
 }
