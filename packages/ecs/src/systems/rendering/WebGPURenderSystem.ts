@@ -107,11 +107,14 @@ export class WebGPURenderSystem extends System {
     this.renderer.init(this.canvas);
   }
 
+  onDestroy(): void {
+    this.renderer.destroy();
+  }
+
   private createCanvas(): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
     const dpr = this.getDPR();
 
-    //
     canvas.width = this.rootElement.clientWidth * dpr;
     canvas.height = this.rootElement.clientHeight * dpr;
     canvas.style.width = `${this.rootElement.clientWidth}px`;
@@ -197,12 +200,14 @@ export class WebGPURenderSystem extends System {
   }
 
   private filterEntities(): Entity[] {
+    const hasMesh = (entity: Entity) =>
+      entity.hasComponent(Mesh3DComponent.componentName) ||
+      entity.hasComponent(PMXMeshComponent.componentName);
     return this.world.getEntitiesByCondition(
       (entity) =>
         entity.hasComponent(WebGPU3DRenderComponent.componentName) &&
         entity.hasComponent(Transform3DComponent.componentName) &&
-        (entity.hasComponent(Mesh3DComponent.componentName) ||
-          entity.hasComponent(PMXMeshComponent.componentName)),
+        hasMesh(entity),
     );
   }
 
@@ -292,6 +297,14 @@ export class WebGPURenderSystem extends System {
     }
 
     // Fall back to regular mesh component
+    return this.extractMeshRenderData(entity, transformComponent, renderComponent);
+  }
+
+  private extractMeshRenderData(
+    entity: Entity,
+    transformComponent: Transform3DComponent,
+    renderComponent: WebGPU3DRenderComponent,
+  ): RenderData[] {
     const meshComponent = entity.getComponent<Mesh3DComponent>(Mesh3DComponent.componentName);
     if (!meshComponent) {
       return [];
@@ -491,10 +504,6 @@ export class WebGPURenderSystem extends System {
 
   private prepareComputePass(renderables: RenderData[]): boolean {
     return renderables.some((renderable) => renderable.morphCount && renderable.morphCount > 0);
-  }
-
-  onDestroy(): void {
-    this.renderer.destroy();
   }
 
   /**

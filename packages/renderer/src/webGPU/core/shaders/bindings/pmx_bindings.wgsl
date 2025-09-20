@@ -31,4 +31,4 @@
 @group(3) @binding(1) var<uniform> morph_weights: array<vec4<f32>, 16>; // 64/4=16
 @group(3) @binding(2) var<storage, read> morph_data: array<f32>;
 @group(3) @binding(3) var<uniform> morph_info: MorphInfo; // Actual morph count and stride
-@group(3) @binding(4) var<storage, read> morphed_vertices: array<VertexInput>;
+@group(3) @binding(4) var<storage, read> morphed_vertices: array<PMXVertexInput>;
