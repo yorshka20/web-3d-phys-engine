@@ -62,10 +62,14 @@ export class GeometryManager {
     return this.createCacheItem(label, geometryData);
   }
 
+  @SmartResource(ResourceType.GEOMETRY, {
+    cache: true,
+    lifecycle: 'persistent',
+  })
   createPMXGeometry(
+    geometryId: string,
     pmxModel: PMXModel,
     materialIndex: number,
-    geometryId: string,
   ): GeometryCacheItem {
     const material = pmxModel.materials[materialIndex];
     if (!material) {
