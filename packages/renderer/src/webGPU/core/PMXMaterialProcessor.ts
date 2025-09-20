@@ -648,8 +648,11 @@ export class PMXMaterialProcessor {
     const { assetDescriptor, materialIndex } = descriptor;
 
     // Use GPUResourceCoordinator to create materials
-    const materials = await this.gpuResourceCoordinator.createGPUResource(label, {
-      assetDescriptor,
+    const materials = await this.gpuResourceCoordinator.createGPUResource<'pmx_material'>(label, {
+      assetDescriptor: {
+        ...assetDescriptor,
+        type: 'pmx_material',
+      },
     });
 
     if (!materials || materials.length === 0) {

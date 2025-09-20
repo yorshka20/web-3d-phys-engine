@@ -77,7 +77,7 @@ export class GPUResourceCoordinator {
 
     switch (assetType) {
       case 'pmx_model':
-        return this.createPMXGeometryForComputePass(
+        return this.createPMXGeometryForRenderPass(
           assetDescriptor as AssetDescriptor<'pmx_model'>,
         ) as GPUResourceType<T>;
       case 'pmx_material':
@@ -96,6 +96,15 @@ export class GPUResourceCoordinator {
         console.warn(`[GPUResourceCoordinator] Unsupported asset type: ${assetType}`);
         return null;
     }
+  }
+
+  async createPMXGeometryForRenderPass(assetDescriptor: AssetDescriptor<'pmx_model'>) {
+    const pmxData = assetDescriptor.rawData;
+    const assetId = assetDescriptor.id;
+
+    const geometryData = this.convertPMXToGeometryData(assetId, pmxData);
+
+    return this.geometryManager.createGeometryFromData(assetId, { geometryData });
   }
 
   /**

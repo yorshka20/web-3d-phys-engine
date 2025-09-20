@@ -12,7 +12,7 @@ export class PMXMeshComponent extends Component {
 
   public assetId: string; // Asset ID in the registry
   public assetDescriptor: AssetDescriptor | null = null; // Asset descriptor (lazy loaded)
-  public gpuResource: unknown | null = null; // GPU resource (created on-demand)
+
   public visible: boolean = true;
   public castShadow: boolean = true;
   public receiveShadow: boolean = true;
@@ -28,14 +28,16 @@ export class PMXMeshComponent extends Component {
   /**
    * Resolve asset reference from registry
    */
-  resolveAsset(): AssetDescriptor<AssetType> | null {
+  resolveAsset<T extends AssetType>(): AssetDescriptor<T> | null {
     if (!this.assetDescriptor) {
-      this.assetDescriptor = assetRegistry.getAssetDescriptor(this.assetId) || null;
+      this.assetDescriptor = assetRegistry.getAssetDescriptor(
+        this.assetId,
+      ) as AssetDescriptor<T> | null;
       if (this.assetDescriptor) {
         assetRegistry.addRef(this.assetId);
       }
     }
-    return this.assetDescriptor;
+    return this.assetDescriptor as AssetDescriptor<T> | null;
   }
 
   /**
@@ -45,7 +47,6 @@ export class PMXMeshComponent extends Component {
     if (this.assetDescriptor) {
       assetRegistry.releaseRef(this.assetId);
       this.assetDescriptor = null;
-      this.gpuResource = null;
     }
   }
 
@@ -73,20 +74,6 @@ export class PMXMeshComponent extends Component {
   }
 
   /**
-   * Set GPU resource (called by renderer)
-   */
-  setGPUResource(gpuResource: unknown): void {
-    this.gpuResource = gpuResource;
-  }
-
-  /**
-   * Get GPU resource
-   */
-  getGPUResource(): unknown | null {
-    return this.gpuResource;
-  }
-
-  /**
    * Set texture base path
    */
   setTextureBasePath(path: string): void {
@@ -99,7 +86,6 @@ export class PMXMeshComponent extends Component {
   clone(): PMXMeshComponent {
     const cloned = new PMXMeshComponent(this.assetId);
     cloned.assetDescriptor = this.assetDescriptor;
-    cloned.gpuResource = this.gpuResource;
     cloned.visible = this.visible;
     cloned.castShadow = this.castShadow;
     cloned.receiveShadow = this.receiveShadow;
