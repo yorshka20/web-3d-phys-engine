@@ -239,7 +239,6 @@ export class WebGPURenderSystem extends System {
         enableFrustumCulling: true,
         enableOcclusion: false,
         maxDrawCalls: 1000,
-        computePass: this.prepareComputePass(renderables),
       },
       globalUniforms: this.globalUniforms,
     };
@@ -419,6 +418,7 @@ export class WebGPURenderSystem extends System {
         renderOrder: renderComponent.getLayer() || 0,
         castShadow: pmxMeshComponent.castShadow,
         receiveShadow: pmxMeshComponent.receiveShadow,
+        computePass: true,
         // Add PMX-specific data
         pmxAssetId: pmxMeshComponent.assetId,
         pmxComponent: pmxMeshComponent,

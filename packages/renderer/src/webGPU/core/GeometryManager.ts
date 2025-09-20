@@ -44,7 +44,7 @@ export class GeometryManager {
 
     // Create geometry data
     const geometry = this.createGeometryData(type, params);
-    return this.createCacheItem(geometry, label);
+    return this.createCacheItem(label, geometry);
   }
 
   /**
@@ -59,7 +59,7 @@ export class GeometryManager {
   })
   createGeometryFromData(label: string, descriptor: GeometryDataDescriptor): GeometryCacheItem {
     const { geometryData } = descriptor;
-    return this.createCacheItem(geometryData, label);
+    return this.createCacheItem(label, geometryData);
   }
 
   createPMXGeometry(
@@ -206,11 +206,11 @@ export class GeometryManager {
 
   /**
    * Create cache item
-   * @param geometry Geometry data
    * @param label Geometry label
+   * @param geometry Geometry data
    * @returns Geometry cache item
    */
-  private createCacheItem(geometry: GeometryData, label: string): GeometryCacheItem {
+  private createCacheItem(label: string, geometry: GeometryData): GeometryCacheItem {
     // Create vertex buffer
     const vertexBuffer = this.bufferManager.createVertexBuffer(`${label}_vertices`, {
       data: geometry.vertices.buffer as ArrayBuffer,

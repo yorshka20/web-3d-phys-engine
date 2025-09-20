@@ -28,6 +28,8 @@ export interface RenderData {
   castShadow: boolean;
   receiveShadow: boolean;
 
+  computePass?: boolean;
+
   // PMX model specific (optional)
   pmxAssetId?: string;
   pmxComponent?: PMXMeshComponent;
@@ -73,7 +75,6 @@ export interface RenderConfig {
   enableFrustumCulling: boolean;
   enableOcclusion: boolean;
   maxDrawCalls: number;
-  computePass?: boolean;
 }
 
 // new renderContext interface

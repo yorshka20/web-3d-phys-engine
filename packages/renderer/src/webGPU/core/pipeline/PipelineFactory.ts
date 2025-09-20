@@ -246,9 +246,9 @@ export class PipelineFactory {
    */
   async createCustomComputePipeline(
     customShaderId: string,
-    purpose: ComputePurpose = 'custom',
     customOptions?: Partial<ComputePipelineCreationOptions>,
   ): Promise<GPUComputePipeline> {
+    const purpose = customOptions?.purpose || 'custom';
     const computeKey = generateComputePipelineKey(purpose, customShaderId, customOptions);
     return this.pipelineManager.getComputePipeline(computeKey);
   }

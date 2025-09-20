@@ -77,7 +77,7 @@ export class GPUResourceCoordinator {
 
     switch (assetType) {
       case 'pmx_model':
-        return this.createPMXGeometry(
+        return this.createPMXGeometryForComputePass(
           assetDescriptor as AssetDescriptor<'pmx_model'>,
         ) as GPUResourceType<T>;
       case 'pmx_material':
@@ -101,15 +101,19 @@ export class GPUResourceCoordinator {
   /**
    * Create PMX geometry using GeometryManager
    */
-  private async createPMXGeometry(assetDescriptor: AssetDescriptor<'pmx_model'>) {
+  async createPMXGeometryForComputePass(assetDescriptor: AssetDescriptor<'pmx_model'>) {
     const pmxData = assetDescriptor.rawData;
     const assetId = assetDescriptor.id;
 
     // Convert PMX data to geometry data format
-    const geometryData = this.convertPMXToGeometryData(pmxData);
+    const geometryData = this.convertPMXToGeometryData(assetId, pmxData);
 
     // Use GeometryManager to create the actual GPU geometry
-    return this.geometryManager.createGeometryFromData(assetId, { geometryData });
+    const computeBuffer = this.bufferManager.createStorageBuffer(`${assetId}_compute_buffer`, {
+      data: geometryData.vertices.buffer as ArrayBuffer,
+    });
+
+    return computeBuffer;
   }
 
   /**
@@ -182,7 +186,14 @@ export class GPUResourceCoordinator {
   /**
    * Convert PMX model data to GeometryData format
    */
-  private convertPMXToGeometryData(pmxModel: PMXModel): {
+  @SmartResource(ResourceType.GEOMETRY, {
+    cache: true,
+    lifecycle: 'persistent',
+  })
+  private convertPMXToGeometryData(
+    label: string, // for caching
+    pmxModel: PMXModel,
+  ): {
     vertices: Float32Array;
     indices: Uint16Array;
     vertexCount: number;
@@ -267,7 +278,6 @@ export class GPUResourceCoordinator {
     const pmxFaces = pmxModel.faces;
 
     // Process faces
-
     for (let i = 0; i < pmxFaces.length; i++) {
       // Each face object contains an indices array with 3 vertex indices
       const face = pmxFaces[i];

@@ -227,6 +227,8 @@ export interface PipelineCreationOptions {
  * Compute pipeline creation options
  */
 export interface ComputePipelineCreationOptions {
+  purpose?: ComputePurpose;
+
   // Shader configuration
   shaderDefines?: Record<string, string | number | boolean>;
 
