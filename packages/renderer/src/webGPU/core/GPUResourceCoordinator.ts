@@ -68,7 +68,7 @@ export class GPUResourceCoordinator {
     cache: true,
     lifecycle: 'persistent',
   })
-  async createMaterialGPUResource<T extends AssetType>(
+  async createGPUResource<T extends AssetType>(
     label: string,
     descriptor: GPUResourceDescriptor<T>,
   ): Promise<GPUResourceType<T> | null> {

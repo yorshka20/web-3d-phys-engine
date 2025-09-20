@@ -1,9 +1,10 @@
 import { PMXMaterial, PMXTexture } from '@ecs/components/physics/mesh/PMXModel';
-import { assetRegistry } from './AssetRegistry';
+import { AssetDescriptor, assetRegistry } from './AssetRegistry';
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
 import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
+import { GPUResourceCoordinator } from './GPUResourceCoordinator';
 import { PMXAnimationBufferManager } from './PMXAnimationBufferManager';
 import { PMXAssetDescriptor } from './PMXAssetDescriptor';
 import { TextureManager } from './TextureManager';
@@ -39,6 +40,11 @@ export interface PMXMaterialCacheData {
   materialType: 'pmx';
 }
 
+export interface PMXMaterialDescriptor {
+  materialIndex: number;
+  assetDescriptor: AssetDescriptor<'pmx_material'>;
+}
+
 @Injectable(ServiceTokens.PMX_MATERIAL_PROCESSOR, {
   lifecycle: 'singleton',
 })
@@ -54,6 +60,9 @@ export class PMXMaterialProcessor {
 
   @Inject(ServiceTokens.PMX_ANIMATION_BUFFER_MANAGER)
   private animationBufferManager!: PMXAnimationBufferManager;
+
+  @Inject(ServiceTokens.GPU_RESOURCE_COORDINATOR)
+  private gpuResourceCoordinator!: GPUResourceCoordinator;
 
   private defaultTextures: Map<number, PMXMaterialTextureResource> = new Map();
   private materialCache: Map<string, PMXMaterialCacheData> = new Map();
@@ -658,6 +667,32 @@ export class PMXMaterialProcessor {
 
     this.bufferManager.updateBuffer(buffer, uniformData.buffer);
     return buffer;
+  }
+
+  async createPMXMaterial(label: string, descriptor: PMXMaterialDescriptor) {
+    const { assetDescriptor, materialIndex } = descriptor;
+
+    // Use GPUResourceCoordinator to create materials
+    const materials = await this.gpuResourceCoordinator.createGPUResource(label, {
+      assetDescriptor,
+    });
+
+    if (!materials || materials.length === 0) {
+      throw new Error('Failed to create PMX materials');
+    }
+
+    let index = materialIndex;
+    // Validate material index
+    if (materialIndex >= materials.length) {
+      console.warn(
+        `Material index ${materialIndex} out of range, using material 0. Available materials: ${materials.length}`,
+      );
+      index = 0;
+    }
+
+    // Cache and return the specific material
+    const material = materials[index];
+    return material;
   }
 
   /**

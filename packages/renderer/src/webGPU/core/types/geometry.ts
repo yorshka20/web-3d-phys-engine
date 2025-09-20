@@ -1,4 +1,5 @@
 import { GeometryData, GeometryPrimitiveOptions, GeometryType } from '@ecs/components/physics/mesh';
+import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 
 /**
  * Geometry cache item
@@ -34,4 +35,13 @@ export interface GeometryDescriptor<T extends GeometryType = GeometryType> {
  */
 export interface GeometryDataDescriptor {
   geometryData: GeometryData;
+}
+
+/**
+ * PMX geometry descriptor for creating geometry from existing data
+ */
+export interface PMXGeometryDescriptor {
+  pmxModel: PMXModel;
+  materialIndex: number;
+  geometryId: string;
 }
