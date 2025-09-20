@@ -20,3 +20,18 @@ export interface GeometryCacheItem {
  * Geometry parameters
  */
 export type GeometryParams<T extends GeometryType> = GeometryPrimitiveOptions[T];
+
+/**
+ * Geometry descriptor for creating geometry from type and params
+ */
+export interface GeometryDescriptor<T extends GeometryType = GeometryType> {
+  type: T;
+  params?: GeometryParams<T>;
+}
+
+/**
+ * Geometry data descriptor for creating geometry from existing data
+ */
+export interface GeometryDataDescriptor {
+  geometryData: GeometryData;
+}

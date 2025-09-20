@@ -164,22 +164,6 @@ export interface IRenderBackend {
   setComputePipeline(pipeline: GPUComputePipeline): void;
   setBindGroup(index: number, bindGroup: BindGroup): void;
 
-  // Draw commands
-  draw(
-    vertexCount: number,
-    instanceCount?: number,
-    firstVertex?: number,
-    firstInstance?: number,
-  ): void;
-  drawIndexed(
-    indexCount: number,
-    instanceCount?: number,
-    firstIndex?: number,
-    baseVertex?: number,
-    firstInstance?: number,
-  ): void;
-  dispatch(x: number, y?: number, z?: number): void;
-
   // Buffer operations
   setVertexBuffer(slot: number, buffer: GPUBuffer, offset?: number, size?: number): void;
   setIndexBuffer(buffer: GPUBuffer, format: GPUIndexFormat, offset?: number, size?: number): void;
@@ -225,20 +209,6 @@ export abstract class IWebGPURenderer implements IRenderer, IRenderBackend {
   abstract setRenderPipeline(pipeline: RenderPipeline): void;
   abstract setComputePipeline(pipeline: GPUComputePipeline): void;
   abstract setBindGroup(index: number, bindGroup: BindGroup): void;
-  abstract draw(
-    vertexCount: number,
-    instanceCount?: number,
-    firstVertex?: number,
-    firstInstance?: number,
-  ): void;
-  abstract drawIndexed(
-    indexCount: number,
-    instanceCount?: number,
-    firstIndex?: number,
-    baseVertex?: number,
-    firstInstance?: number,
-  ): void;
-  abstract dispatch(x: number, y?: number, z?: number): void;
   abstract setVertexBuffer(slot: number, buffer: GPUBuffer, offset?: number, size?: number): void;
   abstract setIndexBuffer(
     buffer: GPUBuffer,

@@ -1,8 +1,14 @@
 import { GeometryData, GeometryFactory, GeometryType } from '@ecs/components/physics/mesh';
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
-import { Inject, Injectable } from './decorators/ResourceDecorators';
-import { GeometryCacheItem, GeometryParams } from './types/geometry';
+import { Inject, Injectable, SmartResource } from './decorators/ResourceDecorators';
+import { ResourceType } from './types/constant';
+import {
+  GeometryCacheItem,
+  GeometryDataDescriptor,
+  GeometryDescriptor,
+  GeometryParams,
+} from './types/geometry';
 
 /**
  * Geometry Manager
@@ -15,80 +21,40 @@ export class GeometryManager {
   @Inject(ServiceTokens.BUFFER_MANAGER)
   private bufferManager!: BufferManager;
 
-  private geometryCache: Map<string, GeometryCacheItem> = new Map();
-
   /**
-   * Get or create geometry
-   * @param type Geometry type
-   * @param params Geometry parameters
+   * Create geometry from type and parameters
+   * @param label Geometry label
+   * @param descriptor Geometry descriptor
    * @returns Geometry cache item
    */
-  getGeometry<T extends GeometryType>(
-    type: T,
-    params: GeometryParams<T> = {} as GeometryParams<T>,
+  @SmartResource(ResourceType.GEOMETRY, {
+    cache: true,
+    lifecycle: 'persistent',
+  })
+  createGeometry<T extends GeometryType>(
+    label: string,
+    descriptor: GeometryDescriptor<T>,
   ): GeometryCacheItem {
-    const cacheKey = this.generateCacheKey(type, params);
+    const { type, params = {} as GeometryParams<T> } = descriptor;
 
-    // Check cache
-    if (this.geometryCache.has(cacheKey)) {
-      return this.geometryCache.get(cacheKey)!;
-    }
-
-    // Create new geometry
-    const geometry = this.createGeometry(type, params);
-    const cacheItem = this.createCacheItem(geometry, cacheKey);
-
-    // Cache geometry
-    this.geometryCache.set(cacheKey, cacheItem);
-
-    return cacheItem;
+    // Create geometry data
+    const geometry = this.createGeometryData(type, params);
+    return this.createCacheItem(geometry, label);
   }
 
   /**
-   * Get or create geometry from existing geometry data
-   * @param geometryData Existing geometry data
-   * @param geometryId Unique identifier for this geometry
+   * Create geometry from existing geometry data
+   * @param label Geometry label
+   * @param descriptor Geometry data descriptor
    * @returns Geometry cache item
    */
-  getGeometryFromData(geometryData: GeometryData, geometryId?: string): GeometryCacheItem {
-    const cacheKey = geometryId || this.generateCacheKeyFromData(geometryData);
-
-    // Check cache
-    if (this.geometryCache.has(cacheKey)) {
-      return this.geometryCache.get(cacheKey)!;
-    }
-
-    // Create cache item from existing geometry data
-    const cacheItem = this.createCacheItem(geometryData, cacheKey);
-
-    // Cache geometry
-    this.geometryCache.set(cacheKey, cacheItem);
-
-    return cacheItem;
-  }
-
-  /**
-   * Generate cache key
-   * @param type Geometry type
-   * @param params Geometry parameters
-   * @returns Cache key
-   */
-  private generateCacheKey<T extends GeometryType>(type: T, params: GeometryParams<T>): string {
-    const paramStr = JSON.stringify(params);
-    return `${type}_${paramStr}`;
-  }
-
-  /**
-   * Generate cache key from geometry data
-   * @param geometryData Geometry data
-   * @returns Cache key
-   */
-  private generateCacheKeyFromData(geometryData: GeometryData): string {
-    // Create a hash-like key based on geometry data properties
-    const vertexCount = geometryData.vertexCount;
-    const indexCount = geometryData.indexCount;
-    const bounds = geometryData.bounds;
-    return `data_${vertexCount}_${indexCount}_${bounds.min[0]}_${bounds.min[1]}_${bounds.min[2]}_${bounds.max[0]}_${bounds.max[1]}_${bounds.max[2]}`;
+  @SmartResource(ResourceType.GEOMETRY, {
+    cache: true,
+    lifecycle: 'persistent',
+  })
+  createGeometryFromData(label: string, descriptor: GeometryDataDescriptor): GeometryCacheItem {
+    const { geometryData } = descriptor;
+    return this.createCacheItem(geometryData, label);
   }
 
   /**
@@ -97,33 +63,36 @@ export class GeometryManager {
    * @param params Geometry parameters
    * @returns Geometry data
    */
-  private createGeometry<T extends GeometryType>(type: T, params: GeometryParams<T>): GeometryData {
+  private createGeometryData<T extends GeometryType>(
+    type: T,
+    params: GeometryParams<T>,
+  ): GeometryData {
     return GeometryFactory.createGeometryDataByDescriptor({ type, params });
   }
 
   /**
    * Create cache item
    * @param geometry Geometry data
-   * @param cacheKey Cache key
+   * @param label Geometry label
    * @returns Geometry cache item
    */
-  private createCacheItem(geometry: GeometryData, cacheKey: string): GeometryCacheItem {
+  private createCacheItem(geometry: GeometryData, label: string): GeometryCacheItem {
     // Create vertex buffer
-    const vertexBuffer = this.bufferManager.createVertexBuffer(`${cacheKey}_vertices`, {
+    const vertexBuffer = this.bufferManager.createVertexBuffer(`${label}_vertices`, {
       data: geometry.vertices.buffer as ArrayBuffer,
     });
 
     if (!vertexBuffer) {
-      throw new Error(`Failed to create vertex buffer for ${cacheKey}`);
+      throw new Error(`Failed to create vertex buffer for ${label}`);
     }
 
     // Create index buffer
-    const indexBuffer = this.bufferManager.createIndexBuffer(`${cacheKey}_indices`, {
+    const indexBuffer = this.bufferManager.createIndexBuffer(`${label}_indices`, {
       data: geometry.indices.buffer as ArrayBuffer,
     });
 
     if (!indexBuffer) {
-      throw new Error(`Failed to create index buffer for ${cacheKey}`);
+      throw new Error(`Failed to create index buffer for ${label}`);
     }
 
     return {
@@ -141,36 +110,9 @@ export class GeometryManager {
   }
 
   /**
-   * Get cached geometry by ID
-   * @param geometryId Geometry ID
-   * @returns Cached geometry or undefined
-   */
-  getCachedGeometry(geometryId: string): GeometryCacheItem | undefined {
-    return this.geometryCache.get(geometryId);
-  }
-
-  /**
-   * Get cache statistics
-   * @returns Cache statistics
-   */
-  getCacheStats(): { totalGeometries: number; cacheKeys: string[] } {
-    return {
-      totalGeometries: this.geometryCache.size,
-      cacheKeys: Array.from(this.geometryCache.keys()),
-    };
-  }
-
-  /**
-   * Clear cache
-   */
-  clearCache(): void {
-    this.geometryCache.clear();
-  }
-
-  /**
    * Destroy manager
    */
   destroy(): void {
-    this.clearCache();
+    // SmartResource handles cleanup automatically
   }
 }

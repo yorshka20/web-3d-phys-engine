@@ -2,13 +2,14 @@ import { VertexFormat, WebGPUMaterialDescriptor } from '@ecs';
 import { PMXModel, PMXVertex } from '@ecs/components/physics/mesh/PMXModel';
 import { AssetDescriptor, AssetType } from './AssetRegistry';
 import { BufferManager } from './BufferManager';
-import { Inject, Injectable } from './decorators';
+import { Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { GeometryManager } from './GeometryManager';
 import { MaterialManager } from './MaterialManager';
 import { pmxAssetRegistry } from './PMXAssetRegistry';
 import { PMXMaterialCacheData, PMXMaterialProcessor } from './PMXMaterialProcessor';
 import { TextureManager } from './TextureManager';
+import { ResourceType } from './types/constant';
 import { GeometryCacheItem } from './types/geometry';
 
 // GPU resource return types based on asset type
@@ -21,6 +22,12 @@ type GPUResourceType<T extends AssetType> = T extends 'pmx_model'
       : T extends 'material'
         ? WebGPUMaterialDescriptor
         : unknown;
+
+// GPU resource descriptor
+interface GPUResourceDescriptor<T extends AssetType = AssetType> {
+  assetDescriptor: AssetDescriptor<T>;
+  urgency?: 'immediate' | 'high' | 'normal' | 'low';
+}
 
 /**
  * GPU Resource Coordinator - Coordinates GPU resource creation across specialized managers
@@ -57,10 +64,15 @@ export class GPUResourceCoordinator {
    * Get or create GPU resource for an asset
    * This coordinates with specialized managers rather than creating resources directly
    */
-  async getOrCreateGPUResource<T extends AssetType>(
-    assetDescriptor: AssetDescriptor<T>,
-    urgency: 'immediate' | 'high' | 'normal' | 'low' = 'normal',
+  @SmartResource(ResourceType.GPU_RESOURCE, {
+    cache: true,
+    lifecycle: 'persistent',
+  })
+  async createMaterialGPUResource<T extends AssetType>(
+    label: string,
+    descriptor: GPUResourceDescriptor<T>,
   ): Promise<GPUResourceType<T> | null> {
+    const { assetDescriptor, urgency = 'normal' } = descriptor;
     const assetType = assetDescriptor.type;
 
     switch (assetType) {
@@ -97,7 +109,7 @@ export class GPUResourceCoordinator {
     const geometryData = this.convertPMXToGeometryData(pmxData);
 
     // Use GeometryManager to create the actual GPU geometry
-    return this.geometryManager.getGeometryFromData(geometryData, assetId);
+    return this.geometryManager.createGeometryFromData(assetId, { geometryData });
   }
 
   /**

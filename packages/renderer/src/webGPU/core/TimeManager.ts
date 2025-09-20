@@ -7,7 +7,7 @@ import { BufferType } from './types';
   lifecycle: 'singleton',
 })
 export class TimeManager {
-  static TimeBufferLabel = 'Time';
+  static TimeBufferLabel = 'TimeBuffer';
 
   @Inject(ServiceTokens.WEBGPU_DEVICE)
   private device!: GPUDevice;
@@ -34,7 +34,6 @@ export class TimeManager {
         size: 16,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
-      // todo: auto register
     }
     return buffer;
   }

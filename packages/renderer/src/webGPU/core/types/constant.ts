@@ -41,6 +41,8 @@ export enum ResourceType {
   BIND_GROUP = 'bind_group',
   TEXTURE = 'texture',
   SAMPLER = 'sampler',
+  GEOMETRY = 'geometry',
+  GPU_RESOURCE = 'gpu_resource',
 }
 
 /**
