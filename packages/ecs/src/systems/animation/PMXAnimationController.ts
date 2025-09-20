@@ -5,7 +5,10 @@
 
 import { PMXMeshComponent } from '@ecs/components/physics/mesh/PMXMeshComponent';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
-import { PMXAnimationComponent } from '@ecs/components/rendering/PMXAnimationComponent';
+import {
+  PMXAnimationComponent,
+  PMXAnimationState,
+} from '@ecs/components/rendering/PMXAnimationComponent';
 import { PMXBoneComponent } from '@ecs/components/rendering/PMXBoneComponent';
 import { PMXMorphComponent } from '@ecs/components/rendering/PMXMorphComponent';
 import { Entity } from '@ecs/core/ecs/Entity';
@@ -68,7 +71,6 @@ export class PMXAnimationController {
     const { assetId } = pmxMeshComponent;
     const pmxModel = assetDescriptor?.rawData as PMXModel;
     const { bones, morphs, metadata } = pmxModel;
-    const vertexCount = metadata.vertexCount;
 
     // Create morph component
     const morphComponent = new PMXMorphComponent({
@@ -76,7 +78,7 @@ export class PMXAnimationController {
       morphCount: metadata.morphCount,
       boneCount: metadata.boneCount,
       frameCount: metadata.frameCount,
-      vertexCount,
+      vertexCount: metadata.vertexCount,
       morphs,
     });
 
@@ -393,7 +395,7 @@ export class PMXAnimationController {
    * @param entityId Entity ID
    * @returns Animation state or null if not found
    */
-  getAnimationState(entityId: string): any | null {
+  getAnimationState(entityId: string): PMXAnimationState | null {
     return this.animationSystem.getAnimationState(entityId);
   }
 

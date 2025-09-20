@@ -382,7 +382,7 @@ export class WebGPURenderSystem extends System {
     // Get animation data
     const boneMatrices = boneComponent ? this.extractBoneMatrices(boneComponent) : undefined;
     const morphWeights = morphComponent ? this.extractMorphWeights(morphComponent) : undefined;
-    const morphCount = morphComponent ? morphComponent.getVertexMorphCount() : undefined;
+    const morphCount = morphComponent ? morphComponent.getMorphCount() : undefined;
     const vertexCount = pmxModel.metadata.vertexCount;
 
     // Create a renderable for each material
@@ -500,10 +500,6 @@ export class WebGPURenderSystem extends System {
     mat3.transpose(normalMatrix, normalMatrix);
 
     return new Float32Array(normalMatrix);
-  }
-
-  private prepareComputePass(renderables: RenderData[]): boolean {
-    return renderables.some((renderable) => renderable.morphCount && renderable.morphCount > 0);
   }
 
   /**

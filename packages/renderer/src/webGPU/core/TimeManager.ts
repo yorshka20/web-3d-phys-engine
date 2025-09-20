@@ -7,8 +7,6 @@ import { BufferType } from './types';
   lifecycle: 'singleton',
 })
 export class TimeManager {
-  static TimeBufferLabel = 'TimeBuffer';
-
   @Inject(ServiceTokens.WEBGPU_DEVICE)
   private device!: GPUDevice;
 
@@ -27,9 +25,9 @@ export class TimeManager {
   }
 
   getBuffer() {
-    let buffer = this.bufferManager.getBufferByLabel(TimeManager.TimeBufferLabel);
+    let buffer = this.bufferManager.getBufferByLabel('time_buffer');
     if (!buffer) {
-      buffer = this.bufferManager.createCustomBuffer(TimeManager.TimeBufferLabel, {
+      buffer = this.bufferManager.createCustomBuffer('time_buffer', {
         type: BufferType.UNIFORM,
         size: 16,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
