@@ -21,9 +21,10 @@ import { PMXAnimationController } from '@ecs/systems/animation/PMXAnimationContr
 import { AssetLoader } from '@renderer';
 import { pmxAssetRegistry } from '@renderer/webGPU/core/PMXAssetRegistry';
 import chroma from 'chroma-js';
-import { burniceDescriptor, perlicaDescriptor } from './descriptors';
+import { alenDescriptor, burniceDescriptor, perlicaDescriptor } from './descriptors';
 
 // Import model URLs
+import alenModel from '../../assets/alen/艾莲.pmx?url';
 import burniceModel from '../../assets/burnice/柏妮思.pmx?url';
 import perlicaModel from '../../assets/perlica/perlica.pmx?url';
 
@@ -36,12 +37,12 @@ export async function createPMXAnimationExample(world: World) {
   world.addSystem(new PMXAnimationSystem());
 
   // Register asset descriptors
-  //   pmxAssetRegistry.register(alenDescriptor);
+  pmxAssetRegistry.register(alenDescriptor);
   pmxAssetRegistry.register(burniceDescriptor);
   pmxAssetRegistry.register(perlicaDescriptor);
 
   // Load PMX models
-  //   await AssetLoader.loadPMXModelFromURL(alenModel, 'alen');
+  await AssetLoader.loadPMXModelFromURL(alenModel, 'alen');
   await AssetLoader.loadPMXModelFromURL(burniceModel, 'burnice');
   await AssetLoader.loadPMXModelFromURL(perlicaModel, 'perlica');
 
@@ -52,11 +53,11 @@ export async function createPMXAnimationExample(world: World) {
     rotation: [0, 0, 0],
   });
   // Create PMX entities
-  //   const alenEntity = createPMXEntity(world, {
-  //     name: 'alen',
-  //     position: [-10, 0, 0],
-  //     rotation: [0, 0, 0],
-  //   });
+  const alenEntity = createPMXEntity(world, {
+    name: 'alen',
+    position: [-10, 0, 0],
+    rotation: [0, 0, 0],
+  });
   const burniceEntity = createPMXEntity(world, {
     name: 'burnice',
     position: [10, 0, 0],
@@ -65,21 +66,15 @@ export async function createPMXAnimationExample(world: World) {
 
   // Initialize animation components
   animationController.initializePMXAnimation(perlicaEntity);
-  //   animationController.initializePMXAnimation(alenEntity);
+  animationController.initializePMXAnimation(alenEntity);
   animationController.initializePMXAnimation(burniceEntity);
 
   // --- Start a simple morph animation loop for testing ALL morphs ---
-  const entitiesToAnimate = [perlicaEntity, burniceEntity];
+  const entitiesToAnimate = world.getEntitiesByCondition((entity) =>
+    entity.hasComponent(PMXMeshComponent.componentName),
+  );
   world.addSystem(new SimpleAnimationDriver(entitiesToAnimate));
   // --- End of simple morph animation loop ---
-
-  // Create animation presets
-  // createAnimationPresets(animationController);
-
-  // Start some example animations
-  for (const id of [perlicaEntity.id]) {
-    // startExampleAnimations(animationController, id);
-  }
 
   return animationController;
 }
@@ -152,9 +147,9 @@ class SimpleAnimationDriver extends System {
     }
 
     for (const entity of this.entities) {
-      const morphComponent = entity.getComponent(
+      const morphComponent = entity.getComponent<PMXMorphComponent>(
         PMXMorphComponent.componentName,
-      ) as PMXMorphComponent;
+      );
       if (!morphComponent) continue;
 
       const totalMorphs =
