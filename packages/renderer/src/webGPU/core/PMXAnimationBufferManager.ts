@@ -7,13 +7,13 @@ import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
 import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
+import { WebGPUResourceManager } from './ResourceManager';
 import { BufferType } from './types';
 
 export interface PMXAnimationBuffers {
   boneMatricesBuffer: GPUBuffer;
   morphWeightsBuffer: GPUBuffer;
   morphDataBuffer: GPUBuffer;
-  morphCountBuffer: GPUBuffer;
   animationBindGroup: GPUBindGroup;
 }
 
@@ -33,6 +33,12 @@ export class PMXAnimationBufferManager {
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
   private bindGroupManager!: BindGroupManager;
 
+  @Inject(ServiceTokens.WEBGPU_DEVICE)
+  private device!: GPUDevice;
+
+  @Inject(ServiceTokens.RESOURCE_MANAGER)
+  private resourceManager!: WebGPUResourceManager;
+
   private animationBuffers: Map<string, PMXAnimationBuffers> = new Map();
   private maxBones = 256; // Maximum number of bones per model
   private maxMorphs = 64; // Maximum number of morphs per model
@@ -47,21 +53,180 @@ export class PMXAnimationBufferManager {
     console.log('[PMXAnimationBufferManager] Initialized');
   }
 
+  initAnimationBuffersAndBindGroup(
+    batchMorphInfoBuffer: GPUBuffer,
+    batchVertexBuffer: GPUBuffer,
+    batchMorphTargetBuffer: GPUBuffer,
+    batchMorphWeightBuffer: GPUBuffer,
+    batchOutputVertexBuffer: GPUBuffer,
+    computeBindGroupLayout: GPUBindGroupLayout,
+  ) {
+    this.bindGroupManager.createBindGroup(`pmx_morph_compute_bind_group`, {
+      layout: computeBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: batchMorphInfoBuffer },
+        },
+        {
+          binding: 1,
+          resource: { buffer: batchVertexBuffer },
+        },
+        {
+          binding: 2,
+          resource: { buffer: batchMorphTargetBuffer },
+        },
+        {
+          binding: 3,
+          resource: { buffer: batchMorphWeightBuffer },
+        },
+        {
+          binding: 4,
+          resource: { buffer: batchOutputVertexBuffer },
+        },
+      ],
+      label: `pmx_morph_compute_bind_group`,
+    });
+
+    console.log('[WebGPURenderer] Created PMX morph compute bind group');
+  }
+
+  initAnimationBindGroupLayout() {
+    // Create compute bind group layout for PMX morph compute
+    return this.bindGroupManager.createBindGroupLayout(`pmx_morph_compute_bind_group_layout`, {
+      entries: [
+        // morph info
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'uniform' },
+        },
+        // base vertices. it's geometryData.vertexBuffer
+        {
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        // morph targets
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        // morph weights
+        {
+          binding: 3,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        // output vertices
+        {
+          binding: 4,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+      ],
+      label: `PMXMorphComputeBindGroup Layout`,
+    });
+  }
+
+  /**
+   * Initialize morph compute buffers for PMX morphing using BufferManager
+   */
+  initializeMorphComputeBuffers(
+    maxVertices: number,
+    modelCount: number,
+    maxMorphTargets: number = 64,
+  ) {
+    const vertexSize = 3 * 4 + 3 * 4 + 2 * 4 + 4 * 4 + 4 * 4 + 1 * 4; // 68 bytes
+    const alignedVertexSize = Math.ceil(vertexSize / 16) * 16; // 80 bytes
+    const vertexBufferSize = maxVertices * modelCount * alignedVertexSize;
+
+    // Calculate morph target buffer size based on actual needs
+    // Layout: [morph0_vertex0, morph0_vertex1, ..., morph1_vertex0, ...]
+    const morphTargetBufferSize = maxMorphTargets * vertexBufferSize;
+
+    // Initialize morph info buffer (vertex count and morph count)
+    const batchMorphInfoBuffer = this.bufferManager.createCustomBuffer(
+      `${maxVertices}x${modelCount}_pmx_morph_info_buffer`,
+      {
+        type: BufferType.UNIFORM,
+        size: 16, // ✅ MorphInfo struct: 2×u32 + padding = 16 bytes
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      },
+    );
+
+    // Initialize base vertex buffer
+    const batchVertexBuffer = this.bufferManager.createCustomBuffer(
+      `${maxVertices}x${modelCount}_pmx_output_vertex_buffer`,
+      {
+        type: BufferType.STORAGE,
+        size: vertexBufferSize, // 17 floats per vertex
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      },
+    );
+
+    // Initialize morph target buffer - according to actual needs
+    const batchMorphTargetBuffer = this.bufferManager.createStorageBuffer(
+      `${maxVertices}x${modelCount}_pmx_morph_target_buffer`,
+      {
+        data: new ArrayBuffer(morphTargetBufferSize), // ✅ maxMorphTargets × vertexBufferSize
+      },
+    );
+
+    // Initialize morph weight buffer - support more morph
+    const batchMorphWeightBuffer = this.bufferManager.createCustomBuffer(
+      `${maxVertices}x${modelCount}_pmx_morph_weight_buffer`,
+      {
+        type: BufferType.STORAGE,
+        size: maxMorphTargets * 4, // ✅ at least 256 bytes, support more morph
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      },
+    );
+
+    // Initialize output vertex buffer
+    const batchOutputVertexBuffer = this.bufferManager.createCustomBuffer(
+      `${maxVertices}x${modelCount}_pmx_output_vertex_buffer`,
+      {
+        type: BufferType.STORAGE,
+        size: vertexBufferSize, // ✅ same as input size
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      },
+    );
+
+    console.log(`[WebGPURenderer] Initialized morph compute buffers:
+    - Vertex count: ${maxVertices}
+    - Model count: ${modelCount}
+    - Max morph targets: ${maxMorphTargets}
+    - Vertex buffer size: ${(vertexBufferSize / 1024).toFixed(1)}KB
+    - Morph target buffer size: ${(morphTargetBufferSize / 1024 / 1024).toFixed(1)}MB
+    - Total memory: ${((vertexBufferSize * 3 + morphTargetBufferSize) / 1024 / 1024).toFixed(1)}MB`);
+
+    return {
+      vertexBufferSize,
+      batchVertexBuffer,
+      batchMorphInfoBuffer,
+      batchMorphTargetBuffer,
+      batchMorphWeightBuffer,
+      batchOutputVertexBuffer,
+    };
+  }
+
   /**
    * Create or get animation buffers for a PMX model
-   * @param modelId Unique identifier for the PMX model
+   * @param pmxAssetId Unique identifier for the PMX model
    * @param boneCount Number of bones in the model
    * @param vertexCount Number of vertices in the model
    * @param morphCount Number of morphs in the model
    * @returns Animation buffers for the model
    */
   getOrCreateAnimationBuffers(
-    modelId: string,
+    pmxAssetId: string,
     boneCount: number,
     vertexCount: number,
     morphCount: number,
   ): PMXAnimationBuffers {
-    const bufferKey = `${modelId}_animation`;
+    const bufferKey = `${pmxAssetId}_animation`;
 
     // Check if buffers already exist
     if (this.animationBuffers.has(bufferKey)) {
@@ -69,7 +234,7 @@ export class PMXAnimationBufferManager {
     }
 
     // Create new animation buffers
-    const buffers = this.createAnimationBuffers(modelId, boneCount, vertexCount, morphCount);
+    const buffers = this.createAnimationBuffers(pmxAssetId, boneCount, vertexCount, morphCount);
     this.animationBuffers.set(bufferKey, buffers);
 
     return buffers;
@@ -77,75 +242,102 @@ export class PMXAnimationBufferManager {
 
   /**
    * Create animation buffers for a specific model
-   * @param modelId Model identifier
+   * @param pmxAssetId Model identifier
    * @param boneCount Number of bones
    * @param vertexCount Number of vertices
    * @param morphCount Number of morphs
    * @returns Created animation buffers
    */
   private createAnimationBuffers(
-    modelId: string,
+    pmxAssetId: string,
     boneCount: number,
     vertexCount: number,
     morphCount: number,
   ): PMXAnimationBuffers {
     // Ensure counts don't exceed maximum
-    const actualBoneCount = Math.min(boneCount, this.maxBones);
     const actualVertexCount = Math.min(vertexCount, this.maxVertices);
     const actualMorphCount = Math.min(morphCount, this.maxMorphs);
 
-    // Create bone matrices buffer (4x4 matrices)
-    const boneMatricesBuffer = this.bufferManager.createBuffer({
-      type: BufferType.STORAGE,
-      size: boneCount * 16 * 4, // 16 floats per matrix * 4 bytes per float
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-      label: `pmx_bone_matrices_${modelId}`,
-    });
+    // 1. Create bone matrices buffer (4x4 matrices)
+    const boneMatricesBuffer = this.bufferManager.createCustomBuffer(
+      `${pmxAssetId}_pmx_bone_matrices_buffer`,
+      {
+        type: BufferType.STORAGE,
+        size: boneCount * 16 * 4, // 16 floats per matrix * 4 bytes per float
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      },
+    );
 
-    // Create morph weights buffer (uniform array)
-    const morphWeightsBuffer = this.bufferManager.createBuffer({
-      type: BufferType.UNIFORM,
-      size: this.maxMorphs * 4, // 4 bytes per float
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      label: `pmx_morph_weights_${modelId}`,
-    });
+    // 2. Create morph weights buffer (uniform array)
+    const morphWeightsBuffer = this.bufferManager.createCustomBuffer(
+      `${pmxAssetId}_pmx_morph_weights_buffer`,
+      {
+        type: BufferType.UNIFORM,
+        size: actualMorphCount * 4 * 16, // 4 bytes per float
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      },
+    );
 
-    // Create morph data buffer (vertex offsets)
+    // 3. Create morph data buffer (vertex offsets)
     // Layout: [vertex0_morph0_offset(3), vertex0_morph1_offset(3), ..., vertex1_morph0_offset(3), ...]
     // Size: vertexCount * morphCount * 3 floats * 4 bytes per float
-    const morphDataBuffer = this.bufferManager.createBuffer({
-      type: BufferType.STORAGE,
-      size: actualVertexCount * this.maxMorphs * 3 * 4, // Use maxMorphs for fixed size
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-      label: `pmx_morph_data_${modelId}`,
-    });
+    const morphDataBuffer = this.bufferManager.createCustomBuffer(
+      `${pmxAssetId}_pmx_morph_data_buffer`,
+      {
+        type: BufferType.STORAGE,
+        size: actualVertexCount * this.maxMorphs * 3 * 4, // Use maxMorphs for fixed size
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      },
+    );
 
-    // Create morph count uniform buffer
-    const morphCountBuffer = this.bufferManager.createBuffer({
-      type: BufferType.UNIFORM,
-      size: 8, // 2 u32s = 8 bytes (actual morph count, max morph stride)
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      label: `pmx_morph_count_${modelId}`,
-    });
+    // 4. Create morph info buffer (vertex count and morph count)
+    const morphInfoBuffer = this.bufferManager.createCustomBuffer(
+      `${pmxAssetId}_pmx_morph_info_buffer`,
+      {
+        type: BufferType.UNIFORM,
+        size: 16, // MorphInfo struct: 2×u32 + padding = 16 bytes
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      },
+    );
+    this.bufferManager.updateBuffer(
+      morphInfoBuffer,
+      new Uint32Array([actualVertexCount, actualMorphCount]).buffer as ArrayBuffer,
+    );
 
-    // Initialize morph count buffer
-    const morphCountData = new Uint32Array([actualMorphCount, this.maxMorphs]);
-    this.bufferManager.updateBuffer(morphCountBuffer, morphCountData.buffer);
+    // 5. Create morphed vertices buffer. reuse from compute shader.
+    const morphedVerticesBuffer = this.bufferManager.createCustomBuffer(
+      `${pmxAssetId}_pmx_output_vertex_buffer`,
+      {
+        type: BufferType.STORAGE,
+        size: actualVertexCount * 17, // 17 floats per vertex
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      },
+    );
+
+    // log the value of morphedVerticesBuffer
+    console.log(`[PMXAnimationBufferManager] Morphed vertices buffer created:`);
+    console.log(`  - Buffer size: ${morphedVerticesBuffer.size} bytes`);
+    console.log(`  - Expected vertices: ${actualVertexCount}`);
+    console.log(`  - Buffer label: ${morphedVerticesBuffer.label}`);
+    console.log(`  - Usage flags: ${morphedVerticesBuffer.usage}`);
+
+    // Read buffer content using copy method to avoid direct mapping conflicts
+    // this.copyAndReadBuffer(morphedVerticesBuffer, actualVertexCount);
 
     // Create animation bind group
     const animationBindGroup = this.createAnimationBindGroup(
-      modelId,
+      pmxAssetId,
       boneMatricesBuffer,
       morphWeightsBuffer,
       morphDataBuffer,
-      morphCountBuffer,
+      morphInfoBuffer,
+      morphedVerticesBuffer,
     );
 
     return {
       boneMatricesBuffer,
-      morphWeightsBuffer,
       morphDataBuffer,
-      morphCountBuffer,
+      morphWeightsBuffer,
       animationBindGroup,
     };
   }
@@ -180,6 +372,12 @@ export class PMXAnimationBufferManager {
           visibility: GPUShaderStage.VERTEX,
           buffer: { type: 'uniform' },
         },
+        // Binding 4: Morphed vertices (storage buffer)
+        {
+          binding: 4,
+          visibility: GPUShaderStage.VERTEX,
+          buffer: { type: 'read-only-storage' },
+        },
       ],
       label: 'PMXAnimationBindGroupLayout',
     });
@@ -198,7 +396,8 @@ export class PMXAnimationBufferManager {
     boneMatricesBuffer: GPUBuffer,
     morphWeightsBuffer: GPUBuffer,
     morphDataBuffer: GPUBuffer,
-    morphCountBuffer: GPUBuffer,
+    morphInfoBuffer: GPUBuffer,
+    morphedVerticesBuffer: GPUBuffer,
   ): GPUBindGroup {
     const bindGroupLayout = this.bindGroupManager.getBindGroupLayout('pmxAnimationBindGroupLayout');
     if (!bindGroupLayout) {
@@ -222,7 +421,11 @@ export class PMXAnimationBufferManager {
         },
         {
           binding: 3,
-          resource: { buffer: morphCountBuffer },
+          resource: { buffer: morphInfoBuffer },
+        },
+        {
+          binding: 4,
+          resource: { buffer: morphedVerticesBuffer },
         },
       ],
       label: `pmx_animation_bind_group_${modelId}`,
@@ -252,7 +455,7 @@ export class PMXAnimationBufferManager {
    * @param modelId Model identifier
    * @param morphWeights Array of morph weights
    */
-  updateMorphWeights(modelId: string, morphWeights: Float32Array): void {
+  updateMorphWeights(modelId: string, morphCount: number, morphWeights: Float32Array): void {
     const bufferKey = `${modelId}_animation`;
     const buffers = this.animationBuffers.get(bufferKey);
 
@@ -261,12 +464,26 @@ export class PMXAnimationBufferManager {
       return;
     }
 
-    // Ensure morph weights array is the correct size
-    const paddedWeights = new Float32Array(this.maxMorphs);
-    paddedWeights.set(morphWeights.slice(0, this.maxMorphs));
+    // Convert Float32Array to vec4 array format for GPU
+    // morph_weights is defined as array<vec4<f32>, 16> (64 morph weights as 16 vec4s)
+    const vec4Weights = new Float32Array(morphCount * 4); // 16 vec4s = 64 floats
+
+    // Pack morph weights into vec4 format
+    for (let i = 0; i < Math.min(morphWeights.length, morphCount); i++) {
+      const vec4Index = Math.floor(i / 4);
+      const componentIndex = i % 4;
+      vec4Weights[vec4Index * 4 + componentIndex] = morphWeights[i];
+    }
+
+    // Zero fill: set unused morph weights to 0
+    for (let i = morphWeights.length; i < morphCount; i++) {
+      const vec4Index = Math.floor(i / 4);
+      const componentIndex = i % 4;
+      vec4Weights[vec4Index * 4 + componentIndex] = 0.0;
+    }
 
     // Upload morph weights to GPU
-    this.bufferManager.updateBuffer(buffers.morphWeightsBuffer, paddedWeights.buffer);
+    this.bufferManager.updateBuffer(buffers.morphWeightsBuffer, vec4Weights.buffer);
   }
 
   /**
@@ -367,5 +584,93 @@ export class PMXAnimationBufferManager {
 
     this.animationBuffers.clear();
     console.log('[PMXAnimationBufferManager] Cleaned up all animation buffers');
+  }
+
+  /**
+   * Read buffer data for debugging
+   * Creates a dedicated staging buffer for debugging without using BufferManager's resource management
+   */
+  private copyAndReadBuffer(sourceBuffer: GPUBuffer, vertexCount: number): void {
+    console.log(`[PMXAnimationBufferManager] Reading buffer data...`);
+    console.log(`[PMXAnimationBufferManager] Source buffer size: ${sourceBuffer.size} bytes`);
+
+    // Create a dedicated staging buffer for debugging (not managed by BufferManager)
+    const stagingBuffer = this.device.createBuffer({
+      size: sourceBuffer.size,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+      label: 'debug_staging_buffer',
+    });
+
+    // Copy data from source buffer to staging buffer
+    const commandEncoder = this.device.createCommandEncoder();
+    commandEncoder.copyBufferToBuffer(sourceBuffer, 0, stagingBuffer, 0, sourceBuffer.size);
+    this.device.queue.submit([commandEncoder.finish()]);
+
+    // Wait for copy operation to complete, then map and read
+    this.device.queue
+      .onSubmittedWorkDone()
+      .then(() => {
+        stagingBuffer
+          .mapAsync(GPUMapMode.READ)
+          .then(() => {
+            const mappedRange = stagingBuffer.getMappedRange();
+            const floatData = new Float32Array(mappedRange);
+
+            console.log(
+              `[PMXAnimationBufferManager] Mapped range size: ${mappedRange.byteLength} bytes`,
+            );
+            console.log(`[PMXAnimationBufferManager] Float32Array length: ${floatData.length}`);
+
+            const totalVertices = floatData.length / 3;
+            let zeroVertices = 0;
+            let nonZeroVertices = 0;
+
+            console.log(
+              `[PMXAnimationBufferManager] Morphed vertices buffer data (${totalVertices} total vertices):`,
+            );
+
+            for (let i = 0; i < totalVertices; i++) {
+              const x = floatData[i * 3];
+              const y = floatData[i * 3 + 1];
+              const z = floatData[i * 3 + 2];
+
+              // Check if values are valid numbers
+              const isValidX = typeof x === 'number' && !isNaN(x);
+              const isValidY = typeof y === 'number' && !isNaN(y);
+              const isValidZ = typeof z === 'number' && !isNaN(z);
+
+              if (!isValidX || !isValidY || !isValidZ) {
+                continue;
+              }
+
+              // Check if vertex has non-zero coordinates
+              const hasNonZero = x !== 0 || y !== 0 || z !== 0;
+
+              if (hasNonZero) {
+                nonZeroVertices++;
+              } else {
+                zeroVertices++;
+              }
+            }
+
+            console.log(`[PMXAnimationBufferManager] Vertex statistics:`);
+            console.log(`  - Total vertices: ${totalVertices}`);
+            console.log(`  - Non-zero vertices: ${nonZeroVertices}`);
+            console.log(`  - Zero vertices: ${zeroVertices}`);
+            console.log(`  - Logged first ${Math.min(nonZeroVertices, 100)} non-zero vertices`);
+
+            // Unmap and destroy the staging buffer
+            stagingBuffer.unmap();
+            stagingBuffer.destroy();
+          })
+          .catch((error) => {
+            console.error('[PMXAnimationBufferManager] Error mapping staging buffer:', error);
+            stagingBuffer.destroy();
+          });
+      })
+      .catch((error) => {
+        console.error('[PMXAnimationBufferManager] Error waiting for copy operation:', error);
+        stagingBuffer.destroy();
+      });
   }
 }

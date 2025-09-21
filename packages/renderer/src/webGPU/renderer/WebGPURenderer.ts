@@ -5,7 +5,6 @@ import { RectArea } from '@ecs/types/types';
 import chroma from 'chroma-js';
 import { mat4 } from 'gl-matrix';
 import { TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
-import { AssetDescriptor } from '../core/AssetRegistry';
 import { BindGroupManager } from '../core/BindGroupManager';
 import { BufferManager } from '../core/BufferManager';
 import { DIContainer, initContainer } from '../core/decorators';
@@ -22,7 +21,7 @@ import {
 } from '../core/pipeline/types';
 import { PMXAnimationBufferManager } from '../core/PMXAnimationBufferManager';
 import { PMXMaterialCacheData, PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
-import { ShaderManager } from '../core/ShaderManager';
+import { ShaderManager } from '../core/shaders/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
 import {
   BindGroupLayoutVisibility,
@@ -127,6 +126,10 @@ export class WebGPURenderer implements IWebGPURenderer {
     return this.context.getAdapter();
   }
 
+  private getDPR(): number {
+    return window.devicePixelRatio;
+  }
+
   renderScene(scene: Scene, camera: Camera): void {
     throw new Error('Method not implemented.');
   }
@@ -174,26 +177,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   setBindGroup(index: number, bindGroup: BindGroup): void {
     throw new Error('Method not implemented.');
   }
-  draw(
-    vertexCount: number,
-    instanceCount?: number,
-    firstVertex?: number,
-    firstInstance?: number,
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  drawIndexed(
-    indexCount: number,
-    instanceCount?: number,
-    firstIndex?: number,
-    baseVertex?: number,
-    firstInstance?: number,
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  dispatch(x: number, y?: number, z?: number): void {
-    throw new Error('Method not implemented.');
-  }
+
   setVertexBuffer(slot: number, buffer: GPUBuffer, offset?: number, size?: number): void {
     throw new Error('Method not implemented.');
   }
@@ -221,21 +205,6 @@ export class WebGPURenderer implements IWebGPURenderer {
         textures: 0, // TODO: implement texture memory tracking
         total: Object.values(bufferStats).reduce((a, b) => a + b, 0),
       },
-    };
-  }
-
-  getDebugInfo(): {
-    deviceInfo: GPUAdapterInfo;
-    supportedFeatures: string[];
-    limits: Record<string, number>;
-  } {
-    const adapter = this.context.getAdapter();
-    return {
-      deviceInfo: adapter.info,
-      supportedFeatures: Array.from(this.device.features),
-      limits: Object.fromEntries(
-        Object.entries(this.device.limits).map(([key, value]) => [key, Number(value)]),
-      ),
     };
   }
 
@@ -291,10 +260,6 @@ export class WebGPURenderer implements IWebGPURenderer {
         maxComputeWorkgroupStorageSize: 32768,
       },
     });
-  }
-
-  private getDPR(): number {
-    return window.devicePixelRatio;
   }
 
   /**
@@ -401,11 +366,10 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
     console.log('[WebGPURenderer] Created texture bind group');
 
-    const materialBuffer = this.bufferManager.createBuffer({
+    const materialBuffer = this.bufferManager.createCustomBuffer('default_material_buffer', {
       type: BufferType.UNIFORM,
       size: 32,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      label: 'default_material_buffer',
     });
 
     // Get the existing material bind group layout (created earlier)
@@ -440,11 +404,10 @@ export class WebGPURenderer implements IWebGPURenderer {
     );
 
     // Create a default lighting buffer (can be expanded later for actual lighting data)
-    const lightingBuffer = this.bufferManager.createBuffer({
+    const lightingBuffer = this.bufferManager.createCustomBuffer('default_lighting_buffer', {
       type: BufferType.UNIFORM,
       size: 64, // Space for basic lighting data (direction, color, etc.)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      label: 'default_lighting_buffer',
     });
 
     this.bindGroupManager.createBindGroup('lightingBindGroup', {
@@ -491,8 +454,114 @@ export class WebGPURenderer implements IWebGPURenderer {
     // create command encoder
     const commandEncoder = this.device.createCommandEncoder();
 
+    // do computePass before renderPass
+
+    // begin compute pass. used for morph type1 animation
+    // await this.computePass(commandEncoder, frameData);
+
     // begin render pass
+    await this.renderPass(commandEncoder, frameData);
+
+    // submit command
+    this.device.queue.submit([commandEncoder.finish()]);
+  }
+
+  private async computePass(
+    commandEncoder: GPUCommandEncoder,
+    frameData: FrameData,
+  ): Promise<void> {
+    const computePassRenderables = frameData.renderables.filter(
+      (renderable) => renderable.computePass,
+    );
+    const modelCount = computePassRenderables.length;
+    if (modelCount === 0) {
+      return;
+    }
+
+    const computePass = commandEncoder.beginComputePass({
+      label: 'pmx morph compute pass',
+    });
+
+    // prepare bind group layout
+    const computeBindGroupLayout = this.pmxAnimationBufferManager.initAnimationBindGroupLayout();
+    const maxVertices = computePassRenderables
+      .map((e) => e.vertexCount || 0)
+      .reduce((a, b) => Math.max(a, b), 0);
+
+    // create batchVertexBuffer. this will contain all the vertices for all the renderables in the compute pass
+    const {
+      vertexBufferSize,
+      batchVertexBuffer,
+      batchMorphInfoBuffer,
+      batchMorphTargetBuffer,
+      batchMorphWeightBuffer,
+      batchOutputVertexBuffer,
+    } = this.pmxAnimationBufferManager.initializeMorphComputeBuffers(maxVertices, modelCount);
+    // write vertices and morph data to batchVertexBuffer
+    computePassRenderables.forEach((entity, index) => {
+      const offset = index * maxVertices * 17; // 17 floats per vertex
+      this.device.queue.writeBuffer(batchVertexBuffer, offset, entity.geometryData.vertices.buffer);
+
+      // const morphOffset = index * vertexBufferSize;
+      // this.device.queue.writeBuffer(batchVertexBuffer, morphOffset, entity.morphData.buffer);
+    });
+
+    const bindGroup = this.bindGroupManager.getBindGroup('pmx_morph_compute_bind_group');
+    if (!bindGroup) {
+      // Initialize animation buffers and bind group
+      this.pmxAnimationBufferManager.initAnimationBuffersAndBindGroup(
+        batchMorphInfoBuffer,
+        batchVertexBuffer,
+        batchMorphTargetBuffer,
+        batchMorphWeightBuffer,
+        batchOutputVertexBuffer,
+        computeBindGroupLayout,
+      );
+    }
+
+    const batchBuffers: GPUBuffer[] = [];
+    for (const renderable of computePassRenderables) {
+      const pmxAssetId = renderable.pmxAssetId;
+      if (!pmxAssetId) {
+        throw new Error('PMX asset not found');
+      }
+
+      const assetDescriptor = renderable.pmxComponent?.resolveAsset<'pmx_model'>();
+      if (!assetDescriptor) {
+        throw new Error('PMX asset not found');
+      }
+      const computeVertexBuffer =
+        this.gpuResourceCoordinator.createPMXGeometryVertexBufferForComputePass(assetDescriptor);
+      batchBuffers.push(computeVertexBuffer);
+    }
+
+    const computePipeline = await this.pipelineFactory.createCustomComputePipeline(
+      'pmx_morph_compute_shader',
+      {
+        purpose: 'custom',
+        workgroupSize: [64, 1, 1],
+        requiredBindGroups: [5], // COMPUTE_DATA. TODO: remove this field.
+      },
+    );
+
+    computePass.setPipeline(computePipeline);
+
+    // Get the pre-created compute bind group
+    const computeBindGroup = this.bindGroupManager.getBindGroup('pmx_morph_compute_bind_group');
+    if (computeBindGroup) {
+      computePass.setBindGroup(0, computeBindGroup);
+
+      // Calculate workgroup count based on vertex count
+      const workgroups = Math.ceil(maxVertices / 64);
+      computePass.dispatchWorkgroups(workgroups, computePassRenderables.length, 1);
+    }
+
+    computePass.end();
+  }
+
+  private async renderPass(commandEncoder: GPUCommandEncoder, frameData: FrameData): Promise<void> {
     const renderPass = commandEncoder.beginRenderPass({
+      label: 'main_render_pass',
       colorAttachments: [
         {
           view: this.context.getContext().getCurrentTexture().createView(),
@@ -509,13 +578,6 @@ export class WebGPURenderer implements IWebGPURenderer {
       },
     });
 
-    // Debug: List all available resources
-    // if (this.frameCount % 300 === 0) {
-    //   const resourceStats = this.resourceManager.getResourceStats();
-    //   // Only log every 60 frames to reduce spam
-    //   console.log('[WebGPURenderer] Available resources:', resourceStats);
-    // }
-
     // Group renderables by semantic pipeline key for efficient pipeline usage
     const renderGroups = this.groupRenderablesBySemanticKey(frameData.renderables);
 
@@ -525,35 +587,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     renderPass.end();
-
-    // set compute pipeline
-    // const computePass = commandEncoder.beginComputePass();
-    // const computePipeline = this.resourceManager.getResource<GPUComputePipeline>(
-    //   'example_compute_pipeline',
-    // );
-
-    // if (computePipeline) {
-    //   computePass.setPipeline(computePipeline);
-
-    //   // Create and set bind group for compute pipeline
-    //   const computeBindGroup =
-    //     this.resourceManager.getResource<GPUBindGroup>('Compute Bind Group');
-    //   computePass.setBindGroup(0, computeBindGroup);
-
-    //   computePass.dispatchWorkgroups(1, 1, 1);
-    // }
-    // computePass.end();
-
-    // submit command
-    this.device.queue.submit([commandEncoder.finish()]);
-
-    // Read compute pipeline results every few frames
-    // if (this.frameCount % 60 === 0) {
-    //   this.readComputeResults();
-    // }
-
-    // Note: Frame counter is incremented in endFrame()
-    // Render loop continuation is handled by external system
   }
 
   /**
@@ -585,9 +618,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Convert to RenderGroup array
-    const renderGroups = Array.from(groups.values());
-
-    return renderGroups;
+    return Array.from(groups.values()).filter((group) => group.renderables.length > 0);
   }
 
   /**
@@ -598,14 +629,11 @@ export class WebGPURenderer implements IWebGPURenderer {
     renderPass: GPURenderPassEncoder,
     frameData: FrameData,
   ): Promise<void> {
-    if (renderGroup.renderables.length === 0) {
-      return;
-    }
-
     // Use unified createAutoPipeline which now supports both regular and PMX materials
     const firstRenderable = renderGroup.renderables[0];
+    // use same pipeline for all renderables in the group
     const pipeline = await this.pipelineFactory.createAutoPipeline(
-      firstRenderable.material, // MaterialDescriptor union type
+      firstRenderable.material,
       firstRenderable.geometryData,
     );
 
@@ -652,21 +680,33 @@ export class WebGPURenderer implements IWebGPURenderer {
     let geometry: GeometryCacheItem;
 
     // Check if this is a PMX model that needs asset-based geometry creation
-    if (renderable.pmxAssetId) {
+    if (renderable.pmxAssetId && renderable.pmxComponent) {
       // For PMX models, we need to determine which material this renderable represents
       const materialIndex = renderable.materialIndex || 0;
       geometry = await this.getOrCreatePMXGeometry(renderable, materialIndex);
 
-      // Also get the material for PMX models
-      const pmxMaterial = await this.getOrCreatePMXMaterial(renderable, materialIndex);
+      // Create a unique key for this specific material
+      const materialKey = `${renderable.pmxAssetId}_material_${materialIndex}`;
+
+      // resolve asset descriptor for PMX material
+      const assetDescriptor = renderable.pmxComponent.resolveAsset<'pmx_material'>();
+      if (!assetDescriptor) {
+        throw new Error('PMX asset not found');
+      }
+
+      // get the material for PMX models
+      const pmxMaterial = await this.pmxMaterialProcessor.createPMXMaterial(materialKey, {
+        assetDescriptor,
+        materialIndex,
+      });
       if (pmxMaterial) {
         renderable.material = pmxMaterial;
       }
     } else {
       // Regular geometry from geometry data
-      geometry = this.geometryManager.getGeometryFromData(
-        renderable.geometryData,
-        renderable.geometryId,
+      geometry = this.geometryManager.createGeometryFromData(
+        renderable.geometryId || 'render_geometry',
+        { geometryData: renderable.geometryData },
       );
     }
 
@@ -697,13 +737,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Create a unique geometry ID for this material
     const geometryId = `${pmxAssetId}_material_geometry_${materialIndex}`;
 
-    // Check if geometry already exists in cache first
-    const cachedGeometry = this.geometryManager.getCachedGeometry(geometryId);
-    if (cachedGeometry) {
-      // console.log(`[WebGPURenderer] Using cached PMX geometry: ${geometryId}`);
-      return cachedGeometry;
-    }
-
     // Get asset data from registry
     const assetDescriptor = pmxComponent.resolveAsset();
     if (!assetDescriptor) {
@@ -717,205 +750,17 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Create geometry for this specific material
-    const geometry = await this.createPMXGeometryForMaterial(pmxModel, materialIndex, geometryId);
+    const geometry = await this.geometryManager.createPMXGeometry(
+      geometryId,
+      pmxModel,
+      materialIndex,
+    );
 
     if (!geometry) {
       throw new Error('Failed to create PMX geometry for material');
     }
 
     return geometry;
-  }
-
-  /**
-   * Create PMX geometry for a specific material
-   */
-  private async createPMXGeometryForMaterial(
-    pmxModel: PMXModel,
-    materialIndex: number,
-    geometryId: string,
-  ): Promise<GeometryCacheItem> {
-    const material = pmxModel.materials[materialIndex];
-    if (!material) {
-      throw new Error(`PMX material ${materialIndex} not found`);
-    }
-
-    // Calculate face range for this material
-    let faceStart = 0;
-    for (let i = 0; i < materialIndex; i++) {
-      faceStart += pmxModel.materials[i].faceCount;
-    }
-    const faceEnd = faceStart + material.faceCount;
-
-    // Extract vertices and faces for this material
-    const materialVertices: number[] = [];
-    const materialIndices: number[] = [];
-    const vertexMap = new Map<number, number>();
-
-    // normalize vertices to fix skinning data
-    const normalizedVertices = this.gpuResourceCoordinator.normalizeVertexData(pmxModel.vertices);
-
-    const floatsPerVertex = 17; // 3+3+2+4+4+1
-
-    // Process faces for this material
-    for (let faceIndex = faceStart; faceIndex < faceEnd; faceIndex++) {
-      const face = pmxModel.faces[faceIndex];
-      if (!face) continue;
-
-      const triangleIndices: number[] = [];
-
-      // Process each vertex in the triangle
-      for (const originalVertexIndex of face.indices) {
-        let newVertexIndex = vertexMap.get(originalVertexIndex);
-
-        if (newVertexIndex === undefined) {
-          // 17 floats per vertex
-          newVertexIndex = materialVertices.length / floatsPerVertex;
-
-          const vertex = normalizedVertices[originalVertexIndex];
-          if (vertex) {
-            // Position (3 floats)
-            materialVertices.push(vertex.position[0], vertex.position[1], vertex.position[2]);
-            // Normal (3 floats)
-            materialVertices.push(vertex.normal[0], vertex.normal[1], vertex.normal[2]);
-            // UV (2 floats)
-            materialVertices.push(vertex.uv[0], vertex.uv[1]);
-            // Skin indices (4 floats)
-            materialVertices.push(
-              vertex.skinIndices[0],
-              vertex.skinIndices[1],
-              vertex.skinIndices[2],
-              vertex.skinIndices[3],
-            );
-            // Skin weights (4 floats)
-            materialVertices.push(
-              vertex.skinWeights[0],
-              vertex.skinWeights[1],
-              vertex.skinWeights[2],
-              vertex.skinWeights[3],
-            );
-            // Edge ratio (1 float)
-            materialVertices.push(vertex.edgeRatio);
-          }
-
-          vertexMap.set(originalVertexIndex, newVertexIndex);
-        }
-
-        triangleIndices.push(newVertexIndex);
-      }
-
-      materialIndices.push(...triangleIndices);
-    }
-
-    // Ensure indices alignment
-    const alignedIndices = [...materialIndices];
-    if (alignedIndices.length % 2 !== 0) {
-      alignedIndices.push(alignedIndices[alignedIndices.length - 1]);
-    }
-
-    // Create geometry data
-    const geometryData = {
-      vertices: new Float32Array(materialVertices),
-      indices: new Uint16Array(alignedIndices),
-      vertexCount: materialVertices.length / floatsPerVertex,
-      indexCount: alignedIndices.length,
-      primitiveType: 'triangle-list' as const,
-      vertexFormat: 'pmx' as const,
-      bounds: this.calculateBounds(materialVertices, floatsPerVertex),
-    };
-
-    const geometry = this.geometryManager.getGeometryFromData(geometryData, geometryId);
-    return geometry;
-  }
-
-  // add bounds calculation helper method
-  private calculateBounds(
-    vertices: number[],
-    stride: number,
-  ): {
-    min: [number, number, number];
-    max: [number, number, number];
-  } {
-    if (vertices.length === 0) {
-      return { min: [0, 0, 0], max: [0, 0, 0] };
-    }
-
-    let minX = vertices[0],
-      minY = vertices[1],
-      minZ = vertices[2];
-    let maxX = vertices[0],
-      maxY = vertices[1],
-      maxZ = vertices[2];
-
-    for (let i = 0; i < vertices.length; i += stride) {
-      const x = vertices[i];
-      const y = vertices[i + 1];
-      const z = vertices[i + 2];
-
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      minZ = Math.min(minZ, z);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-      maxZ = Math.max(maxZ, z);
-    }
-
-    return {
-      min: [minX, minY, minZ],
-      max: [maxX, maxY, maxZ],
-    };
-  }
-
-  /**
-   * Get or create material for PMX model from asset data
-   */
-  private async getOrCreatePMXMaterial(renderable: RenderData, materialIndex: number = 0) {
-    const { pmxAssetId, pmxComponent } = renderable;
-
-    if (!pmxAssetId || !pmxComponent) {
-      throw new Error('PMX asset ID or component not provided');
-    }
-
-    // Create a unique key for this specific material
-    const materialKey = `${pmxAssetId}_material_${materialIndex}`;
-
-    // Check if material already exists in cache
-    const existingMaterial = this.pmxMaterialProcessor.getMaterialData(materialKey);
-    if (existingMaterial) {
-      return existingMaterial;
-    }
-
-    // Get asset data from registry
-    const assetDescriptor = pmxComponent.resolveAsset();
-    if (!assetDescriptor) {
-      throw new Error(`PMX asset not found: ${pmxAssetId}`);
-    }
-
-    // Create a separate asset descriptor for material
-    const materialAssetDescriptor: AssetDescriptor<'pmx_material'> = {
-      ...assetDescriptor,
-      type: 'pmx_material' as const,
-      rawData: assetDescriptor.rawData as PMXModel,
-    };
-
-    // Use GPUResourceCoordinator to create materials
-    const materials =
-      await this.gpuResourceCoordinator.getOrCreateGPUResource(materialAssetDescriptor);
-
-    if (!materials || materials.length === 0) {
-      throw new Error('Failed to create PMX materials');
-    }
-
-    // Validate material index
-    if (materialIndex >= materials.length) {
-      console.warn(
-        `Material index ${materialIndex} out of range, using material 0. Available materials: ${materials.length}`,
-      );
-      materialIndex = 0;
-    }
-
-    // Cache and return the specific material
-    const material = materials[materialIndex];
-    return material;
   }
 
   /**
@@ -1077,7 +922,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     );
 
     // Update animation data if needed
-    await this.updatePMXAnimationData(renderable, morphCount);
+    await this.updatePMXAnimationData(renderable);
 
     // Set animation bind group
     renderPass.setBindGroup(3, animationBuffers.animationBindGroup);
@@ -1086,8 +931,8 @@ export class WebGPURenderer implements IWebGPURenderer {
   /**
    * Update PMX animation data for a specific model
    */
-  private async updatePMXAnimationData(renderable: RenderData, morphCount?: number): Promise<void> {
-    const { pmxAssetId, boneMatrices, morphWeights, morphData } = renderable;
+  private async updatePMXAnimationData(renderable: RenderData): Promise<void> {
+    const { pmxAssetId, boneMatrices, morphWeights, morphCount = 64 } = renderable;
     if (!pmxAssetId) return;
 
     // Update buffers
@@ -1095,18 +940,13 @@ export class WebGPURenderer implements IWebGPURenderer {
       this.pmxAnimationBufferManager.updateBoneMatrices(pmxAssetId, boneMatrices);
     }
     if (morphWeights) {
-      this.pmxAnimationBufferManager.updateMorphWeights(pmxAssetId, morphWeights);
-    }
-
-    // Update morph count information
-    if (morphCount) {
-      this.pmxAnimationBufferManager.updateMorphCount(pmxAssetId, morphCount, morphCount); // Use actual morph count as stride
+      this.pmxAnimationBufferManager.updateMorphWeights(pmxAssetId, morphCount, morphWeights);
     }
 
     // Only update morph data if it's provided (it's static and large)
-    if (morphData) {
-      this.pmxAnimationBufferManager.updateMorphData(pmxAssetId, morphData);
-    }
+    // if (morphData) {
+    //   this.pmxAnimationBufferManager.updateMorphData(pmxAssetId, morphData);
+    // }
   }
 
   /**
@@ -1157,6 +997,76 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
+   * Update morph buffers with PMX model data
+   */
+  updateMorphBuffers(
+    pmxAssetId: string,
+    vertexCount: number,
+    maxMorphTargets: number,
+    morphTargets: Float32Array,
+    morphWeights: Float32Array,
+  ): void {
+    // Update morph info buffer
+    const morphInfo = new Uint32Array([vertexCount, maxMorphTargets]);
+    const morphInfoBuffer = this.bufferManager.getBufferByLabel(
+      `${pmxAssetId}_pmx_morph_info_buffer`,
+    );
+    if (morphInfoBuffer) {
+      this.device.queue.writeBuffer(morphInfoBuffer, 0, morphInfo);
+    }
+
+    // Update morph target buffer
+    const morphTargetBuffer = this.bufferManager.getBufferByLabel(
+      `${pmxAssetId}_pmx_morph_target_buffer`,
+    );
+    if (morphTargetBuffer) {
+      this.device.queue.writeBuffer(
+        morphTargetBuffer,
+        0,
+        morphTargets.buffer,
+        morphTargets.byteOffset,
+        morphTargets.byteLength,
+      );
+    }
+
+    // Update morph weight buffer
+    const morphWeightBuffer = this.bufferManager.getBufferByLabel(
+      `${pmxAssetId}_pmx_morph_weight_buffer`,
+    );
+    if (morphWeightBuffer) {
+      this.device.queue.writeBuffer(
+        morphWeightBuffer,
+        0,
+        morphWeights.buffer,
+        morphWeights.byteOffset,
+        morphWeights.byteLength,
+      );
+    }
+
+    console.log(
+      `[WebGPURenderer] Updated morph buffers: ${vertexCount} vertices, ${maxMorphTargets} morph targets`,
+    );
+  }
+
+  /**
+   * Update only morph weights (for animation updates)
+   */
+  updateMorphWeights(pmxAssetId: string, morphWeights: Float32Array): void {
+    const morphWeightBuffer = this.bufferManager.getBufferByLabel(
+      `${pmxAssetId}_pmx_morph_weight_buffer`,
+    );
+    if (morphWeightBuffer) {
+      this.device.queue.writeBuffer(
+        morphWeightBuffer,
+        0,
+        morphWeights.buffer,
+        morphWeights.byteOffset,
+        morphWeights.byteLength,
+      );
+    }
+  }
+
+  /**
    * Create or get MVP buffer for a geometry instance
    */
   private createOrGetMVPBuffer(geometryId: string): GPUBuffer {
@@ -1165,11 +1075,10 @@ export class WebGPURenderer implements IWebGPURenderer {
     const COMPLETE_MVP_BUFFER_SIZE = 512; // 32 floats × 4 bytes = 512 bytes
 
     if (!buffer) {
-      buffer = this.bufferManager.createBuffer({
+      buffer = this.bufferManager.createCustomBuffer(bufferLabel, {
         type: BufferType.UNIFORM,
         size: COMPLETE_MVP_BUFFER_SIZE,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        label: bufferLabel,
       });
     }
 

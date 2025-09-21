@@ -110,7 +110,7 @@ export class GPUResourceCoordinator {
   /**
    * Create PMX geometry using GeometryManager
    */
-  async createPMXGeometryForComputePass(assetDescriptor: AssetDescriptor<'pmx_model'>) {
+  createPMXGeometryVertexBufferForComputePass(assetDescriptor: AssetDescriptor<'pmx_model'>) {
     const pmxData = assetDescriptor.rawData;
     const assetId = assetDescriptor.id;
 
@@ -118,9 +118,12 @@ export class GPUResourceCoordinator {
     const geometryData = this.convertPMXToGeometryData(assetId, pmxData);
 
     // Use GeometryManager to create the actual GPU geometry
-    const computeBuffer = this.bufferManager.createStorageBuffer(`${assetId}_compute_buffer`, {
-      data: geometryData.vertices.buffer as ArrayBuffer,
-    });
+    const computeBuffer = this.bufferManager.createStorageBuffer(
+      `${assetId}_pmx_output_vertex_buffer`,
+      {
+        data: geometryData.vertices.buffer as ArrayBuffer,
+      },
+    );
 
     return computeBuffer;
   }
