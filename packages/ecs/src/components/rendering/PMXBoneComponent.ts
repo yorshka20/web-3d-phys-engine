@@ -6,7 +6,7 @@
 import { PMXBone } from '@ecs/components/physics/mesh/PMXModel';
 import { Component } from '@ecs/core/ecs/Component';
 import { Vec3, Vec4 } from '@ecs/types/types';
-import { mat4 } from 'gl-matrix';
+import { mat4, quat } from 'gl-matrix';
 // BoneOffset interface moved to PMXMorphComponent
 interface BoneOffset {
   positionOffset: Vec3;
@@ -16,12 +16,12 @@ interface BoneOffset {
 export interface PMXBoneTransform {
   boneIndex: number;
   position: Vec3;
-  rotation: Vec3 | Vec4; // Euler angles in radians
+  rotation: Vec4; // Quaternion for bone rotation
   scale: Vec3;
   enabled: boolean;
 }
 
-export interface PMXBoneComponentData extends Record<string, any> {
+export interface PMXBoneComponentData extends Record<string, unknown> {
   assetId: string; // PMX model asset ID
   boneTransforms: Map<number, PMXBoneTransform>; // boneIndex -> transform
   boneMatrices: Float32Array; // Final skinning matrices for all bones
@@ -91,7 +91,7 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
       const transform = {
         boneIndex: i,
         position: initialPosition,
-        rotation: [0, 0, 0] as Vec3, // Initial rotation is identity
+        rotation: [0, 0, 0, 1] as Vec4, // Initial rotation is identity quaternion
         scale: [1, 1, 1] as Vec3, // Initial scale is identity
         enabled: true,
       };
@@ -141,7 +141,8 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
    */
   calculateBoneMatrices(): void {
     const animatedWorldMatrices: mat4[] = [];
-    // Calculate the world matrix for each bone in the current animated pose
+
+    // First, calculate world matrices for all bones starting from root bones
     for (const rootIndex of this.data.rootBones) {
       this.calculateBoneWorldMatrix(
         rootIndex,
@@ -149,6 +150,31 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
         animatedWorldMatrices,
         this.data.boneTransforms,
       );
+    }
+
+    // Check which bones have transforms but no world matrices
+    const bonesWithTransforms = Array.from(this.data.boneTransforms.keys());
+    const bonesWithoutWorldMatrices = bonesWithTransforms.filter((i) => !animatedWorldMatrices[i]);
+
+    if (bonesWithoutWorldMatrices.length > 0) {
+      // For bones that have transforms but no world matrices,
+      // they should be treated as root bones (no parent)
+      for (const boneIndex of bonesWithoutWorldMatrices) {
+        const transform = this.data.boneTransforms.get(boneIndex);
+        if (transform) {
+          const localMatrix = this.createLocalMatrix(transform);
+          // These bones are treated as root bones, so world matrix = local matrix
+          animatedWorldMatrices[boneIndex] = localMatrix;
+        }
+      }
+    }
+
+    // Ensure all bones have world matrices (some may not be in hierarchy)
+    for (let i = 0; i < this.data.boneCount; i++) {
+      if (!animatedWorldMatrices[i]) {
+        // If bone doesn't have a world matrix, create identity matrix
+        animatedWorldMatrices[i] = mat4.create();
+      }
     }
 
     // Calculate final skinning matrices and flatten them into the array for the GPU
@@ -404,7 +430,7 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
    * @param accumulatedOffsets A map of bone index to accumulated position and rotation offsets.
    */
   applyAccumulatedBoneMorphs(
-    accumulatedOffsets: Map<number, { position: Vec3; rotation: Vec3 }>,
+    accumulatedOffsets: Map<number, { position: Vec3; rotation: Vec4 }>,
   ): void {
     // First, reset all bones to their base state (without morphs)
     this.resetAllBones();
@@ -415,14 +441,34 @@ export class PMXBoneComponent extends Component<PMXBoneComponentData> {
       const originalTransform = this.originalTransforms.get(boneIndex);
 
       if (transform && originalTransform) {
-        // Apply offset from original state, not from current state
+        // Apply position offset from original state
         transform.position[0] = originalTransform.position[0] + offset.position[0];
         transform.position[1] = originalTransform.position[1] + offset.position[1];
         transform.position[2] = originalTransform.position[2] + offset.position[2];
 
-        transform.rotation[0] = originalTransform.rotation[0] + offset.rotation[0];
-        transform.rotation[1] = originalTransform.rotation[1] + offset.rotation[1];
-        transform.rotation[2] = originalTransform.rotation[2] + offset.rotation[2];
+        // Apply rotation offset properly using quaternion multiplication
+        const originalQuat = quat.fromValues(
+          originalTransform.rotation[0],
+          originalTransform.rotation[1],
+          originalTransform.rotation[2],
+          originalTransform.rotation[3],
+        );
+
+        const morphQuat = quat.fromValues(
+          offset.rotation[0],
+          offset.rotation[1],
+          offset.rotation[2],
+          offset.rotation[3],
+        );
+
+        // Multiply quaternions to combine rotations
+        const resultQuat = quat.create();
+        quat.multiply(resultQuat, originalQuat, morphQuat);
+
+        transform.rotation[0] = resultQuat[0];
+        transform.rotation[1] = resultQuat[1];
+        transform.rotation[2] = resultQuat[2];
+        transform.rotation[3] = resultQuat[3];
       }
     }
 

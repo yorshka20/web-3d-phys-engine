@@ -82,12 +82,8 @@ fn apply_bone_skinning(
 ) {
     let total_weight = skin_weights.x + skin_weights.y + skin_weights.z + skin_weights.w;
 
-    if total_weight < 0.001 {
-        *out_position = morphed_position;
-        *out_normal = morphed_normal;
-        return;
-    }
-
+    // Always apply bone skinning, even if weights are low
+    // This ensures all vertices are properly transformed
     *out_position = vec3<f32>(0.0);
     *out_normal = vec3<f32>(0.0);
 
@@ -105,9 +101,14 @@ fn apply_bone_skinning(
         }
     }
 
+    // Normalize by total weight if it's significant
     if total_weight > 0.001 {
         *out_position /= total_weight;
         *out_normal /= total_weight;
+    } else {
+        // If no bone weights, use original position (fallback)
+        *out_position = morphed_position;
+        *out_normal = morphed_normal;
     }
 
     *out_normal = normalize(*out_normal);
@@ -183,13 +184,34 @@ fn vs_main(input: PMXVertexInput, @builtin(vertex_index) vertex_index: u32) -> P
     var world_position: vec3<f32>;
     var world_normal: vec3<f32>;
     var clip_position: vec4<f32>;
-    
+
     // GROUP 1: Read pre-computed morph data from compute shader
-    read_morphed_data(vertex_index, &morphed_position, &morphed_normal);
+    // read_morphed_data(vertex_index, &morphed_position, &morphed_normal);
     
     // skip compute shader result.
     // morphed_position = input.position;
     // morphed_normal = input.normal;
+
+    
+    // GROUP 1: Handle morphs directly in vertex shader
+    // Type 1 (vertex) morphs: Use compute shader result if available
+    // Type 2 (bone) morphs: Use original vertex data, applied through bone skinning
+    if morph_processing > 0.5 {
+        // Try to read from compute shader first (for Type 1 morphs)
+        if vertex_index < arrayLength(&morphed_vertices) {
+            let morphed_vertex = morphed_vertices[vertex_index];
+            morphed_position = morphed_vertex.position;
+            morphed_normal = morphed_vertex.normal;
+        } else {
+            // Fallback to original vertex data
+            morphed_position = input.position;
+            morphed_normal = input.normal;
+        }
+    } else {
+        // No morph processing, use original vertex data
+        morphed_position = input.position;
+        morphed_normal = input.normal;
+    }
 
 
     // GROUP 2: Apply bone skinning to morphed vertices
@@ -233,7 +255,7 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
     let metallic_sample = textureSample(metallic_texture, metallic_sampler, input.uv);
     let emission_sample = textureSample(emission_texture, emission_sampler, input.uv);
     
-        // extract material property values - usually stored in different channels of the texture
+    // extract material property values - usually stored in different channels of the texture
     let roughness = roughness_sample.r; // roughness is usually stored in R channel
     let metallic = 0.0; // metallic_sample.r;   // metallic is usually stored in R channel
     let emission = emission_sample.rgb; // emission is RGB color

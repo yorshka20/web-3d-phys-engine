@@ -15,7 +15,8 @@ import { PMXBoneComponent } from '@ecs/components';
 import { PMXMorphComponent } from '@ecs/components/rendering/PMXMorphComponent';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { System } from '@ecs/core/ecs/System';
-import { Vec3 } from '@ecs/types/types';
+import { Vec3, Vec4 } from '@ecs/types/types';
+import { quat } from 'gl-matrix';
 
 export class PMXMorphSystem extends System {
   constructor() {
@@ -60,7 +61,7 @@ export class PMXMorphSystem extends System {
     }
 
     // Accumulate bone morph offsets
-    const accumulatedOffsets = new Map<number, { position: Vec3; rotation: Vec3 }>();
+    const accumulatedOffsets = new Map<number, { position: Vec3; rotation: Vec4 }>();
 
     for (const morphState of activeBoneMorphs) {
       if (morphState.weight <= 0) continue;
@@ -72,38 +73,60 @@ export class PMXMorphSystem extends System {
       }
 
       // Accumulate offsets for each bone affected by this morph
-      for (const [boneIndex, offset] of boneMorphData.boneOffsets) {
-        if (!accumulatedOffsets.has(boneIndex)) {
-          accumulatedOffsets.set(boneIndex, { position: [0, 0, 0], rotation: [0, 0, 0] });
+      for (const morphData of boneMorphData) {
+        if (!accumulatedOffsets.has(morphData.boneIndex)) {
+          accumulatedOffsets.set(morphData.boneIndex, {
+            position: [0, 0, 0],
+            rotation: [0, 0, 0, 1], // Identity quaternion
+          });
         }
 
-        const acc = accumulatedOffsets.get(boneIndex)!;
+        const acc = accumulatedOffsets.get(morphData.boneIndex)!;
         const weight = morphState.weight;
 
-        // Accumulate position offset with scale factor for debugging
-        // PMX morph offsets might be in different units than expected
-        const positionScale = 1.0; // Try reducing this if positions are too extreme
-        acc.position[0] += offset.positionOffset[0] * weight * positionScale;
-        acc.position[1] += offset.positionOffset[1] * weight * positionScale;
-        acc.position[2] += offset.positionOffset[2] * weight * positionScale;
+        // Position data is already transformed in AssetLoader, no need to flip Z-axis again
+        // Apply position offset with reasonable scaling
+        acc.position[0] += morphData.translation[0] * weight;
+        acc.position[1] += morphData.translation[1] * weight;
+        acc.position[2] += morphData.translation[2] * weight;
 
-        // Accumulate rotation offset
-        const rotationScale = 1.0; // Try reducing this if rotations are too extreme
-        acc.rotation[0] += offset.rotationOffset[0] * weight * rotationScale;
-        acc.rotation[1] += offset.rotationOffset[1] * weight * rotationScale;
-        acc.rotation[2] += offset.rotationOffset[2] * weight * rotationScale;
+        // Handle rotation - accumulate quaternions properly
+        // Don't scale quaternions directly, use slerp for proper interpolation
+        const morphQuat = quat.fromValues(
+          morphData.rotation[0],
+          morphData.rotation[1],
+          morphData.rotation[2],
+          morphData.rotation[3],
+        );
+
+        // Normalize the morph quaternion
+        quat.normalize(morphQuat, morphQuat);
+
+        // Use slerp to interpolate between identity and morph quaternion based on weight
+        const identityQuat = quat.create();
+        const interpolatedQuat = quat.create();
+        quat.slerp(interpolatedQuat, identityQuat, morphQuat, weight);
+
+        // Get current accumulated rotation
+        const currentQuat = quat.fromValues(
+          acc.rotation[0],
+          acc.rotation[1],
+          acc.rotation[2],
+          acc.rotation[3],
+        );
+
+        // Multiply quaternions to combine rotations
+        const resultQuat = quat.create();
+        quat.multiply(resultQuat, currentQuat, interpolatedQuat);
+
+        acc.rotation[0] = resultQuat[0];
+        acc.rotation[1] = resultQuat[1];
+        acc.rotation[2] = resultQuat[2];
+        acc.rotation[3] = resultQuat[3];
       }
     }
 
     // Apply accumulated offsets to bones
-    if (accumulatedOffsets.size > 0 && activeBoneMorphs[0].weight > 0.9) {
-      console.log(`[PMXMorphSystem] Applying ${accumulatedOffsets.size} bone morph offsets`);
-      for (const [boneIndex, offset] of accumulatedOffsets) {
-        console.log(
-          `  Bone ${boneIndex}: pos [${offset.position.map((v) => v.toFixed(3)).join(', ')}], rot [${offset.rotation.map((v) => v.toFixed(3)).join(', ')}]`,
-        );
-      }
-    }
     boneComponent.applyAccumulatedBoneMorphs(accumulatedOffsets);
   }
 

@@ -69,11 +69,11 @@ export async function createPMXAnimationExample(world: World) {
   animationController.initializePMXAnimation(alenEntity);
   animationController.initializePMXAnimation(burniceEntity);
 
-  // --- Start a simple morph animation loop for testing ALL morphs ---
+  // --- Start a simple morph animation loop for testing Type 2 morphs ---
   const entitiesToAnimate = world.getEntitiesByCondition((entity) =>
     entity.hasComponent(PMXMeshComponent.componentName),
   );
-  world.addSystem(new SimpleAnimationDriver(entitiesToAnimate));
+  world.addSystem(new Type2MorphAnimationDriver(entitiesToAnimate));
   // --- End of simple morph animation loop ---
 
   return animationController;
@@ -109,40 +109,38 @@ function createPMXEntity(world: World, pmxModel: { name: string; position: Vec3;
 }
 
 /**
- * A simple animation driver system for testing purposes.
- * It cycles through all morphs of the given entities and animates their weights.
+ * Type 2 morph animation driver system for testing bone morphs specifically.
+ * It cycles through all Type 2 (bone) morphs and animates their weights.
  */
-class SimpleAnimationDriver extends System {
-  private morphIndex = 0;
+class Type2MorphAnimationDriver extends System {
   private morphWeight = 0;
   private increasing = true;
   private entities: Entity[];
   private lastSwitchTime = 0;
   private timeSinceSwitch = 0;
+  private morphSwitchInterval = 3000; // Switch morph every 3 seconds
+  private entityMorphIndices: Map<string, number> = new Map(); // entityId -> morphIndex
 
   constructor(entities: Entity[]) {
     // Run before other animation systems
-    super('SimpleAnimationDriver', SystemPriorities.ANIMATION - 1, 'render');
+    super('Type2MorphAnimationDriver', SystemPriorities.ANIMATION - 1, 'render');
     this.entities = entities;
     this.lastSwitchTime = performance.now();
   }
 
   update(deltaTime: number): void {
-    this.timeSinceSwitch += deltaTime * 1000;
-
-    // Animate weight from 0 to 1 and back to 0 over 2 seconds
+    // Animate weight from 0 to 1 and back to 0 over 4 seconds total
     if (this.increasing) {
-      this.morphWeight += deltaTime * 1.0; // 1 second to go up
+      this.morphWeight += deltaTime * 0.5; // 2 seconds to reach 1.0
       if (this.morphWeight >= 1.0) {
         this.morphWeight = 1.0;
         this.increasing = false;
       }
     } else {
-      this.morphWeight -= deltaTime * 1.0; // 1 second to go down
+      this.morphWeight -= deltaTime * 0.5; // 2 seconds to go back to 0.0
       if (this.morphWeight <= 0.0) {
         this.morphWeight = 0.0;
         this.increasing = true;
-        this.morphIndex++; // Switch to the next morph
       }
     }
 
@@ -152,119 +150,50 @@ class SimpleAnimationDriver extends System {
       );
       if (!morphComponent) continue;
 
-      const totalMorphs =
-        morphComponent.data.vertexMorphs.size + morphComponent.data.boneMorphs.size;
-      if (this.morphIndex >= totalMorphs) {
-        this.morphIndex = 0;
+      // Only process Type 2 (bone) morphs
+      const totalMorphs = morphComponent.data.boneMorphs.size;
+      const morphIndices = Array.from(morphComponent.data.boneMorphs.keys());
+
+      if (totalMorphs === 0) {
+        continue;
       }
+
+      // Get or initialize morph index for this entity
+      let morphIndex = this.entityMorphIndices.get(entity.id) || 0;
+
+      // Switch to next morph when weight reaches 0 and is increasing
+      if (this.morphWeight === 0.0 && this.increasing) {
+        morphIndex++;
+        if (morphIndex >= totalMorphs) {
+          morphIndex = 0;
+        }
+        this.entityMorphIndices.set(entity.id, morphIndex);
+      }
+
+      const actualMorphIndex = morphIndices[morphIndex];
 
       // In each frame, clear all previous morph weights
       morphComponent.clearAllMorphs();
 
-      // Set the weight for the current active morph.
-      // This will be picked up by PMXMorphSystem for Type 2 morphs,
-      // and directly by the renderer for Type 1 morphs.
-      morphComponent.setMorphWeight(this.morphIndex, this.morphWeight);
+      // Set the weight for the current active bone morph
+      morphComponent.setMorphWeight(actualMorphIndex, this.morphWeight);
+
+      // Log morph switch when starting a new morph
+      if (this.morphWeight === 0.0 && this.increasing) {
+        const morphData = morphComponent.getMorphData(actualMorphIndex);
+        const morphName = morphData ? morphData.name : `Morph ${actualMorphIndex}`;
+        console.log(
+          `[Type2MorphAnimationDriver] Starting bone morph "${morphName}" (${morphIndex + 1}/${totalMorphs})`,
+        );
+
+        // Debug: Check if this morph has bone data
+        const boneMorphData = morphComponent.getBoneMorphData(actualMorphIndex);
+        if (boneMorphData) {
+          console.log(`  - Bone morph data: ${boneMorphData.length} bone elements`);
+        } else {
+          console.log(`  - No bone morph data found for morph ${actualMorphIndex}`);
+        }
+      }
     }
   }
-}
-
-function createAnimationPresets(controller: PMXAnimationController) {
-  // Happy expression preset
-  const happyPreset = controller.createMorphPreset('happy', {
-    0: 0.8, // Smile
-    1: 0.6, // Eye squint
-    2: 0.3, // Cheek raise
-  });
-
-  // Sad expression preset
-  const sadPreset = controller.createMorphPreset('sad', {
-    3: 0.9, // Frown
-    4: 0.7, // Eye droop
-    5: 0.4, // Lower lip
-  });
-
-  // Surprised expression preset
-  const surprisedPreset = controller.createMorphPreset('surprised', {
-    6: 1.0, // Wide eyes
-    7: 0.8, // Raised eyebrows
-    8: 0.6, // Open mouth
-  });
-
-  // Wave pose preset
-  const wavePreset = controller.createBonePreset('wave', {
-    10: {
-      // Right arm
-      rotation: [0, 0, 1.2], // Wave motion
-    },
-    11: {
-      // Right forearm
-      rotation: [0, 0, 0.8],
-    },
-  });
-
-  // Bow pose preset
-  const bowPreset = controller.createBonePreset('bow', {
-    0: {
-      // Root bone
-      rotation: [0.3, 0, 0], // Lean forward
-    },
-    1: {
-      // Spine
-      rotation: [0.2, 0, 0],
-    },
-  });
-
-  // Add presets to controller
-  controller.addPreset(happyPreset);
-  controller.addPreset(sadPreset);
-  controller.addPreset(surprisedPreset);
-  controller.addPreset(wavePreset);
-  controller.addPreset(bowPreset);
-}
-
-function startExampleAnimations(controller: PMXAnimationController, entityId: string) {
-  // Apply different expressions to each character
-  controller.applyPreset(entityId, 'happy', 1.0);
-
-  // Add some bone poses
-  controller.applyPreset(entityId, 'wave', 0.8);
-
-  // Example: Blend between expressions over time
-  let blendFactor = 0;
-  const blendDirection = 1;
-
-  setInterval(() => {
-    blendFactor += blendDirection * 0.02;
-
-    if (blendFactor >= 1.0) {
-      blendFactor = 1.0;
-      // Switch to sad expression
-      controller.blendPresets(entityId, 'happy', 'sad', blendFactor);
-    } else if (blendFactor <= 0.0) {
-      blendFactor = 0.0;
-      // Switch back to happy expression
-      controller.blendPresets(entityId, 'sad', 'happy', 1.0 - blendFactor);
-    } else {
-      // Continue blending
-      controller.blendPresets(entityId, 'happy', 'sad', blendFactor);
-    }
-  }, 50); // Update every 50ms
-
-  // Example: Cycle through different poses
-  const poses = ['wave', 'bow'];
-  let currentPoseIndex = 0;
-
-  setInterval(() => {
-    const nextPoseIndex = (currentPoseIndex + 1) % poses.length;
-    const currentPose = poses[currentPoseIndex];
-    const nextPose = poses[nextPoseIndex];
-
-    // Blend between poses
-    controller.blendPresets(entityId, currentPose, nextPose, 1.0);
-
-    currentPoseIndex = nextPoseIndex;
-  }, 3000); // Change pose every 3 seconds
-
-  console.log('[PMXAnimationExample] Started example animations');
 }
