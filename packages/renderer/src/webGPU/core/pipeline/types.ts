@@ -91,6 +91,9 @@ export interface SemanticPipelineKey {
 
   // Custom shader support
   customShaderId?: string; // ID of custom shader to use
+
+  // Vertex attributes (bit flags for actual vertex data)
+  vertexAttributes?: number; // Optional for backward compatibility
 }
 
 /**
@@ -262,6 +265,8 @@ export function generateSemanticPipelineKey(
     primitiveType: determinePrimitiveType(geometry, options),
     vertexFormat: geometry.vertexFormat,
     customShaderId: material.customShaderId,
+    // Use actual vertex attributes from geometry data if available
+    vertexAttributes: geometry.vertexAttributes,
   };
 }
 
@@ -309,7 +314,8 @@ export function convertToGpuPipelineKey(semanticKey: SemanticPipelineKey): GpuPi
     topology: determineTopology(semanticKey),
     depthWrite: determineDepthWrite(semanticKey),
     depthTest: determineDepthTest(semanticKey),
-    vertexAttributes: determineVertexAttributes(semanticKey),
+    // Use actual vertex attributes if available, otherwise fall back to determined attributes
+    vertexAttributes: semanticKey.vertexAttributes ?? determineVertexAttributes(semanticKey),
     shaderDefines: generateShaderDefines(semanticKey),
     customShaderId: semanticKey.customShaderId,
   };
@@ -459,13 +465,12 @@ function determineVertexAttributes(semanticKey: SemanticPipelineKey): number {
       attributes |= 0x20; // EDGE_RATIO
       break;
     case 'gltf':
-      // GLTF format: position + normal + uv0 + uv1 + color + joints + weights + tangent
-      attributes |= 0x02; // NORMAL
-      attributes |= 0x04; // UV0
-      attributes |= 0x40; // UV1
-      attributes |= 0x08; // COLOR
-      attributes |= 0x10; // SKINNING (joints + weights)
-      attributes |= 0x80; // TANGENT
+      // GLTF format: position + optional attributes based on actual data
+      // For GLTF, we need to use the actual vertex attributes from the geometry data
+      // This will be handled by the pipeline creation logic that has access to the geometry data
+      // For now, set a minimal set that most GLTF models have
+      attributes |= 0x02; // NORMAL (most GLTF models have normals)
+      attributes |= 0x04; // UV0 (most GLTF models have UV coordinates)
       break;
     // No additional attributes for 'simple' or unknown formats
   }

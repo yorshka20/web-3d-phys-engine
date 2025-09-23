@@ -328,12 +328,10 @@ export class AssetLoader {
 
     const vertexCount = posArr.length / 3;
 
-    // Calculate vertex stride based on available attributes
-    let stride = 8; // base: pos(3) + normal(3) + uv0(2)
-    if (uv1Arr) stride += 2;
-    if (colorArr) stride += 4;
-    if (jointsArr && weightsArr) stride += 8; // 4 joints + 4 weights
-    if (tangentArr) stride += 4;
+    // Calculate vertex stride for GLTF format
+    // GLTF vertex layout: pos(3) + normal(3) + uv0(2) + uv1(2) + color(4) + joints(4) + weights(4) + tangent(4)
+    // All attributes must be present with default values if not provided
+    const stride = 3 + 3 + 2 + 2 + 4 + 4 + 4 + 4; // Total: 26 floats per vertex
 
     const vertices = new Float32Array(vertexCount * stride);
 
@@ -343,71 +341,103 @@ export class AssetLoader {
       const ci = i * 4;
       let vi = i * stride;
 
-      // Position (3 floats)
+      // Position (3 floats) - always present
       vertices[vi++] = posArr[pi];
       vertices[vi++] = posArr[pi + 1];
       vertices[vi++] = posArr[pi + 2];
 
-      // Normal (3 floats)
+      // Normal (3 floats) - use actual data or default (0, 1, 0)
       if (normalArr) {
         vertices[vi++] = normalArr[pi];
         vertices[vi++] = normalArr[pi + 1];
         vertices[vi++] = normalArr[pi + 2];
       } else {
-        vertices[vi++] = 0;
-        vertices[vi++] = 1;
-        vertices[vi++] = 0;
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 1.0;
+        vertices[vi++] = 0.0;
       }
 
-      // UV0 (2 floats)
+      // UV0 (2 floats) - use actual data or default (0, 0)
       if (uv0Arr) {
         vertices[vi++] = uv0Arr[ui];
         vertices[vi++] = uv0Arr[ui + 1];
       } else {
-        vertices[vi++] = 0;
-        vertices[vi++] = 0;
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 0.0;
       }
 
-      // UV1 (2 floats) - optional
+      // UV1 (2 floats) - use actual data or default (0, 0)
       if (uv1Arr) {
         vertices[vi++] = uv1Arr[ui];
         vertices[vi++] = uv1Arr[ui + 1];
+      } else {
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 0.0;
       }
 
-      // Color (4 floats) - optional
+      // Color (4 floats) - use actual data or default (1, 1, 1, 1)
       if (colorArr) {
         const colorStride = colorArr.length / vertexCount;
         if (colorStride === 3) {
-          vertices[vi++] = colorArr[pi];
-          vertices[vi++] = colorArr[pi + 1];
-          vertices[vi++] = colorArr[pi + 2];
+          vertices[vi++] = colorArr[ci];
+          vertices[vi++] = colorArr[ci + 1];
+          vertices[vi++] = colorArr[ci + 2];
           vertices[vi++] = 1.0; // default alpha
         } else if (colorStride === 4) {
           vertices[vi++] = colorArr[ci];
           vertices[vi++] = colorArr[ci + 1];
           vertices[vi++] = colorArr[ci + 2];
           vertices[vi++] = colorArr[ci + 3];
+        } else {
+          vertices[vi++] = 1.0;
+          vertices[vi++] = 1.0;
+          vertices[vi++] = 1.0;
+          vertices[vi++] = 1.0;
         }
+      } else {
+        vertices[vi++] = 1.0;
+        vertices[vi++] = 1.0;
+        vertices[vi++] = 1.0;
+        vertices[vi++] = 1.0;
       }
 
-      // Joints and Weights (8 floats) - for skinning
-      if (jointsArr && weightsArr) {
+      // Joints (4 floats) - use actual data or default (0, 0, 0, 0)
+      if (jointsArr) {
         vertices[vi++] = jointsArr[ci] || 0;
         vertices[vi++] = jointsArr[ci + 1] || 0;
         vertices[vi++] = jointsArr[ci + 2] || 0;
         vertices[vi++] = jointsArr[ci + 3] || 0;
+      } else {
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 0.0;
+      }
+
+      // Weights (4 floats) - use actual data or default (1, 0, 0, 0)
+      if (weightsArr) {
         vertices[vi++] = weightsArr[ci] || 0;
         vertices[vi++] = weightsArr[ci + 1] || 0;
         vertices[vi++] = weightsArr[ci + 2] || 0;
         vertices[vi++] = weightsArr[ci + 3] || 0;
+      } else {
+        vertices[vi++] = 1.0;
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 0.0;
       }
 
-      // Tangent (4 floats) - for normal mapping
+      // Tangent (4 floats) - use actual data or default (1, 0, 0, 1)
       if (tangentArr) {
         vertices[vi++] = tangentArr[ci] || 1;
         vertices[vi++] = tangentArr[ci + 1] || 0;
         vertices[vi++] = tangentArr[ci + 2] || 0;
         vertices[vi++] = tangentArr[ci + 3] || 1; // handedness
+      } else {
+        vertices[vi++] = 1.0;
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 0.0;
+        vertices[vi++] = 1.0;
       }
     }
 
@@ -434,6 +464,10 @@ export class AssetLoader {
     // GLTF models should use 'gltf' format to support all GLTF vertex attributes
     const vertexFormat: VertexFormat = 'gltf';
 
+    // GLTF format always includes all vertex attributes (with defaults if not provided)
+    // Set all GLTF vertex attribute flags
+    const vertexAttributes = 0x01 | 0x02 | 0x04 | 0x40 | 0x08 | 0x10 | 0x80; // All GLTF attributes
+
     const geometry: GeometryData = {
       vertices,
       indices: indexArr,
@@ -442,6 +476,8 @@ export class AssetLoader {
       vertexFormat,
       primitiveType: 'triangle-list',
       bounds: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] },
+      // Add vertex attributes for pipeline creation
+      vertexAttributes,
     };
 
     return { geometry };
