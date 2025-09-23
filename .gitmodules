@@ -1,0 +1,4 @@
+[submodule "packages/gltf-samples"]
+	path = packages/gltf-samples
+	url = https://github.com/KhronosGroup/glTF-Sample-Assets.git
+	shallow = true
