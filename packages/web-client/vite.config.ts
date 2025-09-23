@@ -15,10 +15,21 @@ function wgslLoader() {
   };
 }
 
+function gltfLoader() {
+  return {
+    name: 'gltf-loader',
+    transform(code, id) {
+      if (id.endsWith('.gltf')) {
+        return `export default ${JSON.stringify(code)};`;
+      }
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   return {
     base: '/',
-    plugins: [wgslLoader()],
+    plugins: [wgslLoader(), gltfLoader()],
     esbuild: {
       target: 'es2022',
       keepNames: true,

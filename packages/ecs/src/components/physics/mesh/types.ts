@@ -161,6 +161,13 @@ export interface Mesh3DDescriptor {
   params?: undefined;
 }
 
+export interface Mesh3DGLTFDescriptor {
+  type: 'gltf';
+  assetId: string;
+  primitiveType: GPUPrimitiveTopology;
+  params?: undefined;
+}
+
 // Generic mesh descriptor that supports type-safe geometry parameters
 export interface Mesh3DShapeDescriptor<T extends GeometryType = GeometryType> {
   type: T;
@@ -180,6 +187,7 @@ export type Mesh3DCustomDescriptor = Mesh3DDescriptor;
 export type AnyMesh3DShapeDescriptor =
   | Mesh3DUnsetDescriptor
   | Mesh3DCustomDescriptor
+  | Mesh3DGLTFDescriptor
   | Mesh3DShapeDescriptor;
 
 // Type-safe geometry descriptor mapping
