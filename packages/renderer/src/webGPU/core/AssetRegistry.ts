@@ -5,6 +5,7 @@
  */
 
 import { GeometryData } from '@ecs/components/physics/mesh/GeometryFactory';
+import { GLTFModel } from '@ecs/components/physics/mesh/GltfModel';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { WebGPUMaterialDescriptor } from '@ecs/components/rendering/render/types';
 
@@ -20,21 +21,30 @@ export interface AssetDescriptor<T extends AssetType = AssetType> {
   loadTime: number;
 }
 
-export type RawDataType<T extends AssetType> = T extends 'pmx_model'
-  ? PMXModel
-  : T extends 'pmx_material'
-    ? PMXModel
-    : T extends 'texture'
-      ? HTMLImageElement
-      : T extends 'material'
-        ? WebGPUMaterialDescriptor
-        : T extends 'mesh'
-          ? GeometryData
-          : T extends 'geometry'
-            ? GeometryData
-            : unknown;
+// Mapping from AssetType to its raw data type
+export interface AssetRawDataTypeMap {
+  pmx_model: PMXModel;
+  pmx_material: PMXModel;
+  texture: HTMLImageElement;
+  material: WebGPUMaterialDescriptor;
+  mesh: GeometryData;
+  geometry: GeometryData;
+  gltf: GLTFModel;
+}
 
-export type AssetType = 'mesh' | 'texture' | 'material' | 'pmx_model' | 'pmx_material' | 'geometry';
+// RawDataType picks the mapped type by key, or unknown if not mapped
+export type RawDataType<T extends AssetType> = T extends keyof AssetRawDataTypeMap
+  ? AssetRawDataTypeMap[T]
+  : unknown;
+
+export type AssetType =
+  | 'mesh'
+  | 'texture'
+  | 'material'
+  | 'pmx_model'
+  | 'pmx_material'
+  | 'geometry'
+  | 'gltf';
 
 export interface AssetMetadata {
   type: AssetType;
@@ -83,12 +93,12 @@ export class AssetRegistry {
   /**
    * Get asset descriptor by ID
    */
-  getAssetDescriptor(assetId: string): AssetDescriptor<AssetType> | undefined {
+  getAssetDescriptor<T extends AssetType>(assetId: string): AssetDescriptor<T> | undefined {
     const descriptor = this.assets.get(assetId);
     if (descriptor) {
       descriptor.lastAccess = Date.now();
     }
-    return descriptor;
+    return descriptor as AssetDescriptor<T> | undefined;
   }
 
   /**

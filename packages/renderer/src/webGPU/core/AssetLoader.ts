@@ -1,4 +1,7 @@
+import { GeometryData, VertexFormat } from '@ecs/components/physics/mesh/GeometryFactory';
+import { GLTFModel, GLTFPrimitive } from '@ecs/components/physics/mesh/GltfModel';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { Document, Primitive, WebIO } from '@gltf-transform/core';
 import { mat4 } from 'gl-matrix';
 import { Parser } from 'mmd-parser';
 import {
@@ -212,6 +215,15 @@ export class AssetLoader {
           case 'texture_file':
             await this.loadTextureFromFile(asset.file, asset.assetId, asset.priority);
             break;
+          case 'gltf_model_url': {
+            const a = asset as unknown as {
+              url: string;
+              assetId: string;
+              priority?: 'low' | 'normal' | 'high';
+            };
+            await this.loadGLTFModelFromURL(a.url, a.assetId, a.priority);
+            break;
+          }
           default:
             throw new Error(`Unknown asset type: ${(asset as AssetLoadingTask).type}`);
         }
@@ -223,6 +235,233 @@ export class AssetLoader {
 
     await Promise.all(loadPromises);
     console.log(`[AssetLoader] Successfully loaded all ${assets.length} assets`);
+  }
+
+  /**
+   * Load GLTF/GLB model from URL and parse into CPU-side GeometryData arrays.
+   * This does not create any GPU resources; it only registers CPU data.
+   */
+  static async loadGLTFModelFromURL(
+    url: string,
+    assetId: string,
+    priority: 'low' | 'normal' | 'high' = 'normal',
+  ): Promise<void> {
+    try {
+      console.log(`[AssetLoader] Loading GLTF model from URL: ${url}`);
+      const io = new WebIO();
+      const doc: Document = await io.read(url);
+
+      const meshes = doc.getRoot().listMeshes();
+      const dependencies: string[] = [];
+      const primitives: GLTFPrimitive[] = [];
+
+      for (const mesh of meshes) {
+        for (const primitive of mesh.listPrimitives()) {
+          const cpuPrim = this.convertGLTFPrimitiveToGeometry(primitive);
+          // collect baseColor texture dependency if exists
+          const material = primitive.getMaterial();
+          if (material) {
+            const tex = material.getBaseColorTexture();
+            if (tex) {
+              const image: unknown = (tex as unknown as { getImage?: () => unknown }).getImage?.();
+              const uriGetter = (image as unknown as { getURI?: () => string }).getURI;
+              const uri = typeof uriGetter === 'function' ? uriGetter.call(image) : undefined;
+              if (typeof uri === 'string' && uri.length > 0) {
+                dependencies.push(uri);
+                cpuPrim.material = { baseColorTexture: uri };
+              }
+            }
+          }
+          primitives.push(cpuPrim);
+        }
+      }
+
+      // Register GLTF model as a CPU asset
+      const metadata: AssetMetadata = {
+        type: 'gltf',
+        dependencies,
+      };
+
+      const model: GLTFModel = { primitives };
+      assetRegistry.register(assetId, model, metadata);
+
+      // Load textures referenced by the model (best-effort)
+      await this.loadTexturesForGLTF(dependencies);
+
+      console.log(`[AssetLoader] Successfully loaded GLTF model: ${assetId}`);
+    } catch (error) {
+      console.error(`[AssetLoader] Failed to load GLTF model ${assetId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Convert a glTF primitive to our interleaved GeometryData (pos+normal+uv) format.
+   */
+  private static convertGLTFPrimitiveToGeometry(primitive: Primitive): GLTFPrimitive {
+    const position = primitive.getAttribute('POSITION');
+    if (!position) {
+      throw new Error('GLTF primitive missing POSITION attribute');
+    }
+
+    const normal = primitive.getAttribute('NORMAL');
+    const uv0 = primitive.getAttribute('TEXCOORD_0');
+    const uv1 = primitive.getAttribute('TEXCOORD_1');
+    const color = primitive.getAttribute('COLOR_0');
+    const joints = primitive.getAttribute('JOINTS_0');
+    const weights = primitive.getAttribute('WEIGHTS_0');
+    const tangent = primitive.getAttribute('TANGENT');
+    const indices = primitive.getIndices();
+
+    // Get arrays
+    const posArr = new Float32Array(position.getArray() as ArrayLike<number>);
+    const normalArr = normal ? new Float32Array(normal.getArray() as ArrayLike<number>) : null;
+    const uv0Arr = uv0 ? new Float32Array(uv0.getArray() as ArrayLike<number>) : null;
+    const uv1Arr = uv1 ? new Float32Array(uv1.getArray() as ArrayLike<number>) : null;
+    const colorArr = color ? new Float32Array(color.getArray() as ArrayLike<number>) : null;
+    const jointsArr = joints ? new Uint32Array(joints.getArray() as ArrayLike<number>) : null;
+    const weightsArr = weights ? new Float32Array(weights.getArray() as ArrayLike<number>) : null;
+    const tangentArr = tangent ? new Float32Array(tangent.getArray() as ArrayLike<number>) : null;
+    const indexArr = indices
+      ? new Uint16Array(indices.getArray() as ArrayLike<number>)
+      : new Uint16Array([]);
+
+    const vertexCount = posArr.length / 3;
+
+    // Calculate vertex stride based on available attributes
+    let stride = 8; // base: pos(3) + normal(3) + uv0(2)
+    if (uv1Arr) stride += 2;
+    if (colorArr) stride += 4;
+    if (jointsArr && weightsArr) stride += 8; // 4 joints + 4 weights
+    if (tangentArr) stride += 4;
+
+    const vertices = new Float32Array(vertexCount * stride);
+
+    for (let i = 0; i < vertexCount; i++) {
+      const pi = i * 3;
+      const ui = i * 2;
+      const ci = i * 4;
+      let vi = i * stride;
+
+      // Position (3 floats)
+      vertices[vi++] = posArr[pi];
+      vertices[vi++] = posArr[pi + 1];
+      vertices[vi++] = posArr[pi + 2];
+
+      // Normal (3 floats)
+      if (normalArr) {
+        vertices[vi++] = normalArr[pi];
+        vertices[vi++] = normalArr[pi + 1];
+        vertices[vi++] = normalArr[pi + 2];
+      } else {
+        vertices[vi++] = 0;
+        vertices[vi++] = 1;
+        vertices[vi++] = 0;
+      }
+
+      // UV0 (2 floats)
+      if (uv0Arr) {
+        vertices[vi++] = uv0Arr[ui];
+        vertices[vi++] = uv0Arr[ui + 1];
+      } else {
+        vertices[vi++] = 0;
+        vertices[vi++] = 0;
+      }
+
+      // UV1 (2 floats) - optional
+      if (uv1Arr) {
+        vertices[vi++] = uv1Arr[ui];
+        vertices[vi++] = uv1Arr[ui + 1];
+      }
+
+      // Color (4 floats) - optional
+      if (colorArr) {
+        const colorStride = colorArr.length / vertexCount;
+        if (colorStride === 3) {
+          vertices[vi++] = colorArr[pi];
+          vertices[vi++] = colorArr[pi + 1];
+          vertices[vi++] = colorArr[pi + 2];
+          vertices[vi++] = 1.0; // default alpha
+        } else if (colorStride === 4) {
+          vertices[vi++] = colorArr[ci];
+          vertices[vi++] = colorArr[ci + 1];
+          vertices[vi++] = colorArr[ci + 2];
+          vertices[vi++] = colorArr[ci + 3];
+        }
+      }
+
+      // Joints and Weights (8 floats) - for skinning
+      if (jointsArr && weightsArr) {
+        vertices[vi++] = jointsArr[ci] || 0;
+        vertices[vi++] = jointsArr[ci + 1] || 0;
+        vertices[vi++] = jointsArr[ci + 2] || 0;
+        vertices[vi++] = jointsArr[ci + 3] || 0;
+        vertices[vi++] = weightsArr[ci] || 0;
+        vertices[vi++] = weightsArr[ci + 1] || 0;
+        vertices[vi++] = weightsArr[ci + 2] || 0;
+        vertices[vi++] = weightsArr[ci + 3] || 0;
+      }
+
+      // Tangent (4 floats) - for normal mapping
+      if (tangentArr) {
+        vertices[vi++] = tangentArr[ci] || 1;
+        vertices[vi++] = tangentArr[ci + 1] || 0;
+        vertices[vi++] = tangentArr[ci + 2] || 0;
+        vertices[vi++] = tangentArr[ci + 3] || 1; // handedness
+      }
+    }
+
+    // Calculate bounds
+    let minX = Infinity,
+      minY = Infinity,
+      minZ = Infinity;
+    let maxX = -Infinity,
+      maxY = -Infinity,
+      maxZ = -Infinity;
+    for (let i = 0; i < posArr.length; i += 3) {
+      const x = posArr[i];
+      const y = posArr[i + 1];
+      const z = posArr[i + 2];
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      minZ = Math.min(minZ, z);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      maxZ = Math.max(maxZ, z);
+    }
+
+    // Determine vertex format based on available attributes
+    let vertexFormat: VertexFormat = 'simple'; // pos+normal+uv
+    if (uv1Arr || colorArr || (jointsArr && weightsArr) || tangentArr) {
+      vertexFormat = 'full';
+    }
+
+    const geometry: GeometryData = {
+      vertices,
+      indices: indexArr,
+      vertexCount,
+      indexCount: indexArr.length,
+      vertexFormat,
+      primitiveType: 'triangle-list',
+      bounds: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] },
+    };
+
+    return { geometry };
+  }
+
+  /**
+   * Load textures referenced by a GLTF model URIs.
+   */
+  private static async loadTexturesForGLTF(textureUris: string[]): Promise<void> {
+    const unique = Array.from(new Set(textureUris));
+    const tasks = unique.map(async (uri) => {
+      try {
+        await this.loadTextureFromURL(uri, uri);
+      } catch (e) {
+        console.warn('[AssetLoader] Failed to load GLTF texture:', uri, e);
+      }
+    });
+    await Promise.all(tasks);
   }
 
   /**
@@ -532,6 +771,12 @@ export type AssetLoadingTask =
   | {
       type: 'texture_file';
       file: File;
+      assetId: string;
+      priority?: 'low' | 'normal' | 'high';
+    }
+  | {
+      type: 'gltf_model_url';
+      url: string;
       assetId: string;
       priority?: 'low' | 'normal' | 'high';
     };
