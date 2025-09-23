@@ -15,6 +15,7 @@ struct MVPUniforms {
     model_matrix: mat4x4<f32>,         // Model transformation
     view_matrix: mat4x4<f32>,          // View transformation  
     projection_matrix: mat4x4<f32>,    // Projection transformation
+    normal_matrix: mat4x4<f32>,        // adjoint of model_matrix
     camera_pos: vec3<f32>,             // Camera position
     camera_forward: vec3<f32>,         // Camera forward direction
     camera_up: vec3<f32>,              // Camera up direction

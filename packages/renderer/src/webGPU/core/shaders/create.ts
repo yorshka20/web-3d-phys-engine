@@ -5,6 +5,7 @@ import {
   EmissiveShaderModule,
   FIRE_MATERIAL_DEFAULT_PARAMS,
   FireMaterialShaderModule,
+  GLTFMaterialShaderModule,
   PMX_MATERIAL_DEFAULT_PARAMS,
   PMXMaterialShaderModule,
   PMXMorphComputeShaderModule,
@@ -357,5 +358,37 @@ export function createDefaultShaderModule(): ShaderModule {
     version: '1.0.0',
     author: 'WebGPU 3D Physics Engine',
     tags: ['default', 'fallback'],
+  };
+}
+
+export function createGLTFMaterialShaderModule(): GLTFMaterialShaderModule {
+  return {
+    id: 'gltf_material_shader',
+    name: 'GLTF Material Shader',
+    description: 'GLTF model material shader with multi-texture support and GLTF-specific features',
+    type: 'render',
+    fileName: 'Gltf.wgsl',
+    sourceCode: shaderFragmentRegistry.get('Gltf.wgsl') || '',
+    includes: [
+      'core/constants.wgsl',
+      'core/uniforms.wgsl',
+      'core/gltf_types.wgsl',
+      'bindings/gltf_bindings.wgsl',
+    ],
+    compilationOptions: {
+      vertexFormat: ['full'],
+    },
+    runtimeParams: {},
+    renderState: {
+      blendMode: 'replace',
+      depthTest: true,
+      depthWrite: true,
+      cullMode: 'back',
+      frontFace: 'ccw',
+      sampleCount: 1,
+    },
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: ['gltf', 'material', 'multi-texture'],
   };
 }

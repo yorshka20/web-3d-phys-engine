@@ -8,11 +8,15 @@ import pmxMaterialShader from './materials/PMXMaterial.wgsl';
 import pulsewaveShader from './materials/Pulsewave.wgsl';
 import waterMaterialShader from './materials/WaterMaterial.wgsl';
 
+// GLTF material shaders
+import gltfMaterialShader from './materials/Gltf.wgsl';
+
 // Compute shaders
 import pmxMorphComputeShader from './compute/PMXMorphCompute.wgsl';
 
 // Core fragments
 import constantsFragment from './core/constants.wgsl';
+import gltfTypesFragment from './core/gltf_types.wgsl';
 import uniformsFragment from './core/uniforms.wgsl';
 import vertexTypesFragment from './core/vertex_types.wgsl';
 
@@ -34,6 +38,7 @@ import shadowFragment from './passes/shadow.wgsl';
 
 // Binding fragments
 import fireBindingsFragment from './bindings/fire_bindings.wgsl';
+import gltfBindingsFragment from './bindings/gltf_bindings.wgsl';
 import pmxBindingsFragment from './bindings/pmx_bindings.wgsl';
 import pmxMorphComputeBindingsFragment from './bindings/pmx_morph_compute_bindings.wgsl';
 import simpleBindingsFragment from './bindings/simple_bindings.wgsl';
@@ -45,6 +50,7 @@ export const shaderFragmentRegistry = new Map([
   ['core/uniforms.wgsl', uniformsFragment],
   ['core/vertex_types.wgsl', vertexTypesFragment],
   ['core/constants.wgsl', constantsFragment],
+  ['core/gltf_types.wgsl', gltfTypesFragment],
 
   // Math fragments
   ['math/color.wgsl', colorFragment],
@@ -68,6 +74,7 @@ export const shaderFragmentRegistry = new Map([
   ['bindings/fire_bindings.wgsl', fireBindingsFragment],
   ['bindings/simple_bindings.wgsl', simpleBindingsFragment],
   ['bindings/pmx_morph_compute_bindings.wgsl', pmxMorphComputeBindingsFragment],
+  ['bindings/gltf_bindings.wgsl', gltfBindingsFragment],
 
   // Material shaders
   ['PMXMaterial.wgsl', pmxMaterialShader],
@@ -77,6 +84,7 @@ export const shaderFragmentRegistry = new Map([
   ['Checkerboard.wgsl', checkerboardShader],
   ['Emissive.wgsl', emissiveShader],
   ['Pulsewave.wgsl', pulsewaveShader],
+  ['Gltf.wgsl', gltfMaterialShader],
 
   // Compute shaders
   ['PMXMorphCompute.wgsl', pmxMorphComputeShader],

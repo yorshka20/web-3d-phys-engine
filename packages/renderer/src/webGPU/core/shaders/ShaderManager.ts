@@ -8,6 +8,7 @@ import {
   createDefaultShaderModule,
   createEmissiveShaderModule,
   createFireMaterialShaderModule,
+  createGLTFMaterialShaderModule,
   createPMXMaterialShaderModule,
   createPMXMorphComputeShaderModule,
   createPulsewaveShaderModule,
@@ -102,6 +103,10 @@ export class ShaderManager {
     // Register Fire Material Shader
     this.registerShaderModule(createFireMaterialShaderModule());
     console.log('✓ Registered Fire Material Shader');
+
+    // Register GLTF Material Shader
+    this.registerShaderModule(createGLTFMaterialShaderModule());
+    console.log('✓ Registered GLTF Material Shader');
   }
 
   private compileShaderModules(): void {
@@ -169,6 +174,13 @@ export class ShaderManager {
       vertexFormat: 'full',
       defines: {
         ENABLE_FLICKER: true,
+      },
+    });
+
+    this.compileShaderModule('gltf_material_shader', {
+      vertexFormat: 'full',
+      defines: {
+        ENABLE_GLTF_MATERIAL: true,
       },
     });
 

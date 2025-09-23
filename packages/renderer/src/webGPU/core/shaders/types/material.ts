@@ -372,3 +372,17 @@ export interface PulsewaveShaderModule extends ShaderModule {
   author: string;
   tags: string[];
 }
+
+/**
+ * GLTF Material Shader Module Definition
+ */
+export interface GLTFMaterialShaderModule extends ShaderModule {
+  id: 'gltf_material_shader';
+  name: 'GLTF Material Shader';
+  description: 'GLTF model material shader with multi-texture support and GLTF-specific features';
+  type: 'render';
+  compilationOptions: {
+    vertexFormat: VertexFormat[];
+    defines?: Record<string, never>;
+  };
+}
