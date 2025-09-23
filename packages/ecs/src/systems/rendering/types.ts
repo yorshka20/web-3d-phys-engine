@@ -4,7 +4,7 @@ import { CameraData, LightData, WebGPUMaterialDescriptor } from '@ecs/components
 import { Vec3 } from '@ecs/types/types';
 import { PMXMaterialCacheData } from '@renderer/webGPU/core/PMXMaterialProcessor';
 import { GlobalUniforms, ViewportData } from '@renderer/webGPU/types';
-import { mat3, mat4 } from 'gl-matrix';
+import { mat4 } from 'gl-matrix';
 
 // core render data - replace direct Entity passing
 export interface RenderData {
@@ -13,11 +13,11 @@ export interface RenderData {
 
   // Geometry information
   geometryId: string; // for resource cache
-  geometryData: GeometryData;
+  geometryData: GeometryData[];
 
   // Transform information
   worldMatrix: mat4;
-  normalMatrix: mat3; // normal transformation matrix
+  normalMatrix: mat4; // normal transformation matrix (mat4 for WGSL compatibility)
 
   // Material information
   material: WebGPUMaterialDescriptor | PMXMaterialCacheData;

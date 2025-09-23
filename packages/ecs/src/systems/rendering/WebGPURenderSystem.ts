@@ -410,7 +410,7 @@ export class WebGPURenderSystem extends System {
       renderDataList.push({
         entityId: entity.numericId,
         geometryId,
-        geometryData,
+        geometryData: [geometryData],
         worldMatrix: new Float32Array(worldMatrix),
         normalMatrix,
         material: renderComponent.getMaterial(),
@@ -436,12 +436,37 @@ export class WebGPURenderSystem extends System {
 
   /**
    * Generate geometry data if not exists
+   * TODO: fix GeometryData Array type
    */
-  private generateGeometryData(meshComponent: Mesh3DComponent): GeometryData {
-    return GeometryFactory.createGeometryDataByDescriptor(
-      meshComponent.descriptor,
-      meshComponent.getPrimitiveType(),
-    );
+  private generateGeometryData(meshComponent: Mesh3DComponent): GeometryData[] {
+    switch (meshComponent.descriptor.type) {
+      case 'gltf': {
+        const assetDescriptor = meshComponent.resolveAsset<'gltf'>();
+        if (!assetDescriptor) {
+          throw new Error('GLTF asset descriptor not found');
+        }
+        const gltfModel = assetDescriptor.rawData;
+        if (!gltfModel) {
+          throw new Error('GLTF model not found');
+        }
+        return gltfModel.primitives.map((primitive) => primitive.geometry);
+      }
+      case 'mesh':
+        return [
+          GeometryFactory.createGeometryDataByDescriptor(
+            meshComponent.descriptor,
+            meshComponent.getPrimitiveType(),
+          ),
+        ];
+
+      default:
+        return [
+          GeometryFactory.createGeometryDataByDescriptor(
+            meshComponent.descriptor,
+            meshComponent.getPrimitiveType(),
+          ),
+        ];
+    }
   }
 
   /**
@@ -488,6 +513,7 @@ export class WebGPURenderSystem extends System {
 
   /**
    * Calculate normal matrix from world matrix
+   * Returns mat4 format for WGSL compatibility
    */
   private calculateNormalMatrix(worldMatrix: Float32Array): Float32Array {
     // Extract upper 3x3 matrix
@@ -495,11 +521,32 @@ export class WebGPURenderSystem extends System {
     mat3.fromMat4(matrix3x3, worldMatrix);
 
     // Calculate inverse transpose for normal transformation
-    const normalMatrix = mat3.create();
-    mat3.invert(normalMatrix, matrix3x3);
-    mat3.transpose(normalMatrix, normalMatrix);
+    const normalMatrix3 = mat3.create();
+    mat3.invert(normalMatrix3, matrix3x3);
+    mat3.transpose(normalMatrix3, normalMatrix3);
 
-    return new Float32Array(normalMatrix);
+    // Convert mat3 to mat4 for WGSL compatibility in a more optimized way
+    // Fill the top-left 3x3 of the mat4 with the mat3, rest is identity
+    const normalMatrix4 = new Float32Array([
+      normalMatrix3[0],
+      normalMatrix3[1],
+      normalMatrix3[2],
+      0.0,
+      normalMatrix3[3],
+      normalMatrix3[4],
+      normalMatrix3[5],
+      0.0,
+      normalMatrix3[6],
+      normalMatrix3[7],
+      normalMatrix3[8],
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+    ]);
+
+    return new Float32Array(normalMatrix4);
   }
 
   /**

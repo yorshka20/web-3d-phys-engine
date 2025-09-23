@@ -421,6 +421,203 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'lightingBindGroup',
     });
     console.log('[WebGPURenderer] Created lighting bind group');
+
+    // Create GLTF PBR material bind group layout
+    this.bindGroupManager.createBindGroupLayout('gltfPbrMaterialBindGroupLayout', {
+      entries: [
+        // Material uniforms
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
+        // Base color texture and sampler
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+        // Metallic roughness texture and sampler
+        {
+          binding: 3,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 4,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+        // Normal texture and sampler
+        {
+          binding: 5,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 6,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+        // Occlusion texture and sampler
+        {
+          binding: 7,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 8,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+        // Emissive texture and sampler
+        {
+          binding: 9,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 10,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+      ],
+      label: 'GLTF PBR Material Bind Group Layout',
+    });
+    console.log('[WebGPURenderer] Created GLTF PBR material bind group layout');
+
+    // Create default GLTF textures
+    this.createDefaultGLTFTextures();
+  }
+
+  /**
+   * Create default GLTF textures for PBR materials
+   */
+  private createDefaultGLTFTextures(): void {
+    // Create default white texture for base color
+    this.textureManager.createTexture('gltf_default_white', {
+      id: 'gltf_default_white',
+      width: 1,
+      height: 1,
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+
+    // Create default normal texture (neutral normal: 0.5, 0.5, 1.0)
+    this.textureManager.createTexture('gltf_default_normal', {
+      id: 'gltf_default_normal',
+      width: 1,
+      height: 1,
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+
+    // Create default metallic roughness texture (white = no metallic, no roughness)
+    this.textureManager.createTexture('gltf_default_metallic_roughness', {
+      id: 'gltf_default_metallic_roughness',
+      width: 1,
+      height: 1,
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+
+    // Create default occlusion texture (white = no occlusion)
+    this.textureManager.createTexture('gltf_default_occlusion', {
+      id: 'gltf_default_occlusion',
+      width: 1,
+      height: 1,
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+
+    // Create default emissive texture (black = no emission)
+    this.textureManager.createTexture('gltf_default_emissive', {
+      id: 'gltf_default_emissive',
+      width: 1,
+      height: 1,
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+
+    // Create GLTF samplers
+    // use default sampler
+
+    // Upload default texture data
+    this.uploadDefaultGLTFTextureData();
+
+    console.log('[WebGPURenderer] Created default GLTF textures and samplers');
+  }
+
+  /**
+   * Upload default texture data for GLTF textures
+   */
+  private uploadDefaultGLTFTextureData(): void {
+    // Upload white texture data (1, 1, 1, 1)
+    const whiteData = new Uint8Array([255, 255, 255, 255]);
+    const whiteTexture = this.textureManager.getTexture('gltf_default_white');
+    if (whiteTexture) {
+      this.device.queue.writeTexture(
+        { texture: whiteTexture },
+        whiteData,
+        { bytesPerRow: 4 },
+        { width: 1, height: 1 },
+      );
+    }
+
+    // Upload normal texture data (0.5, 0.5, 1.0, 1.0) -> (128, 128, 255, 255)
+    const normalData = new Uint8Array([128, 128, 255, 255]);
+    const normalTexture = this.textureManager.getTexture('gltf_default_normal');
+    if (normalTexture) {
+      this.device.queue.writeTexture(
+        { texture: normalTexture },
+        normalData,
+        { bytesPerRow: 4 },
+        { width: 1, height: 1 },
+      );
+    }
+
+    // Upload metallic roughness texture data (0, 1, 0, 1) -> (0, 255, 0, 255)
+    const metallicRoughnessData = new Uint8Array([0, 255, 0, 255]);
+    const metallicRoughnessTexture = this.textureManager.getTexture(
+      'gltf_default_metallic_roughness',
+    );
+    if (metallicRoughnessTexture) {
+      this.device.queue.writeTexture(
+        { texture: metallicRoughnessTexture },
+        metallicRoughnessData,
+        { bytesPerRow: 4 },
+        { width: 1, height: 1 },
+      );
+    }
+
+    // Upload occlusion texture data (1, 1, 1, 1) -> (255, 255, 255, 255)
+    const occlusionData = new Uint8Array([255, 255, 255, 255]);
+    const occlusionTexture = this.textureManager.getTexture('gltf_default_occlusion');
+    if (occlusionTexture) {
+      this.device.queue.writeTexture(
+        { texture: occlusionTexture },
+        occlusionData,
+        { bytesPerRow: 4 },
+        { width: 1, height: 1 },
+      );
+    }
+
+    // Upload emissive texture data (0, 0, 0, 1) -> (0, 0, 0, 255)
+    const emissiveData = new Uint8Array([0, 0, 0, 255]);
+    const emissiveTexture = this.textureManager.getTexture('gltf_default_emissive');
+    if (emissiveTexture) {
+      this.device.queue.writeTexture(
+        { texture: emissiveTexture },
+        emissiveData,
+        { bytesPerRow: 4 },
+        { width: 1, height: 1 },
+      );
+    }
   }
 
   /**
@@ -500,7 +697,11 @@ export class WebGPURenderer implements IWebGPURenderer {
     // write vertices and morph data to batchVertexBuffer
     computePassRenderables.forEach((entity, index) => {
       const offset = index * maxVertices * 17; // 17 floats per vertex
-      this.device.queue.writeBuffer(batchVertexBuffer, offset, entity.geometryData.vertices.buffer);
+      this.device.queue.writeBuffer(
+        batchVertexBuffer,
+        offset,
+        entity.geometryData[0].vertices.buffer,
+      );
 
       // const morphOffset = index * vertexBufferSize;
       // this.device.queue.writeBuffer(batchVertexBuffer, morphOffset, entity.morphData.buffer);
@@ -601,7 +802,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       // Generate semantic key considering all pipeline factors
       const semanticKey = generateSemanticPipelineKey(
         renderable.material as WebGPUMaterialDescriptor,
-        renderable.geometryData,
+        renderable.geometryData[0],
       );
 
       // Generate cache key for grouping
@@ -634,7 +835,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     // use same pipeline for all renderables in the group
     const pipeline = await this.pipelineFactory.createAutoPipeline(
       firstRenderable.material,
-      firstRenderable.geometryData,
+      firstRenderable.geometryData[0],
     );
 
     // Set pipeline once for the entire group
@@ -706,7 +907,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       // Regular geometry from geometry data
       geometry = this.geometryManager.createGeometryFromData(
         renderable.geometryId || 'render_geometry',
-        { geometryData: renderable.geometryData },
+        { geometryData: renderable.geometryData[0] },
       );
     }
 
@@ -816,8 +1017,14 @@ export class WebGPURenderer implements IWebGPURenderer {
     renderable: RenderData,
   ): Promise<void> {
     // Check if this is a PMX material (skip texture setup as it's handled by PMX processor)
-    if ('materialType' in renderable.material && renderable.material.materialType === 'pmx') {
+    if (renderable.material.materialType === 'pmx') {
       return; // PMX materials handle their own texture binding
+    }
+
+    // Handle GLTF material bind group setup
+    if (renderable.material.materialType === 'gltf') {
+      await this.setupGLTFMaterialBindGroup(renderPass, renderable);
+      return;
     }
 
     const regularMaterial = renderable.material as WebGPUMaterialDescriptor;
@@ -950,6 +1157,130 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
+   * Setup GLTF material bind group for PBR material data and textures
+   */
+  private async setupGLTFMaterialBindGroup(
+    renderPass: GPURenderPassEncoder,
+    renderable: RenderData,
+  ): Promise<void> {
+    // Get GLTF PBR material bind group layout
+    const gltfMaterialLayout = this.bindGroupManager.getBindGroupLayout(
+      'gltfPbrMaterialBindGroupLayout',
+    );
+    if (!gltfMaterialLayout) {
+      throw new Error('GLTF PBR material bind group layout not found');
+    }
+
+    // Create GLTF material bind group with PBR data and textures
+    const materialId = `gltf_material_${renderable.geometryId}`;
+
+    // Create material uniform buffer for GLTF PBR material
+    const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_buffer`, {
+      type: BufferType.UNIFORM,
+      size: 64, // Size for GLTFPBRMaterial struct
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    // Get GLTF textures and samplers
+    const baseColorTexture = this.textureManager.getTexture('gltf_default_white');
+    const metallicRoughnessTexture = this.textureManager.getTexture(
+      'gltf_default_metallic_roughness',
+    );
+    const normalTexture = this.textureManager.getTexture('gltf_default_normal');
+    const occlusionTexture = this.textureManager.getTexture('gltf_default_occlusion');
+    const emissiveTexture = this.textureManager.getTexture('gltf_default_emissive');
+    const gltfSampler = this.textureManager.getSampler('linear');
+
+    if (
+      !baseColorTexture ||
+      !metallicRoughnessTexture ||
+      !normalTexture ||
+      !occlusionTexture ||
+      !emissiveTexture ||
+      !gltfSampler
+    ) {
+      throw new Error('GLTF default textures or samplers not found');
+    }
+
+    // Create GLTF material bind group
+    const gltfMaterialBindGroup = this.bindGroupManager.createBindGroup(materialId, {
+      layout: gltfMaterialLayout,
+      entries: [
+        // Material uniforms (binding 0)
+        { binding: 0, resource: { buffer: materialBuffer } },
+        // Base color texture (binding 1)
+        { binding: 1, resource: baseColorTexture.createView() },
+        // Base color sampler (binding 2)
+        { binding: 2, resource: gltfSampler },
+        // Metallic roughness texture (binding 3)
+        { binding: 3, resource: metallicRoughnessTexture.createView() },
+        // Metallic roughness sampler (binding 4)
+        { binding: 4, resource: gltfSampler },
+        // Normal texture (binding 5)
+        { binding: 5, resource: normalTexture.createView() },
+        // Normal sampler (binding 6)
+        { binding: 6, resource: gltfSampler },
+        // Occlusion texture (binding 7)
+        { binding: 7, resource: occlusionTexture.createView() },
+        // Occlusion sampler (binding 8)
+        { binding: 8, resource: gltfSampler },
+        // Emissive texture (binding 9)
+        { binding: 9, resource: emissiveTexture.createView() },
+        // Emissive sampler (binding 10)
+        { binding: 10, resource: gltfSampler },
+      ],
+      label: materialId,
+    });
+
+    // Set GLTF material bind group (Group 2)
+    renderPass.setBindGroup(2, gltfMaterialBindGroup);
+
+    // Update material buffer with GLTF PBR material data
+    const gltfMaterial = renderable.material as WebGPUMaterialDescriptor;
+    const materialData = new Float32Array(16); // 16 floats for GLTFPBRMaterial
+    let offset = 0;
+
+    // base_color_factor (4 floats)
+    const albedo = gltfMaterial.albedo || chroma('#ffffff');
+    const albedoGl = (albedo as any).gl();
+    materialData[offset++] = albedoGl[0];
+    materialData[offset++] = albedoGl[1];
+    materialData[offset++] = albedoGl[2];
+    materialData[offset++] = albedoGl[3];
+
+    // metallic_factor (1 float)
+    materialData[offset++] = gltfMaterial.metallic || 0.0;
+
+    // roughness_factor (1 float)
+    materialData[offset++] = gltfMaterial.roughness || 0.5;
+
+    // normal_scale (1 float)
+    materialData[offset++] = 1.0;
+
+    // occlusion_strength (1 float)
+    materialData[offset++] = 1.0;
+
+    // emissive_factor (3 floats)
+    const emissive = gltfMaterial.emissive || chroma('#000000');
+    const emissiveGl = (emissive as any).gl();
+    materialData[offset++] = emissiveGl[0];
+    materialData[offset++] = emissiveGl[1];
+    materialData[offset++] = emissiveGl[2];
+
+    // alpha_cutoff (1 float)
+    materialData[offset++] = 0.5;
+
+    // padding (4 floats to align to 16-byte boundary)
+    materialData[offset++] = 0.0;
+    materialData[offset++] = 0.0;
+    materialData[offset++] = 0.0;
+    materialData[offset++] = 0.0;
+
+    // Write material data to buffer
+    this.device.queue.writeBuffer(materialBuffer, 0, materialData);
+  }
+
+  /**
    * Setup material bind group for material properties
    */
   private setupMaterialBindGroup(renderPass: GPURenderPassEncoder, renderable: RenderData): void {
@@ -960,6 +1291,11 @@ export class WebGPURenderer implements IWebGPURenderer {
       const pmxMaterial = renderable.material as PMXMaterialCacheData;
       renderPass.setBindGroup(2, pmxMaterial.bindGroup);
       return;
+    }
+
+    // Check if this is a GLTF material (skip material setup as it's handled by GLTF texture setup)
+    if (renderable.material.materialType === 'gltf') {
+      return; // GLTF materials handle their own material binding in setupGLTFMaterialBindGroup
     }
 
     // Regular material handling - always set a material bind group
@@ -1072,7 +1408,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private createOrGetMVPBuffer(geometryId: string): GPUBuffer {
     const bufferLabel = `MVP_Buffer_${geometryId}`;
     let buffer = this.bufferManager.getBufferByLabel(bufferLabel);
-    const COMPLETE_MVP_BUFFER_SIZE = 512; // 32 floats × 4 bytes = 512 bytes
+    const COMPLETE_MVP_BUFFER_SIZE = 384; // 96 floats × 4 bytes = 384 bytes
 
     if (!buffer) {
       buffer = this.bufferManager.createCustomBuffer(bufferLabel, {
@@ -1128,6 +1464,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     const projectionMatrix = camera.projectionMatrix;
     const viewMatrix = camera.viewMatrix;
     const modelMatrix = renderable.worldMatrix;
+    const normalMatrix = renderable.normalMatrix; // Already mat4 format
 
     // calculate MVP matrix: Projection × View × Model
     const mvpMatrix = mat4.create();
@@ -1135,7 +1472,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
 
     // create complete uniform data
-    const uniformData = new Float32Array(80); // 80 floats = 512 bytes / 4 bytes per float
+    const uniformData = new Float32Array(96); // 96 floats = 384 bytes / 4 bytes per float
     let offset = 0;
 
     // mvpMatrix (16 floats)
@@ -1152,6 +1489,10 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // projectionMatrix (16 floats)
     uniformData.set(projectionMatrix, offset);
+    offset += 16;
+
+    // normalMatrix (16 floats)
+    uniformData.set(normalMatrix, offset);
     offset += 16;
 
     // cameraPos (4 floats: xyz + padding)

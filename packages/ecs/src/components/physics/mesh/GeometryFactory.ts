@@ -54,6 +54,7 @@ export interface GeometryData {
     min: Vec3;
     max: Vec3;
   };
+  vertexAttributes?: number; // Bit flags for vertex attributes (optional for backward compatibility)
 }
 
 /**
