@@ -118,7 +118,17 @@ export class BufferManager {
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
 
-    this.device.queue.writeBuffer(buffer, 0, descriptor.data);
+    // Create aligned data buffer if needed
+    if (alignedSize > descriptor.data.byteLength) {
+      const alignedData = new ArrayBuffer(alignedSize);
+      const alignedView = new Uint8Array(alignedData);
+      const originalView = new Uint8Array(descriptor.data);
+      alignedView.set(originalView);
+      this.device.queue.writeBuffer(buffer, 0, alignedData);
+    } else {
+      this.device.queue.writeBuffer(buffer, 0, descriptor.data);
+    }
+
     return buffer;
   }
 
@@ -142,7 +152,17 @@ export class BufferManager {
       usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
     });
 
-    this.device.queue.writeBuffer(buffer, 0, descriptor.data);
+    // Create aligned data buffer if needed
+    if (alignedSize > descriptor.data.byteLength) {
+      const alignedData = new ArrayBuffer(alignedSize);
+      const alignedView = new Uint8Array(alignedData);
+      const originalView = new Uint8Array(descriptor.data);
+      alignedView.set(originalView);
+      this.device.queue.writeBuffer(buffer, 0, alignedData);
+    } else {
+      this.device.queue.writeBuffer(buffer, 0, descriptor.data);
+    }
+
     return buffer;
   }
 
