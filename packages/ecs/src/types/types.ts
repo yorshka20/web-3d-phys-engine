@@ -44,12 +44,7 @@ export interface ViewBounds {
 /**
  * Represents a color in RGBA format
  */
-export type Color = {
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-};
+export type Color = chroma.Color;
 
 /**
  * Represents a transform with position, rotation and scale

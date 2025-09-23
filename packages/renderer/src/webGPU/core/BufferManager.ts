@@ -73,7 +73,7 @@ export class BufferManager {
     const alignedSize = Math.ceil(descriptor.size / 4) * 4;
 
     const buffer = this.device.createBuffer({
-      size: alignedSize,
+      size: Number(alignedSize),
       usage: descriptor.usage,
       mappedAtCreation: descriptor.mappedAtCreation || false,
       label,

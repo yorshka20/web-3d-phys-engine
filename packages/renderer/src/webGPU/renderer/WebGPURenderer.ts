@@ -3,8 +3,7 @@ import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { RectArea } from '@ecs/types/types';
 import chroma from 'chroma-js';
-import { mat4 } from 'gl-matrix';
-import { TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
+import { MVPUniformManager, TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { BindGroupManager } from '../core/BindGroupManager';
 import { BufferManager } from '../core/BufferManager';
 import { DIContainer, initContainer } from '../core/decorators';
@@ -80,6 +79,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private resourceManager!: WebGPUResourceManager;
   private gpuResourceCoordinator!: GPUResourceCoordinator;
   private timeManager!: TimeManager;
+  private mvpUniformManager!: MVPUniformManager;
   private geometryManager!: GeometryManager;
   private materialManager!: MaterialManager;
   private pipelineManager!: PipelineManager;
@@ -229,6 +229,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.shaderManager = new ShaderManager();
     this.textureManager = new TextureManager();
     this.timeManager = new TimeManager();
+    this.mvpUniformManager = new MVPUniformManager();
     this.materialManager = new MaterialManager();
     this.geometryManager = new GeometryManager();
     this.pipelineManager = new PipelineManager();
@@ -242,6 +243,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     await this.textureManager.initialize();
     await this.shaderManager.initialize();
+    await this.mvpUniformManager.initialize();
     await this.pmxMaterialProcessor.initialize();
     await this.pmxAnimationBufferManager.initialize();
 
@@ -290,18 +292,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'timeBindGroup',
     });
 
-    // We only need to ensure MVP bind group layout exists
-    this.bindGroupManager.createBindGroupLayout('mvpBindGroupLayout', {
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-          buffer: { type: 'uniform' },
-        },
-      ],
-      label: 'MVPBindGroup Layout',
-    });
-    console.log('[WebGPURenderer] Created MVP bind group layout for PipelineManager');
+    // MVP bind group layout is now handled by MVPUniformManager
 
     // Ensure material bind group layout exists for texture support
     this.bindGroupManager.createBindGroupLayout('materialBindGroupLayout', {
@@ -995,15 +986,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     renderable: RenderData,
     frameData: FrameData,
   ): void {
-    // Create or get MVP buffer and bind group for this instance
-    const mvpBuffer = this.createOrGetMVPBuffer(renderable.geometryId);
-    const mvpBindGroup = this.createOrGetMVPBindGroup(renderable.geometryId, mvpBuffer);
-
-    // Calculate MVP matrix
-    const mvpMatrix = this.calculateCompleteMVPMatrix(renderable, frameData);
-
-    // Update MVP buffer
-    this.device.queue.writeBuffer(mvpBuffer, 0, mvpMatrix.buffer);
+    // Use MVPUniformManager to handle MVP buffer and bind group
+    const mvpBindGroup = this.mvpUniformManager.updateMVPUniforms(renderable, frameData);
 
     // Set MVP bind group
     renderPass.setBindGroup(1, mvpBindGroup);
@@ -1242,7 +1226,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // base_color_factor (4 floats)
     const albedo = gltfMaterial.albedo || chroma('#ffffff');
-    const albedoGl = (albedo as any).gl();
+    const albedoGl = albedo.gl();
     materialData[offset++] = albedoGl[0];
     materialData[offset++] = albedoGl[1];
     materialData[offset++] = albedoGl[2];
@@ -1262,7 +1246,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // emissive_factor (3 floats)
     const emissive = gltfMaterial.emissive || chroma('#000000');
-    const emissiveGl = (emissive as any).gl();
+    const emissiveGl = emissive.gl();
     materialData[offset++] = emissiveGl[0];
     materialData[offset++] = emissiveGl[1];
     materialData[offset++] = emissiveGl[2];
@@ -1401,127 +1385,6 @@ export class WebGPURenderer implements IWebGPURenderer {
       );
     }
   }
-
-  /**
-   * Create or get MVP buffer for a geometry instance
-   */
-  private createOrGetMVPBuffer(geometryId: string): GPUBuffer {
-    const bufferLabel = `MVP_Buffer_${geometryId}`;
-    let buffer = this.bufferManager.getBufferByLabel(bufferLabel);
-    const COMPLETE_MVP_BUFFER_SIZE = 384; // 96 floats × 4 bytes = 384 bytes
-
-    if (!buffer) {
-      buffer = this.bufferManager.createCustomBuffer(bufferLabel, {
-        type: BufferType.UNIFORM,
-        size: COMPLETE_MVP_BUFFER_SIZE,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      });
-    }
-
-    return buffer;
-  }
-
-  /**
-   * Create or get MVP bind group for a geometry instance
-   */
-  private createOrGetMVPBindGroup(geometryId: string, mvpBuffer: GPUBuffer): GPUBindGroup {
-    const bindGroupLabel = `MVP_BindGroup_${geometryId}`;
-
-    // Get or create MVP bind group layout (fast path with fallback)
-    const mvpBindGroupLayout = this.bindGroupManager.safeGetBindGroupLayout('mvpBindGroupLayout', {
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-          buffer: {
-            type: BufferType.UNIFORM,
-          },
-        },
-      ],
-      label: 'MVP Bind Group Layout',
-    });
-
-    // Get or create bind group (fast path with fallback)
-    const bindGroup = this.bindGroupManager.safeGetBindGroup(bindGroupLabel, {
-      layout: mvpBindGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: { buffer: mvpBuffer },
-        },
-      ],
-      label: bindGroupLabel,
-    });
-
-    return bindGroup;
-  }
-
-  /**
-   * Calculate MVP matrix for a renderable
-   */
-  private calculateCompleteMVPMatrix(renderable: RenderData, frameData: FrameData): Float32Array {
-    const camera = frameData.scene.camera;
-    const projectionMatrix = camera.projectionMatrix;
-    const viewMatrix = camera.viewMatrix;
-    const modelMatrix = renderable.worldMatrix;
-    const normalMatrix = renderable.normalMatrix; // Already mat4 format
-
-    // calculate MVP matrix: Projection × View × Model
-    const mvpMatrix = mat4.create();
-    mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);
-    mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix);
-
-    // create complete uniform data
-    const uniformData = new Float32Array(96); // 96 floats = 384 bytes / 4 bytes per float
-    let offset = 0;
-
-    // mvpMatrix (16 floats)
-    uniformData.set(mvpMatrix, offset);
-    offset += 16;
-
-    // modelMatrix (16 floats)
-    uniformData.set(modelMatrix, offset);
-    offset += 16;
-
-    // viewMatrix (16 floats)
-    uniformData.set(viewMatrix, offset);
-    offset += 16;
-
-    // projectionMatrix (16 floats)
-    uniformData.set(projectionMatrix, offset);
-    offset += 16;
-
-    // normalMatrix (16 floats)
-    uniformData.set(normalMatrix, offset);
-    offset += 16;
-
-    // cameraPos (4 floats: xyz + padding)
-    uniformData[offset++] = camera.position[0];
-    uniformData[offset++] = camera.position[1];
-    uniformData[offset++] = camera.position[2];
-    uniformData[offset++] = 0.0; // padding
-
-    // cameraForward (4 floats: xyz + padding)
-    uniformData[offset++] = camera.forward[0];
-    uniformData[offset++] = camera.forward[1];
-    uniformData[offset++] = camera.forward[2];
-    uniformData[offset++] = 0.0; // padding
-
-    // cameraUp (4 floats: xyz + padding)
-    uniformData[offset++] = camera.up[0];
-    uniformData[offset++] = camera.up[1];
-    uniformData[offset++] = camera.up[2];
-    uniformData[offset++] = 0.0; // padding
-
-    // cameraRight (4 floats: xyz + padding)
-    uniformData[offset++] = camera.right[0];
-    uniformData[offset++] = camera.right[1];
-    uniformData[offset++] = camera.right[2];
-    uniformData[offset++] = 0.0; // padding
-
-    return uniformData;
-  }
-
   getDevice(): GPUDevice {
     return this.device;
   }
