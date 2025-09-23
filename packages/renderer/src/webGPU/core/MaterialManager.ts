@@ -167,7 +167,7 @@ export class MaterialManager {
     }
 
     const uniformData = this.createMaterialUniformData(material);
-    this.device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+    this.device.queue.writeBuffer(uniformBuffer, 0, uniformData.buffer);
   }
 
   private createMaterialUniformData(material: WebGPUMaterialDescriptor): Float32Array {

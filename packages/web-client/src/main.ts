@@ -21,6 +21,7 @@ import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
 import chroma from 'chroma-js';
 import { Game } from './game/Game';
 import { createGeometryStage } from './stages/geometry';
+import { createGLTFStage } from './stages/gltf';
 import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 import { createPMXModelStage } from './stages/pmxModel';
 import { createZZZPMXModelStage } from './stages/zzz';
@@ -31,11 +32,11 @@ window.addEventListener('load', () => {
   main();
 });
 
-type Stage = 'geometry' | 'pmxModel' | 'zzz' | 'pmxAnimationExample';
+type Stage = 'geometry' | 'pmxModel' | 'zzz' | 'pmxAnimationExample' | 'gltfModel';
 
-const stages: Stage[] = ['geometry', 'pmxModel', 'zzz', 'pmxAnimationExample'];
+const stages: Stage[] = ['geometry', 'pmxModel', 'zzz', 'pmxAnimationExample', 'gltfModel'];
 
-const stage: Stage = stages[3];
+const stage: Stage = stages[4];
 
 async function main() {
   const rootElement = document.body;
@@ -65,6 +66,9 @@ async function main() {
       break;
     case 'pmxAnimationExample':
       await createPMXAnimationExample(world);
+      break;
+    case 'gltfModel':
+      await createGLTFStage(world);
       break;
     default:
       break;

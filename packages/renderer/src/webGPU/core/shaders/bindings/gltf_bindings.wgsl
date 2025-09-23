@@ -3,10 +3,10 @@
 
 // Group 1: Transform uniforms (MVP)
 @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
-@group(1) @binding(1) var<uniform> joints: JointMatrices;
+// @group(1) @binding(1) var<uniform> joints: GLTFJointMatrices;
 
 // Group 2: PBR Material uniforms and textures
-@group(2) @binding(0) var<uniform> material: PBRMaterial;
+@group(2) @binding(0) var<uniform> material: GLTFPBRMaterial;
 @group(2) @binding(1) var base_color_texture: texture_2d<f32>;
 @group(2) @binding(2) var base_color_sampler: sampler;
 @group(2) @binding(3) var metallic_roughness_texture: texture_2d<f32>;

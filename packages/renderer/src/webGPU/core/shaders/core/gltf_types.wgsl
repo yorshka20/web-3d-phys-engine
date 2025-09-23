@@ -1,4 +1,4 @@
-struct VertexInput {
+struct GLTFVertexInput {
     @location(0) position: vec3<f32>,      // POSITION
     @location(1) normal: vec3<f32>,        // NORMAL  
     @location(2) texcoord_0: vec2<f32>,    // TEXCOORD_0
@@ -10,7 +10,7 @@ struct VertexInput {
 }
 
 
-struct VertexOutput {
+struct GLTFVertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) world_position: vec3<f32>,
     @location(1) world_normal: vec3<f32>,
@@ -21,11 +21,11 @@ struct VertexOutput {
     @location(6) color: vec4<f32>,
 }
 
-struct JointMatrices {
+struct GLTFJointMatrices {
     matrices: array<mat4x4<f32>, 512>,  // at most 512 joints
 }
 
-struct PBRMaterial {
+struct GLTFPBRMaterial {
     // base color
     base_color_factor: vec4<f32>,           // default (1,1,1,1)
     
