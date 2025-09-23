@@ -1,5 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Vec3 } from '@ecs/types/types';
+import { AssetDescriptor, assetRegistry, AssetType } from '@renderer';
 import { GeometryData, GeometryFactory } from './GeometryFactory';
 import { AnyMesh3DShapeDescriptor, GeometryPrimitiveOptions, Vertex3D } from './types';
 
@@ -15,10 +16,13 @@ export class Mesh3DComponent extends Component {
   static componentName = 'Mesh3D';
 
   descriptor: AnyMesh3DShapeDescriptor;
-  geometryData?: GeometryData;
+  geometryData?: GeometryData[];
   vertices: Vertex3D[] = []; // vertex cache
   indices: number[] = []; // indices cache
   bounds: { min: Vec3; max: Vec3 } | null = null;
+
+  assetDescriptor: AssetDescriptor<AssetType> | undefined;
+  assetId: string = '';
 
   private dirty: boolean = true;
 
@@ -38,17 +42,28 @@ export class Mesh3DComponent extends Component {
         max: [...props.bounds.max] as Vec3,
       };
     }
+
+    this.initializeData();
+  }
+
+  private initializeData(): void {
+    if (this.descriptor.type === 'gltf') {
+      this.assetId = this.descriptor.assetId;
+      this.resolveAsset<'gltf'>();
+    }
   }
 
   /**
-   * update mesh descriptor
+   * Resolve asset reference from registry
    */
-  updateDescriptor(descriptor: AnyMesh3DShapeDescriptor): void {
-    this.descriptor = this.normalizeDescriptor(descriptor);
-    this.dirty = true;
-    this.vertices = [];
-    this.indices = [];
-    this.bounds = null;
+  resolveAsset<T extends AssetType>(): AssetDescriptor<T> | undefined {
+    if (!this.assetDescriptor) {
+      this.assetDescriptor = assetRegistry.getAssetDescriptor<T>(this.assetId);
+      if (this.assetDescriptor) {
+        assetRegistry.addRef(this.assetId);
+      }
+    }
+    return this.assetDescriptor as AssetDescriptor<T> | undefined;
   }
 
   /**
@@ -285,10 +300,9 @@ export class Mesh3DComponent extends Component {
     // For primitive geometry types, ensure params is defined
     if (!descriptor.params) {
       // Create a new descriptor with default params based on geometry type
-      const type = (descriptor as { type: string }).type;
-      const defaultParams = GeometryFactory.getDefaultParams(type);
+      const defaultParams = GeometryFactory.getDefaultParams(descriptor.type);
       return {
-        type,
+        ...descriptor,
         params: defaultParams,
       } as AnyMesh3DShapeDescriptor;
     }
