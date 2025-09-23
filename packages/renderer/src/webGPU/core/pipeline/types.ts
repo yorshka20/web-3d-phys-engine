@@ -458,6 +458,15 @@ function determineVertexAttributes(semanticKey: SemanticPipelineKey): number {
       attributes |= 0x10; // SKINNING (skinIndices + skinWeights)
       attributes |= 0x20; // EDGE_RATIO
       break;
+    case 'gltf':
+      // GLTF format: position + normal + uv0 + uv1 + color + joints + weights + tangent
+      attributes |= 0x02; // NORMAL
+      attributes |= 0x04; // UV0
+      attributes |= 0x40; // UV1
+      attributes |= 0x08; // COLOR
+      attributes |= 0x10; // SKINNING (joints + weights)
+      attributes |= 0x80; // TANGENT
+      break;
     // No additional attributes for 'simple' or unknown formats
   }
 

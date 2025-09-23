@@ -431,10 +431,8 @@ export class AssetLoader {
     }
 
     // Determine vertex format based on available attributes
-    let vertexFormat: VertexFormat = 'simple'; // pos+normal+uv
-    if (uv1Arr || colorArr || (jointsArr && weightsArr) || tangentArr) {
-      vertexFormat = 'full';
-    }
+    // GLTF models should use 'gltf' format to support all GLTF vertex attributes
+    const vertexFormat: VertexFormat = 'gltf';
 
     const geometry: GeometryData = {
       vertices,

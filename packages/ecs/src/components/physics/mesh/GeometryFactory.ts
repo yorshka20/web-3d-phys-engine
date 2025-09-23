@@ -36,8 +36,9 @@ import {
  * - full: position + normal + uv
  * - colored: position + color
  * - pmx: position + normal + uv + skinIndices + skinWeights
+ * - gltf: position + normal + uv0 + uv1 + color + joints + weights + tangent
  */
-export type VertexFormat = 'simple' | 'full' | 'colored' | 'pmx';
+export type VertexFormat = 'simple' | 'full' | 'colored' | 'pmx' | 'gltf';
 
 /**
  * Geometry data

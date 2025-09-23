@@ -1,6 +1,6 @@
 import { Color, Vec3 } from '@ecs/types/types';
 
-type MaterialType = 'normal' | 'pmx';
+type MaterialType = 'normal' | 'pmx' | 'gltf';
 
 export interface Material3D {
   // Basic material properties
