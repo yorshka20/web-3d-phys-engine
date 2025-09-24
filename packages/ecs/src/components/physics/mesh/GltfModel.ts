@@ -1,3 +1,4 @@
+import { BaseMaterial } from '@ecs/components/rendering/render/types';
 import { mat4 } from 'gl-matrix';
 import { GeometryData } from './GeometryFactory';
 
@@ -7,7 +8,7 @@ export interface GLTFPrimitive {
   material?: GLTFMaterial;
 }
 
-export interface GLTFMaterial {
+export interface GLTFMaterial extends BaseMaterial {
   // PBR metallic roughness workflow
   baseColorFactor: [number, number, number, number];
   baseColorTexture?: string;
@@ -28,6 +29,8 @@ export interface GLTFMaterial {
   alphaMode: 'OPAQUE' | 'MASK' | 'BLEND';
   alphaCutoff: number;
   doubleSided: boolean;
+
+  materialType: 'gltf';
 }
 
 export interface GLTFModel {

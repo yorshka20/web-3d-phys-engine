@@ -1,4 +1,5 @@
 import { GeometryData } from '@ecs/components/physics/mesh';
+import { GLTFMaterial } from '@ecs/components/physics/mesh/GltfModel';
 import { PMXMeshComponent } from '@ecs/components/physics/mesh/PMXMeshComponent';
 import { CameraData, LightData, WebGPUMaterialDescriptor } from '@ecs/components/rendering';
 import { Vec3 } from '@ecs/types/types';
@@ -11,16 +12,18 @@ export interface RenderData {
   // Entity information
   entityId: number; // Entity numeric ID for animation and other systems
 
+  type: 'gltf' | 'pmx' | 'mesh';
+
   // Geometry information
   geometryId: string; // for resource cache
-  geometryData: GeometryData[];
+  geometryData: GeometryData;
 
   // Transform information
   worldMatrix: mat4;
   normalMatrix: mat4; // normal transformation matrix (mat4 for WGSL compatibility)
 
   // Material information
-  material: WebGPUMaterialDescriptor | PMXMaterialCacheData;
+  material: WebGPUMaterialDescriptor | PMXMaterialCacheData | GLTFMaterial;
   materialUniforms: Record<string, Any>; // material specific uniforms
 
   // render control

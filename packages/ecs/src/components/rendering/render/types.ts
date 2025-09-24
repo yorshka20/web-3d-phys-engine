@@ -2,7 +2,11 @@ import { Color, Vec3 } from '@ecs/types/types';
 
 type MaterialType = 'normal' | 'pmx' | 'gltf';
 
-export interface Material3D {
+export interface BaseMaterial {
+  materialType: MaterialType;
+}
+
+export interface Material3D extends BaseMaterial {
   // Basic material properties
   albedo: Color; // Base color
   metallic: number; // Metallic factor (0-1)
@@ -30,9 +34,6 @@ export interface Material3D {
   // Custom shader support
   customShaderId?: string; // ID of custom shader to use
   shaderParams?: Record<string, unknown>; // Material-specific shader parameters
-
-  // material type
-  materialType: MaterialType;
 }
 
 /**

@@ -16,7 +16,7 @@ export class Mesh3DComponent extends Component {
   static componentName = 'Mesh3D';
 
   descriptor: AnyMesh3DShapeDescriptor;
-  geometryData?: GeometryData[];
+  geometryData?: GeometryData;
   vertices: Vertex3D[] = []; // vertex cache
   indices: number[] = []; // indices cache
   bounds: { min: Vec3; max: Vec3 } | null = null;

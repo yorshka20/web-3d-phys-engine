@@ -1,5 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Color } from '@ecs/types/types';
+import chroma from 'chroma-js';
 import { WebGPU3DRenderProperties, WebGPUMaterialDescriptor } from './types';
 
 /**
@@ -519,10 +520,10 @@ export class WebGPU3DRenderComponent extends Component {
     this.customUniforms = {};
 
     this.material = {
-      albedo: { r: 1, g: 1, b: 1, a: 1 },
+      albedo: chroma('#ffffff'),
       metallic: 0,
       roughness: 0.5,
-      emissive: { r: 0, g: 0, b: 0, a: 1 },
+      emissive: chroma('#000000'),
       emissiveIntensity: 0,
       doubleSided: false,
       materialType: 'normal',
@@ -542,7 +543,7 @@ export class WebGPU3DRenderComponent extends Component {
       albedo,
       metallic: 0,
       roughness: 0.5,
-      emissive: { r: 0, g: 0, b: 0, a: 1 },
+      emissive: chroma('#000000'),
       emissiveIntensity: 0,
       doubleSided: false,
       materialType: 'normal',
@@ -561,7 +562,7 @@ export class WebGPU3DRenderComponent extends Component {
       albedo,
       metallic,
       roughness,
-      emissive: { r: 0, g: 0, b: 0, a: 1 },
+      emissive: chroma('#000000'),
       emissiveIntensity: 0,
       doubleSided: false,
       materialType: 'normal',
@@ -576,7 +577,7 @@ export class WebGPU3DRenderComponent extends Component {
     intensity: number,
   ): WebGPUMaterialDescriptor {
     return {
-      albedo: { r: 1, g: 1, b: 1, a: 1 },
+      albedo: chroma('#ffffff'),
       metallic: 0,
       roughness: 0.5,
       emissive,
