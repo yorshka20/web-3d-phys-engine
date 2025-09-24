@@ -1,5 +1,5 @@
 import { GeometryData, VertexFormat } from '@ecs/components/physics/mesh/GeometryFactory';
-import { GLTFModel, GLTFPrimitive } from '@ecs/components/physics/mesh/GltfModel';
+import { GLTFMaterial, GLTFModel, GLTFPrimitive } from '@ecs/components/physics/mesh/GltfModel';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { Document, Primitive, WebIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
@@ -20,9 +20,7 @@ import { pmxAssetRegistry } from './PMXAssetRegistry';
  * Does NOT create GPU resources - that's handled by GPUResourceCoordinator
  */
 export class AssetLoader {
-  private static loadedAssets: Map<string, unknown> = new Map();
-
-  private static parser = new Parser();
+  private static mmdParser = new Parser();
 
   /**
    * Initialize the asset loader
@@ -260,24 +258,18 @@ export class AssetLoader {
       const dependencies: string[] = [];
       const primitives: GLTFPrimitive[] = [];
 
+      let primitiveIndex = 0;
       for (const mesh of meshes) {
         for (const primitive of mesh.listPrimitives()) {
           const cpuPrim = this.convertGLTFPrimitiveToGeometry(primitive);
-          // collect baseColor texture dependency if exists
-          const material = primitive.getMaterial();
+          // Extract material and load textures
+          const material = await this.extractMaterial(primitive, assetId, primitiveIndex);
           if (material) {
-            const tex = material.getBaseColorTexture();
-            if (tex) {
-              const image: unknown = (tex as unknown as { getImage?: () => unknown }).getImage?.();
-              const uriGetter = (image as unknown as { getURI?: () => string }).getURI;
-              const uri = typeof uriGetter === 'function' ? uriGetter.call(image) : undefined;
-              if (typeof uri === 'string' && uri.length > 0) {
-                dependencies.push(uri);
-                cpuPrim.material = { baseColorTexture: uri };
-              }
-            }
+            cpuPrim.material = material;
           }
+
           primitives.push(cpuPrim);
+          primitiveIndex++;
         }
       }
 
@@ -296,6 +288,84 @@ export class AssetLoader {
       console.log(`[AssetLoader] Successfully loaded GLTF model: ${assetId}`);
     } catch (error) {
       console.error(`[AssetLoader] Failed to load GLTF model ${assetId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extract material information from GLTF primitive and load embedded textures
+   */
+  private static async extractMaterial(
+    primitive: Primitive,
+    assetId: string,
+    primitiveIndex: number,
+  ): Promise<GLTFMaterial | undefined> {
+    const mat = primitive.getMaterial();
+    if (!mat) return undefined;
+
+    const material: GLTFMaterial = {
+      baseColorFactor: mat.getBaseColorFactor() as [number, number, number, number],
+      metallicFactor: mat.getMetallicFactor(),
+      roughnessFactor: mat.getRoughnessFactor(),
+      emissiveFactor: mat.getEmissiveFactor() as [number, number, number],
+      alphaMode: mat.getAlphaMode() as 'OPAQUE' | 'MASK' | 'BLEND',
+      alphaCutoff: mat.getAlphaCutoff(),
+      doubleSided: mat.getDoubleSided(),
+      normalScale: mat.getNormalScale(),
+      occlusionStrength: mat.getOcclusionStrength(),
+    };
+
+    // Process all texture types
+    const textures = [
+      { tex: mat.getBaseColorTexture(), key: 'baseColorTexture' as const },
+      { tex: mat.getMetallicRoughnessTexture(), key: 'metallicRoughnessTexture' as const },
+      { tex: mat.getNormalTexture(), key: 'normalTexture' as const },
+      { tex: mat.getOcclusionTexture(), key: 'occlusionTexture' as const },
+      { tex: mat.getEmissiveTexture(), key: 'emissiveTexture' as const },
+    ];
+
+    for (const { tex, key } of textures) {
+      if (tex) {
+        const imageData = tex.getImage();
+        const mimeType = tex.getMimeType();
+        const textureId = `${assetId}_${key}_${primitiveIndex}`;
+
+        if (!imageData) continue;
+
+        try {
+          // Load texture from embedded binary data
+          await this.loadTextureFromBlob(
+            new Blob([imageData.buffer as ArrayBuffer], { type: mimeType }),
+            textureId,
+          );
+          material[key] = textureId;
+        } catch (error) {
+          console.warn(`[AssetLoader] Failed to load texture ${key} for ${assetId}:`, error);
+        }
+      }
+    }
+
+    return material;
+  }
+
+  /**
+   * Load texture from Blob data (for embedded GLTF textures)
+   */
+  private static async loadTextureFromBlob(blob: Blob, assetId: string): Promise<void> {
+    try {
+      const imageBitmap = await createImageBitmap(blob);
+
+      const metadata: AssetMetadata = {
+        type: 'texture',
+        dependencies: [],
+        memorySize: imageBitmap.width * imageBitmap.height * 4, // RGBA
+      };
+
+      assetRegistry.register(assetId, imageBitmap, metadata);
+
+      console.log(`[AssetLoader] Loaded texture from blob: ${assetId}`);
+    } catch (error) {
+      console.error(`[AssetLoader] Failed to load texture from blob:`, error);
       throw error;
     }
   }
@@ -513,7 +583,7 @@ export class AssetLoader {
       const arrayBuffer = await file.arrayBuffer();
 
       // Parse PMX file using mmd-parser
-      const pmxData = this.parser.parsePmx(arrayBuffer) as PMXModel;
+      const pmxData = this.mmdParser.parsePmx(arrayBuffer) as PMXModel;
 
       // transform PMX coordinates
       this.transformPMXCoordinates(pmxData);
@@ -660,7 +730,6 @@ export class AssetLoader {
    */
   static clearAssets(): void {
     assetRegistry.clearAssets();
-    this.loadedAssets.clear();
     console.log('[AssetLoader] Cleared all assets');
   }
 

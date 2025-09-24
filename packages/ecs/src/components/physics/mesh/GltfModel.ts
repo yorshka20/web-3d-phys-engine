@@ -4,9 +4,30 @@ import { GeometryData } from './GeometryFactory';
 // Minimal CPU-side representation for GLTF
 export interface GLTFPrimitive {
   geometry: GeometryData; // interleaved vertices [pos, normal, uv]
-  material?: {
-    baseColorTexture?: string; // texture asset id (URL or resolved id)
-  };
+  material?: GLTFMaterial;
+}
+
+export interface GLTFMaterial {
+  // PBR metallic roughness workflow
+  baseColorFactor: [number, number, number, number];
+  baseColorTexture?: string;
+
+  metallicFactor: number;
+  roughnessFactor: number;
+  metallicRoughnessTexture?: string; // R=unused G=roughness B=metallic
+
+  normalTexture?: string;
+  normalScale?: number;
+
+  occlusionTexture?: string;
+  occlusionStrength?: number;
+
+  emissiveTexture?: string;
+  emissiveFactor: [number, number, number];
+
+  alphaMode: 'OPAQUE' | 'MASK' | 'BLEND';
+  alphaCutoff: number;
+  doubleSided: boolean;
 }
 
 export interface GLTFModel {

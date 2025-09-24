@@ -25,7 +25,7 @@ export interface AssetDescriptor<T extends AssetType = AssetType> {
 export interface AssetRawDataTypeMap {
   pmx_model: PMXModel;
   pmx_material: PMXModel;
-  texture: HTMLImageElement;
+  texture: HTMLImageElement | ImageBitmap;
   material: WebGPUMaterialDescriptor;
   mesh: GeometryData;
   geometry: GeometryData;
@@ -266,3 +266,5 @@ export class AssetRegistry {
 
 // Global asset registry instance
 export const assetRegistry = new AssetRegistry();
+// @ts-ignore
+window.assetRegistry = assetRegistry;
