@@ -1,4 +1,6 @@
 import { GeometryData, WebGPUMaterialDescriptor } from '@ecs/components';
+import { GLTFMaterial } from '@ecs/components/physics/mesh/GltfModel';
+import chroma from 'chroma-js';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { PMXMaterialCacheData } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
@@ -37,7 +39,7 @@ export interface PredefinedComputePipelineConfig {
 }
 
 // union type support regular materials and PMX materials
-export type MaterialDescriptor = WebGPUMaterialDescriptor | PMXMaterialCacheData;
+export type MaterialDescriptor = WebGPUMaterialDescriptor | PMXMaterialCacheData | GLTFMaterial;
 
 /**
  * Pipeline Factory for creating specialized pipelines
@@ -415,7 +417,7 @@ export class PipelineFactory {
           );
         }
 
-        const pipelineId = `${request.material.albedo.r}_${request.material.albedo.g}_${request.material.albedo.b}_${request.geometry.vertexCount}`;
+        const pipelineId = `${request.material.albedo._rgb[0]}_${request.material.albedo._rgb[1]}_${request.material.albedo._rgb[2]}_${request.geometry.vertexCount}`;
         results.set(pipelineId, pipeline);
       })();
 
@@ -599,10 +601,10 @@ export class PipelineFactory {
   ): Promise<GPURenderPipeline> {
     // Create a compatible material descriptor for semantic key generation
     const materialDescriptor: WebGPUMaterialDescriptor = {
-      albedo: { r: 1, g: 1, b: 1, a: 1 },
+      albedo: chroma('#ffffff'),
       metallic: 0,
       roughness: 0.5,
-      emissive: { r: 0, g: 0, b: 0, a: 1 },
+      emissive: chroma('#000000'),
       emissiveIntensity: 0,
       alphaMode: material.renderOrder === 'transparent' ? 'blend' : 'opaque',
       doubleSided: false,

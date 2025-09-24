@@ -1,6 +1,7 @@
 import { GeometryData, VertexFormat } from '@ecs/components/physics/mesh/GeometryFactory';
 import { GLTFMaterial, GLTFModel, GLTFPrimitive } from '@ecs/components/physics/mesh/GltfModel';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { AlphaMode } from '@ecs/components/rendering/render/types';
 import { Document, Primitive, WebIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { mat4 } from 'gl-matrix';
@@ -308,12 +309,13 @@ export class AssetLoader {
       metallicFactor: mat.getMetallicFactor(),
       roughnessFactor: mat.getRoughnessFactor(),
       emissiveFactor: mat.getEmissiveFactor() as [number, number, number],
-      alphaMode: mat.getAlphaMode() as 'OPAQUE' | 'MASK' | 'BLEND',
+      alphaMode: mat.getAlphaMode().toLowerCase() as AlphaMode,
       alphaCutoff: mat.getAlphaCutoff(),
       doubleSided: mat.getDoubleSided(),
       normalScale: mat.getNormalScale(),
       occlusionStrength: mat.getOcclusionStrength(),
       materialType: 'gltf',
+      customShaderId: 'gltf_material_shader',
     };
 
     // Process all texture types

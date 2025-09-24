@@ -3,6 +3,7 @@
  * Based on actual PMX file analysis with proper TypeScript definitions
  */
 
+import { AlphaMode } from '@ecs/components/rendering/render/types';
 import { Vec3, Vec4 } from '@ecs/types/types';
 import { mat4 } from 'gl-matrix';
 
@@ -202,7 +203,7 @@ export interface PMXMaterialData {
   texturePath?: string;
   sphereTexturePath?: string;
   toonTexturePath?: string;
-  alphaMode: 'opaque' | 'mask' | 'blend';
+  alphaMode: AlphaMode;
   doubleSided: boolean;
 }
 

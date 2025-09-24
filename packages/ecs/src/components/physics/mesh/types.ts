@@ -151,6 +151,7 @@ export interface StadiumDescriptor {
 // 3d mesh descriptor
 export interface Mesh3DDescriptor {
   type: 'mesh';
+  assetId?: undefined;
   vertices: Vertex3D[];
   indices?: number[]; // indices array, for triangle drawing
   primitiveType?: GPUPrimitiveTopology; // primitive type
@@ -171,6 +172,7 @@ export interface Mesh3DGLTFDescriptor {
 // Generic mesh descriptor that supports type-safe geometry parameters
 export interface Mesh3DShapeDescriptor<T extends GeometryType = GeometryType> {
   type: T;
+  assetId?: undefined;
   params?: GeometryPrimitiveOptions[T];
   primitiveType?: GPUPrimitiveTopology;
 }
@@ -178,6 +180,7 @@ export interface Mesh3DShapeDescriptor<T extends GeometryType = GeometryType> {
 // Special case for unset and custom mesh
 export type Mesh3DUnsetDescriptor = {
   type: 'unset';
+  assetId?: undefined;
   params?: undefined;
   primitiveType?: GPUPrimitiveTopology;
 };

@@ -1,4 +1,4 @@
-import { GeometryData, VertexFormat, WebGPUMaterialDescriptor } from '@ecs/components';
+import { AlphaMode, GeometryData, VertexFormat, WebGPUMaterialDescriptor } from '@ecs/components';
 import { mat4, vec3 } from 'gl-matrix';
 import { GeometryCacheItem } from '../types';
 
@@ -77,7 +77,7 @@ export interface SemanticPipelineKey {
   renderPass: 'opaque' | 'transparent' | 'wireframe' | 'shadow';
 
   // Material characteristics (business layer concerns)
-  alphaMode: 'opaque' | 'mask' | 'blend';
+  alphaMode: AlphaMode;
   doubleSided: boolean;
 
   // Vertex format (affects shader compilation)
@@ -314,7 +314,6 @@ export function convertToGpuPipelineKey(semanticKey: SemanticPipelineKey): GpuPi
     topology: determineTopology(semanticKey),
     depthWrite: determineDepthWrite(semanticKey),
     depthTest: determineDepthTest(semanticKey),
-    // Use actual vertex attributes if available, otherwise fall back to determined attributes
     vertexAttributes: semanticKey.vertexAttributes ?? determineVertexAttributes(semanticKey),
     shaderDefines: generateShaderDefines(semanticKey),
     customShaderId: semanticKey.customShaderId,

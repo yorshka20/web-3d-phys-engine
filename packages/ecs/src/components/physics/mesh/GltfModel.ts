@@ -1,4 +1,4 @@
-import { BaseMaterial } from '@ecs/components/rendering/render/types';
+import { AlphaMode, BaseMaterial } from '@ecs/components/rendering/render/types';
 import { mat4 } from 'gl-matrix';
 import { GeometryData } from './GeometryFactory';
 
@@ -26,7 +26,7 @@ export interface GLTFMaterial extends BaseMaterial {
   emissiveTexture?: string;
   emissiveFactor: [number, number, number];
 
-  alphaMode: 'OPAQUE' | 'MASK' | 'BLEND';
+  alphaMode: AlphaMode;
   alphaCutoff: number;
   doubleSided: boolean;
 

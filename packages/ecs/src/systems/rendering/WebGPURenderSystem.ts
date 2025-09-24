@@ -536,7 +536,7 @@ export class WebGPURenderSystem extends System {
   private generateGeometryId(meshComponent: Mesh3DComponent, entity: Entity): string {
     // Create hash based on geometry descriptor and entity ID to ensure uniqueness
     const descriptor = meshComponent.descriptor;
-    return `${descriptor.type}_${entity.id}_${JSON.stringify(descriptor.params)}`;
+    return `${descriptor.type}_${descriptor?.assetId ?? 'default_asset'}_${entity.id}_${JSON.stringify(descriptor.params)}`;
   }
 
   /**

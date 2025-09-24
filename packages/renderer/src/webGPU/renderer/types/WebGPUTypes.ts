@@ -1,3 +1,5 @@
+import { AlphaMode } from '@ecs/components/rendering/render/types';
+
 /**
  * Scene representation for ECS
  */
@@ -146,7 +148,7 @@ export interface PBRMaterial {
   uvOffset: [number, number];
 
   // Alpha blending
-  alphaMode: 'opaque' | 'mask' | 'blend';
+  alphaMode: AlphaMode;
   alphaCutoff: number;
   doubleSided: boolean;
 

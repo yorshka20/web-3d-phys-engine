@@ -2,8 +2,12 @@ import { Color, Vec3 } from '@ecs/types/types';
 
 type MaterialType = 'normal' | 'pmx' | 'gltf';
 
+export type AlphaMode = 'opaque' | 'mask' | 'blend';
+
 export interface BaseMaterial {
   materialType: MaterialType;
+  // Custom shader support
+  customShaderId?: string; // ID of custom shader to use
 }
 
 export interface Material3D extends BaseMaterial {
@@ -25,14 +29,12 @@ export interface Material3D extends BaseMaterial {
   uvOffset?: Vec3; // UV offset [u, v, w]
 
   // Alpha blending
-  alphaMode?: 'opaque' | 'mask' | 'blend';
+  alphaMode?: AlphaMode;
   alphaCutoff?: number; // Alpha cutoff for mask mode
 
   // Double sided rendering
   doubleSided?: boolean;
 
-  // Custom shader support
-  customShaderId?: string; // ID of custom shader to use
   shaderParams?: Record<string, unknown>; // Material-specific shader parameters
 }
 
