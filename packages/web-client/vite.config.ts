@@ -61,6 +61,9 @@ export default defineConfig(({ mode }) => {
         '@renderer/*': resolve(__dirname, '../renderer/src'),
       },
     },
+    optimizeDeps: {
+      include: ['@gltf-transform/core', '@gltf-transform/extensions'],
+    },
     json: {
       stringify: true,
     },

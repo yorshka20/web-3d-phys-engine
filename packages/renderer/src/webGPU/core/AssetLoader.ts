@@ -2,6 +2,7 @@ import { GeometryData, VertexFormat } from '@ecs/components/physics/mesh/Geometr
 import { GLTFModel, GLTFPrimitive } from '@ecs/components/physics/mesh/GltfModel';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { Document, Primitive, WebIO } from '@gltf-transform/core';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { mat4 } from 'gl-matrix';
 import { Parser } from 'mmd-parser';
 import {
@@ -249,6 +250,10 @@ export class AssetLoader {
     try {
       console.log(`[AssetLoader] Loading GLTF model from URL: ${url}`);
       const io = new WebIO();
+
+      // Register extensions to support texture transforms
+      io.registerExtensions(ALL_EXTENSIONS);
+
       const doc: Document = await io.read(url);
 
       const meshes = doc.getRoot().listMeshes();
