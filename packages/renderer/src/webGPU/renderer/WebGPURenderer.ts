@@ -688,11 +688,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     // write vertices and morph data to batchVertexBuffer
     computePassRenderables.forEach((entity, index) => {
       const offset = index * maxVertices * 17; // 17 floats per vertex
-      this.device.queue.writeBuffer(
-        batchVertexBuffer,
-        offset,
-        entity.geometryData[0].vertices.buffer,
-      );
+      this.device.queue.writeBuffer(batchVertexBuffer, offset, entity.geometryData.vertices.buffer);
 
       // const morphOffset = index * vertexBufferSize;
       // this.device.queue.writeBuffer(batchVertexBuffer, morphOffset, entity.morphData.buffer);
@@ -793,7 +789,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       // Generate semantic key considering all pipeline factors
       const semanticKey = generateSemanticPipelineKey(
         renderable.material as WebGPUMaterialDescriptor,
-        renderable.geometryData[0],
+        renderable.geometryData,
       );
 
       // Generate cache key for grouping
@@ -826,7 +822,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     // use same pipeline for all renderables in the group
     const pipeline = await this.pipelineFactory.createAutoPipeline(
       firstRenderable.material,
-      firstRenderable.geometryData[0],
+      firstRenderable.geometryData,
     );
 
     // Set pipeline once for the entire group
@@ -898,7 +894,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       // Regular geometry from geometry data
       geometry = this.geometryManager.createGeometryFromData(
         renderable.geometryId || 'render_geometry',
-        { geometryData: renderable.geometryData[0] },
+        { geometryData: renderable.geometryData },
       );
     }
 

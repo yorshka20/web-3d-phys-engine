@@ -313,6 +313,7 @@ export class AssetLoader {
       doubleSided: mat.getDoubleSided(),
       normalScale: mat.getNormalScale(),
       occlusionStrength: mat.getOcclusionStrength(),
+      materialType: 'gltf',
     };
 
     // Process all texture types

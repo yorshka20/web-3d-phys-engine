@@ -1,4 +1,5 @@
 import { PMXMaterial, PMXTexture } from '@ecs/components/physics/mesh/PMXModel';
+import { BaseMaterial } from '@ecs/components/rendering/render/types';
 import { AssetDescriptor, assetRegistry } from './AssetRegistry';
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
@@ -29,7 +30,7 @@ export interface PMXMaterialTextureResource {
   name?: string;
 }
 
-export interface PMXMaterialCacheData {
+export interface PMXMaterialCacheData extends BaseMaterial {
   material: PMXMaterial;
   textureSlots: Map<number, PMXMaterialTextureResource>;
   uniformBuffer: GPUBuffer;

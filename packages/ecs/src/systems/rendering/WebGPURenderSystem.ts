@@ -4,6 +4,7 @@ import {
   CameraData,
   GeometryData,
   GeometryFactory,
+  GLTFModel,
   Mesh3DComponent,
   PMXBoneComponent,
   PMXMeshComponent,
@@ -295,8 +296,48 @@ export class WebGPURenderSystem extends System {
       }
     }
 
+    // check if the entity has a GLTF mesh component
+    if (entity.hasComponent(Mesh3DComponent.componentName)) {
+      const meshComponent = entity.getComponent<Mesh3DComponent>(Mesh3DComponent.componentName);
+      if (meshComponent.descriptor.type === 'gltf') {
+        return this.extractGLTFMeshRenderData(
+          entity,
+          meshComponent,
+          transformComponent,
+          renderComponent,
+        );
+      }
+    }
+
     // Fall back to regular mesh component
     return this.extractMeshRenderData(entity, transformComponent, renderComponent);
+  }
+
+  private extractGLTFMeshRenderData(
+    entity: Entity,
+    meshComponent: Mesh3DComponent,
+    transformComponent: Transform3DComponent,
+    renderComponent: WebGPU3DRenderComponent,
+  ): RenderData[] {
+    const assetResolver = meshComponent.resolveAsset();
+    if (!assetResolver) {
+      return [];
+    }
+    const gltfModel = assetResolver.rawData as GLTFModel;
+
+    return gltfModel.primitives.map((primitive) => ({
+      entityId: entity.numericId,
+      type: 'gltf',
+      geometryId: this.generateGeometryId(meshComponent, entity),
+      geometryData: primitive.geometry,
+      worldMatrix: new Float32Array(transformComponent.getWorldMatrix()),
+      normalMatrix: this.calculateNormalMatrix(transformComponent.getWorldMatrix()),
+      material: primitive.material ?? renderComponent.getMaterial(),
+      materialUniforms: renderComponent.getUniforms() || {},
+      renderOrder: renderComponent.getLayer() || 0,
+      castShadow: renderComponent.getCastShadow() ?? true,
+      receiveShadow: renderComponent.getReceiveShadow() ?? true,
+    }));
   }
 
   private extractMeshRenderData(
@@ -326,6 +367,7 @@ export class WebGPURenderSystem extends System {
     return [
       {
         entityId: entity.numericId,
+        type: 'mesh',
         geometryId,
         geometryData: meshComponent.geometryData,
         worldMatrix: new Float32Array(worldMatrix),
@@ -409,8 +451,9 @@ export class WebGPURenderSystem extends System {
 
       renderDataList.push({
         entityId: entity.numericId,
+        type: 'pmx',
         geometryId,
-        geometryData: [geometryData],
+        geometryData,
         worldMatrix: new Float32Array(worldMatrix),
         normalMatrix,
         material: renderComponent.getMaterial(),
@@ -438,34 +481,19 @@ export class WebGPURenderSystem extends System {
    * Generate geometry data if not exists
    * TODO: fix GeometryData Array type
    */
-  private generateGeometryData(meshComponent: Mesh3DComponent): GeometryData[] {
+  private generateGeometryData(meshComponent: Mesh3DComponent): GeometryData {
     switch (meshComponent.descriptor.type) {
-      case 'gltf': {
-        const assetDescriptor = meshComponent.resolveAsset<'gltf'>();
-        if (!assetDescriptor) {
-          throw new Error('GLTF asset descriptor not found');
-        }
-        const gltfModel = assetDescriptor.rawData;
-        if (!gltfModel) {
-          throw new Error('GLTF model not found');
-        }
-        return gltfModel.primitives.map((primitive) => primitive.geometry);
-      }
       case 'mesh':
-        return [
-          GeometryFactory.createGeometryDataByDescriptor(
-            meshComponent.descriptor,
-            meshComponent.getPrimitiveType(),
-          ),
-        ];
+        return GeometryFactory.createGeometryDataByDescriptor(
+          meshComponent.descriptor,
+          meshComponent.getPrimitiveType(),
+        );
 
       default:
-        return [
-          GeometryFactory.createGeometryDataByDescriptor(
-            meshComponent.descriptor,
-            meshComponent.getPrimitiveType(),
-          ),
-        ];
+        return GeometryFactory.createGeometryDataByDescriptor(
+          meshComponent.descriptor,
+          meshComponent.getPrimitiveType(),
+        );
     }
   }
 
