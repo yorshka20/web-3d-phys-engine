@@ -138,7 +138,7 @@ export async function createGLTFStage(world: World) {
     {
       assetId: 'gltf_sci_fi_helmet',
       label: 'gltf_sci_fi_helmet',
-      position: [0, 5, 3],
+      position: [0, 5, 5],
       scale: [3, 3, 3],
       material: {
         albedo: chroma('#9b59b6'),

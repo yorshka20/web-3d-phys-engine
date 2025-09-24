@@ -1,9 +1,15 @@
-import { SystemPriorities, WebGPUMaterialDescriptor } from '@ecs';
+import { GLTFMaterial, SystemPriorities, WebGPUMaterialDescriptor } from '@ecs';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { RectArea } from '@ecs/types/types';
 import chroma from 'chroma-js';
-import { MVPUniformManager, TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
+import {
+  assetRegistry,
+  MVPUniformManager,
+  TimeManager,
+  WebGPUContext,
+  WebGPUResourceManager,
+} from '../core';
 import { BindGroupManager } from '../core/BindGroupManager';
 import { BufferManager } from '../core/BufferManager';
 import { DIContainer, initContainer } from '../core/decorators';
@@ -1155,20 +1161,37 @@ export class WebGPURenderer implements IWebGPURenderer {
     const materialId = `gltf_material_${renderable.geometryId}`;
 
     // Create material uniform buffer for GLTF PBR material
-    const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_buffer`, {
+    const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
       size: 64, // Size for GLTFPBRMaterial struct
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    // Get GLTF textures and samplers
-    const baseColorTexture = this.textureManager.getTexture('gltf_default_white');
-    const metallicRoughnessTexture = this.textureManager.getTexture(
+    // Get GLTF material from renderable
+    const gltfMaterial = renderable.material as GLTFMaterial;
+
+    // Get textures from material properties, fallback to defaults if not found
+    const baseColorTexture = await this.getGLTFTexture(
+      gltfMaterial.baseColorTexture,
+      'gltf_default_white',
+    );
+    const metallicRoughnessTexture = await this.getGLTFTexture(
+      gltfMaterial.metallicRoughnessTexture,
       'gltf_default_metallic_roughness',
     );
-    const normalTexture = this.textureManager.getTexture('gltf_default_normal');
-    const occlusionTexture = this.textureManager.getTexture('gltf_default_occlusion');
-    const emissiveTexture = this.textureManager.getTexture('gltf_default_emissive');
+    const normalTexture = await this.getGLTFTexture(
+      gltfMaterial.normalTexture,
+      'gltf_default_normal',
+    );
+    const occlusionTexture = await this.getGLTFTexture(
+      gltfMaterial.occlusionTexture,
+      'gltf_default_occlusion',
+    );
+    const emissiveTexture = await this.getGLTFTexture(
+      gltfMaterial.emissiveTexture,
+      'gltf_default_emissive',
+    );
+
     const gltfSampler = this.textureManager.getSampler('linear');
 
     if (
@@ -1179,7 +1202,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       !emissiveTexture ||
       !gltfSampler
     ) {
-      throw new Error('GLTF default textures or samplers not found');
+      throw new Error('GLTF textures or samplers not found');
     }
 
     // Create GLTF material bind group
@@ -1215,40 +1238,37 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Set GLTF material bind group (Group 2)
     renderPass.setBindGroup(2, gltfMaterialBindGroup);
 
-    // Update material buffer with GLTF PBR material data
-    const gltfMaterial = renderable.material as WebGPUMaterialDescriptor;
+    // Update material buffer with GLTF PBR material data from renderable
     const materialData = new Float32Array(16); // 16 floats for GLTFPBRMaterial
     let offset = 0;
 
-    // base_color_factor (4 floats)
-    const albedo = gltfMaterial.albedo || chroma('#ffffff');
-    const albedoGl = albedo.gl();
-    materialData[offset++] = albedoGl[0];
-    materialData[offset++] = albedoGl[1];
-    materialData[offset++] = albedoGl[2];
-    materialData[offset++] = albedoGl[3];
+    // base_color_factor (4 floats) - with fallback to default values
+    const baseColorFactor = gltfMaterial.baseColorFactor || [1.0, 1.0, 1.0, 1.0];
+    materialData[offset++] = baseColorFactor[0];
+    materialData[offset++] = baseColorFactor[1];
+    materialData[offset++] = baseColorFactor[2];
+    materialData[offset++] = baseColorFactor[3];
 
-    // metallic_factor (1 float)
-    materialData[offset++] = gltfMaterial.metallic || 0.0;
+    // metallic_factor (1 float) - with fallback to default
+    materialData[offset++] = gltfMaterial.metallicFactor ?? 0.0;
 
-    // roughness_factor (1 float)
-    materialData[offset++] = gltfMaterial.roughness || 0.5;
+    // roughness_factor (1 float) - with fallback to default
+    materialData[offset++] = gltfMaterial.roughnessFactor ?? 0.5;
 
-    // normal_scale (1 float)
-    materialData[offset++] = 1.0;
+    // normal_scale (1 float) - with fallback to default
+    materialData[offset++] = gltfMaterial.normalScale ?? 1.0;
 
-    // occlusion_strength (1 float)
-    materialData[offset++] = 1.0;
+    // occlusion_strength (1 float) - with fallback to default
+    materialData[offset++] = gltfMaterial.occlusionStrength ?? 1.0;
 
-    // emissive_factor (3 floats)
-    const emissive = gltfMaterial.emissive || chroma('#000000');
-    const emissiveGl = emissive.gl();
-    materialData[offset++] = emissiveGl[0];
-    materialData[offset++] = emissiveGl[1];
-    materialData[offset++] = emissiveGl[2];
+    // emissive_factor (3 floats) - with fallback to default values
+    const emissiveFactor = gltfMaterial.emissiveFactor || [0.0, 0.0, 0.0];
+    materialData[offset++] = emissiveFactor[0];
+    materialData[offset++] = emissiveFactor[1];
+    materialData[offset++] = emissiveFactor[2];
 
-    // alpha_cutoff (1 float)
-    materialData[offset++] = 0.5;
+    // alpha_cutoff (1 float) - with fallback to default
+    materialData[offset++] = gltfMaterial.alphaCutoff ?? 0.5;
 
     // padding (4 floats to align to 16-byte boundary)
     materialData[offset++] = 0.0;
@@ -1258,6 +1278,63 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Write material data to buffer
     this.device.queue.writeBuffer(materialBuffer, 0, materialData);
+  }
+
+  /**
+   * Helper method to get GLTF texture with fallback to default
+   */
+  private async getGLTFTexture(
+    textureId: string | undefined,
+    defaultTextureId: string,
+  ): Promise<GPUTexture> {
+    if (textureId) {
+      // First check if GPU texture already exists in TextureManager
+      let texture = this.textureManager.getTexture(textureId);
+      if (texture) {
+        return texture;
+      }
+
+      // Check if texture data exists in AssetRegistry
+      const textureAsset = assetRegistry.getAssetDescriptor(textureId);
+      if (textureAsset && textureAsset.rawData) {
+        try {
+          // Create GPU texture from AssetRegistry data
+          const textureData = textureAsset.rawData;
+          if (textureData instanceof ImageBitmap) {
+            texture = this.textureManager.createTexture(textureId, {
+              id: textureId,
+              width: textureData.width,
+              height: textureData.height,
+              format: 'rgba8unorm',
+              usage:
+                GPUTextureUsage.TEXTURE_BINDING |
+                GPUTextureUsage.COPY_DST |
+                GPUTextureUsage.RENDER_ATTACHMENT,
+              initialData: textureData,
+            });
+
+            console.log(`[WebGPURenderer] Created GPU texture from AssetRegistry: ${textureId}`);
+            return texture;
+          }
+        } catch (error) {
+          console.warn(
+            `[WebGPURenderer] Failed to create GPU texture from AssetRegistry: ${textureId}`,
+            error,
+          );
+        }
+      }
+
+      console.warn(
+        `GLTF texture ${textureId} not found in AssetRegistry or TextureManager, using default ${defaultTextureId}`,
+      );
+    }
+
+    const defaultTexture = this.textureManager.getTexture(defaultTextureId);
+    if (!defaultTexture) {
+      throw new Error(`Default GLTF texture ${defaultTextureId} not found`);
+    }
+
+    return defaultTexture;
   }
 
   /**
