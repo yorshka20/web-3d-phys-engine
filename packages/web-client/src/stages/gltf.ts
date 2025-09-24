@@ -11,6 +11,9 @@ import suzanneGltf from '../../../gltf-samples/Models/Suzanne/glTF/Suzanne.gltf?
 import toyCarGltf from '../../../gltf-samples/Models/ToyCar/glTF/ToyCar.gltf?url';
 import triangleGltf from '../../../gltf-samples/Models/Triangle/glTF/Triangle.gltf?url';
 
+import perlicaGltf from '../../assets/perlica_patron/perlica.glb?url';
+import yvonneGltf from '../../assets/yvonne/yvonne.glb?url';
+
 export async function createGLTFStage(world: World) {
   // Load GLTF models into CPU asset registry
   await AssetLoader.loadAssets([
@@ -48,6 +51,18 @@ export async function createGLTFStage(world: World) {
       type: 'gltf_model_url',
       url: sciFiHelmetGltf,
       assetId: 'gltf_sci_fi_helmet',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: perlicaGltf,
+      assetId: 'gltf_perlica',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: yvonneGltf,
+      assetId: 'gltf_yvonne',
       priority: 'normal',
     },
   ]);
@@ -97,7 +112,7 @@ export async function createGLTFStage(world: World) {
       assetId: 'gltf_sunglasses',
       label: 'gltf_sunglasses',
       position: [0, 3, 0],
-      scale: [0.5, 0.5, 0.5],
+      scale: [1, 1, 1],
       material: {
         albedo: chroma('#2c3e50'),
         metallic: 0.9,
@@ -109,8 +124,9 @@ export async function createGLTFStage(world: World) {
     {
       assetId: 'gltf_toy_car',
       label: 'gltf_toy_car',
-      position: [0, -3, 0],
-      scale: [0.8, 0.8, 0.8],
+      position: [0, -10, 0],
+      scale: [1, 1, 1],
+      rotation: [0, Math.PI / 2, Math.PI / 2],
       material: {
         albedo: chroma('#f39c12'),
         metallic: 0.1,
@@ -122,14 +138,40 @@ export async function createGLTFStage(world: World) {
     {
       assetId: 'gltf_sci_fi_helmet',
       label: 'gltf_sci_fi_helmet',
-      position: [0, 0, 3],
-      scale: [1.2, 1.2, 1.2],
+      position: [0, 5, 3],
+      scale: [3, 3, 3],
       material: {
         albedo: chroma('#9b59b6'),
         metallic: 0.7,
         roughness: 0.2,
         emissive: chroma('#8e44ad'),
         emissiveIntensity: 0.3,
+      },
+    },
+    {
+      assetId: 'gltf_perlica',
+      label: 'gltf_perlica',
+      position: [0, 0, 0],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#000000'),
+        metallic: 0,
+        roughness: 0.5,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    {
+      assetId: 'gltf_yvonne',
+      label: 'gltf_yvonne',
+      position: [4, 4, 4],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#000000'),
+        metallic: 0,
+        roughness: 0.5,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
       },
     },
   ];
@@ -148,7 +190,7 @@ export async function createGLTFStage(world: World) {
     entity.addComponent(
       world.createComponent(Transform3DComponent, {
         position: model.position,
-        rotation: [0, 0, 0],
+        rotation: model.rotation || [0, 0, 0],
         scale: model.scale,
       }),
     );
