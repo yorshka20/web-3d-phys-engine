@@ -14,6 +14,18 @@ import triangleGltf from '../../../gltf-samples/Models/Triangle/glTF/Triangle.gl
 import perlicaGltf from '../../assets/perlica_patron/perlica.glb?url';
 import yvonneGltf from '../../assets/yvonne/yvonne.glb?url';
 
+// Import additional glTF models for comprehensive testing
+import avocadoGltf from '../../../gltf-samples/Models/Avocado/glTF/Avocado.gltf?url';
+import boomBoxGltf from '../../../gltf-samples/Models/BoomBox/glTF/BoomBox.gltf?url';
+import cesiumManGltf from '../../../gltf-samples/Models/CesiumMan/glTF/CesiumMan.gltf?url';
+import cubeGltf from '../../../gltf-samples/Models/Cube/glTF/Cube.gltf?url';
+import damagedHelmetGltf from '../../../gltf-samples/Models/DamagedHelmet/glTF/DamagedHelmet.gltf?url';
+import duckGltf from '../../../gltf-samples/Models/Duck/glTF/Duck.gltf?url';
+import flightHelmetGltf from '../../../gltf-samples/Models/FlightHelmet/glTF/FlightHelmet.gltf?url';
+import foxGltf from '../../../gltf-samples/Models/Fox/glTF/Fox.gltf?url';
+import lanternGltf from '../../../gltf-samples/Models/Lantern/glTF/Lantern.gltf?url';
+import metalRoughSpheresGltf from '../../../gltf-samples/Models/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf?url';
+
 export async function createGLTFStage(world: World) {
   // Load GLTF models into CPU asset registry
   await AssetLoader.loadAssets([
@@ -63,6 +75,67 @@ export async function createGLTFStage(world: World) {
       type: 'gltf_model_url',
       url: yvonneGltf,
       assetId: 'gltf_yvonne',
+      priority: 'normal',
+    },
+    // Additional test models for comprehensive material and geometry coverage
+    {
+      type: 'gltf_model_url',
+      url: damagedHelmetGltf,
+      assetId: 'gltf_damaged_helmet',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: flightHelmetGltf,
+      assetId: 'gltf_flight_helmet',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: metalRoughSpheresGltf,
+      assetId: 'gltf_metal_rough_spheres',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: foxGltf,
+      assetId: 'gltf_fox',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: duckGltf,
+      assetId: 'gltf_duck',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: boomBoxGltf,
+      assetId: 'gltf_boom_box',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: lanternGltf,
+      assetId: 'gltf_lantern',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: avocadoGltf,
+      assetId: 'gltf_avocado',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: cesiumManGltf,
+      assetId: 'gltf_cesium_man',
+      priority: 'normal',
+    },
+    {
+      type: 'gltf_model_url',
+      url: cubeGltf,
+      assetId: 'gltf_cube',
       priority: 'normal',
     },
   ]);
@@ -170,6 +243,137 @@ export async function createGLTFStage(world: World) {
         albedo: chroma('#000000'),
         metallic: 0,
         roughness: 0.5,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    // Additional test models with evenly distributed layout
+    {
+      assetId: 'gltf_damaged_helmet',
+      label: 'gltf_damaged_helmet',
+      position: [5, 0, 0],
+      scale: [1.2, 1.2, 1.2],
+      material: {
+        albedo: chroma('#8B4513'), // Brown metallic helmet
+        metallic: 0.8,
+        roughness: 0.3,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    {
+      assetId: 'gltf_flight_helmet',
+      label: 'gltf_flight_helmet',
+      position: [-5, 0, 0],
+      scale: [1.2, 1.2, 1.2],
+      material: {
+        albedo: chroma('#2C3E50'), // Dark blue helmet
+        metallic: 0.6,
+        roughness: 0.2,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    {
+      assetId: 'gltf_metal_rough_spheres',
+      label: 'gltf_metal_rough_spheres',
+      position: [0, 5, 0],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#ffffff'),
+        metallic: 0.5,
+        roughness: 0.5,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    {
+      assetId: 'gltf_fox',
+      label: 'gltf_fox',
+      position: [0, -5, 0],
+      scale: [0.8, 0.8, 0.8],
+      material: {
+        albedo: chroma('#FF8C00'), // Orange fox
+        metallic: 0,
+        roughness: 0.8,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    {
+      assetId: 'gltf_duck',
+      label: 'gltf_duck',
+      position: [0, 0, 5],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#FFD700'), // Golden duck
+        metallic: 0.3,
+        roughness: 0.4,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    {
+      assetId: 'gltf_boom_box',
+      label: 'gltf_boom_box',
+      position: [0, 0, -5],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#1A1A1A'), // Black boombox
+        metallic: 0.2,
+        roughness: 0.6,
+        emissive: chroma('#FF0000'), // Red LED lights
+        emissiveIntensity: 0.5,
+      },
+    },
+    {
+      assetId: 'gltf_lantern',
+      label: 'gltf_lantern',
+      position: [3.5, 3.5, 0],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#FFA500'), // Orange lantern
+        metallic: 0.1,
+        roughness: 0.3,
+        emissive: chroma('#FFD700'), // Golden light
+        emissiveIntensity: 0.8,
+      },
+    },
+    {
+      assetId: 'gltf_avocado',
+      label: 'gltf_avocado',
+      position: [-3.5, 3.5, 0],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#228B22'), // Green avocado
+        metallic: 0,
+        roughness: 0.9,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    {
+      assetId: 'gltf_cesium_man',
+      label: 'gltf_cesium_man',
+      position: [3.5, -3.5, 0],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#4169E1'), // Royal blue
+        metallic: 0.1,
+        roughness: 0.7,
+        emissive: chroma('#000000'),
+        emissiveIntensity: 0,
+      },
+    },
+    {
+      assetId: 'gltf_cube',
+      label: 'gltf_cube',
+      position: [-3.5, -3.5, 0],
+      scale: [1, 1, 1],
+      material: {
+        albedo: chroma('#DC143C'), // Crimson cube
+        metallic: 0.4,
+        roughness: 0.2,
         emissive: chroma('#000000'),
         emissiveIntensity: 0,
       },
