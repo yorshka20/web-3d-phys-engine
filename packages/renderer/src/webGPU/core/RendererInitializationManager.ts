@@ -1,3 +1,4 @@
+import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
 import { Inject, Injectable, ServiceTokens } from './decorators';
 import { GeometryManager } from './GeometryManager';
@@ -38,6 +39,9 @@ export class RendererInitializationManager {
 
   @Inject(ServiceTokens.SHADER_MANAGER)
   private shaderManager!: ShaderManager;
+
+  @Inject(ServiceTokens.BIND_GROUP_MANAGER)
+  private bindGroupManager!: BindGroupManager;
 
   @Inject(ServiceTokens.BUFFER_MANAGER)
   private bufferManager!: BufferManager;
@@ -181,7 +185,7 @@ export class RendererInitializationManager {
     // MVP bind group layout
     const mvpLayout = this.resourceManager.getBindGroupLayoutResource('mvpBindGroupLayout');
     if (!mvpLayout) {
-      this.shaderManager.createCustomBindGroupLayout('mvpBindGroupLayout', {
+      this.bindGroupManager.createBindGroupLayout('mvpBindGroupLayout', {
         entries: [
           {
             binding: 0,
@@ -198,7 +202,7 @@ export class RendererInitializationManager {
     const materialLayout =
       this.resourceManager.getBindGroupLayoutResource('materialBindGroupLayout');
     if (!materialLayout) {
-      this.shaderManager.createCustomBindGroupLayout('materialBindGroupLayout', {
+      this.bindGroupManager.createBindGroupLayout('materialBindGroupLayout', {
         entries: [
           {
             binding: 0,
@@ -225,7 +229,7 @@ export class RendererInitializationManager {
     const lightingLayout =
       this.resourceManager.getBindGroupLayoutResource('lightingBindGroupLayout');
     if (!lightingLayout) {
-      this.shaderManager.createCustomBindGroupLayout('lightingBindGroupLayout', {
+      this.bindGroupManager.createBindGroupLayout('lightingBindGroupLayout', {
         entries: [
           {
             binding: 0,

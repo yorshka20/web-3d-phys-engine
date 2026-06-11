@@ -1,16 +1,16 @@
 import { Mesh3DComponent, Transform3DComponent, WebGPU3DRenderComponent, World } from '@ecs';
 import { GeometryInstanceDescriptor } from '@renderer';
-import chroma from 'chroma-js';
+import { rgba } from '@ecs/utils/color';
 
 export function createGeometryStage(world: World) {
   createGeometryEntities(world);
 }
 
 const defaultMaterial = {
-  albedo: chroma('#000000'),
+  albedo: rgba('#000000'),
   metallic: 0,
   roughness: 0.5,
-  emissive: chroma('#000000'),
+  emissive: rgba('#000000'),
   emissiveIntensity: 0,
   materialType: 'normal' as const,
 };
@@ -82,10 +82,10 @@ function createGeometryEntities(world: World) {
       },
       name: 'Sphere 2',
       material: {
-        albedo: chroma('#00ff00'),
+        albedo: rgba('#00ff00'),
         metallic: 0,
         roughness: 0.5,
-        emissive: chroma('#ff0000'),
+        emissive: rgba('#ff0000'),
         emissiveIntensity: 10,
         alphaMode: 'blend',
         customShaderId: 'fire_material_shader',

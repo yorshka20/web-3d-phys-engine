@@ -2,7 +2,6 @@ import { GLTFMaterial, SystemPriorities, WebGPUMaterialDescriptor } from '@ecs';
 import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { FrameData, RenderData } from '@ecs/systems/rendering/types';
 import { RectArea } from '@ecs/types/types';
-import chroma from 'chroma-js';
 import {
   assetRegistry,
   MVPUniformManager,
@@ -759,7 +758,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       colorAttachments: [
         {
           view: this.context.getContext().getCurrentTexture().createView(),
-          clearValue: chroma('#000000').gl(),
+          clearValue: [0, 0, 0, 1],
           loadOp: 'clear',
           storeOp: 'store',
         },

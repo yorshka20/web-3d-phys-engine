@@ -1,3 +1,5 @@
+import chroma from 'chroma-js'
+
 /**
  * Convert HSL color to RGB
  * @param h Hue (0-360)
@@ -40,12 +42,17 @@ export function hslToRgb(h: number, s: number, l: number): RgbColor {
 }
 
 export function randomRgb(alpha?: number): RgbaColor {
-  return {
-    r: Math.floor(Math.random() * 256),
-    g: Math.floor(Math.random() * 256),
-    b: Math.floor(Math.random() * 256),
-    a: alpha ?? Math.random(),
-  };
+  const [r, g, b] = chroma.random().rgb();
+  return { r, g, b, a: alpha ?? 1 };
+}
+
+/**
+ * Parse a CSS color string (hex, rgb, named) into an RgbaColor.
+ * Use this instead of `chroma(...)` directly when the target field expects RgbaColor.
+ */
+export function rgba(input: string, alpha = 1): RgbaColor {
+  const [r, g, b] = chroma(input).rgb();
+  return { r, g, b, a: alpha };
 }
 
 export type RgbColor = {

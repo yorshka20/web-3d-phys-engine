@@ -57,8 +57,8 @@ export interface IComponent<T = ComponentData> extends IPoolable {
 
   getData(): T;
   setData(data: T): void;
-  updateData<K extends keyof T>(key: K, value: T[K]): void;
-  getDataProperty<K extends keyof T>(key: K): T[K];
+  updateData<K extends keyof T & string>(key: K, value: T[K]): void;
+  getDataProperty<K extends keyof T & string>(key: K): T[K];
 }
 
 /**

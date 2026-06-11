@@ -18,13 +18,13 @@ import {
   World,
 } from '@ecs';
 import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
-import chroma from 'chroma-js';
+import { rgba } from '@ecs/utils/color';
 import { Game } from './game/Game';
 import { createGeometryStage } from './stages/geometry';
-import { createGLTFStage } from './stages/gltf';
-import { createPMXAnimationExample } from './stages/pmxAnimationExample';
-import { createPMXModelStage } from './stages/pmxModel';
-import { createZZZPMXModelStage } from './stages/zzz';
+// import { createGLTFStage } from './stages/gltf';
+// import { createPMXAnimationExample } from './stages/pmxAnimationExample';
+// import { createPMXModelStage } from './stages/pmxModel';
+// import { createZZZPMXModelStage } from './stages/zzz';
 
 // Start the application when the page loads
 window.addEventListener('load', () => {
@@ -58,18 +58,18 @@ async function main() {
     case 'geometry':
       await createGeometryStage(world);
       break;
-    case 'pmxModel':
-      await createPMXModelStage(world);
-      break;
-    case 'zzz':
-      await createZZZPMXModelStage(world);
-      break;
-    case 'pmxAnimationExample':
-      await createPMXAnimationExample(world);
-      break;
-    case 'gltfModel':
-      await createGLTFStage(world);
-      break;
+    // case 'pmxModel':
+    //   await createPMXModelStage(world);
+    //   break;
+    // case 'zzz':
+    //   await createZZZPMXModelStage(world);
+    //   break;
+    // case 'pmxAnimationExample':
+    //   await createPMXAnimationExample(world);
+    //   break;
+    // case 'gltfModel':
+    //   await createGLTFStage(world);
+    //   break;
     default:
       break;
   }
@@ -89,10 +89,10 @@ async function main() {
 }
 
 const defaultMaterial = {
-  albedo: chroma('#000000'),
+  albedo: rgba('#000000'),
   metallic: 0,
   roughness: 0.5,
-  emissive: chroma('#000000'),
+  emissive: rgba('#000000'),
   emissiveIntensity: 0,
   materialType: 'normal' as const,
 };
@@ -256,10 +256,10 @@ function cretePlane(world: World) {
   plane.addComponent(
     world.createComponent(WebGPU3DRenderComponent, {
       material: {
-        albedo: chroma('#000000'),
+        albedo: rgba('#000000'),
         metallic: 0,
         roughness: 0.5,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
         customShaderId: 'checkerboard_shader',
         materialType: 'normal' as const,

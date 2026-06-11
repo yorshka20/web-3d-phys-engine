@@ -30,6 +30,9 @@ export default defineConfig(({ mode }) => {
   return {
     base: '/',
     plugins: [wgslLoader(), gltfLoader()],
+    worker: {
+      plugins: () => [wgslLoader(), gltfLoader()],
+    },
     esbuild: {
       target: 'es2022',
       keepNames: true,

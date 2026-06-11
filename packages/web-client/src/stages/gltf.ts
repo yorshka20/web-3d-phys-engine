@@ -1,7 +1,7 @@
 import { Mesh3DComponent, Transform3DComponent, WebGPU3DRenderComponent } from '@ecs';
 import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
-import chroma from 'chroma-js';
+import { rgba } from '@ecs/utils/color';
 
 // Import glTF models using Vite's import syntax
 import boxGltf from '../../../gltf-samples/Models/Box/glTF/Box.gltf?url';
@@ -148,10 +148,10 @@ export async function createGLTFStage(world: World) {
       position: [0, 0, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#ffffff'),
+        albedo: rgba('#ffffff'),
         metallic: 0,
         roughness: 0.5,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -161,10 +161,10 @@ export async function createGLTFStage(world: World) {
       position: [3, 0, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#ff6b6b'),
+        albedo: rgba('#ff6b6b'),
         metallic: 0.2,
         roughness: 0.3,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -174,10 +174,10 @@ export async function createGLTFStage(world: World) {
       position: [-3, 0, 0],
       scale: [2, 2, 2],
       material: {
-        albedo: chroma('#4ecdc4'),
+        albedo: rgba('#4ecdc4'),
         metallic: 0.8,
         roughness: 0.1,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -187,10 +187,10 @@ export async function createGLTFStage(world: World) {
       position: [0, 3, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#2c3e50'),
+        albedo: rgba('#2c3e50'),
         metallic: 0.9,
         roughness: 0.1,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -201,10 +201,10 @@ export async function createGLTFStage(world: World) {
       scale: [1, 1, 1],
       rotation: [0, Math.PI / 2, Math.PI / 2],
       material: {
-        albedo: chroma('#f39c12'),
+        albedo: rgba('#f39c12'),
         metallic: 0.1,
         roughness: 0.7,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -214,10 +214,10 @@ export async function createGLTFStage(world: World) {
       position: [0, 5, 5],
       scale: [3, 3, 3],
       material: {
-        albedo: chroma('#9b59b6'),
+        albedo: rgba('#9b59b6'),
         metallic: 0.7,
         roughness: 0.2,
-        emissive: chroma('#8e44ad'),
+        emissive: rgba('#8e44ad'),
         emissiveIntensity: 0.3,
       },
     },
@@ -227,10 +227,10 @@ export async function createGLTFStage(world: World) {
       position: [0, 0, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#000000'),
+        albedo: rgba('#000000'),
         metallic: 0,
         roughness: 0.5,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -240,10 +240,10 @@ export async function createGLTFStage(world: World) {
       position: [4, 4, 4],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#000000'),
+        albedo: rgba('#000000'),
         metallic: 0,
         roughness: 0.5,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -254,10 +254,10 @@ export async function createGLTFStage(world: World) {
       position: [5, 0, 0],
       scale: [1.2, 1.2, 1.2],
       material: {
-        albedo: chroma('#8B4513'), // Brown metallic helmet
+        albedo: rgba('#8B4513'), // Brown metallic helmet
         metallic: 0.8,
         roughness: 0.3,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -267,10 +267,10 @@ export async function createGLTFStage(world: World) {
       position: [-5, 0, 0],
       scale: [1.2, 1.2, 1.2],
       material: {
-        albedo: chroma('#2C3E50'), // Dark blue helmet
+        albedo: rgba('#2C3E50'), // Dark blue helmet
         metallic: 0.6,
         roughness: 0.2,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -280,10 +280,10 @@ export async function createGLTFStage(world: World) {
       position: [0, 5, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#ffffff'),
+        albedo: rgba('#ffffff'),
         metallic: 0.5,
         roughness: 0.5,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -293,10 +293,10 @@ export async function createGLTFStage(world: World) {
       position: [0, -5, 0],
       scale: [0.8, 0.8, 0.8],
       material: {
-        albedo: chroma('#FF8C00'), // Orange fox
+        albedo: rgba('#FF8C00'), // Orange fox
         metallic: 0,
         roughness: 0.8,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -306,10 +306,10 @@ export async function createGLTFStage(world: World) {
       position: [0, 0, 5],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#FFD700'), // Golden duck
+        albedo: rgba('#FFD700'), // Golden duck
         metallic: 0.3,
         roughness: 0.4,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -319,10 +319,10 @@ export async function createGLTFStage(world: World) {
       position: [0, 0, -5],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#1A1A1A'), // Black boombox
+        albedo: rgba('#1A1A1A'), // Black boombox
         metallic: 0.2,
         roughness: 0.6,
-        emissive: chroma('#FF0000'), // Red LED lights
+        emissive: rgba('#FF0000'), // Red LED lights
         emissiveIntensity: 0.5,
       },
     },
@@ -332,10 +332,10 @@ export async function createGLTFStage(world: World) {
       position: [3.5, 3.5, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#FFA500'), // Orange lantern
+        albedo: rgba('#FFA500'), // Orange lantern
         metallic: 0.1,
         roughness: 0.3,
-        emissive: chroma('#FFD700'), // Golden light
+        emissive: rgba('#FFD700'), // Golden light
         emissiveIntensity: 0.8,
       },
     },
@@ -345,10 +345,10 @@ export async function createGLTFStage(world: World) {
       position: [-3.5, 3.5, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#228B22'), // Green avocado
+        albedo: rgba('#228B22'), // Green avocado
         metallic: 0,
         roughness: 0.9,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -358,10 +358,10 @@ export async function createGLTFStage(world: World) {
       position: [3.5, -3.5, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#4169E1'), // Royal blue
+        albedo: rgba('#4169E1'), // Royal blue
         metallic: 0.1,
         roughness: 0.7,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },
@@ -371,10 +371,10 @@ export async function createGLTFStage(world: World) {
       position: [-3.5, -3.5, 0],
       scale: [1, 1, 1],
       material: {
-        albedo: chroma('#DC143C'), // Crimson cube
+        albedo: rgba('#DC143C'), // Crimson cube
         metallic: 0.4,
         roughness: 0.2,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
       },
     },

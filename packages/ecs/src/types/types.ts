@@ -3,6 +3,7 @@
  */
 
 import { vec2, vec3, vec4 } from 'gl-matrix';
+import type { RgbaColor } from '../utils/color';
 
 /**
  * Represents a 2D point with x and y coordinates
@@ -44,7 +45,7 @@ export interface ViewBounds {
 /**
  * Represents a color in RGBA format
  */
-export type Color = chroma.Color;
+export type Color = RgbaColor;
 
 /**
  * Represents a transform with position, rotation and scale

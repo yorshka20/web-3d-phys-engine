@@ -6,7 +6,7 @@ import { Entity } from '@ecs/core/ecs/Entity';
 import { World } from '@ecs/core/ecs/World';
 import { OrbitCameraControlSystem } from '@ecs/systems/rendering/OrbitCameraControlSystem';
 // import { Vec3 } from '@ecs/types/types';
-import chroma from 'chroma-js';
+import { rgba } from '@ecs/utils/color';
 
 /**
  * Camera Target Indicator Helper
@@ -57,10 +57,11 @@ export class CameraTargetIndicator {
     this.indicatorEntity.addComponent(
       this.world.createComponent(WebGPU3DRenderComponent, {
         material: {
-          albedo: chroma('#ff0000'), // Bright red
+          materialType: 'normal',
+          albedo: rgba('#ff0000'), // Bright red
           metallic: 0,
           roughness: 0.2,
-          emissive: chroma('#ff0000'), // Emissive for visibility
+          emissive: rgba('#ff0000'), // Emissive for visibility
           emissiveIntensity: 0.5,
           customShaderId: 'emissive_shader',
         },

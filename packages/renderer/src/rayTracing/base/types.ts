@@ -34,7 +34,7 @@ export interface Intersection3D {
 
 export interface Intersection2D {
   point: Point;
-  normal: [number, number];
+  normal: Vec2;
   distance: number;
   entity: SerializedEntity;
 }
@@ -95,7 +95,7 @@ export interface SerializedLight {
   type: 'point' | 'directional' | 'ambient' | 'spot';
   castShadows: boolean;
   attenuation: 'none' | 'linear' | 'quadratic' | 'realistic';
-  direction: [number, number, number];
+  direction: Vec3;
   spotAngle: number;
   spotPenumbra: number;
   enabled: boolean;

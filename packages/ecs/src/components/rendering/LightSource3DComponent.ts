@@ -72,7 +72,7 @@ export class LightSource3DComponent extends Component {
   attenuation: AttenuationType = 'quadratic';
 
   // directional light specific properties
-  direction: [number, number, number] = [0, 0, -1]; // default down
+  direction: Vec3 = [0, 0, -1]; // default down
 
   // spot light specific properties
   spotAngle = 45; // spot light cone angle (degrees)
@@ -100,7 +100,7 @@ export class LightSource3DComponent extends Component {
       type?: LightType;
       castShadows?: boolean;
       attenuation?: AttenuationType;
-      direction?: [number, number, number];
+      direction?: Vec3;
       spotAngle?: number;
       enabled?: boolean;
       layer?: number;

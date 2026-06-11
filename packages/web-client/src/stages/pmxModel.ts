@@ -2,7 +2,7 @@ import { PMXMeshComponent, Transform3DComponent, Vec3, WebGPU3DRenderComponent }
 import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
 import { pmxAssetRegistry } from '@renderer/webGPU/core/PMXAssetRegistry';
-import chroma from 'chroma-js';
+import { rgba } from '@ecs/utils/color';
 import { endministratorDescriptor, nahidaDescriptor, perlicaDescriptor } from './descriptors';
 
 import endministratorModel from '../../assets/endministrator/endministrator.pmx?url';
@@ -53,10 +53,10 @@ function createPMXEntity(world: World, pmxModel: PMXModel) {
   entity.addComponent(
     world.createComponent(WebGPU3DRenderComponent, {
       material: {
-        albedo: chroma('#000000'),
+        albedo: rgba('#000000'),
         metallic: 0,
         roughness: 0.5,
-        emissive: chroma('#000000'),
+        emissive: rgba('#000000'),
         emissiveIntensity: 0,
         customShaderId: 'pmx_material_shader',
         materialType: 'pmx' as const,
