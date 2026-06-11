@@ -36,7 +36,7 @@ type Stage = 'geometry' | 'pmxModel' | 'zzz' | 'pmxAnimationExample' | 'gltfMode
 
 const stages: Stage[] = ['geometry', 'pmxModel', 'zzz', 'pmxAnimationExample', 'gltfModel'];
 
-const stage: Stage = stages[4];
+const stage: Stage = stages[0];
 
 async function main() {
   const rootElement = document.body;
