@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json",
     "build:post": "node ../../scripts/copy-dist.js",
     "preview": "vite preview"
   },
   "dependencies": {
     "@web-3d-phys-engine/ecs": "workspace:*",
     "chroma-js": "3.1.2",
-    "react": "19.1.1",
-    "react-dom": "19.1.1",
+    "svelte": "^5.0.0",
     "vite": "7.1.3"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "svelte-check": "^4.0.0"
   }
 }

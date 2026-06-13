@@ -21,6 +21,7 @@ import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
 import { rgba } from '@ecs/utils/color';
 import { Game } from './game/Game';
 import { createGeometryStage } from './stages/geometry';
+import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
 // import { createGLTFStage } from './stages/gltf';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
@@ -78,7 +79,10 @@ async function main() {
   await game.initialize();
 
   // Create camera debug panel
-  // createCameraDebugPanel(camera);
+  createCameraDebugPanel(camera);
+
+  // Mount entity spawn panel (press F to toggle)
+  mountEntityPanel(world);
 
   game.start();
 

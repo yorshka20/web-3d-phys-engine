@@ -1,3 +1,4 @@
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import fs from 'fs-extra';
 import { resolve } from 'path';
 import { defineConfig } from 'vite';
@@ -29,7 +30,7 @@ function gltfLoader() {
 export default defineConfig(({ mode }) => {
   return {
     base: '/',
-    plugins: [wgslLoader(), gltfLoader()],
+    plugins: [svelte(), wgslLoader(), gltfLoader()],
     worker: {
       plugins: () => [wgslLoader(), gltfLoader()],
     },
