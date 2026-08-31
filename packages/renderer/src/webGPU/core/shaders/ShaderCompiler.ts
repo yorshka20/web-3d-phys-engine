@@ -1,4 +1,7 @@
-import { Inject, Injectable } from '../decorators';
+// Import from the defining module, not the '../decorators' barrel: the barrel
+// imports this file (initContainer registers ShaderCompiler), so going through
+// it forms a circular import and Injectable is undefined at decoration time.
+import { Inject, Injectable } from '../decorators/ResourceDecorators';
 import { ServiceTokens } from '../decorators/DIContainer';
 import { shaderFragmentRegistry } from './registry';
 import {

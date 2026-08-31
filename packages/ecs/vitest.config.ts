@@ -1,7 +1,9 @@
 import { resolve } from 'path';
 import { defineConfig } from 'vitest/config';
+import { gltfLoader, wgslLoader } from '../../scripts/vite-asset-loaders';
 
 export default defineConfig({
+  plugins: [wgslLoader(), gltfLoader()],
   test: {
     environment: 'jsdom',
     globals: true,
@@ -30,6 +32,8 @@ export default defineConfig({
     alias: [
       { find: /^@ecs\/(.*)/, replacement: resolve(__dirname, 'src/$1') },
       { find: /^@ecs$/, replacement: resolve(__dirname, 'src') },
+      { find: /^@renderer\/(.*)/, replacement: resolve(__dirname, '../renderer/src/$1') },
+      { find: /^@renderer$/, replacement: resolve(__dirname, '../renderer/src') },
     ],
   },
 });

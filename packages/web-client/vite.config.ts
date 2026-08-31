@@ -2,30 +2,9 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import fs from 'fs-extra';
 import { resolve } from 'path';
 import { defineConfig } from 'vite';
+import { gltfLoader, wgslLoader } from '../../scripts/vite-asset-loaders';
 
 const packageJson = fs.readJSONSync(resolve(__dirname, '../../package.json'));
-
-function wgslLoader() {
-  return {
-    name: 'wgsl-loader',
-    transform(code, id) {
-      if (id.endsWith('.wgsl')) {
-        return `export default ${JSON.stringify(code)};`;
-      }
-    },
-  };
-}
-
-function gltfLoader() {
-  return {
-    name: 'gltf-loader',
-    transform(code, id) {
-      if (id.endsWith('.gltf')) {
-        return `export default ${JSON.stringify(code)};`;
-      }
-    },
-  };
-}
 
 export default defineConfig(({ mode }) => {
   return {
