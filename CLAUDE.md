@@ -239,6 +239,13 @@ Current state that is easy to misread as bugs or dead code — check here before
 - **Correct me when I'm wrong**: always respect the truth. The user may be wrong, and you must
   not accept a wrong suggestion. If your view differs, check whether the user has made a mistake
   before agreeing.
+- **Deleting legacy code — narrow definition of "2D-limited"**: it means *superseded by an
+  existing 3D counterpart or meaningless in 3D*, NOT "currently written with 2D coordinates".
+  Gameplay mechanisms (spawn/damage/pickup/AI), the worker pool, collision, and the CPU ray
+  tracer are evolution bases — this repo's pattern is evolving 2D implementations to 3D in place
+  (PhysicsComponent, Camera3D, LightSource3D all did). Batch deletions require the user's
+  per-item approval. Upstream `vampire-survivor-like` holds same-or-newer copies of all inherited
+  2D code (verified 2026-08-31), so approved deletions stay recoverable from there.
 
 ## Bug-Fixing Principle: No Patch Mindset (Root Cause First)
 
