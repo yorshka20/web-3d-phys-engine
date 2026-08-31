@@ -3,138 +3,109 @@ import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
 import { rgba } from '@ecs/utils/color';
 
-// Import glTF models using Vite's import syntax
-import boxGltf from '../../../gltf-samples/Models/Box/glTF/Box.gltf?url';
-import sciFiHelmetGltf from '../../../gltf-samples/Models/SciFiHelmet/glTF/SciFiHelmet.gltf?url';
-import sunglassesGltf from '../../../gltf-samples/Models/SunglassesKhronos/glTF/SunglassesKhronos.gltf?url';
-import suzanneGltf from '../../../gltf-samples/Models/Suzanne/glTF/Suzanne.gltf?url';
-import toyCarGltf from '../../../gltf-samples/Models/ToyCar/glTF/ToyCar.gltf?url';
-import triangleGltf from '../../../gltf-samples/Models/Triangle/glTF/Triangle.gltf?url';
-
-import perlicaGltf from '../../assets/perlica_patron/perlica.glb?url';
-import yvonneGltf from '../../assets/yvonne/yvonne.glb?url';
-
-// Import additional glTF models for comprehensive testing
-import avocadoGltf from '../../../gltf-samples/Models/Avocado/glTF/Avocado.gltf?url';
-import boomBoxGltf from '../../../gltf-samples/Models/BoomBox/glTF/BoomBox.gltf?url';
-import cesiumManGltf from '../../../gltf-samples/Models/CesiumMan/glTF/CesiumMan.gltf?url';
-import cubeGltf from '../../../gltf-samples/Models/Cube/glTF/Cube.gltf?url';
-import damagedHelmetGltf from '../../../gltf-samples/Models/DamagedHelmet/glTF/DamagedHelmet.gltf?url';
-import duckGltf from '../../../gltf-samples/Models/Duck/glTF/Duck.gltf?url';
-import flightHelmetGltf from '../../../gltf-samples/Models/FlightHelmet/glTF/FlightHelmet.gltf?url';
-import foxGltf from '../../../gltf-samples/Models/Fox/glTF/Fox.gltf?url';
-import lanternGltf from '../../../gltf-samples/Models/Lantern/glTF/Lantern.gltf?url';
-import metalRoughSpheresGltf from '../../../gltf-samples/Models/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf?url';
+// Khronos sample models are fetched at runtime, not imported at build time, so builds and CI
+// never depend on the gltf-samples checkout. The base URL comes from web-client/.env (pinned
+// jsDelivr CDN; .env.development.local can point it at the local submodule via /@fs). WebIO
+// resolves each model's relative .bin/texture references against this URL.
+const sampleModelUrl = (path: string) => `${import.meta.env.VITE_GLTF_SAMPLES_BASE}/${path}`;
 
 export async function createGLTFStage(world: World) {
   // Load GLTF models into CPU asset registry
   await AssetLoader.loadAssets([
     {
       type: 'gltf_model_url',
-      url: boxGltf,
+      url: sampleModelUrl('Box/glTF/Box.gltf'),
       assetId: 'gltf_box',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: suzanneGltf,
+      url: sampleModelUrl('Suzanne/glTF/Suzanne.gltf'),
       assetId: 'gltf_suzanne',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: triangleGltf,
+      url: sampleModelUrl('Triangle/glTF/Triangle.gltf'),
       assetId: 'gltf_triangle',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: sunglassesGltf,
+      url: sampleModelUrl('SunglassesKhronos/glTF/SunglassesKhronos.gltf'),
       assetId: 'gltf_sunglasses',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: toyCarGltf,
+      url: sampleModelUrl('ToyCar/glTF/ToyCar.gltf'),
       assetId: 'gltf_toy_car',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: sciFiHelmetGltf,
+      url: sampleModelUrl('SciFiHelmet/glTF/SciFiHelmet.gltf'),
       assetId: 'gltf_sci_fi_helmet',
-      priority: 'normal',
-    },
-    {
-      type: 'gltf_model_url',
-      url: perlicaGltf,
-      assetId: 'gltf_perlica',
-      priority: 'normal',
-    },
-    {
-      type: 'gltf_model_url',
-      url: yvonneGltf,
-      assetId: 'gltf_yvonne',
       priority: 'normal',
     },
     // Additional test models for comprehensive material and geometry coverage
     {
       type: 'gltf_model_url',
-      url: damagedHelmetGltf,
+      url: sampleModelUrl('DamagedHelmet/glTF/DamagedHelmet.gltf'),
       assetId: 'gltf_damaged_helmet',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: flightHelmetGltf,
+      url: sampleModelUrl('FlightHelmet/glTF/FlightHelmet.gltf'),
       assetId: 'gltf_flight_helmet',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: metalRoughSpheresGltf,
+      url: sampleModelUrl('MetalRoughSpheres/glTF/MetalRoughSpheres.gltf'),
       assetId: 'gltf_metal_rough_spheres',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: foxGltf,
+      url: sampleModelUrl('Fox/glTF/Fox.gltf'),
       assetId: 'gltf_fox',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: duckGltf,
+      url: sampleModelUrl('Duck/glTF/Duck.gltf'),
       assetId: 'gltf_duck',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: boomBoxGltf,
+      url: sampleModelUrl('BoomBox/glTF/BoomBox.gltf'),
       assetId: 'gltf_boom_box',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: lanternGltf,
+      url: sampleModelUrl('Lantern/glTF/Lantern.gltf'),
       assetId: 'gltf_lantern',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: avocadoGltf,
+      url: sampleModelUrl('Avocado/glTF/Avocado.gltf'),
       assetId: 'gltf_avocado',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: cesiumManGltf,
+      url: sampleModelUrl('CesiumMan/glTF/CesiumMan.gltf'),
       assetId: 'gltf_cesium_man',
       priority: 'normal',
     },
     {
       type: 'gltf_model_url',
-      url: cubeGltf,
+      url: sampleModelUrl('Cube/glTF/Cube.gltf'),
       assetId: 'gltf_cube',
       priority: 'normal',
     },
@@ -219,32 +190,6 @@ export async function createGLTFStage(world: World) {
         roughness: 0.2,
         emissive: rgba('#8e44ad'),
         emissiveIntensity: 0.3,
-      },
-    },
-    {
-      assetId: 'gltf_perlica',
-      label: 'gltf_perlica',
-      position: [0, 0, 0],
-      scale: [1, 1, 1],
-      material: {
-        albedo: rgba('#000000'),
-        metallic: 0,
-        roughness: 0.5,
-        emissive: rgba('#000000'),
-        emissiveIntensity: 0,
-      },
-    },
-    {
-      assetId: 'gltf_yvonne',
-      label: 'gltf_yvonne',
-      position: [4, 4, 4],
-      scale: [1, 1, 1],
-      material: {
-        albedo: rgba('#000000'),
-        metallic: 0,
-        roughness: 0.5,
-        emissive: rgba('#000000'),
-        emissiveIntensity: 0,
       },
     },
     // Additional test models with evenly distributed layout

@@ -9,8 +9,11 @@ Package manager is **pnpm only** — never npm or yarn. Shell is zsh.
 ```bash
 pnpm install
 
-# One-time setup: gltf-samples is a git submodule (KhronosGroup/glTF-Sample-Assets).
-# The gltf stage's model imports fail until it is checked out.
+# Optional: gltf-samples is a git submodule (KhronosGroup/glTF-Sample-Assets, ~1.5GB shallow).
+# The gltf stage fetches sample models at runtime from VITE_GLTF_SAMPLES_BASE (web-client/.env:
+# a jsDelivr CDN URL pinned to the submodule commit). To serve this local checkout instead,
+# point the var at it via /@fs in web-client/.env.development.local (gitignored).
+# Builds and CI never need the submodule.
 git submodule update --init
 
 # Type checking (root tsc --noEmit over all packages via the root tsconfig)
@@ -170,8 +173,10 @@ create camera/plane/coordinate entities, load a stage from `src/stages/`, `game.
 `WebGPURenderSystem`. State shared with Svelte from plain TS must live in `.svelte.ts` files.
 
 Vite specifics: inline `wgslLoader`/`gltfLoader` plugins inline `.wgsl`/`.gltf` as strings (also
-registered for workers); glTF sample models are instead imported with `?url` and fetched at
-runtime by `AssetLoader`; COEP/COOP headers are set for SharedArrayBuffer/workers.
+registered for workers); Khronos sample models are never imported — `stages/gltf.ts` builds URLs
+from `import.meta.env.VITE_GLTF_SAMPLES_BASE` (committed default in `web-client/.env`: the
+commit-pinned jsDelivr CDN; local-submodule override via `/@fs` in `.env.development.local`);
+COEP/COOP headers are set for SharedArrayBuffer/workers.
 
 ## Work-in-Progress Map
 

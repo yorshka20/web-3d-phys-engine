@@ -3,6 +3,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_REPO_URL: string;
+  readonly VITE_GLTF_SAMPLES_BASE: string;
 }
 
 interface ImportMeta {

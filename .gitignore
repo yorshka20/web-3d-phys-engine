@@ -9,8 +9,7 @@ dist/
 build/
 *.tsbuildinfo
 
-# Environment variables
-.env
+# Environment variables — plain .env is committed (shared non-secret defaults); *.local stays out
 .env.local
 .env.development.local
 .env.test.local
