@@ -375,6 +375,12 @@ notes** — never `git add` them. Delivery relies on tracked code and docs.
 
 ### Rules
 
+- **Capture learnings during exploration, not only at delivery.** Any reusable fact uncovered
+  while reading code — a caching/keying mechanism, a hidden coupling, a runtime ordering
+  constraint, a third-party API surface — goes into the matching `.claude-learnings/` scope
+  file in the same session, even when it was not the goal of the investigation. The learnings
+  directory is an architecture map that fills in across sessions: the next investigation must
+  be able to start from notes instead of re-reading the same code.
 - **`index.md` is a pure pointer layer, not a content summary.** One line per file:
   `- [name](file.md) — <one-line hook>`. **No dated deltas in an index** — deltas go in the body
   of scope/daily files. Update an index line only when a file's overall theme changes. Keep each
