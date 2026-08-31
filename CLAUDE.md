@@ -183,14 +183,17 @@ Current state that is easy to misread as bugs or dead code — check here before
 - **The compute pass is disabled**: `// await this.computePass(...)` in
   `WebGPURenderer.renderTick`. The PMX morph-compute path (`PMXAnimationBufferManager`,
   `compute/PMXMorphCompute.wgsl`) is dormant, part of stalled PMX morph animation work.
-- **Legacy 2D remnants** — `canvas2d/` (and the ecs-side 2D `RenderSystem`) was deleted
-  2026-08-31; the reusable canvas-element management was extracted to `renderer/src/base/`
-  (`CanvasLayer`). `renderer/src/rayTracing/` remains (CPU ray tracer driven by the ecs worker
-  pool; its `RayTracingLayer` is runtime-orphaned and needs `setWorld()` injection from a future
-  driver). Most of `ecs/src/entities/` and many gameplay systems (AI, Chase, Weapon, Damage,
-  Death, Pickup, Spawn, Collision, Border, Recycle, ForceField) are dormant 2D-game leftovers not
-  registered by `main.ts`; their old viewport authority is gone — they read
-  `systems/viewport.ts#getScreenViewport()`, a transitional seam pending the legacy-2D decision.
+- **2D-era code: the keep/delete decision is settled** (2026-08-31). Deleted, because a 3D
+  counterpart supersedes them: `canvas2d/` + the ecs 2D `RenderSystem` (→ WebGPURenderSystem;
+  canvas-element management survives in `renderer/src/base/CanvasLayer`), 2D `TransformSystem`
+  (→ Transform3DSystem), 2D `InputSystem` (→ Input3DSystem; WeaponSystem now wants an
+  `AimInputSource` capability under the 'InputSystem' name). **Everything dimension-independent
+  stays permanently** and awaits in-place 2D→3D evolution: gameplay systems (AI, Chase, Weapon,
+  Damage, Death, Pickup, Spawn, Collision, Border, Recycle, ForceField), `ecs/src/entities/`,
+  the `core/worker` pool, and `renderer/src/rayTracing/` (CPU ray tracer; its `RayTracingLayer`
+  is runtime-orphaned and needs `setWorld()` injection from a future driver). The dormant
+  gameplay systems read `systems/viewport.ts#getScreenViewport()` where the 2D pipeline's
+  viewport used to be.
 - `InstanceManager` is an **empty class** and `renderBatches` is never populated — instancing is
   planned, not implemented. `RendererInitializationManager` documents a 4-phase init that
   `WebGPURenderer.init()` does not use (orphaned refactor). Several `IWebGPURenderer` methods
