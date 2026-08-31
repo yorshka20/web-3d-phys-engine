@@ -64,3 +64,25 @@ PMX = group 2 material + group 3 animation.
 Known deferred items: alpha MASK shader discard is unverified; PMX animation buffers are keyed
 per asset (two entities sharing one PMX asset would fight); uniforms are rewritten every frame
 (no dirty tracking).
+
+## Module structure (who owns what)
+
+- `webGPU/renderer/frame/DrawListBuilder.ts` — pure data step: builds, partitions, and sorts
+  the frame's `DrawItem` lists. No GPU access, no DI; unit-testable in isolation.
+- `webGPU/renderer/passes/ForwardPass.ts` — the single render pass (forward shading: geometry
+  and lighting computed in one pass writing straight to swapchain color + depth, as opposed to
+  a deferred G-buffer chain). A render pass is the unit that resolves and draws its own draw
+  lists into an encoder, so it owns all three steps: attachment descriptors, the async prepare
+  phase, and the synchronous encode walk. The walk is deliberately NOT a separate "executor"
+  object — one pass exists today, and machinery is extracted for sharing only when a second
+  pass (shadow / depth-prepass / post-process) actually needs it. PMX-specific resolution
+  (per-material geometry, animation buffers) lives as pass privates under the same rule.
+  Passes are renderer-private objects wired by constructor, not DI services; attachment views
+  are injected as closures (the swapchain texture changes per frame, depth on resize).
+- `webGPU/core/MaterialBinder.ts` — `@Injectable` DI service resolving material-tier bind
+  groups by `materialKey` (regular + glTF families; PMX material bind groups come pre-built
+  from `PMXMaterialProcessor`).
+- `WebGPURenderer` — device/context lifecycle, manager construction, frame loop
+  (`beginFrame`/`renderTick`/`endFrame`), and pass sequencing: today the dormant PMX morph
+  compute pass (commented out) followed by `ForwardPass.execute`. Future passes join as
+  sibling objects under `passes/` and `renderTick` becomes the pass schedule.
