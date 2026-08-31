@@ -1,10 +1,43 @@
-import { RenderComponent, ShapeComponent, TransformComponent } from '@ecs/components/index';
-import { IEntity } from '@ecs/core/ecs/types';
-import { RectArea } from '@ecs/types/types';
-import { RenderLayerIdentifier, RenderLayerPriority } from '../../constant';
-import { BaseRenderLayer, RenderLayerType } from './RenderLayer';
+import { RectArea } from '../types/base';
 
-export class CanvasRenderLayer extends BaseRenderLayer {
+export enum RenderLayerType {
+  CANVAS = 'canvas',
+  DOM = 'dom',
+}
+
+/**
+ * Minimal render-layer contract: identity, stacking priority, visibility and
+ * the per-frame update hook. Carries no ECS knowledge — a concrete layer that
+ * needs scene access must receive it through its own explicit seam.
+ */
+export abstract class RenderLayer {
+  type: RenderLayerType = RenderLayerType.CANVAS;
+  visible: boolean = true;
+
+  constructor(
+    public identifier: string,
+    public priority: number,
+  ) {}
+
+  abstract update(deltaTime: number, viewport: RectArea, cameraOffset: [number, number]): void;
+
+  abstract onResize(): void;
+
+  onDestroy(): void {}
+}
+
+/**
+ * Canvas-element management shared by every canvas-backed layer, whatever
+ * context type ultimately draws into it (2d today, webgpu-composited layers
+ * later): DPR-aware sizing, absolute positioning stacked by priority
+ * (z-index), resize, and teardown.
+ *
+ * Two modes:
+ * - own canvas: the layer creates and mounts its own stacked <canvas>.
+ * - shared canvas: the layer draws into a canvas owned by someone else and
+ *   must not clear, resize, or remove it.
+ */
+export class CanvasLayer extends RenderLayer {
   type = RenderLayerType.CANVAS;
 
   protected ctx: CanvasRenderingContext2D;
@@ -13,14 +46,13 @@ export class CanvasRenderLayer extends BaseRenderLayer {
   protected isSharedCanvas: boolean;
 
   constructor(
-    public identifier: RenderLayerIdentifier,
-    public priority: RenderLayerPriority,
+    identifier: string,
+    priority: number,
     rootElementOrCanvas: HTMLElement | HTMLCanvasElement,
     context?: CanvasRenderingContext2D,
   ) {
     super(identifier, priority);
 
-    // get dpr
     const dpr = window.devicePixelRatio || 1;
 
     if (rootElementOrCanvas instanceof HTMLCanvasElement) {
@@ -53,19 +85,10 @@ export class CanvasRenderLayer extends BaseRenderLayer {
     throw new Error('Method not implemented.');
   }
 
-  protected clearCanvas(viewport: RectArea, cameraOffset: [number, number]): void {
+  protected clearCanvas(): void {
     if (!this.isSharedCanvas) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
-  }
-
-  protected renderEntity(
-    render: RenderComponent,
-    transform: TransformComponent,
-    shape: ShapeComponent,
-    cameraOffset: [number, number],
-  ): void {
-    throw new Error('Method not implemented.');
   }
 
   onResize(): void {
@@ -79,15 +102,6 @@ export class CanvasRenderLayer extends BaseRenderLayer {
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.scale(dpr, dpr);
     }
-  }
-
-  filterEntity(entity: IEntity, viewport: RectArea): boolean {
-    return (
-      entity.hasComponent(ShapeComponent.componentName) &&
-      entity.hasComponent(RenderComponent.componentName) &&
-      entity.hasComponent(TransformComponent.componentName) &&
-      this.isInViewport(entity, viewport)
-    );
   }
 
   onDestroy(): void {

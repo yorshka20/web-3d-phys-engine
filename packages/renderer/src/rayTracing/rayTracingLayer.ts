@@ -10,8 +10,9 @@ import {
 } from '@ecs';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { IEntity } from '@ecs/core/ecs/types';
+import type { World } from '@ecs/core/ecs/World';
 import { WorkerPoolManager } from '@ecs/core/worker';
-import { CanvasRenderLayer } from '@renderer/canvas2d';
+import { CanvasLayer } from '@renderer/base';
 import { RenderLayerIdentifier, RenderLayerPriority } from '@renderer/constant';
 import {
   ProgressiveRayTracingWorkerData,
@@ -42,9 +43,12 @@ interface ProgressiveRenderState {
  * This approach allows for complex lighting and shadow effects to be rendered in parallel,
  * leveraging multiple CPU cores for better performance.
  */
-export class RayTracingLayer extends CanvasRenderLayer {
+export class RayTracingLayer extends CanvasLayer {
   // default invisible
   visible = false;
+
+  // Scene access seam: whoever mounts this layer must inject the world.
+  private world: World | null = null;
 
   private workerPoolManager: WorkerPoolManager;
   private tileSize = 100; // The width and height of the tiles rendered by each worker. Smaller tiles give better load balancing but more overhead.
@@ -92,6 +96,21 @@ export class RayTracingLayer extends CanvasRenderLayer {
 
     // Get a reference to the worker pool manager singleton
     this.workerPoolManager = WorkerPoolManager.getInstance();
+  }
+
+  setWorld(world: World): void {
+    this.world = world;
+  }
+
+  private getWorld(): World {
+    if (!this.world) {
+      throw new Error(`Layer ${this.identifier} not initialized with a world`);
+    }
+    return this.world;
+  }
+
+  private getLayerEntities(viewport: RectArea): IEntity[] {
+    return this.getWorld().getEntitiesByCondition((entity) => this.filterEntity(entity));
   }
 
   /**

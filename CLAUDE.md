@@ -68,7 +68,8 @@ Known-broken test infrastructure (do not trust it, fix it before relying on it):
 Three source packages plus an asset submodule:
 
 - `packages/ecs` — ECS core plus all game components/systems (including the render *systems*).
-- `packages/renderer` — WebGPU renderer (plus legacy canvas2d and CPU rayTracing subsystems).
+- `packages/renderer` — WebGPU renderer, shared canvas-layer base (`src/base/`), and the legacy
+  CPU rayTracing subsystem.
 - `packages/web-client` — Vite app: entry point, demo stages, Svelte UI overlay.
 - `packages/gltf-samples` — git submodule of Khronos glTF sample assets (no package.json).
 
@@ -88,12 +89,12 @@ documented in `docs/toolchain.md` — read it before touching module/resolution 
 
 ### The ecs ↔ renderer coupling
 
-The two packages are **mutually coupled at source level, in both directions** (~40 renderer files
-import `@ecs`; ~19 ecs files import `@renderer`). The ECS↔renderer data contract is
-`packages/ecs/src/systems/rendering/types.ts` (`FrameData` / `RenderData` / `SceneData`), which
-itself imports renderer types back into ecs. Much of the cycle's width comes from the legacy 2D
-subsystems (see Work-in-Progress Map). Treat any change that adds a new cross-package import as
-an architectural decision, not a convenience.
+Target rule: dependencies flow one way — `web-client → ecs → renderer → (third-party only)`.
+The renderer owns its input vocabulary (`geometry/`, `assets/`, `material/`, `frame/` — the
+`FrameData` contract lives in `@renderer/frame/types`), and its only remaining `@ecs` imports are
+inside the legacy `rayTracing/` subsystem. Old ecs paths re-export the moved types as
+**transitional shims** (removal tracked as Phase 1.5 in the local architecture roadmap). Treat
+any new renderer→ecs import as a layering violation, not a convenience.
 
 ### ECS package
 
@@ -182,11 +183,14 @@ Current state that is easy to misread as bugs or dead code — check here before
 - **The compute pass is disabled**: `// await this.computePass(...)` in
   `WebGPURenderer.renderTick`. The PMX morph-compute path (`PMXAnimationBufferManager`,
   `compute/PMXMorphCompute.wgsl`) is dormant, part of stalled PMX morph animation work.
-- **Legacy 2D subsystems** — `renderer/src/canvas2d/`, `renderer/src/rayTracing/`, most of
-  `ecs/src/entities/` (Enemy/Projectile/Item/weapons) and many gameplay systems (AI, Chase,
-  Weapon, Damage, Death, Pickup, Spawn, Collision) — are 2D-game leftovers not registered by
-  `main.ts` (only 6 systems are wired). Still exported and still imported by ecs, which is the
-  main width of the ecs↔renderer cycle.
+- **Legacy 2D remnants** — `canvas2d/` (and the ecs-side 2D `RenderSystem`) was deleted
+  2026-08-31; the reusable canvas-element management was extracted to `renderer/src/base/`
+  (`CanvasLayer`). `renderer/src/rayTracing/` remains (CPU ray tracer driven by the ecs worker
+  pool; its `RayTracingLayer` is runtime-orphaned and needs `setWorld()` injection from a future
+  driver). Most of `ecs/src/entities/` and many gameplay systems (AI, Chase, Weapon, Damage,
+  Death, Pickup, Spawn, Collision, Border, Recycle, ForceField) are dormant 2D-game leftovers not
+  registered by `main.ts`; their old viewport authority is gone — they read
+  `systems/viewport.ts#getScreenViewport()`, a transitional seam pending the legacy-2D decision.
 - `InstanceManager` is an **empty class** and `renderBatches` is never populated — instancing is
   planned, not implemented. `RendererInitializationManager` documents a 4-phase init that
   `WebGPURenderer.init()` does not use (orphaned refactor). Several `IWebGPURenderer` methods

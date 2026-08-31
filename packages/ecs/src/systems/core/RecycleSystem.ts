@@ -2,7 +2,7 @@ import { TransformComponent } from '@ecs/components';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
-import { RenderSystem } from '@ecs/systems';
+import { getScreenViewport } from '../viewport';
 import { Point, RectArea } from '@ecs/types/types';
 
 /**
@@ -29,15 +29,11 @@ export class RecycleSystem extends System {
     this.predicate = predicate;
   }
 
-  private getRenderSystem(): RenderSystem {
-    return RenderSystem.getInstance();
-  }
-
   update(deltaTime: number): void {
     this.removeEntities();
 
     // get viewport (depends on RenderSystem)
-    const viewport = this.getRenderSystem().getViewport();
+    const viewport = getScreenViewport();
 
     // iterate all entities with TransformComponent
     const entities = this.world.getEntitiesByCondition((entity) => {

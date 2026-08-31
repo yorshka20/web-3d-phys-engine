@@ -1,7 +1,7 @@
 import { PhysicsComponent, TransformComponent } from '@ecs/components';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { System } from '@ecs/core/ecs/System';
-import { RenderSystem } from '@ecs/systems';
+import { getScreenViewport } from '../viewport';
 import { Point, RectArea, Vec2 } from '@ecs/types/types';
 
 /**
@@ -22,14 +22,7 @@ export class ForceFieldSystem extends System {
   private unitDirection: Vec2 = [0, 1];
 
   get viewport(): RectArea {
-    if (!this.renderSystem) {
-      throw new Error('RenderSystem not found');
-    }
-    return this.renderSystem.getViewport();
-  }
-
-  get renderSystem(): RenderSystem | null {
-    return RenderSystem.getInstance();
+    return getScreenViewport();
   }
 
   constructor() {

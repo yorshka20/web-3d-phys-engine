@@ -2,7 +2,6 @@ import { ShapeComponent, SpatialGridComponent, TransformComponent } from '@ecs/c
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
-import { RenderSystem } from '../rendering/RenderSystem';
 
 /**
  * @class SpatialGridSystem
@@ -21,16 +20,11 @@ export class SpatialGridSystem extends System {
    */
   private readonly UPDATE_INTERVAL = 100; // Update every 100ms (roughly 10fps)
 
-  private resizeUpdated: boolean = false;
 
   private spatialComponent: SpatialGridComponent | null = null;
 
   constructor() {
     super('SpatialGridSystem', SystemPriorities.SPATIAL_GRID, 'logic');
-  }
-
-  private getRenderSystem(): RenderSystem {
-    return RenderSystem.getInstance();
   }
 
   /**
@@ -55,7 +49,6 @@ export class SpatialGridSystem extends System {
     // Handle window resize
     window.addEventListener('resize', () => {
       this.spatialComponent?.clear();
-      this.resizeUpdated = false;
     });
   }
 
@@ -86,13 +79,6 @@ export class SpatialGridSystem extends System {
       this.spatialComponent.insert(entity.id, position, entity.type, size);
     }
 
-    if (!this.resizeUpdated) {
-      const renderSystem = this.getRenderSystem();
-      if (renderSystem) {
-        this.spatialComponent.updateMaxCell(renderSystem.getViewport());
-        this.resizeUpdated = true;
-      }
-    }
   }
 
   destroy(): void {

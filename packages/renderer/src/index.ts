@@ -1,5 +1,5 @@
 export * from './assets';
-export * from './canvas2d';
+export * from './base';
 export * from './frame';
 // The frame contract's LightType enum wins over the legacy string union in
 // rayTracing/worker/types (star exports would otherwise drop the name).

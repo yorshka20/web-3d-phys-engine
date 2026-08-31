@@ -13,22 +13,15 @@ import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
 import { SoundManager } from '@ecs/core/resources/SoundManager';
 import { createDamageTextEntity } from '@ecs/entities';
-import { IRenderLayer } from '@renderer/types/IRenderLayer';
 import { CollisionSystem } from '../physics/collision';
-import { RenderSystem } from '../rendering';
 
 export class DamageSystem extends System {
   private collisionSystem: CollisionSystem | null = null;
 
-  private highlightedCells: string[] = [];
 
   constructor() {
     super('DamageSystem', SystemPriorities.DAMAGE, 'logic');
     // this.debug = true;
-  }
-
-  private getRenderSystem(): RenderSystem {
-    return RenderSystem.getInstance();
   }
 
   getCollisionSystem(): CollisionSystem {
@@ -243,7 +236,6 @@ export class DamageSystem extends System {
     }
 
     // Highlight cells in debug layer
-    this.collectHighlightedCells(cells);
 
     const hitEnemies: Entity[] = [];
     const processedEnemies = new Set<string>(); // Track processed enemies to avoid duplicates
@@ -356,32 +348,6 @@ export class DamageSystem extends System {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  private getGridDebugLayer(): IRenderLayer | null {
-    const gridDebugLayer = this.getRenderSystem().getGridDebugLayer();
-    if (!gridDebugLayer) {
-      return null;
-    }
-    return gridDebugLayer;
-  }
-
-  private collectHighlightedCells(cells: string[]): void {
-    const gridDebugLayer = this.getGridDebugLayer();
-    if (!gridDebugLayer) {
-      return;
-    }
-    this.highlightedCells.push(...cells);
-  }
-
-  private sendHighlightedCells(): void {
-    const gridDebugLayer = this.getGridDebugLayer();
-    if (!gridDebugLayer) {
-      return;
-    }
-    if (this.highlightedCells.length === 0) return;
-    (gridDebugLayer as Any).setHighlightedCells(this.highlightedCells);
-    this.highlightedCells.length = 0;
-  }
-
   update(deltaTime: number): void {
     const collisionResults = this.getCollisionSystem().getCollisionResults();
     const entitiesToRemove: Entity[] = [];
@@ -479,6 +445,5 @@ export class DamageSystem extends System {
       this.world.removeEntity(entity);
     }
 
-    this.sendHighlightedCells();
   }
 }

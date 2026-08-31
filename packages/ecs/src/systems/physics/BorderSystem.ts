@@ -8,7 +8,7 @@ import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
 import { SimpleEntity, WorkerPoolManager } from '@ecs/core/worker';
-import { RenderSystem } from '@ecs/systems';
+import { getScreenViewport } from '../viewport';
 import { Vec2 } from '@ecs/types/types';
 import { CollisionPair } from './collision/collisionUtils';
 
@@ -29,10 +29,6 @@ export class BorderSystem extends System {
     this.friction = friction;
 
     this.workerPoolManager = WorkerPoolManager.getInstance();
-  }
-
-  private getRenderSystem(): RenderSystem {
-    return RenderSystem.getInstance();
   }
 
   /**
@@ -270,7 +266,7 @@ export class BorderSystem extends System {
    * @param transform - The TransformComponent of the entity.
    */
   private ensureEntityInViewport(shape: ShapeComponent, transform: TransformComponent): void {
-    const viewport = this.getRenderSystem().getViewport();
+    const viewport = getScreenViewport();
     const [w, h] = shape.getSize();
     let [nx, ny] = transform.getPosition();
     // Clamp so that the entire AABB stays within the viewport

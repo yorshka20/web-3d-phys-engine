@@ -1,11 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Point } from '@ecs/types/types';
 import {
-  PatternAssetManager,
-  PatternEffect,
-  PatternState,
-} from '@renderer/canvas2d/resource/PatternAssetManager';
-import {
   CircleShapeDescriptor,
   PatternDescriptor,
   RenderPatternType,
@@ -25,19 +20,11 @@ export class ShapeComponent extends Component {
   tessellated: Point[] = []; // Curve tessellation cache
   bounds: { min: Point; max: Point } | null = null;
 
-  // Pattern image and manager for pattern-based rendering
-  private patternImage: HTMLImageElement | null = null;
-  private patternManager: PatternAssetManager;
-
   private dirty: boolean = true;
 
   constructor(props: ShapeProps) {
     super('Shape');
     this.descriptor = props.descriptor;
-    this.patternManager = PatternAssetManager.getInstance();
-    if (this.isPatternDescriptor(this.descriptor)) {
-      this.loadPatternImage(this.descriptor.patternType);
-    }
     if (props.tessellated) {
       this.tessellated = [...props.tessellated];
     }
@@ -57,22 +44,10 @@ export class ShapeComponent extends Component {
   }
 
   /**
-   * Load the pattern image for the given pattern type
-   */
-  private loadPatternImage(patternType: RenderPatternType): void {
-    this.patternImage = this.patternManager.getPattern(patternType);
-  }
-
-  /**
    * Update shape descriptor and pattern image if needed
    */
   updateDescriptor(descriptor: ShapeDescriptor): void {
     this.descriptor = descriptor;
-    if (this.isPatternDescriptor(descriptor)) {
-      this.loadPatternImage(descriptor.patternType);
-    } else {
-      this.patternImage = null;
-    }
     this.dirty = true;
     this.tessellated = [];
     this.bounds = null;
@@ -186,36 +161,8 @@ export class ShapeComponent extends Component {
     return undefined;
   }
 
-  /**
-   * Get the pattern image if this is a pattern shape
-   */
-  getPatternImage(): HTMLImageElement | null {
-    if (this.isPatternDescriptor(this.descriptor)) {
-      return this.patternImage;
-    }
-    return null;
-  }
-
-  /**
-   * Get the pattern image for a specific state and effect if this is a pattern shape
-   * @param state The current state of the entity
-   * @param effect The pattern effect to use
-   * @returns The pattern image to use
-   */
-  getPatternImageForState(
-    state: PatternState = 'normal',
-    effect: PatternEffect = 'whiteSilhouette',
-  ): HTMLImageElement | null {
-    if (!this.isPatternDescriptor(this.descriptor)) return null;
-    if (state === 'normal') {
-      return this.patternImage;
-    }
-    return this.patternManager.getPatternWithState(this.descriptor.patternType, state, effect);
-  }
-
   reset(): void {
     super.reset();
-    this.patternImage = null;
     this.tessellated = [];
     this.bounds = null;
     this.dirty = true;

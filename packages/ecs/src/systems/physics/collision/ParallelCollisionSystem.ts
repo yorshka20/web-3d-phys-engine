@@ -8,7 +8,7 @@ import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
 import { SimpleEntity, WorkerPoolManager } from '@ecs/core/worker';
-import { RenderSystem } from '@ecs/systems';
+import { getScreenViewport } from '../../viewport';
 import { getNumericPairKey } from '@ecs/utils/name';
 import { CollisionPair, CollisionResult, getCollisionNormalAndPenetration } from './collisionUtils';
 
@@ -44,10 +44,6 @@ export class ParallelCollisionSystem extends System {
     super('ParallelCollisionSystem', SystemPriorities.COLLISION, 'logic');
 
     this.workerPoolManager = WorkerPoolManager.getInstance();
-  }
-
-  private getRenderSystem(): RenderSystem {
-    return RenderSystem.getInstance();
   }
 
   // Main update loop
@@ -478,7 +474,7 @@ export class ParallelCollisionSystem extends System {
     const shape = entity.getComponent<ShapeComponent>(ShapeComponent.componentName);
     if (!transform || !shape) return;
 
-    const viewport = this.getRenderSystem().getViewport();
+    const viewport = getScreenViewport();
     const size = shape.getSize();
     let [x, y] = transform.getPosition();
 
