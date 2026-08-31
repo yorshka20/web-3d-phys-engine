@@ -16,13 +16,13 @@ import {
   WebGPURenderSystem,
   World,
 } from '@ecs';
+import { rgba } from '@ecs/utils/color';
 import { Vertex3D } from '@renderer/geometry/types';
 import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
-import { rgba } from '@ecs/utils/color';
 import { Game } from './game/Game';
 import { createGeometryStage } from './stages/geometry';
+import { createGLTFStage } from './stages/gltf';
 import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
-// import { createGLTFStage } from './stages/gltf';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
 // import { createZZZPMXModelStage } from './stages/zzz';
@@ -37,7 +37,18 @@ type Stage = 'geometry' | 'pmxModel' | 'zzz' | 'pmxAnimationExample' | 'gltfMode
 
 const stages: Stage[] = ['geometry', 'pmxModel', 'zzz', 'pmxAnimationExample', 'gltfModel'];
 
-const stage: Stage = stages[0];
+function resolveStage(): Stage {
+  const requested = new URLSearchParams(window.location.search).get('stage');
+  if (requested) {
+    if (stages.includes(requested as Stage)) {
+      return requested as Stage;
+    }
+    console.warn(`[main] unknown stage "${requested}", available: ${stages.join(', ')}`);
+  }
+  return stages[0];
+}
+
+const stage: Stage = resolveStage();
 
 async function main() {
   const rootElement = document.body;
@@ -68,9 +79,9 @@ async function main() {
     // case 'pmxAnimationExample':
     //   await createPMXAnimationExample(world);
     //   break;
-    // case 'gltfModel':
-    //   await createGLTFStage(world);
-    //   break;
+    case 'gltfModel':
+      await createGLTFStage(world);
+      break;
     default:
       break;
   }
