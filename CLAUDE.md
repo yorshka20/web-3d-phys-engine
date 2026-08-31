@@ -249,6 +249,10 @@ Current state that is easy to misread as bugs or dead code — check here before
 - **Hold a high implementation bar**: code with weak architectural design is never acceptable.
   Respect the existing module/system design (DI + managers in renderer, priority-ordered systems
   in ecs) when implementing within a given scope.
+- **Architecture correctness precedes implementation correctness** (current early-stage stance,
+  stated 2026-08-31): when a structurally correct change risks behavioral/visual regressions,
+  take the change and fix regressions forward. Never bend a design or add compatibility layers
+  to protect the current behavior of an early-stage implementation.
 - **Correct me when I'm wrong**: always respect the truth. The user may be wrong, and you must
   not accept a wrong suggestion. If your view differs, check whether the user has made a mistake
   before agreeing.
