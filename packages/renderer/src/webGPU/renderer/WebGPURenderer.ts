@@ -14,6 +14,7 @@ import { PipelineManager } from '../core/pipeline/PipelineManager';
 import { PMXAnimationBufferManager } from '../core/PMXAnimationBufferManager';
 import { PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
 import { ShaderManager } from '../core/shaders/ShaderManager';
+import { ShadingParamsManager } from '../core/ShadingParamsManager';
 import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
 import { ForwardPass } from './passes/ForwardPass';
@@ -64,6 +65,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private pipelineFactory!: PipelineFactory;
   private pmxMaterialProcessor!: PMXMaterialProcessor;
   private pmxAnimationBufferManager!: PMXAnimationBufferManager;
+  private shadingParamsManager!: ShadingParamsManager;
   private materialBinder!: MaterialBinder;
 
   // frame orchestration (renderer-private, constructor-wired)
@@ -203,6 +205,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.pipelineManager = new PipelineManager();
     this.bindGroupManager = new BindGroupManager();
     this.pipelineFactory = new PipelineFactory();
+    this.shadingParamsManager = new ShadingParamsManager();
     this.pmxMaterialProcessor = new PMXMaterialProcessor();
     this.pmxAnimationBufferManager = new PMXAnimationBufferManager();
     this.materialBinder = new MaterialBinder();

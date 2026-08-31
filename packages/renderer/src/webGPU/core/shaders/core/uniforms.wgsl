@@ -45,3 +45,22 @@ struct PMXMaterialUniforms {
     sphere_mode: f32,
     padding: f32,
 }
+
+// Field order must match PMX_SHADING_PARAM_SCHEMA in ShadingParamsManager.ts —
+// the buffer is packed in schema order.
+struct PMXShadingParams {
+    light_dir: vec3<f32>,
+    ambient_strength: f32,
+    emission_intensity: f32,
+    diffuse_floor: f32,
+    diffuse_gain: f32,
+    min_brightness: f32,
+    specular_scale_dark: f32,
+    specular_scale_bright: f32,
+    env_reflection_strength: f32,
+    normal_strength: f32,
+    normal_threshold: f32,
+    saturation: f32,
+    _pad0: f32,
+    _pad1: f32,
+}

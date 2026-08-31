@@ -239,7 +239,7 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
     let normal_sample = textureSample(normal_texture, normal_sampler, input.uv);
 
     // only apply when the normal map has a significant change (to avoid noise)
-    if length(normal_sample.rg - vec2<f32>(0.5)) > 0.15 {
+    if length(normal_sample.rg - vec2<f32>(0.5)) > shading_params.normal_threshold {
         let tangent_normal = normalize(normal_sample.rgb * 2.0 - 1.0);
         let TBN = mat3x3<f32>(
             normalize(input.world_tangent),
@@ -247,7 +247,7 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
             normalize(input.world_normal)
         );
         // mix original normal and tangent space normal, to avoid over strong凹凸效果
-        final_normal = normalize(mix(input.world_normal, TBN * tangent_normal, 0.7));
+        final_normal = normalize(mix(input.world_normal, TBN * tangent_normal, shading_params.normal_strength));
     }
 
     // 3. PBR material property sampling
@@ -261,13 +261,13 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
     let emission = emission_sample.rgb; // emission is RGB color
 
     // 4. basic lighting calculation
-    let light_dir = normalize(vec3<f32>(0.5, 0.8, 0.3));
+    let light_dir = normalize(shading_params.light_dir);
     let view_dir = normalize(mvp.camera_pos - input.world_position);
     let n_dot_l = max(dot(final_normal, light_dir), 0.0);
     let n_dot_v = max(dot(final_normal, view_dir), 0.0);
 
-    let ambient = pmx_material.ambient * 1.0;
-    let diffuse_strength = max(n_dot_l, 0.3); // ensure minimum brightness, avoid completely dark
+    let ambient = pmx_material.ambient * shading_params.ambient_strength;
+    let diffuse_strength = max(n_dot_l, shading_params.diffuse_floor); // ensure minimum brightness, avoid completely dark
     
     // 5. PBR specular calculation - based on physical rendering
     let specular_sample = textureSample(specular_texture, specular_sampler, input.uv);
@@ -296,19 +296,23 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
     let specular_contribution = fresnel * specular_power * n_dot_l * specular_mask * (1.0 - roughness * 0.5);
 
     let base_luminance = dot(base_color.rgb, vec3<f32>(0.299, 0.587, 0.114));
-    let specular_scale = select(0.3, 0.1, base_luminance > 0.8);
+    let specular_scale = select(
+        shading_params.specular_scale_dark,
+        shading_params.specular_scale_bright,
+        base_luminance > 0.8
+    );
     
     // 6. metal/non-metal diffuse processing
     // metal material has almost no diffuse, non-metal material has normal diffuse
     let diffuse_factor = 1.0 - metallic; // metallic越高，漫反射越少
-    var diffuse_color = base_color.rgb * (ambient + diffuse_strength * 1.2) * diffuse_factor;
+    var diffuse_color = base_color.rgb * (ambient + diffuse_strength * shading_params.diffuse_gain) * diffuse_factor;
     
     // 7. Sphere mapping environment reflection - simulate environment lighting
     let sphere_uv = normalize(reflect(-view_dir, final_normal)).xy * 0.5 + 0.5;
     let sphere_sample = textureSample(sphere_texture, sphere_sampler, sphere_uv);
     
     // mix environment reflection based on metallic and roughness
-    let env_reflection = sphere_sample.rgb * fresnel * (1.0 - roughness) * 0.3;
+    let env_reflection = sphere_sample.rgb * fresnel * (1.0 - roughness) * shading_params.env_reflection_strength;
     
     // 8. PMX Toon shading - skip for now
     // comment out toon processing, use standard PBR lighting
@@ -317,14 +321,14 @@ fn fs_main(input: PMXVertexOutput) -> @location(0) vec4<f32> {
     var final_color = diffuse_color + specular_contribution * specular_scale + env_reflection;
     
     // 10. add emission - emission effect that is not affected by lighting
-    final_color = final_color + emission * 2.0; // enhance emission effect
-    
+    final_color = final_color + emission * shading_params.emission_intensity;
+
     // 11. adjust minimum brightness to ensure
-    final_color = max(final_color, base_color.rgb * 0.4);
-    
+    final_color = max(final_color, base_color.rgb * shading_params.min_brightness);
+
     // 12. maintain saturation
     let luminance = dot(final_color, vec3<f32>(0.299, 0.587, 0.114));
-    final_color = mix(vec3<f32>(luminance), final_color, 1.0);
+    final_color = mix(vec3<f32>(luminance), final_color, shading_params.saturation);
 
     return vec4<f32>(final_color, base_color.a * pmx_material.alpha);
 }

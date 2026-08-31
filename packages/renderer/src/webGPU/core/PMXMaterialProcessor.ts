@@ -7,6 +7,7 @@ import { Inject, Injectable } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { GPUResourceCoordinator } from './GPUResourceCoordinator';
 import { PMXAssetDescriptor } from './PMXAssetDescriptor';
+import { ShadingParamsManager } from './ShadingParamsManager';
 import { TextureManager } from './TextureManager';
 import { BufferType } from './types';
 
@@ -60,6 +61,9 @@ export class PMXMaterialProcessor {
 
   @Inject(ServiceTokens.GPU_RESOURCE_COORDINATOR)
   private gpuResourceCoordinator!: GPUResourceCoordinator;
+
+  @Inject(ServiceTokens.SHADING_PARAMS_MANAGER)
+  private shadingParamsManager!: ShadingParamsManager;
 
   private defaultTextures: Map<number, PMXMaterialTextureResource> = new Map();
   private materialCache: Map<string, PMXMaterialCacheData> = new Map();
@@ -774,6 +778,12 @@ export class PMXMaterialProcessor {
           visibility: GPUShaderStage.FRAGMENT,
           sampler: { type: 'filtering' },
         },
+        // binding: 17 - Shading params (shared tuning buffer, see ShadingParamsManager)
+        {
+          binding: 17,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
       ],
       label: 'PMXMaterialBindGroupLayout',
     });
@@ -793,6 +803,12 @@ export class PMXMaterialProcessor {
     entries.push({
       binding: 0,
       resource: { buffer: uniformBuffer },
+    });
+
+    // Shared shading-params buffer (one buffer across all PMX materials)
+    entries.push({
+      binding: 17,
+      resource: { buffer: this.shadingParamsManager.getBuffer() },
     });
 
     // bind all texture slots - match new shader layout

@@ -25,6 +25,7 @@
 @group(2) @binding(14) var metallic_sampler: sampler;
 @group(2) @binding(15) var emission_texture: texture_2d<f32>;
 @group(2) @binding(16) var emission_sampler: sampler;
+@group(2) @binding(17) var<uniform> shading_params: PMXShadingParams;
 
 // Group 3: PMX Animation data (Bone matrices and Morph weights)
 @group(3) @binding(0) var<storage, read> bone_matrices: array<mat4x4<f32>>;

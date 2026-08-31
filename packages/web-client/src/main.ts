@@ -24,6 +24,7 @@ import { createEndfieldStage } from './stages/endfield';
 import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
 import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
+import { mountShadingPanel } from './ui/shadingPanel';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
 // import { createZZZPMXModelStage } from './stages/zzz';
@@ -111,6 +112,9 @@ async function main() {
 
   // Mount entity spawn panel (press F to toggle)
   mountEntityPanel(world);
+
+  // Mount PMX shading tuning panel (press G to toggle)
+  mountShadingPanel();
 
   game.start();
 

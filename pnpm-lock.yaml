@@ -101,10 +101,16 @@ importers:
       svelte:
         specifier: ^5.0.0
         version: 5.56.3
+      tweakpane:
+        specifier: ^4.0.5
+        version: 4.0.5
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^5.0.0
         version: 5.1.1(supports-color@8.1.1)(svelte@5.56.3)(vite@7.1.7(@types/node@24.1.0)(terser@5.43.1))
+      '@tweakpane/core':
+        specifier: ^2.0.5
+        version: 2.0.5
       svelte-check:
         specifier: ^4.0.0
         version: 4.6.0(picomatch@4.0.3)(svelte@5.56.3)(typescript@5.8.3)
@@ -778,6 +784,9 @@ packages:
   '@tootallnate/once@2.0.0':
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
+
+  '@tweakpane/core@2.0.5':
+    resolution: {integrity: sha512-punBgD5rKCF5vcNo6BsSOXiDR/NSs9VM7SG65QSLJIxfRaGgj54ree9zQW6bO3pNFf3AogiGgaNODUVQRk9YqQ==}
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -2540,6 +2549,9 @@ packages:
       jest-util:
         optional: true
 
+  tweakpane@4.0.5:
+    resolution: {integrity: sha512-rxEXdSI+ArlG1RyO6FghC4ZUX8JkEfz8F3v1JuteXSV0pEtHJzyo07fcDG+NsJfN5L39kSbCYbB9cBGHyuI/tQ==}
+
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
@@ -3460,6 +3472,8 @@ snapshots:
       - supports-color
 
   '@tootallnate/once@2.0.0': {}
+
+  '@tweakpane/core@2.0.5': {}
 
   '@types/babel__core@7.20.5':
     dependencies:
@@ -5523,6 +5537,8 @@ snapshots:
       babel-jest: 29.7.0(@babel/core@7.28.0(supports-color@8.1.1))(supports-color@8.1.1)
       esbuild: 0.25.9
       jest-util: 29.7.0
+
+  tweakpane@4.0.5: {}
 
   type-check@0.4.0:
     dependencies:
