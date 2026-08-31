@@ -14,6 +14,7 @@ import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
 import { CameraTargetIndicator } from '@ecs/helpers/CameraTargetIndicator';
 import { Vec3 } from '@ecs/types/types';
+import { isSceneSurfaceEvent } from '@ecs/utils/sceneSurface';
 
 /**
  * OrbitCameraControlSystem handles 3D modeling software-style camera controls
@@ -400,6 +401,10 @@ export class OrbitCameraControlSystem extends System {
    * Handle mouse wheel zoom
    */
   private handleMouseWheel = (event: WheelEvent): void => {
+    // Zoom only when scrolling the scene surface: over UI overlays the wheel belongs to the
+    // panel (no zoom, no preventDefault, so panel scrolling keeps working).
+    if (!isSceneSurfaceEvent(event)) return;
+
     // Find active orbit cameras
     const cameraEntities = this.world.getEntitiesWithComponents([
       Camera3DComponent,

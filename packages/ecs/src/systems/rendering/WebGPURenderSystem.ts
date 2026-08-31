@@ -12,6 +12,7 @@ import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
 import { RectArea, Vec3 } from '@ecs/types/types';
+import { markSceneSurface } from '@ecs/utils/sceneSurface';
 import { GLTFModel } from '@renderer/assets/GltfModel';
 import { PMXModel } from '@renderer/assets/PMXModel';
 import { CameraData, FrameData, RenderData } from '@renderer/frame/types';
@@ -67,6 +68,7 @@ export class WebGPURenderSystem extends System {
     this.viewport = [0, 0, rootElement.clientWidth * dpr, rootElement.clientHeight * dpr];
 
     this.canvas = this.createCanvas();
+    markSceneSurface(this.canvas);
     this.rootElement.appendChild(this.canvas);
 
     // Create webgpu renderer

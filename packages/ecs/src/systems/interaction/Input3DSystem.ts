@@ -7,6 +7,7 @@ import {
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
+import { isSceneSurfaceEvent } from '@ecs/utils/sceneSurface';
 
 const KEY_MAP_3D = {
   KeyW: 'forward',
@@ -131,7 +132,8 @@ export class Input3DSystem extends System {
     }
   };
 
-  private handleCanvasClick = () => {
+  private handleCanvasClick = (event: MouseEvent) => {
+    if (!isSceneSurfaceEvent(event)) return;
     if (!this.isPointerLocked) {
       // Check if any active camera requires pointer lock
       if (this.shouldLockPointer()) {
@@ -152,6 +154,11 @@ export class Input3DSystem extends System {
   };
 
   private handleMouseDown = (event: MouseEvent) => {
+    // A camera gesture only starts on the scene surface; presses on UI overlays never
+    // register a button, so orbit rotate/pan (gated on mouseButtons) stays inert.
+    // mouseup/mousemove stay unfiltered: a drag that started on the surface must keep
+    // tracking and be releasable anywhere.
+    if (!isSceneSurfaceEvent(event)) return;
     this.mouseButtons.add(event.button);
     this.updateMouseButtons();
 
