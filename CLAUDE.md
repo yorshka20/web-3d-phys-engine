@@ -245,6 +245,9 @@ Current state that is easy to misread as bugs or dead code — check here before
   writing a second copy; one entry point rather than parallel near-duplicate methods.
 - **Branches/commits**: conventional commits (`feat:`, `fix:`, `chore:`, ...); feature branches
   named `feature/module-name`.
+- **Abandoning committed work**: `git reset` to the last good commit and force-push — do not
+  stack revert commits (user convention, 2026-08-31: “直接 reset 然后 push force，别反复
+  patch”). Verify tree equality with the target commit before resetting.
 
 ## Engineering Principles
 
