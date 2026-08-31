@@ -1,7 +1,8 @@
 import { GLTFMaterial } from '@renderer/assets/GltfModel';
 import { PMXModel } from '@renderer/assets/PMXModel';
-import { WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { AlphaMode, WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { FrameData, RenderData } from '@renderer/frame/types';
+import { vec3 } from 'gl-matrix';
 import { RectArea } from '@renderer/types/base';
 import {
   assetRegistry,
@@ -19,13 +20,9 @@ import { InstanceManager } from '../core/InstanceManager';
 import { MaterialManager } from '../core/MaterialManager';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
 import { PipelineManager } from '../core/pipeline/PipelineManager';
-import {
-  generateSemanticCacheKey,
-  generateSemanticPipelineKey,
-  SemanticPipelineKey,
-} from '../core/pipeline/types';
+import { generateSemanticCacheKey, generateSemanticPipelineKey } from '../core/pipeline/types';
 import { PMXAnimationBufferManager } from '../core/PMXAnimationBufferManager';
-import { PMXMaterialCacheData, PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
+import { PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
 import { ShaderManager } from '../core/shaders/ShaderManager';
 import { TextureManager } from '../core/TextureManager';
 import {
@@ -45,13 +42,45 @@ import {
   RenderPipeline,
 } from './types/IWebGPURenderer';
 
-// Render group definition - now uses semantic key for more precise grouping
-interface RenderGroup {
-  semanticKey: SemanticPipelineKey;
-  semanticCacheKey: string;
-  renderables: RenderData[];
+// One sortable draw in the frame's ordered draw lists. Resource references are resolved in
+// the prepare phase so that encoding stays fully synchronous.
+interface DrawItem {
+  renderable: RenderData;
+  pipelineKey: string;
+  viewDepth: number;
   pipeline?: GPURenderPipeline;
+  geometry?: GeometryCacheItem;
 }
+
+// Bind groups shared by every draw with the same materialKey. Slot semantics follow the
+// material family: regular = group2 textures + group3 material, glTF = group2 PBR material,
+// PMX = group2 material + group3 animation.
+interface MaterialBindings {
+  group2?: GPUBindGroup;
+  group3?: GPUBindGroup;
+}
+
+// GPU resources resolved once per frame during prepare, consumed by the synchronous encode.
+interface FrameResources {
+  pipelines: Map<string, GPURenderPipeline>;
+  materials: Map<string, MaterialBindings>;
+  pmxAnimations: Map<string, GPUBindGroup | undefined>; // keyed by pmxAssetId
+}
+
+// Last-bound state during encode; a bind is only re-issued when its identity key changes.
+interface EncodeStateCache {
+  pipelineKey?: string;
+  materialKey?: string;
+  geometryId?: string;
+  uniformKey?: string;
+}
+
+// Plain code-unit comparison: sort keys are opaque cache ids, locale rules must not apply.
+function compareKeys(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+const scratchBoundsCenter = vec3.create();
 /**
  * WebGPU Renderer
  *
@@ -736,6 +765,18 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   private async renderPass(commandEncoder: GPUCommandEncoder, frameData: FrameData): Promise<void> {
+    // Prepare phase (async): build the ordered draw lists and resolve every GPU resource up
+    // front, so the encode phase below is fully synchronous — no await between beginRenderPass
+    // and end.
+    const { opaque, transparent } = this.buildDrawLists(frameData);
+    const frame: FrameResources = {
+      pipelines: new Map(),
+      materials: new Map(),
+      pmxAnimations: new Map(),
+    };
+    await this.prepareDrawItems(opaque, frame);
+    await this.prepareDrawItems(transparent, frame);
+
     const renderPass = commandEncoder.beginRenderPass({
       label: 'main_render_pass',
       colorAttachments: [
@@ -754,74 +795,191 @@ export class WebGPURenderer implements IWebGPURenderer {
       },
     });
 
-    // Group renderables by semantic pipeline key for efficient pipeline usage
-    const renderGroups = this.groupRenderablesBySemanticKey(frameData.renderables);
+    this.setCommonBindGroups(renderPass, frameData);
 
-    // Render each group with its optimized pipeline
-    for (const renderGroup of renderGroups) {
-      await this.renderGroup(renderGroup, renderPass, frameData);
-    }
+    // Opaque first (state-sorted), then transparent (back-to-front). The bind-state cache
+    // spans both phases because they share one pass encoder.
+    const cache: EncodeStateCache = {};
+    this.encodeDrawList(renderPass, opaque, frameData, frame, cache);
+    this.encodeDrawList(renderPass, transparent, frameData, frame, cache);
 
     renderPass.end();
   }
 
   /**
-   * Group renderables by their semantic pipeline key for efficient pipeline usage
-   * This considers all factors that affect pipeline selection, not just render purpose
+   * Build the frame's ordered draw lists. Opaque draws are sorted by state-change cost
+   * (renderOrder stays the outermost contract); transparent (blend) draws are sorted strictly
+   * back-to-front — blending correctness outranks state dedup.
    */
-  private groupRenderablesBySemanticKey(renderables: RenderData[]): RenderGroup[] {
-    const groups = new Map<string, RenderGroup>();
+  private buildDrawLists(frameData: FrameData): { opaque: DrawItem[]; transparent: DrawItem[] } {
+    const opaque: DrawItem[] = [];
+    const transparent: DrawItem[] = [];
+    const viewMatrix = frameData.scene.camera.viewMatrix;
 
-    // Group renderables by their semantic pipeline key
-    for (const renderable of renderables) {
-      // Generate semantic key considering all pipeline factors
+    for (const renderable of frameData.renderables) {
       const semanticKey = generateSemanticPipelineKey(
         renderable.material as WebGPUMaterialDescriptor,
         renderable.geometryData,
       );
+      const item: DrawItem = {
+        renderable,
+        pipelineKey: generateSemanticCacheKey(semanticKey),
+        viewDepth: 0,
+      };
 
-      // Generate cache key for grouping
-      const semanticCacheKey = generateSemanticCacheKey(semanticKey);
-
-      if (!groups.has(semanticCacheKey)) {
-        groups.set(semanticCacheKey, {
-          semanticKey,
-          semanticCacheKey,
-          renderables: [],
-        });
+      if ((renderable.material as { alphaMode?: AlphaMode }).alphaMode === 'blend') {
+        item.viewDepth = this.computeViewDepth(renderable, viewMatrix);
+        transparent.push(item);
+      } else {
+        opaque.push(item);
       }
-      groups.get(semanticCacheKey)!.renderables.push(renderable);
     }
 
-    // Convert to RenderGroup array
-    return Array.from(groups.values()).filter((group) => group.renderables.length > 0);
+    opaque.sort(
+      (a, b) =>
+        a.renderable.renderOrder - b.renderable.renderOrder ||
+        compareKeys(a.pipelineKey, b.pipelineKey) ||
+        compareKeys(a.renderable.materialKey, b.renderable.materialKey) ||
+        compareKeys(a.renderable.geometryId, b.renderable.geometryId),
+    );
+    transparent.sort(
+      (a, b) => a.renderable.renderOrder - b.renderable.renderOrder || b.viewDepth - a.viewDepth,
+    );
+
+    return { opaque, transparent };
   }
 
   /**
-   * Render a group of renderables with the same pipeline
+   * View-space distance of the geometry bounds center, for transparent draw ordering
    */
-  private async renderGroup(
-    renderGroup: RenderGroup,
-    renderPass: GPURenderPassEncoder,
-    frameData: FrameData,
-  ): Promise<void> {
-    // Use unified createAutoPipeline which now supports both regular and PMX materials
-    const firstRenderable = renderGroup.renderables[0];
-    // use same pipeline for all renderables in the group
-    const pipeline = await this.pipelineFactory.createAutoPipeline(
-      firstRenderable.material,
-      firstRenderable.geometryData,
+  private computeViewDepth(renderable: RenderData, viewMatrix: Float32Array): number {
+    const { min, max } = renderable.geometryData.bounds;
+    vec3.set(
+      scratchBoundsCenter,
+      (min[0] + max[0]) / 2,
+      (min[1] + max[1]) / 2,
+      (min[2] + max[2]) / 2,
     );
+    vec3.transformMat4(scratchBoundsCenter, scratchBoundsCenter, renderable.worldMatrix);
+    vec3.transformMat4(scratchBoundsCenter, scratchBoundsCenter, viewMatrix);
+    // Camera looks down -Z in view space, so distance in front of the camera is -z
+    return -scratchBoundsCenter[2];
+  }
 
-    // Set pipeline once for the entire group
-    renderPass.setPipeline(pipeline);
+  /**
+   * Prepare phase: resolve pipeline, geometry, and material bind groups for every draw item.
+   * All async work lives here; per-key resources are resolved once per frame via `frame`.
+   */
+  private async prepareDrawItems(items: DrawItem[], frame: FrameResources): Promise<void> {
+    for (const item of items) {
+      const { renderable } = item;
 
-    // Set common bind groups (time, camera, etc.)
-    this.setCommonBindGroups(renderPass, frameData);
+      // PMX renderables carry the entity's component material at this point: the pipeline key
+      // was derived from it in buildDrawLists, so the pipeline must be created from it too
+      // (same order as the previous group-based flow; the processed PMX material only provides
+      // bind groups below).
+      let pipeline = frame.pipelines.get(item.pipelineKey);
+      if (!pipeline) {
+        pipeline = await this.pipelineFactory.createAutoPipeline(
+          renderable.material,
+          renderable.geometryData,
+        );
+        frame.pipelines.set(item.pipelineKey, pipeline);
+      }
+      item.pipeline = pipeline;
 
-    // Render all objects in this group
-    for (const renderable of renderGroup.renderables) {
-      await this.renderObject(renderPass, renderable, frameData);
+      if (renderable.pmxAssetId && renderable.pmxComponent) {
+        const materialIndex = renderable.materialIndex || 0;
+        item.geometry = await this.getOrCreatePMXGeometry(renderable, materialIndex);
+
+        // Animation buffers are per PMX asset, shared by all of its material draws
+        if (!frame.pmxAnimations.has(renderable.pmxAssetId)) {
+          frame.pmxAnimations.set(
+            renderable.pmxAssetId,
+            await this.preparePMXAnimation(renderable),
+          );
+        }
+
+        if (!frame.materials.has(renderable.materialKey)) {
+          const assetDescriptor = renderable.pmxComponent.resolveAsset<'pmx_material'>();
+          if (!assetDescriptor) {
+            throw new Error('PMX asset not found');
+          }
+          const pmxMaterial = await this.pmxMaterialProcessor.createPMXMaterial(
+            renderable.materialKey,
+            { assetDescriptor, materialIndex },
+          );
+          frame.materials.set(renderable.materialKey, {
+            group2: pmxMaterial?.bindGroup,
+            group3: frame.pmxAnimations.get(renderable.pmxAssetId),
+          });
+        }
+      } else {
+        item.geometry = this.geometryManager.createGeometryFromData(
+          renderable.geometryId || 'render_geometry',
+          { geometryData: renderable.geometryData },
+        );
+
+        if (!frame.materials.has(renderable.materialKey)) {
+          if (renderable.material.materialType === 'gltf') {
+            frame.materials.set(renderable.materialKey, {
+              group2: await this.ensureGLTFMaterialBindGroup(renderable),
+            });
+          } else {
+            frame.materials.set(renderable.materialKey, {
+              group2: this.ensureTextureBindGroup(renderable) ?? undefined,
+              group3: this.ensureRegularMaterialBindGroup(renderable) ?? undefined,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Encode phase: fully synchronous state-cached walk over one ordered draw list.
+   */
+  private encodeDrawList(
+    renderPass: GPURenderPassEncoder,
+    items: DrawItem[],
+    frameData: FrameData,
+    frame: FrameResources,
+    cache: EncodeStateCache,
+  ): void {
+    for (const item of items) {
+      const renderable = item.renderable;
+      const geometry = item.geometry!;
+
+      if (item.pipelineKey !== cache.pipelineKey) {
+        renderPass.setPipeline(item.pipeline!);
+        cache.pipelineKey = item.pipelineKey;
+      }
+
+      if (renderable.materialKey !== cache.materialKey) {
+        const bindings = frame.materials.get(renderable.materialKey);
+        if (bindings?.group2) {
+          renderPass.setBindGroup(2, bindings.group2);
+        }
+        if (bindings?.group3) {
+          renderPass.setBindGroup(3, bindings.group3);
+        }
+        cache.materialKey = renderable.materialKey;
+      }
+
+      if (renderable.geometryId !== cache.geometryId) {
+        renderPass.setVertexBuffer(0, geometry.vertexBuffer);
+        renderPass.setIndexBuffer(geometry.indexBuffer, geometry.indexFormat);
+        cache.geometryId = renderable.geometryId;
+      }
+
+      // uniformKey contract: equal key ⇒ identical matrices, so write and bind skip together
+      if (renderable.uniformKey !== cache.uniformKey) {
+        const mvpBindGroup = this.mvpUniformManager.updateMVPUniforms(renderable, frameData);
+        renderPass.setBindGroup(1, mvpBindGroup);
+        cache.uniformKey = renderable.uniformKey;
+      }
+
+      renderPass.drawIndexed(geometry.indexCount);
     }
   }
 
@@ -843,58 +1001,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Groups 2, 3, and 4: Will be set per object based on material type
     // - PMX materials: Group 2 = PMX material + textures, Group 3 = animation data
     // - Regular materials: Group 2 = textures, Group 3 = material
-  }
-
-  /**
-   * Render a single object with its specific resources
-   */
-  private async renderObject(
-    renderPass: GPURenderPassEncoder,
-    renderable: RenderData,
-    frameData: FrameData,
-  ): Promise<void> {
-    let geometry: GeometryCacheItem;
-
-    // Check if this is a PMX model that needs asset-based geometry creation
-    if (renderable.pmxAssetId && renderable.pmxComponent) {
-      // For PMX models, we need to determine which material this renderable represents
-      const materialIndex = renderable.materialIndex || 0;
-      geometry = await this.getOrCreatePMXGeometry(renderable, materialIndex);
-
-      // Cache key for this specific material, computed at extract time
-      const materialKey = renderable.materialKey;
-
-      // resolve asset descriptor for PMX material
-      const assetDescriptor = renderable.pmxComponent.resolveAsset<'pmx_material'>();
-      if (!assetDescriptor) {
-        throw new Error('PMX asset not found');
-      }
-
-      // get the material for PMX models
-      const pmxMaterial = await this.pmxMaterialProcessor.createPMXMaterial(materialKey, {
-        assetDescriptor,
-        materialIndex,
-      });
-      if (pmxMaterial) {
-        renderable.material = pmxMaterial;
-      }
-    } else {
-      // Regular geometry from geometry data
-      geometry = this.geometryManager.createGeometryFromData(
-        renderable.geometryId || 'render_geometry',
-        { geometryData: renderable.geometryData },
-      );
-    }
-
-    // Setup all bind groups for this object
-    await this.setupObjectBindGroups(renderPass, renderable, frameData);
-
-    // Set vertex and index buffers
-    renderPass.setVertexBuffer(0, geometry.vertexBuffer);
-    renderPass.setIndexBuffer(geometry.indexBuffer, geometry.indexFormat);
-
-    // Draw the object
-    renderPass.drawIndexed(geometry.indexCount);
   }
 
   /**
@@ -940,71 +1046,19 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
-   * Setup all bind groups for a single object
+   * Get or create the texture bind group (group 2) for a regular material
    */
-  private async setupObjectBindGroups(
-    renderPass: GPURenderPassEncoder,
-    renderable: RenderData,
-    frameData: FrameData,
-  ): Promise<void> {
-    // Setup MVP bind group (Group 1)
-    this.setupMVPBindGroup(renderPass, renderable, frameData);
-
-    // Setup texture bind group (Group 2)
-    await this.setupTextureBindGroup(renderPass, renderable);
-
-    // Setup material bind group (Group 3)
-    this.setupMaterialBindGroup(renderPass, renderable);
-
-    // Setup PMX animation bind group (Group 4) if this is a PMX model
-    if (renderable.pmxAssetId) {
-      await this.setupPMXAnimationBindGroup(renderPass, renderable);
-    }
-  }
-
-  /**
-   * Setup MVP bind group for object transformation
-   */
-  private setupMVPBindGroup(
-    renderPass: GPURenderPassEncoder,
-    renderable: RenderData,
-    frameData: FrameData,
-  ): void {
-    // Use MVPUniformManager to handle MVP buffer and bind group
-    const mvpBindGroup = this.mvpUniformManager.updateMVPUniforms(renderable, frameData);
-
-    // Set MVP bind group
-    renderPass.setBindGroup(1, mvpBindGroup);
-  }
-
-  /**
-   * Setup texture bind group for material textures
-   */
-  private async setupTextureBindGroup(
-    renderPass: GPURenderPassEncoder,
-    renderable: RenderData,
-  ): Promise<void> {
-    // Check if this is a PMX material (skip texture setup as it's handled by PMX processor)
-    if (renderable.material.materialType === 'pmx') {
-      return; // PMX materials handle their own texture binding
-    }
-
-    // Handle GLTF material bind group setup
-    if (renderable.material.materialType === 'gltf') {
-      await this.setupGLTFMaterialBindGroup(renderPass, renderable);
-      return;
-    }
-
+  private ensureTextureBindGroup(renderable: RenderData): GPUBindGroup | null {
     const regularMaterial = renderable.material as WebGPUMaterialDescriptor;
     const textureId = regularMaterial.albedoTextureId || regularMaterial.albedoTexture;
 
-    // Always set a texture bind group for non-PMX materials, even if no specific texture
+    // Always provide a texture bind group for regular materials, even if no specific texture
     if (!textureId) {
       // Use default white texture
       const defaultTexture = this.textureManager.getTexture('default_white_texture');
       if (!defaultTexture) {
         console.error('Default white texture not found');
-        return;
+        return null;
       }
 
       const sampler = this.textureManager.getSampler('linear');
@@ -1014,7 +1068,7 @@ export class WebGPURenderer implements IWebGPURenderer {
         throw new Error('Texture bind group layout not found');
       }
 
-      const textureBindGroup = this.bindGroupManager.createBindGroup('default_textureBindGroup', {
+      return this.bindGroupManager.createBindGroup('default_textureBindGroup', {
         layout: textureBindGroupLayout,
         entries: [
           { binding: 0, resource: defaultTexture.createView() },
@@ -1022,9 +1076,6 @@ export class WebGPURenderer implements IWebGPURenderer {
         ],
         label: 'default_textureBindGroup',
       });
-
-      renderPass.setBindGroup(2, textureBindGroup);
-      return;
     }
 
     // Get or create texture
@@ -1035,7 +1086,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       texture = this.textureManager.getTexture('default_white_texture');
       if (!texture) {
         console.error('Default white texture not found');
-        return;
+        return null;
       }
     }
 
@@ -1048,40 +1099,32 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Create texture bind group
-    const textureBindGroup = this.bindGroupManager.createBindGroup(
-      `${textureId}_textureBindGroup`,
-      {
-        layout: textureBindGroupLayout,
-        entries: [
-          { binding: 0, resource: texture.createView() },
-          { binding: 1, resource: sampler },
-        ],
-        label: `${textureId}_textureBindGroup`,
-      },
-    );
-
-    // Set texture bind group
-    renderPass.setBindGroup(2, textureBindGroup);
+    return this.bindGroupManager.createBindGroup(`${textureId}_textureBindGroup`, {
+      layout: textureBindGroupLayout,
+      entries: [
+        { binding: 0, resource: texture.createView() },
+        { binding: 1, resource: sampler },
+      ],
+      label: `${textureId}_textureBindGroup`,
+    });
   }
 
   /**
-   * Setup PMX animation bind group for morph and bone data
+   * Ensure PMX animation buffers exist and hold this frame's data; returns the animation
+   * bind group (group 3). Buffers are keyed per PMX asset.
    */
-  private async setupPMXAnimationBindGroup(
-    renderPass: GPURenderPassEncoder,
-    renderable: RenderData,
-  ): Promise<void> {
-    if (!renderable.pmxAssetId) return;
+  private async preparePMXAnimation(renderable: RenderData): Promise<GPUBindGroup | undefined> {
+    if (!renderable.pmxAssetId) return undefined;
 
     // Get or create animation buffers for this PMX model
     const pmxComponent = renderable.pmxComponent;
-    if (!pmxComponent) return;
+    if (!pmxComponent) return undefined;
 
     const assetDescriptor = pmxComponent.resolveAsset();
-    if (!assetDescriptor) return;
+    if (!assetDescriptor) return undefined;
 
     const pmxModel = assetDescriptor.rawData as PMXModel; // PMXModel type
-    if (!pmxModel) return;
+    if (!pmxModel) return undefined;
 
     // Get bone count, vertex count, and morph count from PMX model
     const boneCount = pmxModel.bones?.length || 0;
@@ -1099,8 +1142,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Update animation data if needed
     await this.updatePMXAnimationData(renderable);
 
-    // Set animation bind group
-    renderPass.setBindGroup(3, animationBuffers.animationBindGroup);
+    return animationBuffers.animationBindGroup;
   }
 
   /**
@@ -1125,12 +1167,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
-   * Setup GLTF material bind group for PBR material data and textures
+   * Get or create the GLTF PBR material bind group (group 2) and write its factor data
    */
-  private async setupGLTFMaterialBindGroup(
-    renderPass: GPURenderPassEncoder,
-    renderable: RenderData,
-  ): Promise<void> {
+  private async ensureGLTFMaterialBindGroup(renderable: RenderData): Promise<GPUBindGroup> {
     // Get GLTF PBR material bind group layout
     const gltfMaterialLayout = this.bindGroupManager.getBindGroupLayout(
       'gltfPbrMaterialBindGroupLayout',
@@ -1217,9 +1256,6 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: materialId,
     });
 
-    // Set GLTF material bind group (Group 2)
-    renderPass.setBindGroup(2, gltfMaterialBindGroup);
-
     // Update material buffer with GLTF PBR material data from renderable
     const materialData = new Float32Array(16); // 16 floats for GLTFPBRMaterial
     let offset = 0;
@@ -1260,6 +1296,8 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Write material data to buffer
     this.device.queue.writeBuffer(materialBuffer, 0, materialData);
+
+    return gltfMaterialBindGroup;
   }
 
   /**
@@ -1320,31 +1358,18 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   /**
-   * Setup material bind group for material properties
+   * Get or create the material bind group (group 3) for a regular material.
+   * PMX and GLTF materials never reach here — prepareDrawItems dispatches them to their own
+   * bind-group sources (PMX processor cache / ensureGLTFMaterialBindGroup).
    */
-  private setupMaterialBindGroup(renderPass: GPURenderPassEncoder, renderable: RenderData): void {
-    // Check if this is a PMX material (has PMX-specific data)
-    if (renderable.material.materialType === 'pmx') {
-      // This is a PMX material with pre-created bind group
-      // PMX materials use bind group index 2 (TIME=0, MVP=1, PMX_MATERIAL=2, ANIMATION=3)
-      const pmxMaterial = renderable.material as PMXMaterialCacheData;
-      renderPass.setBindGroup(2, pmxMaterial.bindGroup);
-      return;
-    }
+  private ensureRegularMaterialBindGroup(renderable: RenderData): GPUBindGroup | null {
+    const regularMaterial = renderable.material as WebGPUMaterialDescriptor;
 
-    // Check if this is a GLTF material (skip material setup as it's handled by GLTF texture setup)
-    if (renderable.material.materialType === 'gltf') {
-      return; // GLTF materials handle their own material binding in setupGLTFMaterialBindGroup
-    }
-
-    // Regular material handling - always set a material bind group
-    if (!renderable.material.albedo) {
+    // Regular material handling - always provide a material bind group
+    if (!regularMaterial.albedo) {
       // Use default material bind group
       const materialBindGroup = this.resourceManager.getBindGroupResource('materialBindGroup');
-      if (materialBindGroup) {
-        renderPass.setBindGroup(3, materialBindGroup.bindGroup);
-      }
-      return;
+      return materialBindGroup ? materialBindGroup.bindGroup : null;
     }
 
     const materialBindGroupLayout =
@@ -1354,17 +1379,13 @@ export class WebGPURenderer implements IWebGPURenderer {
     }
 
     // Create or get material bind group using the material identity computed at extract time
-    const materialId = renderable.materialKey;
-
-    const materialBindGroup = this.materialManager.createMaterialBindGroup(
-      materialId,
-      renderable.material,
-      materialBindGroupLayout,
+    return (
+      this.materialManager.createMaterialBindGroup(
+        renderable.materialKey,
+        regularMaterial,
+        materialBindGroupLayout,
+      ) ?? null
     );
-
-    if (materialBindGroup) {
-      renderPass.setBindGroup(3, materialBindGroup);
-    }
   }
 
   /**

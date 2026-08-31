@@ -148,7 +148,14 @@ which extracts per-entity render data, assembles `FrameData`, and calls
   alphaMode, doubleSided, textures, primitive, vertexFormat, customShaderId) in
   `PipelineManager`; `PipelineFactory.createAutoPipeline(material, geometryData)` is the one used
   per frame. Renderables are grouped by semantic key, one pipeline per group.
-- **No render graph.** `WebGPURenderer.renderTick` is a single hardcoded forward pass.
+- **No render graph.** `WebGPURenderer.renderTick` is a single forward pass, encoded from
+  sorted flat draw lists (opaque state-sorted, transparent back-to-front; async prepare, then
+  fully synchronous encode). No grouping structure — state dedup comes from sort order.
+- **Frame contract & identity keys (core design)**: every `RenderData` carries three required
+  identity keys — `geometryId` (geometry data), `uniformKey` (draw instance / transform slot),
+  `materialKey` (material) — and every GPU-resource cache is keyed by exactly one of them.
+  Invariants and key formats: `docs/renderer-frame-contract.md` — read it before touching
+  extract paths, the draw loop, or any cache keyed off `RenderData`.
 - **Bind group convention** (WebGPURenderer): group 0 = time (always), 1 = per-object MVP,
   2/3/4 = material/texture/animation depending on material type (PMX: 2=material+textures,
   3=animation; regular: 2=textures, 3=material).
