@@ -22,9 +22,10 @@ Target visuals for any model: the Khronos reference viewer,
 - **Node transforms**: the default scene is flattened at load into `GLTFModel.instances`
   (mesh index + baked node world matrix); `WebGPURenderSystem` emits one renderable per
   instance × primitive, composing entity × node matrices (fixed 2026-08-31). Skinned mesh
-  nodes get an identity transform per spec §3.7.3.2. A mesh referenced by several nodes
-  renders correctly but as separate draw calls (no GPU instancing), and today's per-instance
-  geometry cache keys duplicate its GPU buffers (pending the geometryId/uniform-key split).
+  nodes get an identity transform per spec §3.7.3.2. Geometry GPU buffers are shared per
+  (asset, mesh, primitive) across entities and node instances (`RenderData.geometryId`),
+  while each instance owns its MVP uniform slot (`RenderData.uniformKey`); a mesh referenced
+  by several nodes still draws as separate draw calls (no GPU instancing).
 - **Materials**: metal-rough factors + baseColor / metallicRoughness / normal / occlusion /
   emissive textures, alphaMode, doubleSided, per glTF material. The glTF material always wins:
   the ecs `WebGPU3DRenderComponent` material scalars are inert for `materialType: 'gltf'`
@@ -44,7 +45,7 @@ Ordered by number of sample models blocked. "Test models" are the smallest/clear
 | Animations (node TRS / weights) | 26 | AnimatedTriangle, BoxAnimated, InterpolationTest | |
 | Alpha MASK | 16 | AlphaBlendModeTest, Sponza (foliage/chains) | alphaMode already reaches the pipeline key; whether the shader discards is unverified. |
 | Alpha BLEND (sorting) | 13 | AlphaBlendModeTest | Needs back-to-front draw ordering; renderer currently has no sort. |
-| Mesh instancing (1 mesh, N nodes) | 13 | ABeautifulGame (chess pieces), CesiumMilkTruck (wheels) | Node flattening (2026-08-31) makes these render correctly, but as separate draw calls with duplicated GPU buffers; true GPU instancing still unimplemented (`InstanceManager` is an empty class). |
+| Mesh instancing (1 mesh, N nodes) | 13 | ABeautifulGame (chess pieces), CesiumMilkTruck (wheels) | Node flattening (2026-08-31) makes these render correctly with shared GPU buffers, but as separate draw calls; true GPU instancing still unimplemented (`InstanceManager` is an empty class). |
 | Skinning | 7 | SimpleSkin, RiggedSimple, Fox, CesiumMan, BrainStem | Skinned models render in bind pose today (acceptable fallback). |
 | Morph targets | 4 | SimpleMorph, AnimatedMorphCube | Related to the dormant PMX morph-compute path. |
 | Quantized/normalized attributes | 3 | MeshoptCubeTest (REQ KHR_mesh_quantization), RecursiveSkeletons | Converter assumes float arrays. |

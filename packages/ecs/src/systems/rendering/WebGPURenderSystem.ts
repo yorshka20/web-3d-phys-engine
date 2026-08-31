@@ -326,21 +326,24 @@ export class WebGPURenderSystem extends System {
     const assetId = meshComponent.descriptor.assetId;
 
     // One renderable per (mesh instance × primitive): each glTF scene node carries its own
-    // baked world matrix, composed here with the entity transform. The geometryId doubles as
-    // the MVP uniform key downstream, so it must be unique per instance, not per entity.
+    // baked world matrix, composed here with the entity transform. geometryId identifies the
+    // shared asset data (same buffers across entities and node instances); uniformKey is the
+    // per-instance transform slot — primitives of one instance share it (same matrices).
     const renderData: RenderData[] = [];
     gltfModel.instances.forEach((instance, instanceIndex) => {
       const worldMatrix = mat4.create();
       mat4.multiply(worldMatrix, entityWorldMatrix, instance.worldMatrix);
       const normalMatrix = this.calculateNormalMatrix(worldMatrix as Float32Array);
+      const uniformKey = `gltf_${entity.id}_i${instanceIndex}`;
 
       const mesh = gltfModel.meshes[instance.meshIndex];
       mesh.primitives.forEach((primitive, primitiveIndex) => {
         renderData.push({
           entityId: entity.numericId,
           type: 'gltf',
-          geometryId: `gltf_${assetId}_${entity.id}_i${instanceIndex}_p${primitiveIndex}`,
+          geometryId: `gltf_${assetId}_m${instance.meshIndex}_p${primitiveIndex}`,
           geometryData: primitive.geometry,
+          uniformKey,
           worldMatrix: new Float32Array(worldMatrix),
           normalMatrix,
           material: primitive.material ?? renderComponent.getMaterial(),
@@ -385,6 +388,7 @@ export class WebGPURenderSystem extends System {
         type: 'mesh',
         geometryId,
         geometryData: meshComponent.geometryData,
+        uniformKey: `mesh_${entity.id}`,
         worldMatrix: new Float32Array(worldMatrix),
         normalMatrix,
         material: renderComponent.getMaterial(),
@@ -469,6 +473,7 @@ export class WebGPURenderSystem extends System {
         type: 'pmx',
         geometryId,
         geometryData,
+        uniformKey: `pmx_${entity.id}`,
         worldMatrix: new Float32Array(worldMatrix),
         normalMatrix,
         material: renderComponent.getMaterial(),

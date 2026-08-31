@@ -28,7 +28,9 @@ export class MVPUniformManager {
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
   private bindGroupManager!: BindGroupManager;
 
-  // Cache for MVP buffers and bind groups per geometry instance
+  // Cache for MVP buffers and bind groups, keyed by RenderData.uniformKey (one per draw
+  // instance — never share a buffer across draws with different matrices: every
+  // queue.writeBuffer lands before the frame's submit, so sharing is last-write-wins)
   private mvpBuffers = new Map<string, GPUBuffer>();
   private mvpBindGroups = new Map<string, GPUBindGroup>();
 
@@ -61,30 +63,30 @@ export class MVPUniformManager {
   }
 
   /**
-   * Get or create MVP buffer for a geometry instance
+   * Get or create MVP buffer for a draw instance
    */
-  getOrCreateMVPBuffer(geometryId: string): GPUBuffer {
-    const bufferLabel = `MVP_Buffer_${geometryId}`;
+  getOrCreateMVPBuffer(uniformKey: string): GPUBuffer {
+    const bufferLabel = `MVP_Buffer_${uniformKey}`;
 
-    if (!this.mvpBuffers.has(geometryId)) {
+    if (!this.mvpBuffers.has(uniformKey)) {
       const buffer = this.bufferManager.createCustomBuffer(bufferLabel, {
         type: BufferType.UNIFORM,
         size: Number(this.MVP_BUFFER_SIZE),
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
-      this.mvpBuffers.set(geometryId, buffer);
+      this.mvpBuffers.set(uniformKey, buffer);
     }
 
-    return this.mvpBuffers.get(geometryId)!;
+    return this.mvpBuffers.get(uniformKey)!;
   }
 
   /**
-   * Get or create MVP bind group for a geometry instance
+   * Get or create MVP bind group for a draw instance
    */
-  getOrCreateMVPBindGroup(geometryId: string): GPUBindGroup {
-    if (!this.mvpBindGroups.has(geometryId)) {
-      const mvpBuffer = this.getOrCreateMVPBuffer(geometryId);
-      const bindGroupLabel = `MVP_BindGroup_${geometryId}`;
+  getOrCreateMVPBindGroup(uniformKey: string): GPUBindGroup {
+    if (!this.mvpBindGroups.has(uniformKey)) {
+      const mvpBuffer = this.getOrCreateMVPBuffer(uniformKey);
+      const bindGroupLabel = `MVP_BindGroup_${uniformKey}`;
 
       const mvpBindGroupLayout = this.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
       if (!mvpBindGroupLayout) {
@@ -102,19 +104,18 @@ export class MVPUniformManager {
         label: bindGroupLabel,
       });
 
-      this.mvpBindGroups.set(geometryId, bindGroup);
+      this.mvpBindGroups.set(uniformKey, bindGroup);
     }
 
-    return this.mvpBindGroups.get(geometryId)!;
+    return this.mvpBindGroups.get(uniformKey)!;
   }
 
   /**
    * Update MVP uniform data for a renderable and return the bind group
    */
   updateMVPUniforms(renderable: RenderData, frameData: FrameData): GPUBindGroup {
-    const geometryId = renderable.geometryId || 'default_geometry';
-    const mvpBuffer = this.getOrCreateMVPBuffer(geometryId);
-    const mvpBindGroup = this.getOrCreateMVPBindGroup(geometryId);
+    const mvpBuffer = this.getOrCreateMVPBuffer(renderable.uniformKey);
+    const mvpBindGroup = this.getOrCreateMVPBindGroup(renderable.uniformKey);
 
     // Calculate MVP matrix and camera data
     const uniformData = this.calculateMVPUniformData(renderable, frameData);
@@ -192,18 +193,18 @@ export class MVPUniformManager {
   }
 
   /**
-   * Get MVP bind group for a geometry instance (without updating data)
+   * Get MVP bind group for a draw instance (without updating data)
    */
-  getMVPBindGroup(geometryId: string): GPUBindGroup | null {
-    return this.mvpBindGroups.get(geometryId) || null;
+  getMVPBindGroup(uniformKey: string): GPUBindGroup | null {
+    return this.mvpBindGroups.get(uniformKey) || null;
   }
 
   /**
-   * Clear cached buffers and bind groups for a specific geometry
+   * Clear cached buffers and bind groups for a specific draw instance
    */
-  clearGeometry(geometryId: string): void {
-    this.mvpBuffers.delete(geometryId);
-    this.mvpBindGroups.delete(geometryId);
+  clearInstance(uniformKey: string): void {
+    this.mvpBuffers.delete(uniformKey);
+    this.mvpBindGroups.delete(uniformKey);
   }
 
   /**

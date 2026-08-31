@@ -88,8 +88,16 @@ export interface RenderData {
   type: 'gltf' | 'pmx' | 'mesh';
 
   // Geometry information
-  geometryId: string; // for resource cache
+  // Identifies the geometry DATA: renderables drawing the same vertex/index data share one
+  // geometryId so GPU buffers are created once (SmartResource caches by this key).
+  geometryId: string;
   geometryData: GeometryData;
+
+  // Identifies the DRAW INSTANCE: keys the per-object MVP uniform buffer/bind group, so it
+  // must be unique per world matrix per frame (all queue.writeBuffer calls land before the
+  // frame's submit — sharing a key across different matrices is last-write-wins). Renderables
+  // with identical matrices (e.g. primitives of one glTF node) may share it.
+  uniformKey: string;
 
   // Transform information
   worldMatrix: mat4;
