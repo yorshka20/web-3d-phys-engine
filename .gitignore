@@ -101,3 +101,7 @@ jspm_packages/
 *.local.md
 
 packages/web-client/assets/
+# Claude local-only working notes (see CLAUDE.md "Workflow")
+.claude-workbook/
+.claude-learnings/
+ROADMAP.md
