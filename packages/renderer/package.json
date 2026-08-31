@@ -11,7 +11,8 @@
     "@gltf-transform/core": "4.2.1",
     "@gltf-transform/extensions": "4.2.1",
     "gl-matrix": "3.4.4",
-    "mmd-parser": "1.0.4"
+    "mmd-parser": "1.0.4",
+    "primitive-geometry": "2.11.0"
   },
   "license": "MIT"
 }

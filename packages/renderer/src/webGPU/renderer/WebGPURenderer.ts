@@ -1,7 +1,8 @@
-import { GLTFMaterial, SystemPriorities, WebGPUMaterialDescriptor } from '@ecs';
-import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
-import { FrameData, RenderData } from '@ecs/systems/rendering/types';
-import { RectArea } from '@ecs/types/types';
+import { GLTFMaterial } from '@renderer/assets/GltfModel';
+import { PMXModel } from '@renderer/assets/PMXModel';
+import { WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { FrameData, RenderData } from '@renderer/frame/types';
+import { RectArea } from '@renderer/types/base';
 import {
   assetRegistry,
   MVPUniformManager,
@@ -35,16 +36,13 @@ import {
 } from '../core/types';
 import {
   BindGroup,
-  Camera,
   ComputePass,
   ComputePassDescriptor,
   ContextConfig,
   IWebGPURenderer,
-  PostProcessEffect,
   RenderPass,
   RenderPassDescriptor,
   RenderPipeline,
-  Scene,
 } from './types/IWebGPURenderer';
 
 // Render group definition - now uses semantic key for more precise grouping
@@ -64,8 +62,6 @@ interface RenderGroup {
  * - Management of render pipelines and shaders
  */
 export class WebGPURenderer implements IWebGPURenderer {
-  priority = SystemPriorities.RENDER;
-
   private initialized = false;
 
   private canvas!: HTMLCanvasElement;
@@ -135,19 +131,6 @@ export class WebGPURenderer implements IWebGPURenderer {
     return window.devicePixelRatio;
   }
 
-  renderScene(scene: Scene, camera: Camera): void {
-    throw new Error('Method not implemented.');
-  }
-  renderEntity(entityId: number, world: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-
-  addPostProcessEffect(effect: PostProcessEffect): void {
-    throw new Error('Method not implemented.');
-  }
-  removePostProcessEffect(effectId: string): void {
-    throw new Error('Method not implemented.');
-  }
   beginFrame(): void {
     // Update time manager
     this.timeManager.updateTime(performance.now());

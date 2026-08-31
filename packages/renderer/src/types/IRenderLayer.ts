@@ -1,5 +1,5 @@
 import { IEntity } from '@ecs/core/ecs/types';
-import { RectArea } from '@ecs/types/types';
+import { RectArea } from '@renderer/types/base';
 import { RenderSystem } from '@ecs/systems';
 import { RenderLayerType } from '../canvas2d/base/RenderLayer';
 import { IRenderer } from './IRenderer';

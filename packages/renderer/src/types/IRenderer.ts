@@ -1,5 +1,5 @@
 import { RenderSystem } from '@ecs/systems';
-import { RectArea } from '@ecs/types/types';
+import { RectArea } from '@renderer/types/base';
 import { IRenderLayer } from './IRenderLayer';
 
 export interface ContextConfig {

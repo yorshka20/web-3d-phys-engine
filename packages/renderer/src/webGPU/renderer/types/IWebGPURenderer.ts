@@ -1,5 +1,4 @@
-import { Camera3DComponent, Transform3DComponent } from '@ecs/components';
-import { FrameData } from '@ecs/systems/rendering/types';
+import { FrameData } from '@renderer/frame/types';
 
 // ===== Core WebGPU Types =====
 
@@ -7,11 +6,6 @@ export interface Scene {
   entities: Set<number>; // Entity IDs
   name: string;
   active: boolean;
-}
-
-export interface Camera {
-  component: Camera3DComponent;
-  transform: Transform3DComponent;
 }
 
 export interface Mesh {
@@ -132,14 +126,6 @@ export interface ContextConfig {
  * Provides scene-level operations and resource management
  */
 export interface IRenderer {
-  // Scene management
-  renderScene(scene: Scene, camera: Camera): void;
-  renderEntity(entityId: number, world: unknown): void; // ECS world reference
-
-  // Post processing
-  addPostProcessEffect(effect: PostProcessEffect): void;
-  removePostProcessEffect(effectId: string): void;
-
   // Frame control
   beginFrame(): void;
   endFrame(): void;
@@ -191,13 +177,6 @@ export abstract class IWebGPURenderer implements IRenderer, IRenderBackend {
   abstract getDevice(): GPUDevice;
   abstract getContext(): GPUCanvasContext;
   abstract getAdapter(): GPUAdapter;
-
-  // ===== IRenderer Implementation =====
-  abstract renderScene(scene: Scene, camera: Camera): void;
-  abstract renderEntity(entityId: number, world: unknown): void;
-
-  abstract addPostProcessEffect(effect: PostProcessEffect): void;
-  abstract removePostProcessEffect(effectId: string): void;
 
   // ===== Frame Control =====
   abstract beginFrame(): void;

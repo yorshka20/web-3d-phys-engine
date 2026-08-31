@@ -1,4 +1,4 @@
-import { VertexFormat } from '@ecs/components/physics/mesh';
+import { VertexFormat } from '@renderer/geometry';
 import { ShaderModule, ShaderParamDefinition } from './shader';
 
 /**

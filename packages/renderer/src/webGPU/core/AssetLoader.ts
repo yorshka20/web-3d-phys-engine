@@ -1,7 +1,7 @@
-import { GeometryData, VertexFormat } from '@ecs/components/physics/mesh/GeometryFactory';
-import { GLTFMaterial, GLTFModel, GLTFPrimitive } from '@ecs/components/physics/mesh/GltfModel';
-import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
-import { AlphaMode } from '@ecs/components/rendering/render/types';
+import { GeometryData, VertexFormat } from '@renderer/geometry/GeometryFactory';
+import { GLTFMaterial, GLTFModel, GLTFPrimitive } from '@renderer/assets/GltfModel';
+import { PMXModel } from '@renderer/assets/PMXModel';
+import { AlphaMode } from '@renderer/material/types';
 import { Document, Primitive, WebIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { mat4 } from 'gl-matrix';

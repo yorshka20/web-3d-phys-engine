@@ -1,5 +1,5 @@
-import { GeometryData, GeometryPrimitiveOptions, GeometryType } from '@ecs/components/physics/mesh';
-import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { GeometryData, GeometryPrimitiveOptions, GeometryType } from '@renderer/geometry';
+import { PMXModel } from '@renderer/assets/PMXModel';
 
 /**
  * Geometry cache item

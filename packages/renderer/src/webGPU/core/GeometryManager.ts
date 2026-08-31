@@ -1,5 +1,5 @@
-import { GeometryData, GeometryFactory, GeometryType } from '@ecs/components/physics/mesh';
-import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { GeometryData, GeometryFactory, GeometryType } from '@renderer/geometry';
+import { PMXModel } from '@renderer/assets/PMXModel';
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable, SmartResource } from './decorators/ResourceDecorators';

@@ -1,4 +1,4 @@
-import { VertexFormat } from '@ecs/components/physics/mesh';
+import { VertexFormat } from '@renderer/geometry';
 import { Inject, Injectable } from '../decorators';
 import { ServiceTokens } from '../decorators/DIContainer';
 import { WebGPUResourceManager } from '../ResourceManager';

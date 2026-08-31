@@ -4,10 +4,10 @@
  * This follows the design principle of separating asset loading from GPU resource creation
  */
 
-import { GeometryData } from '@ecs/components/physics/mesh/GeometryFactory';
-import { GLTFModel } from '@ecs/components/physics/mesh/GltfModel';
-import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
-import { WebGPUMaterialDescriptor } from '@ecs/components/rendering/render/types';
+import { GeometryData } from '@renderer/geometry/GeometryFactory';
+import { GLTFModel } from '@renderer/assets/GltfModel';
+import { PMXModel } from '@renderer/assets/PMXModel';
+import { WebGPUMaterialDescriptor } from '@renderer/material/types';
 
 export interface AssetDescriptor<T extends AssetType = AssetType> {
   id: string;

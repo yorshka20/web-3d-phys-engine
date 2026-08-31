@@ -1,4 +1,4 @@
-import { FrameData, RenderData } from '@ecs/systems/rendering/types';
+import { FrameData, RenderData } from '@renderer/frame/types';
 import { mat4 } from 'gl-matrix';
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';

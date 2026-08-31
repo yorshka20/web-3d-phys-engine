@@ -1,5 +1,6 @@
-import { Transform3DComponent, WebGPUMaterialDescriptor } from '@ecs/components';
-import { GeometryType } from '@ecs/components/physics/mesh';
+import { WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { GeometryType } from '@renderer/geometry';
+import { mat4 } from 'gl-matrix';
 import { BufferType, ResourceType } from './constant';
 import { GeometryParams } from './geometry';
 import { WebGPUResource } from './resource';
@@ -84,7 +85,7 @@ export interface PipelineDescriptor {
 export interface InstanceDescriptor {
   id: string;
   modelId: string;
-  transform: Transform3DComponent;
+  worldMatrix: mat4;
 }
 
 /**

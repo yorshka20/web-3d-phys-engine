@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "chroma-js": "3.1.2",
-    "gl-matrix": "3.4.4",
-    "primitive-geometry": "2.11.0"
+    "gl-matrix": "3.4.4"
   }
 }

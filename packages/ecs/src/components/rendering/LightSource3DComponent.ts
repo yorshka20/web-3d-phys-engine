@@ -5,44 +5,17 @@ import { SerializedLight } from '@renderer/rayTracing';
 
 export type AttenuationType = 'none' | 'linear' | 'quadratic' | 'realistic';
 
-export enum LightType {
-  AMBIENT = 'ambient',
-  DIRECTIONAL = 'directional',
-  POINT = 'point',
-  SPOT = 'spot',
-}
-
-export interface BaseLightData {
-  type: LightType;
-  color: Vec3; // RGB
-  intensity: number;
-  castShadow: boolean;
-}
-
-export interface DirectionalLightData extends BaseLightData {
-  type: LightType.DIRECTIONAL;
-  direction: Vec3;
-  shadowMapSize?: number;
-  shadowBias?: number;
-}
-
-export interface PointLightData extends BaseLightData {
-  type: LightType.POINT;
-  position: Vec3;
-  range: number; // attenuation range
-  attenuation: Vec3; // constant, linear, quadratic
-}
-
-export interface SpotLightData extends BaseLightData {
-  type: LightType.SPOT;
-  position: Vec3;
-  direction: Vec3;
-  innerCone: number; // inner cone angle
-  outerCone: number; // outer cone angle
-  range: number;
-}
-
-export type LightData = DirectionalLightData | PointLightData | SpotLightData;
+// Light data types moved to the renderer's frame contract; re-exported for
+// existing @ecs import paths.
+import { LightType } from '@renderer/frame/types';
+export { LightType } from '@renderer/frame/types';
+export type {
+  BaseLightData,
+  DirectionalLightData,
+  LightData,
+  PointLightData,
+  SpotLightData,
+} from '@renderer/frame/types';
 
 /**
  * Light source component for 2D ray tracing

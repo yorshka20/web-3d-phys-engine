@@ -1,4 +1,4 @@
-import { AlphaMode } from '@ecs/components/rendering/render/types';
+import { AlphaMode } from '@renderer/material/types';
 
 /**
  * Scene representation for ECS

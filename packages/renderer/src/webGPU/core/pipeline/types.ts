@@ -1,4 +1,5 @@
-import { AlphaMode, GeometryData, VertexFormat, WebGPUMaterialDescriptor } from '@ecs/components';
+import { GeometryData, VertexFormat } from '@renderer/geometry/GeometryFactory';
+import { AlphaMode, WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { mat4, vec3 } from 'gl-matrix';
 import { GeometryCacheItem } from '../types';
 

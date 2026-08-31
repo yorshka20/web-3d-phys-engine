@@ -1,6 +1,6 @@
-import { GeometryData, WebGPUMaterialDescriptor } from '@ecs/components';
-import { GLTFMaterial } from '@ecs/components/physics/mesh/GltfModel';
-import { rgba } from '@ecs/utils/color';
+import { GLTFMaterial } from '@renderer/assets/GltfModel';
+import { GeometryData } from '@renderer/geometry/GeometryFactory';
+import { WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { PMXMaterialCacheData } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
@@ -601,10 +601,10 @@ export class PipelineFactory {
   ): Promise<GPURenderPipeline> {
     // Create a compatible material descriptor for semantic key generation
     const materialDescriptor: WebGPUMaterialDescriptor = {
-      albedo: rgba('#ffffff'),
+      albedo: { r: 255, g: 255, b: 255, a: 1 },
       metallic: 0,
       roughness: 0.5,
-      emissive: rgba('#000000'),
+      emissive: { r: 0, g: 0, b: 0, a: 1 },
       emissiveIntensity: 0,
       alphaMode: material.renderOrder === 'transparent' ? 'blend' : 'opaque',
       doubleSided: false,

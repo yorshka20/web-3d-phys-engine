@@ -1,4 +1,4 @@
-import { WebGPUMaterialDescriptor } from '@ecs/components/rendering/render/types';
+import { WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';

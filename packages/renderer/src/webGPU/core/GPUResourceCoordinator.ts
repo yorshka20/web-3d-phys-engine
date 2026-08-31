@@ -1,5 +1,6 @@
-import { VertexFormat, WebGPUMaterialDescriptor } from '@ecs';
-import { PMXModel, PMXVertex } from '@ecs/components/physics/mesh/PMXModel';
+import { VertexFormat } from '@renderer/geometry/GeometryFactory';
+import { WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { PMXModel, PMXVertex } from '@renderer/assets/PMXModel';
 import { AssetDescriptor, AssetType } from './AssetRegistry';
 import { BufferManager } from './BufferManager';
 import { Inject, Injectable, SmartResource } from './decorators';
