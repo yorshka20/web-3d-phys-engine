@@ -74,3 +74,21 @@ type BoxOptions = OptionsOf<typeof primitives.box>;
 Apply the same pattern if another dependency's `exports` map blocks a deep type
 import: prefer deriving the type from what the package officially exports over
 adding `paths` workarounds or ambient module declarations.
+
+## WebGPU type declarations (2026-08)
+
+WebGPU globals (`GPUDevice`, `GPUTextureUsage`, ...) come from `@webgpu/types`, loaded via the
+triple-slash reference in `global.d.ts`, which every package tsconfig includes:
+
+```ts
+/// <reference types="@webgpu/types" />
+```
+
+Do not rely on TypeScript's bundled `lib.dom` for WebGPU: as of TS 5.8 it ships only a partial
+surface (interfaces like `GPUTexture` exist, const objects like `GPUTextureUsage` do not).
+
+History: the reference used to work only by accident — `typeRoots` listed
+`./node_modules/@webgpu/types` (a typeRoot's *subdirectories* are treated as type packages, so
+TS loaded `dist/` as a pseudo-package). CLI tsc passed; IDE language servers did not replicate
+the quirk. The `typeRoots` override was removed entirely — the default (`@types` folders up the
+tree) plus the explicit reference is the documented setup.
