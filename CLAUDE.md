@@ -179,6 +179,10 @@ from `import.meta.env.VITE_GLTF_SAMPLES_BASE` (committed default in `web-client/
 commit-pinned jsDelivr CDN; local-submodule override via `/@fs` in `.env.development.local`);
 COEP/COOP headers are set for SharedArrayBuffer/workers.
 
+`docs/gltf-sample-assets.md` maps the Khronos sample library to renderer feature gaps (core-spec
+gaps, extension tiers, hero-asset requirement checklists) — consult it when picking glTF test
+models or extending glTF rendering.
+
 ## Work-in-Progress Map
 
 Current state that is easy to misread as bugs or dead code — check here before "fixing":
