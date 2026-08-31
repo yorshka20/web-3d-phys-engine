@@ -400,11 +400,13 @@ export class AssetLoader {
     const jointsArr = joints ? new Uint32Array(joints.getArray() as ArrayLike<number>) : null;
     const weightsArr = weights ? new Float32Array(weights.getArray() as ArrayLike<number>) : null;
     const tangentArr = tangent ? new Float32Array(tangent.getArray() as ArrayLike<number>) : null;
+    const vertexCount = posArr.length / 3;
+
+    // A primitive without indices is valid glTF (vertices are consumed sequentially, spec
+    // 3.7.2.1); synthesize 0..n-1 so the renderer's indexed-only draw path still covers it.
     const indexArr = indices
       ? new Uint16Array(indices.getArray() as ArrayLike<number>)
-      : new Uint16Array([]);
-
-    const vertexCount = posArr.length / 3;
+      : Uint16Array.from({ length: vertexCount }, (_, i) => i);
 
     // Calculate vertex stride for GLTF format
     // GLTF vertex layout: pos(3) + normal(3) + uv0(2) + uv1(2) + color(4) + joints(4) + weights(4) + tangent(4)
