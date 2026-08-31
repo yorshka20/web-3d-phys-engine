@@ -861,8 +861,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       const materialIndex = renderable.materialIndex || 0;
       geometry = await this.getOrCreatePMXGeometry(renderable, materialIndex);
 
-      // Create a unique key for this specific material
-      const materialKey = `${renderable.pmxAssetId}_material_${materialIndex}`;
+      // Cache key for this specific material, computed at extract time
+      const materialKey = renderable.materialKey;
 
       // resolve asset descriptor for PMX material
       const assetDescriptor = renderable.pmxComponent.resolveAsset<'pmx_material'>();
@@ -1139,8 +1139,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('GLTF PBR material bind group layout not found');
     }
 
-    // Create GLTF material bind group with PBR data and textures
-    const materialId = `gltf_material_${renderable.geometryId}`;
+    // Create GLTF material bind group with PBR data and textures, cached by material identity
+    const materialId = renderable.materialKey;
 
     // Create material uniform buffer for GLTF PBR material
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
@@ -1353,12 +1353,8 @@ export class WebGPURenderer implements IWebGPURenderer {
       throw new Error('Material bind group layout not found');
     }
 
-    // Create or get material bind group using material ID from renderable
-    // Use a combination of material properties to create a unique ID
-    const materialId =
-      renderable.material.bindGroupId ||
-      renderable.material.uniformBufferId ||
-      `material_${renderable.geometryId}`;
+    // Create or get material bind group using the material identity computed at extract time
+    const materialId = renderable.materialKey;
 
     const materialBindGroup = this.materialManager.createMaterialBindGroup(
       materialId,

@@ -43,6 +43,10 @@ export interface GLTFMaterial extends BaseMaterial {
   doubleSided: boolean;
 
   materialType: 'gltf';
+
+  // Stable identity of the source document material (glTF materials are document-level and
+  // shared across primitives); keys material GPU-resource caches downstream.
+  materialKey: string;
 }
 
 export interface GLTFModel {

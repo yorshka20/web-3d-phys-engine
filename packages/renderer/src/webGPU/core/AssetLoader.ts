@@ -8,7 +8,7 @@ import {
 } from '@renderer/assets/GltfModel';
 import { PMXModel } from '@renderer/assets/PMXModel';
 import { AlphaMode } from '@renderer/material/types';
-import { Document, Mesh, Node, Primitive, WebIO } from '@gltf-transform/core';
+import { Document, Material, Mesh, Node, Primitive, WebIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { mat4 } from 'gl-matrix';
 import { Parser } from 'mmd-parser';
@@ -273,7 +273,11 @@ export class AssetLoader {
         if (node.getMesh()) meshNodes.push(node);
       });
 
-      let primitiveIndex = 0;
+      // glTF materials are document-level and shared across primitives: convert each source
+      // material once and let sharing primitives reference the same GLTFMaterial (and its
+      // textures), instead of duplicating per primitive.
+      const materials = new Map<Material, GLTFMaterial>();
+
       for (const node of meshNodes) {
         const mesh = node.getMesh()!;
         let meshIndex = meshIndices.get(mesh);
@@ -282,13 +286,17 @@ export class AssetLoader {
           for (const primitive of mesh.listPrimitives()) {
             const cpuPrim = this.convertGLTFPrimitiveToGeometry(primitive);
             // Extract material and load textures
-            const material = await this.extractMaterial(primitive, assetId, primitiveIndex);
-            if (material) {
+            const mat = primitive.getMaterial();
+            if (mat) {
+              let material = materials.get(mat);
+              if (!material) {
+                material = await this.extractMaterial(mat, assetId, materials.size);
+                materials.set(mat, material);
+              }
               cpuPrim.material = material;
             }
 
             primitives.push(cpuPrim);
-            primitiveIndex++;
           }
           meshIndex = meshes.length;
           meshes.push({ primitives });
@@ -325,16 +333,13 @@ export class AssetLoader {
   }
 
   /**
-   * Extract material information from GLTF primitive and load embedded textures
+   * Extract one document-level GLTF material and load its embedded textures
    */
   private static async extractMaterial(
-    primitive: Primitive,
+    mat: Material,
     assetId: string,
-    primitiveIndex: number,
-  ): Promise<GLTFMaterial | undefined> {
-    const mat = primitive.getMaterial();
-    if (!mat) return undefined;
-
+    materialIndex: number,
+  ): Promise<GLTFMaterial> {
     const material: GLTFMaterial = {
       baseColorFactor: mat.getBaseColorFactor() as [number, number, number, number],
       metallicFactor: mat.getMetallicFactor(),
@@ -347,6 +352,7 @@ export class AssetLoader {
       occlusionStrength: mat.getOcclusionStrength(),
       materialType: 'gltf',
       customShaderId: 'gltf_material_shader',
+      materialKey: `gltf_${assetId}_mat_${materialIndex}`,
     };
 
     // Process all texture types
@@ -362,7 +368,7 @@ export class AssetLoader {
       if (tex) {
         const imageData = tex.getImage();
         const mimeType = tex.getMimeType();
-        const textureId = `${assetId}_${key}_${primitiveIndex}`;
+        const textureId = `${assetId}_${key}_mat${materialIndex}`;
 
         if (!imageData) continue;
 

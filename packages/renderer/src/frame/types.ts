@@ -105,6 +105,10 @@ export interface RenderData {
 
   // Material information
   material: WebGPUMaterialDescriptor | PMXMaterialCacheData | GLTFMaterial;
+  // Identifies the MATERIAL identity: keys material uniform-buffer/bind-group caches, so
+  // renderables sharing one material (glTF document-level materials, PMX per-index materials)
+  // share GPU material resources.
+  materialKey: string;
   materialUniforms: Record<string, Any>; // material specific uniforms
 
   // render control

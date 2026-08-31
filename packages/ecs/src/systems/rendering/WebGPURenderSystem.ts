@@ -347,6 +347,9 @@ export class WebGPURenderSystem extends System {
           worldMatrix: new Float32Array(worldMatrix),
           normalMatrix,
           material: primitive.material ?? renderComponent.getMaterial(),
+          // A primitive without a material falls back to the entity's component material,
+          // whose identity is then per-entity, not per-asset.
+          materialKey: primitive.material?.materialKey ?? `gltf_mat_fallback_${entity.id}`,
           materialUniforms: renderComponent.getUniforms() || {},
           renderOrder: renderComponent.getLayer() || 0,
           castShadow: renderComponent.getCastShadow() ?? true,
@@ -382,6 +385,8 @@ export class WebGPURenderSystem extends System {
     // Calculate normal matrix (inverse transpose of upper 3x3 world matrix)
     const normalMatrix = this.calculateNormalMatrix(worldMatrix);
 
+    const material = renderComponent.getMaterial();
+
     return [
       {
         entityId: entity.numericId,
@@ -391,7 +396,8 @@ export class WebGPURenderSystem extends System {
         uniformKey: `mesh_${entity.id}`,
         worldMatrix: new Float32Array(worldMatrix),
         normalMatrix,
-        material: renderComponent.getMaterial(),
+        material,
+        materialKey: material.bindGroupId || material.uniformBufferId || `mesh_mat_${entity.id}`,
         materialUniforms: renderComponent.getUniforms() || {},
         renderOrder: renderComponent.getLayer() || 0,
         castShadow: renderComponent.getCastShadow() ?? true,
@@ -477,6 +483,7 @@ export class WebGPURenderSystem extends System {
         worldMatrix: new Float32Array(worldMatrix),
         normalMatrix,
         material: renderComponent.getMaterial(),
+        materialKey: `pmx_${pmxMeshComponent.assetId}_mat_${materialIndex}`,
         materialUniforms: renderComponent.getUniforms() || {},
         renderOrder: renderComponent.getLayer() || 0,
         castShadow: pmxMeshComponent.castShadow,
