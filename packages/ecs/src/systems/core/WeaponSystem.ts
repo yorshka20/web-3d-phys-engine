@@ -25,7 +25,6 @@ import { SoundManager } from '@ecs/core/resources/SoundManager';
 import { createAreaEffectEntity, createEffectEntity, createProjectileEntity } from '@ecs/entities';
 import { Point } from '@ecs/types/types';
 import { TimeUtil } from '@ecs/utils/timeUtil';
-import { InputSystem } from '../interaction';
 import { getScreenViewport } from '../viewport';
 
 type WeaponParameters<T extends Weapon> = {
@@ -37,19 +36,29 @@ type WeaponParameters<T extends Weapon> = {
   currentTime: number;
 };
 
+/**
+ * Aiming input required by WeaponSystem. The 2D InputSystem that used to
+ * provide it was removed (superseded by Input3DSystem, which has no
+ * world-space mouse position); whichever input system revives this dormant
+ * system must register under the 'InputSystem' name and satisfy this shape.
+ */
+interface AimInputSource extends System {
+  getMousePosition(): Point;
+}
+
 export class WeaponSystem extends System {
   private maxAreaEffects = 10;
   private areaEffects: Entity[] = [];
 
-  private inputSystem: InputSystem | null = null;
+  private inputSystem: AimInputSource | null = null;
 
   constructor() {
     super('WeaponSystem', SystemPriorities.WEAPON, 'logic');
   }
 
-  private getInputSystem(): InputSystem {
+  private getInputSystem(): AimInputSource {
     if (this.inputSystem) return this.inputSystem;
-    this.inputSystem = this.world.getSystem<InputSystem>('InputSystem', SystemPriorities.INPUT);
+    this.inputSystem = this.world.getSystem<AimInputSource>('InputSystem', SystemPriorities.INPUT);
     if (!this.inputSystem) {
       throw new Error('InputSystem not found');
     }
