@@ -14,17 +14,24 @@ Target visuals for any model: the Khronos reference viewer,
 - **Attributes**: POSITION, NORMAL, TEXCOORD_0/1, COLOR_0, JOINTS_0, WEIGHTS_0, TANGENT, packed
   into a fixed 26-float vertex; missing attributes get defaults (normal `(0,1,0)`, uv `0`,
   color white). Attribute arrays are assumed float32 (quantized/normalized attrs unsupported).
-- **Indices**: uint16 only — uint32 accessors are silently corrupted by `new Uint16Array(...)`
-  truncation (AssetLoader), and the uint16 assumption repeats in `GeometryData`,
-  `GeometryManager`, `GPUResourceCoordinator` (2-byte alignment logic), and
-  `WebGPURenderer.renderTick` (`setIndexBuffer(buffer, 'uint16')`). Non-indexed primitives get
+- **Indices**: uint16 and uint32 (u8 accessors widen to u16 — WebGPU has no u8 index format).
+  `GeometryData.indices` is `Uint16Array | Uint32Array` and the draw-time `GPUIndexFormat` is
+  derived from the array type in `GeometryManager`'s cache item, flowing to `setIndexBuffer`
+  (fixed 2026-08-31; u32 accessors were silently truncated before). Non-indexed primitives get
   synthesized sequential indices (fixed 2026-08-31; Fox was invisible before).
+- **Node transforms**: the default scene is flattened at load into `GLTFModel.instances`
+  (mesh index + baked node world matrix); `WebGPURenderSystem` emits one renderable per
+  instance × primitive, composing entity × node matrices (fixed 2026-08-31). Skinned mesh
+  nodes get an identity transform per spec §3.7.3.2. A mesh referenced by several nodes
+  renders correctly but as separate draw calls (no GPU instancing), and today's per-instance
+  geometry cache keys duplicate its GPU buffers (pending the geometryId/uniform-key split).
 - **Materials**: metal-rough factors + baseColor / metallicRoughness / normal / occlusion /
   emissive textures, alphaMode, doubleSided, per glTF material. The glTF material always wins:
   the ecs `WebGPU3DRenderComponent` material scalars are inert for `materialType: 'gltf'`
   (only `materialType`/`customShaderId` enter the pipeline key).
-- **NOT consumed**: node transforms & scene hierarchy, skins, morph targets, animations,
-  cameras, punctual lights, and every KHR/EXT extension.
+- **NOT consumed**: skins, morph targets, animations, cameras, punctual lights, and every
+  KHR/EXT extension. The scene hierarchy itself is not retained (flattened away at load) —
+  node animation will need it kept.
 
 ## Core-spec gaps
 
@@ -32,12 +39,12 @@ Ordered by number of sample models blocked. "Test models" are the smallest/clear
 
 | Gap | Models hit | Test models | Notes |
 | --- | ---: | --- | --- |
-| Node transforms & hierarchy | 118 | Duck (0.01 scale matrix), DamagedHelmet (rotation), ABeautifulGame (48 transformed nodes) | The biggest gap. `stages/gltf.ts` currently works around it with hand-measured per-entity scales. Fix direction: bake node world transforms into vertex data at load, or emit one renderable per node. |
-| uint32 indices | 28 | **SciFiHelmet** (70,074 verts, single mesh, otherwise extension-free — the designated regression model), ToyCar, ABeautifulGame | Silent corruption, not an error. Fix = plumb `indexFormat` through GeometryData → GPUResourceCoordinator → `setIndexBuffer`. |
+| ~~Node transforms & hierarchy~~ | 118 | Duck (0.01 scale matrix), DamagedHelmet (rotation), ABeautifulGame (48 transformed nodes) | **Fixed 2026-08-31**: default scene flattened at load into per-instance world matrices; the hand-measured scales in `stages/gltf.ts` are gone. |
+| ~~uint32 indices~~ | 28 | **SciFiHelmet** (70,074 verts, single mesh, otherwise extension-free — the designated regression model), ToyCar, ABeautifulGame | **Fixed 2026-08-31**: index width follows the source accessor; format derived from the array type at draw. |
 | Animations (node TRS / weights) | 26 | AnimatedTriangle, BoxAnimated, InterpolationTest | |
 | Alpha MASK | 16 | AlphaBlendModeTest, Sponza (foliage/chains) | alphaMode already reaches the pipeline key; whether the shader discards is unverified. |
 | Alpha BLEND (sorting) | 13 | AlphaBlendModeTest | Needs back-to-front draw ordering; renderer currently has no sort. |
-| Mesh instancing (1 mesh, N nodes) | 13 | ABeautifulGame (chess pieces), CesiumMilkTruck (wheels) | Depends on node-hierarchy support; `InstanceManager` is an empty class today. |
+| Mesh instancing (1 mesh, N nodes) | 13 | ABeautifulGame (chess pieces), CesiumMilkTruck (wheels) | Node flattening (2026-08-31) makes these render correctly, but as separate draw calls with duplicated GPU buffers; true GPU instancing still unimplemented (`InstanceManager` is an empty class). |
 | Skinning | 7 | SimpleSkin, RiggedSimple, Fox, CesiumMan, BrainStem | Skinned models render in bind pose today (acceptable fallback). |
 | Morph targets | 4 | SimpleMorph, AnimatedMorphCube | Related to the dormant PMX morph-compute path. |
 | Quantized/normalized attributes | 3 | MeshoptCubeTest (REQ KHR_mesh_quantization), RecursiveSkeletons | Converter assumes float arrays. |
@@ -74,18 +81,18 @@ What each showcase model needs before it matches the reference viewer.
 | Hero | Size | Needs (core) | Needs (extensions) | Status today |
 | --- | --- | --- | --- | --- |
 | **FlightHelmet** | 95k tris, 15 imgs, 46MB | nothing — flat hierarchy, uint16, opaque | transmission (visor only) | **Renders correctly now** (visor opaque). In the gltf stage. |
-| **DamagedHelmet** | 15k tris, 5 imgs, 3MB | node transform (one rotation node) | — | In the stage; orientation may differ from reference until node transforms land. |
-| **SciFiHelmet** | 23k tris, 4K textures, 28MB | **uint32 indices** | — | Excluded from the stage; add back as the uint32 regression model. |
-| **Sponza** | 262k tris, 69 imgs, 50MB | alpha MASK (foliage), uint16 ✓, 1 transformed node | — | Surprisingly close: mostly core-compatible. Best candidate for a dedicated lighting stage. |
-| **ToyCar** | 213k tris | uint32 indices, node transforms | texture_transform, transmission, sheen, clearcoat | Geometry corrupt today. |
-| **ABeautifulGame** | 574k tris, 33 imgs | uint32 indices, node hierarchy + instancing | transmission, volume | The end-boss showcase. |
+| **DamagedHelmet** | 15k tris, 5 imgs, 3MB | node transform ✓ (2026-08-31) | — | In the stage; orientation should now match the reference. |
+| **SciFiHelmet** | 23k tris, 4K textures, 28MB | uint32 indices ✓ (2026-08-31) | — | In the stage as the uint32 regression model. |
+| **Sponza** | 262k tris, 69 imgs, 50MB | alpha MASK (foliage), uint16 ✓, node transform ✓ | — | Only alpha MASK left. Best candidate for a dedicated lighting stage. |
+| **ToyCar** | 213k tris | uint32 ✓, node transforms ✓ | texture_transform, transmission, sheen, clearcoat | Core geometry should render now; extensions still missing. |
+| **ABeautifulGame** | 574k tris, 33 imgs | uint32 ✓, node hierarchy + instancing ✓ (as separate draws) | transmission, volume | The end-boss showcase. |
 
 ## Suggested implementation order
 
-1. **Node transforms** — unlocks 118 models and deletes the hand-measured scales in
-   `stages/gltf.ts`; prerequisite for instancing/skinning/animation.
-2. **uint32 indices** — mechanical fix across the five uint16 sites; regression model
-   SciFiHelmet, then ToyCar/ABeautifulGame geometry.
+1. ~~**Node transforms**~~ — done 2026-08-31 (load-time scene flattening, per-instance
+   renderables); prerequisite for instancing/skinning/animation.
+2. ~~**uint32 indices**~~ — done 2026-08-31; regression model SciFiHelmet, then
+   ToyCar/ABeautifulGame geometry.
 3. **Alpha MASK verify + BLEND sorting** — unlocks Sponza as a lighting testbed.
 4. **Lighting quality (IBL + tonemapping)** — not a glTF feature, but it is most of the visual
    gap the current scene shows ("粗糙" is mainly the lighting model, not model fidelity).

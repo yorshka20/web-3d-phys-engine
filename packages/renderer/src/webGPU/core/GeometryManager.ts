@@ -239,6 +239,7 @@ export class GeometryManager {
       indexBuffer,
       vertexCount: geometry.vertexCount,
       indexCount: geometry.indexCount,
+      indexFormat: geometry.indices instanceof Uint32Array ? 'uint32' : 'uint16',
       primitiveType: geometry.primitiveType,
       bounds: {
         min: geometry.bounds.min as [number, number, number],

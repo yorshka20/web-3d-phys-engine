@@ -10,6 +10,7 @@ export interface GeometryCacheItem {
   indexBuffer: GPUBuffer;
   vertexCount: number;
   indexCount: number;
+  indexFormat: GPUIndexFormat;
   primitiveType: GPUPrimitiveTopology;
   bounds: {
     min: [number, number, number];

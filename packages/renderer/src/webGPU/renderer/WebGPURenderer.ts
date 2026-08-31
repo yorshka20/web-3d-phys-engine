@@ -891,7 +891,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // Set vertex and index buffers
     renderPass.setVertexBuffer(0, geometry.vertexBuffer);
-    renderPass.setIndexBuffer(geometry.indexBuffer, 'uint16');
+    renderPass.setIndexBuffer(geometry.indexBuffer, geometry.indexFormat);
 
     // Draw the object
     renderPass.drawIndexed(geometry.indexCount);

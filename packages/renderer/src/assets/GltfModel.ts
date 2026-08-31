@@ -8,6 +8,18 @@ export interface GLTFPrimitive {
   material?: GLTFMaterial;
 }
 
+export interface GLTFMesh {
+  primitives: GLTFPrimitive[];
+}
+
+// One scene node that references a mesh, flattened at load time with its world transform
+// baked in. Several instances may share one meshIndex (glTF mesh reuse across nodes), so
+// consumers must treat meshes as shared data and carry the transform per instance.
+export interface GLTFMeshInstance {
+  meshIndex: number;
+  worldMatrix: mat4;
+}
+
 export interface GLTFMaterial extends BaseMaterial {
   // PBR metallic roughness workflow
   baseColorFactor: [number, number, number, number];
@@ -34,7 +46,8 @@ export interface GLTFMaterial extends BaseMaterial {
 }
 
 export interface GLTFModel {
-  primitives: GLTFPrimitive[];
+  meshes: GLTFMesh[];
+  instances: GLTFMeshInstance[]; // flattened default-scene nodes that carry a mesh
   nodes?: GLTFNode[]; // scene graph
   animations?: GLTFAnimation[]; // animations
   skins?: GLTFSkin[]; // skinning data

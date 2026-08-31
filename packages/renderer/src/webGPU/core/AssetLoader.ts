@@ -1,8 +1,14 @@
 import { GeometryData, VertexFormat } from '@renderer/geometry/GeometryFactory';
-import { GLTFMaterial, GLTFModel, GLTFPrimitive } from '@renderer/assets/GltfModel';
+import {
+  GLTFMaterial,
+  GLTFMesh,
+  GLTFMeshInstance,
+  GLTFModel,
+  GLTFPrimitive,
+} from '@renderer/assets/GltfModel';
 import { PMXModel } from '@renderer/assets/PMXModel';
 import { AlphaMode } from '@renderer/material/types';
-import { Document, Primitive, WebIO } from '@gltf-transform/core';
+import { Document, Mesh, Node, Primitive, WebIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { mat4 } from 'gl-matrix';
 import { Parser } from 'mmd-parser';
@@ -255,23 +261,48 @@ export class AssetLoader {
 
       const doc: Document = await io.read(url);
 
-      const meshes = doc.getRoot().listMeshes();
+      const root = doc.getRoot();
+      const scene = root.getDefaultScene() ?? root.listScenes()[0];
       const dependencies: string[] = [];
-      const primitives: GLTFPrimitive[] = [];
+      const meshes: GLTFMesh[] = [];
+      const instances: GLTFMeshInstance[] = [];
+      const meshIndices = new Map<Mesh, number>();
+
+      const meshNodes: Node[] = [];
+      scene?.traverse((node) => {
+        if (node.getMesh()) meshNodes.push(node);
+      });
 
       let primitiveIndex = 0;
-      for (const mesh of meshes) {
-        for (const primitive of mesh.listPrimitives()) {
-          const cpuPrim = this.convertGLTFPrimitiveToGeometry(primitive);
-          // Extract material and load textures
-          const material = await this.extractMaterial(primitive, assetId, primitiveIndex);
-          if (material) {
-            cpuPrim.material = material;
-          }
+      for (const node of meshNodes) {
+        const mesh = node.getMesh()!;
+        let meshIndex = meshIndices.get(mesh);
+        if (meshIndex === undefined) {
+          const primitives: GLTFPrimitive[] = [];
+          for (const primitive of mesh.listPrimitives()) {
+            const cpuPrim = this.convertGLTFPrimitiveToGeometry(primitive);
+            // Extract material and load textures
+            const material = await this.extractMaterial(primitive, assetId, primitiveIndex);
+            if (material) {
+              cpuPrim.material = material;
+            }
 
-          primitives.push(cpuPrim);
-          primitiveIndex++;
+            primitives.push(cpuPrim);
+            primitiveIndex++;
+          }
+          meshIndex = meshes.length;
+          meshes.push({ primitives });
+          meshIndices.set(mesh, meshIndex);
         }
+
+        // A skinned mesh is positioned by its joints alone — glTF 2.0 §3.7.3.2 requires
+        // ignoring the transform of the node that references the skinned mesh.
+        const worldMatrix = node.getSkin() ? mat4.create() : mat4.clone(node.getWorldMatrix());
+        instances.push({ meshIndex, worldMatrix });
+      }
+
+      if (instances.length === 0) {
+        console.warn(`[AssetLoader] GLTF model has no renderable scene nodes: ${assetId}`);
       }
 
       // Register GLTF model as a CPU asset
@@ -280,7 +311,7 @@ export class AssetLoader {
         dependencies,
       };
 
-      const model: GLTFModel = { primitives };
+      const model: GLTFModel = { meshes, instances };
       assetRegistry.register(assetId, model, metadata);
 
       // Load textures referenced by the model (best-effort)
@@ -404,9 +435,20 @@ export class AssetLoader {
 
     // A primitive without indices is valid glTF (vertices are consumed sequentially, spec
     // 3.7.2.1); synthesize 0..n-1 so the renderer's indexed-only draw path still covers it.
-    const indexArr = indices
-      ? new Uint16Array(indices.getArray() as ArrayLike<number>)
-      : Uint16Array.from({ length: vertexCount }, (_, i) => i);
+    // Index width follows the source accessor: u32 stays u32, u8 widens to u16 (WebGPU has
+    // no uint8 index format). The draw-time format is derived from the array type.
+    const srcIndices = indices?.getArray();
+    let indexArr: Uint16Array | Uint32Array;
+    if (!srcIndices) {
+      indexArr =
+        vertexCount > 0x10000
+          ? Uint32Array.from({ length: vertexCount }, (_, i) => i)
+          : Uint16Array.from({ length: vertexCount }, (_, i) => i);
+    } else if (srcIndices instanceof Uint32Array) {
+      indexArr = new Uint32Array(srcIndices);
+    } else {
+      indexArr = new Uint16Array(srcIndices as ArrayLike<number>);
+    }
 
     // Calculate vertex stride for GLTF format
     // GLTF vertex layout: pos(3) + normal(3) + uv0(2) + uv1(2) + color(4) + joints(4) + weights(4) + tangent(4)

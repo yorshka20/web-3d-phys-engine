@@ -242,7 +242,11 @@ export class AssetRegistry {
     if (data instanceof ArrayBuffer) {
       return data.byteLength;
     }
-    if (data instanceof Float32Array || data instanceof Uint16Array) {
+    if (
+      data instanceof Float32Array ||
+      data instanceof Uint16Array ||
+      data instanceof Uint32Array
+    ) {
       return data.byteLength;
     }
     if (typeof data === 'string') {

@@ -45,7 +45,7 @@ export type VertexFormat = 'simple' | 'full' | 'colored' | 'pmx' | 'gltf';
  */
 export interface GeometryData {
   vertices: Float32Array;
-  indices: Uint16Array;
+  indices: Uint16Array | Uint32Array;
   vertexCount: number;
   indexCount: number;
   vertexFormat: VertexFormat; // 'simple' for position only, 'full' for pos+normal+uv

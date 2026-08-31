@@ -12,20 +12,20 @@ const sampleModelUrl = (path: string) => `${import.meta.env.VITE_GLTF_SAMPLES_BA
 // One model per rendering feature class:
 //   Box           — untextured indexed primitive (reused as the scale series)
 //   Suzanne       — untextured smooth-shaded mesh
-//   Duck          — single baseColor texture
-//   DamagedHelmet — full PBR texture set (baseColor/normal/metallicRoughness/AO/emissive)
+//   Duck          — single baseColor texture; node-transform test (0.01 scene-node scale)
+//   DamagedHelmet — full PBR texture set (baseColor/normal/metallicRoughness/AO/emissive);
+//                   node-rotation test (+90° X must match the reference orientation)
 //   Fox           — skinned model, renders in bind pose
+//   SciFiHelmet   — 70k-vertex single mesh with uint32 indices (index-width regression)
 //   FlightHelmet  — hero asset: 95k tris, 6 meshes/materials, 2K PBR sets (its visor uses the
 //                   optional KHR_materials_transmission — unsupported, so it renders opaque)
 //
-// SciFiHelmet (the other hero candidate) is excluded until the renderer supports 32-bit index
-// buffers — its 70k-vertex mesh is corrupted by the uint16-only index path. See
-// docs/gltf-sample-assets.md for the full sample-library capability map.
-//
-// AssetLoader reads raw mesh primitives and ignores glTF node transforms, so models render at
-// raw vertex scale (Duck is ~154 units tall, Fox ~79). `scale` normalizes each to roughly 2
-// units, and position.y is chosen so the scaled bounding-box bottom rests exactly on the
+// glTF node transforms are baked into per-instance world matrices at load time, so placements
+// use each asset's natural scale. Fox is the exception: a skinned mesh ignores its node
+// transform (glTF 2.0 §3.7.3.2) and the model is authored at cm scale, so an entity-level
+// 0.025 keeps it in scene proportion. position.y puts each bounding-box bottom exactly on the
 // ground plane (y = -1) — ground contact doubles as a translation×scale correctness check.
+// See docs/gltf-sample-assets.md for the full sample-library capability map.
 const placements = [
   // scale series at z = -4: the same unit cube at 0.5x / 1x / 2x
   {
@@ -54,15 +54,16 @@ const placements = [
     assetId: 'gltf_suzanne',
     path: 'Suzanne/glTF/Suzanne.gltf',
     label: 'suzanne',
-    position: [-6, -0.03, 2],
+    position: [-6, -0.025, 2],
     scale: 1,
   },
+  // raw vertices are ~154 units tall; the scene node's 0.01 matrix must bring it to ~1.54
   {
     assetId: 'gltf_duck',
     path: 'Duck/glTF/Duck.gltf',
     label: 'duck',
-    position: [-2, -1.13, 2],
-    scale: 0.013,
+    position: [-2, -1.1, 2],
+    scale: 1,
   },
   // floats at y = 2 on purpose: verifies translation along y, not just the ground rows
   {
@@ -80,6 +81,13 @@ const placements = [
     scale: 0.025,
   },
   // hero row at z = 8 (nearest the camera): fidelity benchmark for renderer work
+  {
+    assetId: 'gltf_scifi_helmet',
+    path: 'SciFiHelmet/glTF/SciFiHelmet.gltf',
+    label: 'scifi_helmet',
+    position: [-6, 0.46, 8],
+    scale: 1,
+  },
   {
     assetId: 'gltf_flight_helmet',
     path: 'FlightHelmet/glTF/FlightHelmet.gltf',

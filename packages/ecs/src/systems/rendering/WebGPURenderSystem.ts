@@ -322,20 +322,37 @@ export class WebGPURenderSystem extends System {
       return [];
     }
     const gltfModel = assetResolver.rawData as GLTFModel;
+    const entityWorldMatrix = transformComponent.getWorldMatrix();
+    const assetId = meshComponent.descriptor.assetId;
 
-    return gltfModel.primitives.map((primitive) => ({
-      entityId: entity.numericId,
-      type: 'gltf',
-      geometryId: this.generateGeometryId(meshComponent, entity),
-      geometryData: primitive.geometry,
-      worldMatrix: new Float32Array(transformComponent.getWorldMatrix()),
-      normalMatrix: this.calculateNormalMatrix(transformComponent.getWorldMatrix()),
-      material: primitive.material ?? renderComponent.getMaterial(),
-      materialUniforms: renderComponent.getUniforms() || {},
-      renderOrder: renderComponent.getLayer() || 0,
-      castShadow: renderComponent.getCastShadow() ?? true,
-      receiveShadow: renderComponent.getReceiveShadow() ?? true,
-    }));
+    // One renderable per (mesh instance × primitive): each glTF scene node carries its own
+    // baked world matrix, composed here with the entity transform. The geometryId doubles as
+    // the MVP uniform key downstream, so it must be unique per instance, not per entity.
+    const renderData: RenderData[] = [];
+    gltfModel.instances.forEach((instance, instanceIndex) => {
+      const worldMatrix = mat4.create();
+      mat4.multiply(worldMatrix, entityWorldMatrix, instance.worldMatrix);
+      const normalMatrix = this.calculateNormalMatrix(worldMatrix as Float32Array);
+
+      const mesh = gltfModel.meshes[instance.meshIndex];
+      mesh.primitives.forEach((primitive, primitiveIndex) => {
+        renderData.push({
+          entityId: entity.numericId,
+          type: 'gltf',
+          geometryId: `gltf_${assetId}_${entity.id}_i${instanceIndex}_p${primitiveIndex}`,
+          geometryData: primitive.geometry,
+          worldMatrix: new Float32Array(worldMatrix),
+          normalMatrix,
+          material: primitive.material ?? renderComponent.getMaterial(),
+          materialUniforms: renderComponent.getUniforms() || {},
+          renderOrder: renderComponent.getLayer() || 0,
+          castShadow: renderComponent.getCastShadow() ?? true,
+          receiveShadow: renderComponent.getReceiveShadow() ?? true,
+        });
+      });
+    });
+
+    return renderData;
   }
 
   private extractMeshRenderData(
