@@ -1,10 +1,5 @@
 import { WebGPUMaterialDescriptor } from '@renderer/material/types';
 
-// Material vocabulary moved to the renderer package (it describes renderer
-// input, not component state). Re-exported here so existing @ecs import
-// paths keep working.
-export * from '@renderer/material/types';
-
 /**
  * WebGPU-specific rendering properties
  */

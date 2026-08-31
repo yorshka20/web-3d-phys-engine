@@ -27,8 +27,7 @@
       "@web-client/*": ["./packages/web-client/src/*"],
       "@renderer": ["./packages/renderer/src"],
       "@renderer/*": ["./packages/renderer/src/*"]
-    },
-    "typeRoots": ["./node_modules/@types", "./node_modules/@webgpu/types", "./global.d.ts"]
+    }
   },
   "include": ["./packages/*/src/**/*.ts", "./packages/*/src/**/*.d.ts", "global.d.ts"],
   "exclude": ["node_modules", "**/dist"]

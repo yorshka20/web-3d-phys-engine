@@ -1,10 +1,6 @@
 import {
   ActiveCameraTag,
   Camera3DComponent,
-  CameraData,
-  GeometryData,
-  GeometryFactory,
-  GLTFModel,
   Mesh3DComponent,
   PMXBoneComponent,
   PMXMeshComponent,
@@ -12,16 +8,18 @@ import {
   Transform3DComponent,
   WebGPU3DRenderComponent,
 } from '@ecs/components';
-import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
 import { System } from '@ecs/core/ecs/System';
 import { RectArea, Vec3 } from '@ecs/types/types';
+import { GLTFModel } from '@renderer/assets/GltfModel';
+import { PMXModel } from '@renderer/assets/PMXModel';
+import { CameraData, FrameData, RenderData } from '@renderer/frame/types';
+import { GeometryData, GeometryFactory } from '@renderer/geometry/GeometryFactory';
 import { createWebGPURenderer } from '@renderer/webGPU';
 import { IWebGPURenderer } from '@renderer/webGPU/renderer/types/IWebGPURenderer';
 import { GlobalUniforms, RenderStats, ViewportData } from '@renderer/webGPU/types';
 import { mat3, mat4 } from 'gl-matrix';
-import { FrameData, RenderData } from './types';
 
 /**
  * Responsibilities:

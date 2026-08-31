@@ -5,17 +5,7 @@ import { SerializedLight } from '@renderer/rayTracing';
 
 export type AttenuationType = 'none' | 'linear' | 'quadratic' | 'realistic';
 
-// Light data types moved to the renderer's frame contract; re-exported for
-// existing @ecs import paths.
 import { LightType } from '@renderer/frame/types';
-export { LightType } from '@renderer/frame/types';
-export type {
-  BaseLightData,
-  DirectionalLightData,
-  LightData,
-  PointLightData,
-  SpotLightData,
-} from '@renderer/frame/types';
 
 /**
  * Light source component for 2D ray tracing

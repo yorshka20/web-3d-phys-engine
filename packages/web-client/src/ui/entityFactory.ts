@@ -8,7 +8,7 @@ import {
   WebGPU3DRenderComponent,
   World,
 } from '@ecs';
-import { AnyMesh3DShapeDescriptor } from '@ecs/components/physics/mesh/types';
+import { AnyMesh3DShapeDescriptor } from '@renderer/geometry/types';
 import { rgba } from '@ecs/utils/color';
 
 export type SpawnableType = 'cube' | 'sphere' | 'cylinder' | 'cone' | 'torus' | 'capsule';

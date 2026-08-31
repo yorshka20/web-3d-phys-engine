@@ -4,7 +4,7 @@
  */
 
 import { PMXMeshComponent } from '@ecs/components/physics/mesh/PMXMeshComponent';
-import { PMXModel } from '@ecs/components/physics/mesh/PMXModel';
+import { PMXModel } from '@renderer/assets/PMXModel';
 import {
   PMXAnimationComponent,
   PMXAnimationState,

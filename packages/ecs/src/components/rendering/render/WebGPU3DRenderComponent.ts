@@ -1,7 +1,8 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { Color } from '@ecs/types/types';
 import { rgba } from '@ecs/utils/color';
-import { WebGPU3DRenderProperties, WebGPUMaterialDescriptor } from './types';
+import { WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { WebGPU3DRenderProperties } from './types';
 
 /**
  * WebGPU 3D Render Component

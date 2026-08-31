@@ -12,11 +12,11 @@ import {
   StatsComponent,
   Transform3DComponent,
   Transform3DSystem,
-  Vertex3D,
   WebGPU3DRenderComponent,
   WebGPURenderSystem,
   World,
 } from '@ecs';
+import { Vertex3D } from '@renderer/geometry/types';
 import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
 import { rgba } from '@ecs/utils/color';
 import { Game } from './game/Game';

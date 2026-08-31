@@ -1,6 +1,6 @@
 import { Component } from '@ecs/core/ecs/Component';
 import { AssetDescriptor, assetRegistry, AssetType } from '@renderer/webGPU/core/AssetRegistry';
-import { PMXModel } from './PMXModel';
+import { PMXModel } from '@renderer/assets/PMXModel';
 
 /**
  * PMX Mesh Component

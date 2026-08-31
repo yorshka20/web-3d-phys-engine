@@ -3,7 +3,7 @@
  * Handles Type 2 morphs (bone transformations) for pose changes and skeletal animation
  */
 
-import { PMXBone } from '@ecs/components/physics/mesh/PMXModel';
+import { PMXBone } from '@renderer/assets/PMXModel';
 import { Component } from '@ecs/core/ecs/Component';
 import { Vec3, Vec4 } from '@ecs/types/types';
 import { mat4, quat } from 'gl-matrix';

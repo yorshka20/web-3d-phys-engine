@@ -26,9 +26,6 @@ export interface Camera3DProps {
   up?: Vec3; // Up vector for 3D camera
 }
 
-// CameraData moved to the renderer's frame contract; re-exported for
-// existing @ecs import paths.
-export type { CameraData } from '@renderer/frame/types';
 
 export class Camera3DComponent extends Component {
   static componentName = 'Camera';
