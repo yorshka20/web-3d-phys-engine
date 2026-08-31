@@ -2,21 +2,16 @@
   "name": "@web-3d-phys-engine/renderer",
   "version": "0.1.0",
   "description": "Renderer implementation for Web 3D Phys Engine.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
   "scripts": {
-    "build": "tsc -b",
-    "clean": "rimraf dist",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run"
   },
   "dependencies": {
-    "@web-3d-phys-engine/ecs": "workspace:*",
-    "chroma-js": "3.1.2",
-    "primitive-geometry": "2.11.0"
+    "@gltf-transform/core": "4.2.1",
+    "@gltf-transform/extensions": "4.2.1",
+    "gl-matrix": "3.4.4",
+    "mmd-parser": "1.0.4"
   },
-  "files": [
-    "dist"
-  ],
   "license": "MIT"
 }

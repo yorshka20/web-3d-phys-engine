@@ -11,11 +11,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@web-3d-phys-engine/renderer": "workspace:*"
-  },
-  "peerDependencies": {
     "chroma-js": "3.1.2",
+    "gl-matrix": "3.4.4",
     "primitive-geometry": "2.11.0"
-  },
-  "devDependencies": {}
+  }
 }
