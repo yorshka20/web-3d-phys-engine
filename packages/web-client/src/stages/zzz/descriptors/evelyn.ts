@@ -6,19 +6,19 @@
 import { PMXAssetDescriptor } from '@renderer/webGPU/core/PMXAssetDescriptor';
 
 // Import texture URLs
-import evelynTex1 from '../../../assets/evelyn/hair.bmp?url';
-import evelynTex2 from '../../../assets/evelyn/skin.bmp?url';
-import evelynSph1 from '../../../assets/evelyn/spa/2.bmp?url';
-import evelynSph2 from '../../../assets/evelyn/spa/hair_s.bmp?url';
-import evelynSph3 from '../../../assets/evelyn/spa/heisi.png?url';
-import evelynSph4 from '../../../assets/evelyn/spa/mc1.png?url';
-import evelynSph5 from '../../../assets/evelyn/spa/mc3.png?url';
-import evelynTex4 from '../../../assets/evelyn/tex/衣.png?url';
-import evelynTex5 from '../../../assets/evelyn/tex/衣2.png?url';
-import evelynTex6 from '../../../assets/evelyn/tex/衣21.png?url';
-import evelynTex7 from '../../../assets/evelyn/tex/颜.png?url';
-import evelynTex8 from '../../../assets/evelyn/tex/黑.jpg?url';
-import evelynTex3 from '../../../assets/evelyn/toon_defo.bmp?url';
+import evelynTex1 from '../../../../assets/evelyn/hair.bmp?url';
+import evelynTex2 from '../../../../assets/evelyn/skin.bmp?url';
+import evelynSph1 from '../../../../assets/evelyn/spa/2.bmp?url';
+import evelynSph2 from '../../../../assets/evelyn/spa/hair_s.bmp?url';
+import evelynSph3 from '../../../../assets/evelyn/spa/heisi.png?url';
+import evelynSph4 from '../../../../assets/evelyn/spa/mc1.png?url';
+import evelynSph5 from '../../../../assets/evelyn/spa/mc3.png?url';
+import evelynTex4 from '../../../../assets/evelyn/tex/衣.png?url';
+import evelynTex5 from '../../../../assets/evelyn/tex/衣2.png?url';
+import evelynTex6 from '../../../../assets/evelyn/tex/衣21.png?url';
+import evelynTex7 from '../../../../assets/evelyn/tex/颜.png?url';
+import evelynTex8 from '../../../../assets/evelyn/tex/黑.jpg?url';
+import evelynTex3 from '../../../../assets/evelyn/toon_defo.bmp?url';
 
 export const evelynDescriptor: PMXAssetDescriptor = {
   modelId: 'evelyn',

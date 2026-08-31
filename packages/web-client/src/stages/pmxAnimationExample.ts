@@ -21,7 +21,9 @@ import { PMXAnimationController } from '@ecs/systems/animation/PMXAnimationContr
 import { AssetLoader } from '@renderer';
 import { pmxAssetRegistry } from '@renderer/webGPU/core/PMXAssetRegistry';
 import { rgba } from '@ecs/utils/color';
-import { alenDescriptor, burniceDescriptor, perlicaDescriptor } from './descriptors';
+import { alenDescriptor } from './zzz/descriptors/alen';
+import { burniceDescriptor } from './zzz/descriptors/burnice';
+import { perlicaDescriptor } from './zzz/descriptors/perlica';
 
 // Import model URLs
 import alenModel from '../../assets/alen/艾莲.pmx?url';

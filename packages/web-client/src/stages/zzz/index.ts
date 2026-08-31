@@ -3,27 +3,25 @@ import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
 import { pmxAssetRegistry } from '@renderer/webGPU/core/PMXAssetRegistry';
 import { rgba } from '@ecs/utils/color';
-import {
-  alenDescriptor,
-  burniceDescriptor,
-  endministratorDescriptor,
-  evelynDescriptor,
-  janeDescriptor,
-  nahidaDescriptor,
-  perlicaDescriptor,
-  vivianDescriptor,
-  yaojiayinDescriptor,
-} from './descriptors';
+import { alenDescriptor } from './descriptors/alen';
+import { burniceDescriptor } from './descriptors/burnice';
+import { endministratorDescriptor } from './descriptors/endministrator';
+import { evelynDescriptor } from './descriptors/evelyn';
+import { janeDescriptor } from './descriptors/jane';
+import { nahidaDescriptor } from './descriptors/nahida';
+import { perlicaDescriptor } from './descriptors/perlica';
+import { vivianDescriptor } from './descriptors/vivian';
+import { yaojiayinDescriptor } from './descriptors/yaojiayin';
 
-import alenModel from '../../assets/alen/艾莲.pmx?url';
-import burniceModel from '../../assets/burnice/柏妮思.pmx?url';
-import endministratorModel from '../../assets/endministrator/endministrator.pmx?url';
-import evelynModel from '../../assets/evelyn/伊芙琳.pmx?url';
-import janeModel from '../../assets/jane/简.pmx?url';
-import nahidaModel from '../../assets/nahida/nahida.pmx?url';
-import perlicaModel from '../../assets/perlica/perlica.pmx?url';
-import vivianModel from '../../assets/vivian/薇薇安.pmx?url';
-import yaojiayinModel from '../../assets/yaojiayin/耀嘉音.pmx?url';
+import alenModel from '../../../assets/alen/艾莲.pmx?url';
+import burniceModel from '../../../assets/burnice/柏妮思.pmx?url';
+import endministratorModel from '../../../assets/endministrator/endministrator.pmx?url';
+import evelynModel from '../../../assets/evelyn/伊芙琳.pmx?url';
+import janeModel from '../../../assets/jane/简.pmx?url';
+import nahidaModel from '../../../assets/nahida/nahida.pmx?url';
+import perlicaModel from '../../../assets/perlica/perlica.pmx?url';
+import vivianModel from '../../../assets/vivian/薇薇安.pmx?url';
+import yaojiayinModel from '../../../assets/yaojiayin/耀嘉音.pmx?url';
 
 export async function createZZZPMXModelStage(world: World) {
   // 第一排：前方

@@ -6,15 +6,15 @@
 import { PMXAssetDescriptor } from '@renderer/webGPU/core/PMXAssetDescriptor';
 
 // Import texture URLs
-import alenTex1 from '../../../assets/alen/hair.bmp?url';
-import alenTex2 from '../../../assets/alen/skin.bmp?url';
-import alenSph1 from '../../../assets/alen/spa/hair_s.bmp?url';
-import alenTex4 from '../../../assets/alen/tex/sh.png?url';
-import alenTex5 from '../../../assets/alen/tex/体.png?url';
-import alenTex6 from '../../../assets/alen/tex/武器.png?url';
-import alenTex7 from '../../../assets/alen/tex/颜.png?url';
-import alenTex8 from '../../../assets/alen/tex/髮.png?url';
-import alenTex3 from '../../../assets/alen/toon_defo.bmp?url';
+import alenTex1 from '../../../../assets/alen/hair.bmp?url';
+import alenTex2 from '../../../../assets/alen/skin.bmp?url';
+import alenSph1 from '../../../../assets/alen/spa/hair_s.bmp?url';
+import alenTex4 from '../../../../assets/alen/tex/sh.png?url';
+import alenTex5 from '../../../../assets/alen/tex/体.png?url';
+import alenTex6 from '../../../../assets/alen/tex/武器.png?url';
+import alenTex7 from '../../../../assets/alen/tex/颜.png?url';
+import alenTex8 from '../../../../assets/alen/tex/髮.png?url';
+import alenTex3 from '../../../../assets/alen/toon_defo.bmp?url';
 
 export const alenDescriptor: PMXAssetDescriptor = {
   modelId: 'alen',

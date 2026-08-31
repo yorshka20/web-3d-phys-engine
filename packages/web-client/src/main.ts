@@ -20,6 +20,7 @@ import { rgba } from '@ecs/utils/color';
 import { Vertex3D } from '@renderer/geometry/types';
 import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
 import { Game } from './game/Game';
+import { createEndfieldStage } from './stages/endfield';
 import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
 import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
@@ -33,9 +34,16 @@ window.addEventListener('load', () => {
   main();
 });
 
-type Stage = 'geometry' | 'pmxModel' | 'zzz' | 'pmxAnimationExample' | 'gltfModel';
+type Stage = 'geometry' | 'pmxModel' | 'zzz' | 'endfield' | 'pmxAnimationExample' | 'gltfModel';
 
-const stages: Stage[] = ['geometry', 'pmxModel', 'zzz', 'pmxAnimationExample', 'gltfModel'];
+const stages: Stage[] = [
+  'geometry',
+  'pmxModel',
+  'zzz',
+  'endfield',
+  'pmxAnimationExample',
+  'gltfModel',
+];
 
 function resolveStage(): Stage {
   const requested = new URLSearchParams(window.location.search).get('stage');
@@ -53,6 +61,7 @@ const stage: Stage = resolveStage();
 // The gltf test scene is laid out around the origin; the default framing looks at [0, 10, 8].
 const stageCameraConfig: Partial<Record<Stage, CameraConfig>> = {
   gltfModel: { target: [0, 0.5, 0], distance: 16, elevationDegrees: 18 },
+  endfield: { target: [0, 10, 0], distance: 28, elevationDegrees: 8 },
 };
 
 async function main() {
@@ -84,6 +93,9 @@ async function main() {
     // case 'pmxAnimationExample':
     //   await createPMXAnimationExample(world);
     //   break;
+    case 'endfield':
+      await createEndfieldStage(world);
+      break;
     case 'gltfModel':
       await createGLTFStage(world);
       break;

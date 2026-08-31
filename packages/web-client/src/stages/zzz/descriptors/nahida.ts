@@ -6,16 +6,16 @@
 import { PMXAssetDescriptor } from '@renderer/webGPU/core/PMXAssetDescriptor';
 
 // Import texture URLs
-import nahidaTex1 from '../../../assets/nahida/hair.bmp?url';
-import nahidaTex2 from '../../../assets/nahida/skin.bmp?url';
-import nahidaSph1 from '../../../assets/nahida/sph/hair_s.bmp?url';
-import nahidaSph2 from '../../../assets/nahida/sph/s1.bmp?url';
-import nahidaTex8 from '../../../assets/nahida/tex/spa_h.png?url';
-import nahidaTex6 from '../../../assets/nahida/tex/体1.png?url';
-import nahidaTex7 from '../../../assets/nahida/tex/肌.png?url';
-import nahidaTex4 from '../../../assets/nahida/tex/颜.png?url';
-import nahidaTex5 from '../../../assets/nahida/tex/髮1.png?url';
-import nahidaTex3 from '../../../assets/nahida/toon_defo.bmp?url';
+import nahidaTex1 from '../../../../assets/nahida/hair.bmp?url';
+import nahidaTex2 from '../../../../assets/nahida/skin.bmp?url';
+import nahidaSph1 from '../../../../assets/nahida/sph/hair_s.bmp?url';
+import nahidaSph2 from '../../../../assets/nahida/sph/s1.bmp?url';
+import nahidaTex8 from '../../../../assets/nahida/tex/spa_h.png?url';
+import nahidaTex6 from '../../../../assets/nahida/tex/体1.png?url';
+import nahidaTex7 from '../../../../assets/nahida/tex/肌.png?url';
+import nahidaTex4 from '../../../../assets/nahida/tex/颜.png?url';
+import nahidaTex5 from '../../../../assets/nahida/tex/髮1.png?url';
+import nahidaTex3 from '../../../../assets/nahida/toon_defo.bmp?url';
 
 export const nahidaDescriptor: PMXAssetDescriptor = {
   modelId: 'nahida',

@@ -3,36 +3,23 @@ import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
 import { pmxAssetRegistry } from '@renderer/webGPU/core/PMXAssetRegistry';
 import { rgba } from '@ecs/utils/color';
-import { endministratorDescriptor } from './zzz/descriptors/endministrator';
-import { nahidaDescriptor } from './zzz/descriptors/nahida';
-import { perlicaDescriptor } from './zzz/descriptors/perlica';
+import { siDescriptor } from './descriptors/si';
+import { zhuangfangyiDescriptor } from './descriptors/zhuangfangyi';
 
-import endministratorModel from '../../assets/endministrator/endministrator.pmx?url';
-import nahidaModel from '../../assets/nahida/nahida.pmx?url';
-import perlicaModel from '../../assets/perlica/perlica.pmx?url';
+import siModel from '../../../assets/si/祀.pmx?url';
+import zhuangfangyiModel from '../../../assets/zhuangfangyi/庄方宜.pmx?url';
 
-export async function createPMXModelStage(world: World) {
-  createPMXEntity(world, { name: 'endministrator', position: [0, 0, -10], rotation: [0, 0, 0] });
-  createPMXEntity(world, {
-    name: 'nahida',
-    position: [10, 0, 0],
-    rotation: [0, -Math.PI / 2, 0],
-  });
-  createPMXEntity(world, {
-    name: 'perlica',
-    position: [0, 0, 10],
-    rotation: [0, Math.PI / 2, 0],
-  });
+export async function createEndfieldStage(world: World) {
+  createPMXEntity(world, { name: 'si', position: [-8, 0, 0], rotation: [0, 0, 0] });
+  createPMXEntity(world, { name: 'zhuangfangyi', position: [8, 0, 0], rotation: [0, 0, 0] });
 
   // Register asset descriptors
-  pmxAssetRegistry.register(endministratorDescriptor);
-  pmxAssetRegistry.register(nahidaDescriptor);
-  pmxAssetRegistry.register(perlicaDescriptor);
+  pmxAssetRegistry.register(siDescriptor);
+  pmxAssetRegistry.register(zhuangfangyiDescriptor);
 
   // Load PMX models (this will also load PMX-specified textures with namespace isolation)
-  await AssetLoader.loadPMXModelFromURL(endministratorModel, 'endministrator');
-  await AssetLoader.loadPMXModelFromURL(nahidaModel, 'nahida');
-  await AssetLoader.loadPMXModelFromURL(perlicaModel, 'perlica');
+  await AssetLoader.loadPMXModelFromURL(siModel, 'si');
+  await AssetLoader.loadPMXModelFromURL(zhuangfangyiModel, 'zhuangfangyi');
 }
 
 interface PMXModel {
