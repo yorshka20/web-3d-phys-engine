@@ -37,7 +37,7 @@ export abstract class System implements ISystem {
     this.updateFrequency = options?.updateFrequency ?? 1;
   }
 
-  init(): void {
+  init(): void | Promise<void> {
     this.spatialGrid = this.world.getEntitiesWithComponents([SpatialGridComponent])[0];
     if (this.spatialGrid) {
       this.gridComponent = this.spatialGrid.getComponent<SpatialGridComponent>(

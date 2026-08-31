@@ -101,9 +101,9 @@ export class WebGPURenderSystem extends System {
     }
   }
 
-  init(): void {
+  async init(): Promise<void> {
     super.init();
-    this.renderer.init(this.canvas);
+    await this.renderer.init(this.canvas);
   }
 
   onDestroy(): void {

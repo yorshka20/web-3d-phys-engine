@@ -190,13 +190,15 @@ export class World implements IWorld {
   /**
    * Initialize systems in the order of their priority
    *
-   * all systems should be sorted by priority and initialized in the order of their priority
+   * all systems should be sorted by priority and initialized in the order of their priority.
+   * Async inits are awaited sequentially so a later system can rely on an earlier one being
+   * fully initialized — "initialized" only becomes true when this promise resolves.
    */
-  initSystems() {
+  async initSystems(): Promise<void> {
     const systems = Array.from(this.systems.values());
     systems.sort((a, b) => a.priority - b.priority);
     for (const system of systems) {
-      system.init();
+      await system.init();
     }
   }
 

@@ -73,7 +73,7 @@ export interface ISystem {
   readonly systemType: SystemType;
   enabled: boolean;
 
-  init(): void;
+  init(): void | Promise<void>;
   destroy(): void;
 
   setWorld(world: World): void;

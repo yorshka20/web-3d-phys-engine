@@ -72,7 +72,7 @@ export class Game {
         // Register core systems
         this.world.addSystem(new PerformanceSystem());
 
-        this.world.initSystems();
+        await this.world.initSystems();
 
         this.initialized = true;
         console.log('Game initialized successfully');
