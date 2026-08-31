@@ -13,7 +13,8 @@ pnpm install
 # The gltf stage fetches sample models at runtime from VITE_GLTF_SAMPLES_BASE (web-client/.env:
 # a jsDelivr CDN URL pinned to the submodule commit). To serve this local checkout instead,
 # point the var at it via /@fs in web-client/.env.development.local (gitignored).
-# Builds and CI never need the submodule.
+# Builds and CI never need the submodule; its URL is SSH on purpose so deploy providers
+# (Vercel) skip cloning it — see the comment in .gitmodules.
 git submodule update --init
 
 # Type checking (root tsc --noEmit over all packages via the root tsconfig)

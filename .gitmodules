@@ -1,4 +1,8 @@
+# SSH on purpose: deploy providers (Vercel) auto-clone public HTTPS submodules on every deploy
+# (~1.5GB, dwarfing the build itself) but cannot fetch over SSH — they warn and skip instead.
+# Local init needs a GitHub SSH key; without one, rewrite to HTTPS first:
+#   git config url."https://github.com/".insteadOf "git@github.com:"
 [submodule "packages/gltf-samples"]
 	path = packages/gltf-samples
-	url = https://github.com/KhronosGroup/glTF-Sample-Assets.git
+	url = git@github.com:KhronosGroup/glTF-Sample-Assets.git
 	shallow = true
