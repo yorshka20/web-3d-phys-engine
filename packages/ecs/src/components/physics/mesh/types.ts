@@ -1,22 +1,31 @@
 import { Vec2, Vec3, Vec4 } from '@ecs/types/types';
-import { BoxOptions } from 'primitive-geometry/types/src/box';
-import { CapsuleOptions } from 'primitive-geometry/types/src/capsule';
-import { CircleOptions } from 'primitive-geometry/types/src/circle';
-import { ConeOptions } from 'primitive-geometry/types/src/cone';
-import { CubeOptions } from 'primitive-geometry/types/src/cube';
-import { CylinderOptions } from 'primitive-geometry/types/src/cylinder';
-import { DiscOptions } from 'primitive-geometry/types/src/disc';
-import { EllipseOptions } from 'primitive-geometry/types/src/ellipse';
-import { EllipsoidOptions } from 'primitive-geometry/types/src/ellipsoid';
-import { IcosahedronOptions } from 'primitive-geometry/types/src/icosahedron';
-import { IcosphereOptions } from 'primitive-geometry/types/src/icosphere';
-import { PlaneOptions } from 'primitive-geometry/types/src/plane';
-import { QuadOptions } from 'primitive-geometry/types/src/quad';
-import { RoundedCubeOptions } from 'primitive-geometry/types/src/rounded-cube';
-import { SphereOptions } from 'primitive-geometry/types/src/sphere';
-import { StadiumOptions } from 'primitive-geometry/types/src/stadium';
-import { TetrahedronOptions } from 'primitive-geometry/types/src/tetrahedron';
-import { TorusOptions } from 'primitive-geometry/types/src/torus';
+import type * as primitives from 'primitive-geometry';
+
+// primitive-geometry's exports map only exposes the package root, which
+// re-exports the factory functions but not their option types — so derive
+// each options type from the corresponding factory signature.
+type OptionsOf<T> = T extends (options?: infer O, ...args: never[]) => unknown
+  ? NonNullable<O>
+  : never;
+
+type BoxOptions = OptionsOf<typeof primitives.box>;
+type CapsuleOptions = OptionsOf<typeof primitives.capsule>;
+type CircleOptions = OptionsOf<typeof primitives.circle>;
+type ConeOptions = OptionsOf<typeof primitives.cone>;
+type CubeOptions = OptionsOf<typeof primitives.cube>;
+type CylinderOptions = OptionsOf<typeof primitives.cylinder>;
+type DiscOptions = OptionsOf<typeof primitives.disc>;
+type EllipseOptions = OptionsOf<typeof primitives.ellipse>;
+type EllipsoidOptions = OptionsOf<typeof primitives.ellipsoid>;
+type IcosahedronOptions = OptionsOf<typeof primitives.icosahedron>;
+type IcosphereOptions = OptionsOf<typeof primitives.icosphere>;
+type PlaneOptions = OptionsOf<typeof primitives.plane>;
+type QuadOptions = OptionsOf<typeof primitives.quad>;
+type RoundedCubeOptions = OptionsOf<typeof primitives.roundedCube>;
+type SphereOptions = OptionsOf<typeof primitives.sphere>;
+type StadiumOptions = OptionsOf<typeof primitives.stadium>;
+type TetrahedronOptions = OptionsOf<typeof primitives.tetrahedron>;
+type TorusOptions = OptionsOf<typeof primitives.torus>;
 
 /**
  * 3D vertex data structure

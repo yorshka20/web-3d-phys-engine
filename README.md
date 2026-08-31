@@ -24,6 +24,7 @@ src/
 ├── engine/         # Main engine coordination
 └── main.ts         # Application entry point
 
+docs/               # Project documentation (toolchain decisions, etc.)
 plans/              # Development documentation and specifications
 tests/              # Unit tests and test utilities
 ```
