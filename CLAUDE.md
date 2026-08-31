@@ -361,6 +361,12 @@ Anything the user states as a convention, preference, or working agreement goes 
 **Never** record such a rule only in an agent's private memory store — it is machine-local and
 invisible to other agents.
 
+**Terminology (user convention, 2026-08-31)**: when the user says “文档” unqualified, it means
+the `.claude-learnings/` notes — the internal documentation we read ourselves. `docs/` is the
+outward-facing documentation. “写进文档 / 文档里有吗” targets learnings unless `docs/` is
+named explicitly; keep learnings current with the code, with pointers into `docs/` where a
+tracked record exists.
+
 ## Workflow: Workbook & Learnings
 
 `.claude-workbook/`, `.claude-learnings/`, and `/ROADMAP.md` are **gitignored, local-only
