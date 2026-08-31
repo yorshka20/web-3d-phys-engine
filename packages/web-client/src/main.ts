@@ -50,6 +50,11 @@ function resolveStage(): Stage {
 
 const stage: Stage = resolveStage();
 
+// The gltf test scene is laid out around the origin; the default framing looks at [0, 10, 8].
+const stageCameraConfig: Partial<Record<Stage, CameraConfig>> = {
+  gltfModel: { target: [0, 0.5, 0], distance: 16, elevationDegrees: 18 },
+};
+
 async function main() {
   const rootElement = document.body;
 
@@ -62,7 +67,7 @@ async function main() {
   world.addSystem(new OrbitCameraControlSystem());
   world.addSystem(new WebGPURenderSystem(rootElement));
 
-  const camera = create3DCamera(world);
+  const camera = create3DCamera(world, stageCameraConfig[stage]);
   cretePlane(world);
   createCoordinate(world);
 
