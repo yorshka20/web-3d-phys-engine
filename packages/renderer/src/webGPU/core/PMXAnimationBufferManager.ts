@@ -41,8 +41,9 @@ export class PMXAnimationBufferManager {
 
   private animationBuffers: Map<string, PMXAnimationBuffers> = new Map();
   private maxBones = 256; // Maximum number of bones per model
-  private maxMorphs = 64; // Maximum number of morphs per model
-  private maxVertices = 65536; // Maximum number of vertices for morph data
+  // pmx_bindings.wgsl declares morph_weights as array<vec4<f32>, 16> — a fixed 64-slot
+  // uniform array — so the morph count is a shader contract, not a tunable.
+  private maxMorphs = 64;
 
   /**
    * Initialize the animation buffer manager
@@ -254,9 +255,13 @@ export class PMXAnimationBufferManager {
     vertexCount: number,
     morphCount: number,
   ): PMXAnimationBuffers {
-    // Ensure counts don't exceed maximum
-    const actualVertexCount = Math.min(vertexCount, this.maxVertices);
+    // Vertex counts carry no shader-side limit; buffers must cover the whole model.
     const actualMorphCount = Math.min(morphCount, this.maxMorphs);
+    if (morphCount > this.maxMorphs) {
+      console.warn(
+        `[PMXAnimationBufferManager] ${pmxAssetId} has ${morphCount} morphs; only the first ${this.maxMorphs} fit the shader's fixed morph_weights array`,
+      );
+    }
 
     // 1. Create bone matrices buffer (4x4 matrices)
     const boneMatricesBuffer = this.bufferManager.createCustomBuffer(
@@ -267,6 +272,18 @@ export class PMXAnimationBufferManager {
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
       },
     );
+
+    // The rest state of a skinned mesh is identity bone matrices. GPU buffers zero-fill by
+    // default, and the vertex shader skins unconditionally, so a zero matrix collapses every
+    // vertex to the origin — entities without bone animation never call updateBoneMatrices.
+    const identityMatrices = new Float32Array(boneCount * 16);
+    for (let i = 0; i < boneCount; i++) {
+      identityMatrices[i * 16] = 1;
+      identityMatrices[i * 16 + 5] = 1;
+      identityMatrices[i * 16 + 10] = 1;
+      identityMatrices[i * 16 + 15] = 1;
+    }
+    this.bufferManager.updateBuffer(boneMatricesBuffer, identityMatrices.buffer as ArrayBuffer);
 
     // 2. Create morph weights buffer (uniform array)
     const morphWeightsBuffer = this.bufferManager.createCustomBuffer(
@@ -285,7 +302,7 @@ export class PMXAnimationBufferManager {
       `${pmxAssetId}_pmx_morph_data_buffer`,
       {
         type: BufferType.STORAGE,
-        size: actualVertexCount * this.maxMorphs * 3 * 4, // Use maxMorphs for fixed size
+        size: vertexCount * this.maxMorphs * 3 * 4, // Use maxMorphs for fixed size
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
       },
     );
@@ -301,7 +318,7 @@ export class PMXAnimationBufferManager {
     );
     this.bufferManager.updateBuffer(
       morphInfoBuffer,
-      new Uint32Array([actualVertexCount, actualMorphCount]).buffer as ArrayBuffer,
+      new Uint32Array([vertexCount, actualMorphCount]).buffer as ArrayBuffer,
     );
 
     // 5. Create morphed vertices buffer. reuse from compute shader.
@@ -309,7 +326,7 @@ export class PMXAnimationBufferManager {
       `${pmxAssetId}_pmx_output_vertex_buffer`,
       {
         type: BufferType.STORAGE,
-        size: actualVertexCount * 17, // 17 floats per vertex
+        size: vertexCount * 17 * 4, // 17 floats per vertex, 4 bytes per float
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
       },
     );
@@ -317,12 +334,12 @@ export class PMXAnimationBufferManager {
     // log the value of morphedVerticesBuffer
     console.log(`[PMXAnimationBufferManager] Morphed vertices buffer created:`);
     console.log(`  - Buffer size: ${morphedVerticesBuffer.size} bytes`);
-    console.log(`  - Expected vertices: ${actualVertexCount}`);
+    console.log(`  - Expected vertices: ${vertexCount}`);
     console.log(`  - Buffer label: ${morphedVerticesBuffer.label}`);
     console.log(`  - Usage flags: ${morphedVerticesBuffer.usage}`);
 
     // Read buffer content using copy method to avoid direct mapping conflicts
-    // this.copyAndReadBuffer(morphedVerticesBuffer, actualVertexCount);
+    // this.copyAndReadBuffer(morphedVerticesBuffer, vertexCount);
 
     // Create animation bind group
     const animationBindGroup = this.createAnimationBindGroup(

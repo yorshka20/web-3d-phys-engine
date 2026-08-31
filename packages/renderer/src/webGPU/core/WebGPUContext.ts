@@ -115,6 +115,12 @@ export class WebGPUContext {
     // handle device lost
     this.device.lost.then(this.handleDeviceLost);
 
+    // WebGPU validation/OOM errors surface asynchronously; without a handler they are easy to
+    // miss and a failing draw silently blanks the frame.
+    this.device.onuncapturederror = (event: GPUUncapturedErrorEvent) => {
+      console.error('[WebGPUContext] Uncaptured WebGPU error:', event.error.message);
+    };
+
     return device;
   }
 
