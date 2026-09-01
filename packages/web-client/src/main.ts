@@ -23,6 +23,7 @@ import { Game } from './game/Game';
 import { createEndfieldStage } from './stages/endfield';
 import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
+import { createHGRPStage } from './stages/hgrp';
 import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
 import { mountShadingPanel } from './ui/shadingPanel';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
@@ -35,7 +36,14 @@ window.addEventListener('load', () => {
   main();
 });
 
-type Stage = 'geometry' | 'pmxModel' | 'zzz' | 'endfield' | 'pmxAnimationExample' | 'gltfModel';
+type Stage =
+  | 'geometry'
+  | 'pmxModel'
+  | 'zzz'
+  | 'endfield'
+  | 'pmxAnimationExample'
+  | 'gltfModel'
+  | 'hgrp';
 
 const stages: Stage[] = [
   'geometry',
@@ -44,6 +52,7 @@ const stages: Stage[] = [
   'endfield',
   'pmxAnimationExample',
   'gltfModel',
+  'hgrp',
 ];
 
 function resolveStage(): Stage {
@@ -63,6 +72,7 @@ const stage: Stage = resolveStage();
 const stageCameraConfig: Partial<Record<Stage, CameraConfig>> = {
   gltfModel: { target: [0, 0.5, 0], distance: 16, elevationDegrees: 18 },
   endfield: { target: [0, 10, 0], distance: 28, elevationDegrees: 8 },
+  hgrp: { target: [0, 7, 0], distance: 24, elevationDegrees: 8 },
 };
 
 async function main() {
@@ -99,6 +109,9 @@ async function main() {
       break;
     case 'gltfModel':
       await createGLTFStage(world);
+      break;
+    case 'hgrp':
+      await createHGRPStage(world);
       break;
     default:
       break;
