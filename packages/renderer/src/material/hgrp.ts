@@ -61,6 +61,61 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
   doubleSided: boolean;
 }
 
+// Calibration-tunable subset of the HGRP parameters: exactly what the render path consumes
+// (MaterialBinder's uniform packing, plus _EnableOutline which gates the outline draw list).
+// The shading GUI generates its widgets from these tables and mutates the live descriptors in
+// place — the binder re-packs the material uniform from the descriptor every frame, so edits
+// take effect without extra plumbing. Defaults mirror the binder's `??` fallbacks so a widget
+// shows the effective value when a preset omits the key.
+export interface HGRPTunableFloatDef {
+  key: string;
+  default: number;
+  min: number;
+  max: number;
+  step?: number;
+}
+
+export const HGRP_SHADING_SCHEMA_VERSION = 1;
+
+export const HGRP_TUNABLE_FLOATS: readonly HGRPTunableFloatDef[] = [
+  { key: '_UseDiffRampMap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_UseShadowLutTex', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_UseBumpMap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_UseSDFLightmap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_UseSpecRampMap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_UseEmission', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_EnableOutline', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_ShadowColorBrightness', default: 1, min: 0, max: 2, step: 0.01 },
+  { key: '_ShadowColorSaturation', default: 1, min: 0, max: 3, step: 0.01 },
+  { key: '_BumpScale', default: 1, min: 0, max: 3, step: 0.01 },
+  { key: '_ColorAdjustmentRimIntensity', default: 0, min: 0, max: 8, step: 0.05 },
+  { key: '_ColorAdjustmentRimWidth', default: 0.35, min: 0, max: 1, step: 0.01 },
+  { key: '_Smoothness', default: 0.5, min: 0, max: 1, step: 0.01 },
+  { key: '_Specular', default: 0.5, min: 0, max: 4, step: 0.05 },
+  { key: '_AnisotropyIntensity', default: 0, min: 0, max: 8, step: 0.05 },
+  { key: '_UseMatcap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_MatcapNormalScale', default: 1, min: 0, max: 2, step: 0.01 },
+  { key: '_EyeHighLight', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_EmissionBrightness', default: 1, min: 0, max: 40, step: 0.1 },
+  { key: '_OutlineWidth', default: 0, min: 0, max: 3, step: 0.01 },
+  { key: '_OutlineColorBrightness', default: 0.5, min: 0, max: 2, step: 0.01 },
+  { key: '_OutlineColorSaturation', default: 1, min: 0, max: 3, step: 0.01 },
+];
+
+export interface HGRPTunableColorDef {
+  key: string;
+  default: [number, number, number, number];
+}
+
+// _EyeHighLightColor/_EyeScatteringColor are consumed too but stay preset-driven: they are
+// HDR (>1) and a color picker cannot express them.
+export const HGRP_TUNABLE_COLORS: readonly HGRPTunableColorDef[] = [
+  { key: '_BaseColor', default: [1, 1, 1, 1] },
+  { key: '_ColorAdjustmentRimColor', default: [1, 1, 1, 1] },
+  { key: '_EmissionColor', default: [0, 0, 0, 1] },
+  { key: '_MatcapColor', default: [1, 1, 1, 1] },
+];
+
 export function hgrpTextureAssetId(character: string, filename: string): string {
   return `hgrp_${character}_${filename}`;
 }
@@ -92,11 +147,17 @@ export function createHGRPMaterialFromPreset(
       ? (variantName as HGRPShaderVariant)
       : 'CharacterNPR';
 
-  // Unity material semantics: _SurfaceType 1 = transparent, _AlphaClip 1 = cutout,
-  // _Cull 0 = two-sided (2 = back-face culling). The glb's own alphaMode/doubleSided are
-  // export artifacts of the FBX->glTF conversion — the preset is authoritative.
+  // Unity material semantics: _SurfaceType 1 = transparent, _Cull 0 = two-sided (2 =
+  // back-face culling). Cutout has TWO gates in HGRP: _AlphaClip and _EnableAlphaTest
+  // (Pelica's cloth_01 uses only the latter — audited 2026-09-01, all-materials _AlphaClip
+  // is 0). The glb's own alphaMode/doubleSided are export artifacts of the FBX->glTF
+  // conversion — the preset is authoritative.
   const alphaMode: AlphaMode =
-    floats._SurfaceType === 1 ? 'blend' : floats._AlphaClip === 1 ? 'mask' : 'opaque';
+    floats._SurfaceType === 1
+      ? 'blend'
+      : floats._AlphaClip === 1 || floats._EnableAlphaTest === 1
+        ? 'mask'
+        : 'opaque';
 
   return {
     materialType: 'hgrp',

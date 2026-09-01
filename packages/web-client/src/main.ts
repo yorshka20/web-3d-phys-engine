@@ -23,8 +23,9 @@ import { Game } from './game/Game';
 import { createEndfieldStage } from './stages/endfield';
 import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
-import { createHGRPStage } from './stages/hgrp';
+import { createHGRPStage, HGRP_PELICA_ASSET_ID } from './stages/hgrp';
 import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
+import { mountHGRPShadingPanel } from './ui/hgrpShadingPanel';
 import { mountShadingPanel } from './ui/shadingPanel';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
@@ -128,6 +129,11 @@ async function main() {
 
   // Mount PMX shading tuning panel (press G to toggle)
   mountShadingPanel();
+
+  // Mount HGRP material calibration panel (press H to toggle)
+  if (stage === 'hgrp') {
+    mountHGRPShadingPanel(HGRP_PELICA_ASSET_ID);
+  }
 
   game.start();
 

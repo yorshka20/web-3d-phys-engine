@@ -6,6 +6,7 @@
 // loses to the cheek/hair centimetres in front at grazing angles. Shading uses the TRUE
 // world position/normal — only the clip-space depth is biased.
 
+@group(2) @binding(5) var matcap_tex: texture_2d<f32>; // _MatcapTex
 @group(2) @binding(6) var shadow_lut: texture_2d<f32>; // _ShadowLutTex
 
 // World-space pull toward the camera. The scene presents the character at 10x model scale,

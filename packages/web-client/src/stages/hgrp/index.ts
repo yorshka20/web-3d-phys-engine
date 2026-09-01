@@ -19,13 +19,15 @@ const pelicaTextureUrls = Object.fromEntries(
   ).map(([path, url]) => [path.split('/').pop()!, url as string]),
 );
 
+export const HGRP_PELICA_ASSET_ID = 'hgrp_pelica';
+
 // Stage B: the converted HGRP character renders through the HGRP material family — materials
 // joined from preset.json by glb material name, BaseMap + DiffRamp lighting (M2). Variant
 // features (SDF/matcap/rim, outline/stencil, tonemap) land in Stages C–E.
 export async function createHGRPStage(world: World) {
   await AssetLoader.loadHGRPCharacter({
     url: pelicaModel,
-    assetId: 'hgrp_pelica',
+    assetId: HGRP_PELICA_ASSET_ID,
     preset: pelicaPreset as HGRPPreset,
     textureUrls: pelicaTextureUrls,
   });
@@ -35,7 +37,7 @@ export async function createHGRPStage(world: World) {
 
   entity.addComponent(
     world.createComponent(Mesh3DComponent, {
-      descriptor: { type: 'gltf', primitiveType: 'triangle-list', assetId: 'hgrp_pelica' },
+      descriptor: { type: 'gltf', primitiveType: 'triangle-list', assetId: HGRP_PELICA_ASSET_ID },
     }),
   );
 

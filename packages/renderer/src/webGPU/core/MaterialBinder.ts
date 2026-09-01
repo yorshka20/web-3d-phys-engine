@@ -85,7 +85,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 144, // HGRPMaterialParams: 3x vec4 + 24 f32
+      size: 192, // HGRPMaterialParams: 6x vec4 + 24 f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -113,7 +113,7 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    const params = new Float32Array(36);
+    const params = new Float32Array(48);
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
     params.set(baseColor, 0);
     params.set(material.colors._ColorAdjustmentRimColor ?? [1, 1, 1, 1], 4);
@@ -136,12 +136,18 @@ export class MaterialBinder {
     params[19] = material.floats._Smoothness ?? 0.5;
     params[20] = material.floats._Specular ?? 0.5;
     params[21] = material.floats._AnisotropyIntensity ?? 0;
+    params[22] = material.floats._UseMatcap ?? 0;
+    params[23] = material.floats._MatcapNormalScale ?? 1;
     params.set(material.colors._EmissionColor ?? [0, 0, 0, 1], 24);
     params[28] = material.floats._UseEmission ?? 0;
     params[29] = material.floats._EmissionBrightness ?? 1;
     params[30] = material.floats._OutlineWidth ?? 0;
     params[31] = material.floats._OutlineColorBrightness ?? 0.5;
     params[32] = material.floats._OutlineColorSaturation ?? 1;
+    params[33] = material.floats._EyeHighLight ?? 0;
+    params.set(material.colors._MatcapColor ?? [1, 1, 1, 1], 36);
+    params.set(material.colors._EyeHighLightColor ?? [1, 1, 1, 1], 40);
+    params.set(material.colors._EyeScatteringColor ?? [1, 1, 1, 1], 44);
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;
@@ -159,7 +165,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 144,
+      size: 192,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const baseMap = await this.getGLTFTexture(material.textures._BaseMap, 'gltf_default_white');
