@@ -96,6 +96,7 @@ export const HGRP_TUNABLE_FLOATS: readonly HGRPTunableFloatDef[] = [
   { key: '_AnisotropyValue', default: 0.5, min: 0, max: 1, step: 0.01 },
   { key: '_UseMatcap', default: 0, min: 0, max: 1, step: 1 },
   { key: '_FaceHighlightMap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_ParallaxScale', default: 0, min: 0, max: 0.2, step: 0.001 },
   { key: '_MatcapNormalScale', default: 1, min: 0, max: 2, step: 0.01 },
   { key: '_EyeHighLight', default: 0, min: 0, max: 1, step: 1 },
   { key: '_EmissionBrightness', default: 1, min: 0, max: 40, step: 0.1 },
@@ -129,6 +130,7 @@ export const HGRP_TUNABLE_COLORS: readonly HGRPTunableColorDef[] = [
   { key: '_MatcapColor', default: [1, 1, 1, 1] },
   { key: '_PantyhoseColor', default: [0, 0, 0, 1] },
   { key: '_SDFRimColor', default: [1, 1, 1, 1] },
+  { key: '_EyeTintColor', default: [1, 1, 1, 1] },
 ];
 
 export function hgrpTextureAssetId(character: string, filename: string): string {
@@ -206,7 +208,12 @@ export function createDefaultHGRPMaterial(
     textures: {},
     // Explicit shadow params so the fill still shades instead of rendering unlit
     floats: { _ShadowColorBrightness: 0.5, _ShadowColorSaturation: 1 },
-    colors: { _BaseColor: [0.08, 0.08, 0.12, 0.35] },
+    // Near-transparent cool shadow: the shells' real material JSONs did not survive the rip
+    // (common materials), and the eyeshadow shell covers the upper HALF of the eyeball — an
+    // opaque guess reads as a black lid (falsified by the pink-shell test, 2026-09-01). It
+    // is either a subtle lid-shadow layer or a blink eyelid meant to be hidden at rest;
+    // both want it barely visible. GUI-calibrated guess.
+    colors: { _BaseColor: [0.12, 0.15, 0.25, 0.15] },
     alphaMode: 'blend',
     alphaCutoff: 0.5,
     doubleSided: false,

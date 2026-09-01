@@ -9,10 +9,13 @@
 @group(2) @binding(5) var matcap_tex: texture_2d<f32>; // _MatcapTex
 @group(2) @binding(6) var shadow_lut: texture_2d<f32>; // _ShadowLutTex
 
-// World-space pull toward the camera. The scene presents the character at 10x model scale,
-// so 0.06 world units = 6mm in model space — beats the iris->eye-white gap, far below the
-// cheek depth at grazing angles. Calibration constant (v1).
-const HGRP_EYE_DEPTH_OFFSET: f32 = 0.06;
+// World-space pull toward the camera. The scene presents the character at 10x model scale
+// (0.03 world = 3mm model): large enough that the iris CENTER beats the eye-white just in
+// front of it, small enough that the card's top padding — which sits deeper behind the
+// upper eye-white — loses and lets the white show, approximating the game's stencil crop
+// (the near-black upper eye was the card padding showing through, diagnosed 2026-09-01).
+// Calibration constant.
+const HGRP_EYE_DEPTH_OFFSET: f32 = 0.03;
 
 @vertex
 fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {
@@ -44,6 +47,13 @@ fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // frag_coord.z carries the camera-biased overlay depth (slightly nearer than the true
-    // surface), which only widens the rim's depth margin — acceptable for the iris.
-    return hgrp_shade_eye(input.uv0, input.world_normal, input.position);
+    // surface); the iris path takes no rim, so the bias never reaches an edge test.
+    return hgrp_shade_eye(
+        input.uv0,
+        input.world_normal,
+        input.world_tangent,
+        input.world_bitangent,
+        input.world_position,
+        input.position,
+    );
 }

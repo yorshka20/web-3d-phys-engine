@@ -8,5 +8,12 @@
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
-    return hgrp_shade_eye(input.uv0, input.world_normal, input.position);
+    return hgrp_shade_eye(
+        input.uv0,
+        input.world_normal,
+        input.world_tangent,
+        input.world_bitangent,
+        input.world_position,
+        input.position,
+    );
 }

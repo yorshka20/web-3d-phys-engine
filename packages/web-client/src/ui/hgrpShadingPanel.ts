@@ -193,6 +193,8 @@ export function mountHGRPShadingPanel(assetId: string) {
       sceneSettings.clearColor = [ev.value.r, ev.value.g, ev.value.b];
     });
 
+  // Persistence is EXPLICIT ('Save overrides' button): live tweaks are session-only, so
+  // experiments never silently shadow the authoritative preset values across reloads.
   const persist = () => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(snapshotState(materials)));
@@ -223,7 +225,6 @@ export function mountHGRPShadingPanel(assetId: string) {
         })
         .on('change', (ev) => {
           material.floats[def.key] = ev.value as number;
-          persist();
         });
     }
     syncers.push(() => {
@@ -244,7 +245,6 @@ export function mountHGRPShadingPanel(assetId: string) {
         .on('change', (ev) => {
           const c = ev.value as { r: number; g: number; b: number; a: number };
           material.colors[def.key] = [c.r, c.g, c.b, c.a];
-          persist();
         });
     }
     syncers.push(() => {
@@ -262,13 +262,13 @@ export function mountHGRPShadingPanel(assetId: string) {
     pane.refresh();
   };
 
+  pane.addButton({ title: 'Save overrides' }).on('click', () => persist());
   pane.addButton({ title: 'Export JSON' }).on('click', () => {
     exportState(snapshotState(materials), assetId);
   });
   pane.addButton({ title: 'Import JSON' }).on('click', () =>
     importState((imported) => {
       applyState(materials, imported);
-      persist();
       syncWidgets();
     }),
   );
