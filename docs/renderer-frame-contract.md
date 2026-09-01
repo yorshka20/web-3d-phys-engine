@@ -88,19 +88,25 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   sampleable depth texture (format authority `WebGPUContext.getPrepassDepthFormat`), bound to
   every HGRP pipeline as group 3 (per-frame globals) and read by the screen-space depth rim.
   The forward pass still writes its own depth attachment.
-- `webGPU/renderer/passes/TonemapPass.ts` — fullscreen resolve of the HDR scene-color target
-  (rgba16float, format authority `WebGPUContext.getSceneColorFormat`): exposure × ACES in
-  linear light, written through the swapchain's sRGB view (declared in the canvas configure
-  `viewFormats`) so the hardware performs the sRGB encode. A fixed post-process pass with
-  exactly one pipeline, so it builds its shader module and pipeline directly instead of
-  going through the material-pipeline machinery (ShaderManager registration and semantic
-  pipeline keys are material-shader concerns). Material pipelines consequently declare the
-  scene-color format as their color target, not the swapchain format.
+- `webGPU/renderer/passes/BloomPass.ts` — linear-light HDR bloom over the scene-color
+  target: threshold prefilter into a half-resolution rgba16float mip chain, downsample walk,
+  additive tent upsample; mip 0 accumulates the glow the tonemap composites.
+- `webGPU/renderer/passes/TonemapPass.ts` — composites bloom onto the HDR scene color
+  (rgba16float, format authority `WebGPUContext.getSceneColorFormat`), applies exposure ×
+  ACES and a manual sRGB encode, writing an encoded-LDR rgba8unorm texture for FXAA. A fixed
+  post-process pass with exactly one pipeline, so it builds its shader module and pipeline
+  directly instead of going through the material-pipeline machinery (ShaderManager
+  registration and semantic pipeline keys are material-shader concerns). Material pipelines
+  consequently declare the scene-color format as their color target, not the swapchain
+  format.
+- `webGPU/renderer/passes/FXAAPass.ts` — final anti-aliasing over the encoded LDR output,
+  written to the swapchain's plain view (values are already sRGB-encoded; a second encode
+  would wash the image).
 - `webGPU/core/MaterialBinder.ts` — `@Injectable` DI service resolving material-tier bind
   groups by `materialKey` (regular + glTF + HGRP families; PMX material bind groups come
   pre-built from `PMXMaterialProcessor`).
 - `WebGPURenderer` — device/context lifecycle, manager construction, frame loop
   (`beginFrame`/`renderTick`/`endFrame`), and pass sequencing: the dormant PMX morph compute
-  pass (commented out), `DepthPrepass.execute`, `ForwardPass.execute` into the scene-color
-  target, then `TonemapPass.execute` to the swapchain. Future passes join as sibling objects
-  under `passes/` in this schedule.
+  pass (commented out), then `DepthPrepass → ForwardPass(HDR) → BloomPass → TonemapPass(LDR)
+  → FXAAPass(swapchain)`. Future passes join as sibling objects under `passes/` in this
+  schedule.

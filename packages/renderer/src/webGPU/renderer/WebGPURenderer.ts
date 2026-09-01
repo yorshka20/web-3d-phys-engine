@@ -18,8 +18,10 @@ import { ShaderManager } from '../core/shaders/ShaderManager';
 import { ShadingParamsManager } from '../core/ShadingParamsManager';
 import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
+import { BloomPass } from './passes/BloomPass';
 import { DepthPrepass } from './passes/DepthPrepass';
 import { ForwardPass } from './passes/ForwardPass';
+import { FXAAPass } from './passes/FXAAPass';
 import { HGRPEyeOverlayStage } from './passes/HGRPEyeOverlayStage';
 import { HGRPOutlineStage } from './passes/HGRPOutlineStage';
 import { TonemapPass } from './passes/TonemapPass';
@@ -76,7 +78,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   // frame orchestration (renderer-private, constructor-wired)
   private depthPrepass!: DepthPrepass;
   private forwardPass!: ForwardPass;
+  private bloomPass!: BloomPass;
   private tonemapPass!: TonemapPass;
+  private fxaaPass!: FXAAPass;
   // Per-frame HGRP globals (group 3): rebuilt when the prepass depth texture is recreated
   private hgrpFrameBindGroup?: GPUBindGroup;
   private hgrpFrameBindGroupTexture?: GPUTexture;
@@ -90,6 +94,9 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   // Sampleable depth written by the depth prepass, read by screen-space effects (HGRP rim)
   private prepassDepthTexture!: GPUTexture;
+
+  // Encoded LDR tonemap output, consumed by the FXAA pass
+  private ldrTexture!: GPUTexture;
 
   // HDR scene-color target: the forward pass renders here, the tonemap pass resolves it to
   // the swapchain (format authority: WebGPUContext.getSceneColorFormat)
@@ -271,15 +278,22 @@ export class WebGPURenderer implements IWebGPURenderer {
       depthFormat: this.context.getPrepassDepthFormat(),
       getDepthView: () => this.prepassDepthTexture.createView(),
     });
+    this.bloomPass = new BloomPass({
+      device: this.device,
+      getInputTexture: () => this.sceneColorTexture,
+    });
     this.tonemapPass = new TonemapPass({
       device: this.device,
-      outputFormat: this.context.getSwapchainSrgbViewFormat(),
+      outputFormat: 'rgba8unorm',
       getInputTexture: () => this.sceneColorTexture,
-      getOutputView: () =>
-        this.context
-          .getContext()
-          .getCurrentTexture()
-          .createView({ format: this.context.getSwapchainSrgbViewFormat() }),
+      getBloomView: () => this.bloomPass.getBloomView(),
+      getOutputView: () => this.ldrTexture.createView(),
+    });
+    this.fxaaPass = new FXAAPass({
+      device: this.device,
+      outputFormat: this.context.getPreferredFormat(),
+      getInputTexture: () => this.ldrTexture,
+      getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
 
     // Ensure essential resources are created for PipelineManager
@@ -377,6 +391,18 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'Prepass Depth Texture',
     });
     console.log('[WebGPURenderer] Created prepass depth texture');
+
+    // create the encoded-LDR tonemap target consumed by FXAA (same lifetime rules)
+    this.ldrTexture = this.device.createTexture({
+      size: {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      label: 'LDR Texture',
+    });
+    console.log('[WebGPURenderer] Created LDR texture');
 
     // create HDR scene-color target (same lifetime rules as the depth texture)
     this.sceneColorTexture = this.device.createTexture({
@@ -716,10 +742,13 @@ export class WebGPURenderer implements IWebGPURenderer {
     // await this.computePass(commandEncoder, frameData);
 
     // pass sequence: depth prepass (sampleable scene depth for screen-space effects),
-    // forward shading into the HDR scene-color target, then tonemap resolve to the swapchain
+    // forward shading into the HDR scene-color target, bloom chain over it, tonemap
+    // composite+resolve to encoded LDR, FXAA to the swapchain
     this.depthPrepass.execute(commandEncoder, frameData);
     await this.forwardPass.execute(commandEncoder, frameData);
+    this.bloomPass.execute(commandEncoder);
     this.tonemapPass.execute(commandEncoder);
+    this.fxaaPass.execute(commandEncoder);
 
     // submit command
     this.device.queue.submit([commandEncoder.finish()]);

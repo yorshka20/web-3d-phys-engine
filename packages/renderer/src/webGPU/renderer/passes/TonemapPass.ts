@@ -1,11 +1,13 @@
 import tonemapShader from '../../core/shaders/passes/tonemap.wgsl';
+import { bloomSettings } from './BloomPass';
 
 export interface TonemapPassDeps {
   device: GPUDevice;
   outputFormat: GPUTextureFormat;
-  // The HDR scene-color texture is recreated only on resize; the swapchain view changes
-  // every frame — both are injected as closures like ForwardPass attachments.
+  // The HDR scene-color texture is recreated only on resize; the output view and bloom
+  // view can change per frame — all injected as closures like ForwardPass attachments.
   getInputTexture(): GPUTexture;
+  getBloomView(): GPUTextureView;
   getOutputView(): GPUTextureView;
 }
 
@@ -21,20 +23,21 @@ export const tonemapSettings = {
 /**
  * Tonemap Pass
  *
- * Fullscreen resolve of the HDR scene-color target to the swapchain. A fixed post-process
- * pass with exactly one pipeline and no material variance, so it builds its own shader
- * module and pipeline directly instead of going through the material-pipeline machinery
- * (ShaderManager registration and semantic pipeline keys exist for material shaders).
- * Renderer-private, constructor-wired — same rules as ForwardPass.
- *
- * Writes through the swapchain's sRGB view: the shader outputs linear display-referred
- * values (exposure x ACES) and the hardware performs the sRGB encode.
+ * Composites the bloom chain onto the HDR scene color, applies exposure x ACES and the
+ * manual sRGB encode, writing an ENCODED LDR texture that the FXAA pass consumes (FXAA
+ * expects perceptual-domain input, so the encode cannot be left to an sRGB view here).
+ * A fixed post-process pass with exactly one pipeline and no material variance, so it
+ * builds its own shader module and pipeline directly instead of going through the
+ * material-pipeline machinery (ShaderManager registration and semantic pipeline keys exist
+ * for material shaders). Renderer-private, constructor-wired — same rules as ForwardPass.
  */
 export class TonemapPass {
   private pipeline?: GPURenderPipeline;
   private bindGroupLayout?: GPUBindGroupLayout;
   private bindGroup?: GPUBindGroup;
   private bindGroupInput?: GPUTexture;
+  private bindGroupBloomView?: GPUTextureView;
+  private bloomSampler?: GPUSampler;
   private settingsBuffer?: GPUBuffer;
   private readonly settingsData = new Float32Array(4);
 
@@ -45,6 +48,7 @@ export class TonemapPass {
     const bindGroup = this.ensureBindGroup();
 
     this.settingsData[0] = tonemapSettings.exposure;
+    this.settingsData[1] = bloomSettings.intensity;
     this.deps.device.queue.writeBuffer(this.settingsBuffer!, 0, this.settingsData);
 
     const renderPass = commandEncoder.beginRenderPass({
@@ -75,6 +79,14 @@ export class TonemapPass {
       code: tonemapShader,
     });
 
+    this.bloomSampler = this.deps.device.createSampler({
+      label: 'tonemap_bloom_sampler',
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+    });
+
     this.bindGroupLayout = this.deps.device.createBindGroupLayout({
       label: 'tonemap_bind_group_layout',
       entries: [
@@ -88,6 +100,16 @@ export class TonemapPass {
           binding: 1,
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' },
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 3,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
         },
       ],
     });
@@ -112,7 +134,8 @@ export class TonemapPass {
 
   private ensureBindGroup(): GPUBindGroup {
     const input = this.deps.getInputTexture();
-    if (this.bindGroup && this.bindGroupInput === input) {
+    const bloomView = this.deps.getBloomView();
+    if (this.bindGroup && this.bindGroupInput === input && this.bindGroupBloomView === bloomView) {
       return this.bindGroup;
     }
 
@@ -130,9 +153,12 @@ export class TonemapPass {
       entries: [
         { binding: 0, resource: input.createView() },
         { binding: 1, resource: { buffer: this.settingsBuffer } },
+        { binding: 2, resource: bloomView },
+        { binding: 3, resource: this.bloomSampler! },
       ],
     });
     this.bindGroupInput = input;
+    this.bindGroupBloomView = bloomView;
     return this.bindGroup;
   }
 }

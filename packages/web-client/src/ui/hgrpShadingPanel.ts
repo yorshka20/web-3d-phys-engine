@@ -6,6 +6,7 @@ import {
   HGRPMaterialDescriptor,
 } from '@renderer/material/hgrp';
 import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
+import { bloomSettings } from '@renderer/webGPU/renderer/passes/BloomPass';
 import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
 import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 import { Pane } from 'tweakpane';
@@ -167,6 +168,18 @@ export function mountHGRPShadingPanel(assetId: string) {
   // (session-only calibration knobs, not part of the per-material preset state)
   const globalFolder = pane.addFolder({ title: 'Scene (global)', expanded: true });
   globalFolder.addBinding(tonemapSettings, 'exposure', { min: 0.1, max: 4, step: 0.01 });
+  globalFolder.addBinding(bloomSettings, 'threshold', {
+    label: 'bloomThreshold',
+    min: 0,
+    max: 4,
+    step: 0.01,
+  });
+  globalFolder.addBinding(bloomSettings, 'intensity', {
+    label: 'bloomIntensity',
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
   const backdrop = {
     clearColor: {
       r: sceneSettings.clearColor[0],
