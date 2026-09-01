@@ -13,7 +13,7 @@
 // Samplers are shared across textures (not one per texture): default WebGPU limits allow
 // 16 sampled textures AND 16 samplers per stage, and the skin variant alone carries
 // 9 textures.
-// Field order must match the Float32Array layout written by MaterialBinder (96 bytes).
+// Field order must match the Float32Array layout written by MaterialBinder (128 bytes).
 struct HGRPMaterialParams {
     base_color: vec4<f32>,
     rim_color: vec4<f32>,
@@ -33,6 +33,11 @@ struct HGRPMaterialParams {
     aniso_intensity: f32, // hair strand highlight (_AnisotropyIntensity)
     reserved1: f32,
     reserved2: f32,
+    emission_color: vec4<f32>,
+    use_emission: f32,
+    emission_brightness: f32, // HDR-scaled (8-30 in presets); the tonemap shoulder absorbs it
+    reserved3: f32,
+    reserved4: f32,
 }
 
 @group(2) @binding(0) var<uniform> hgrp_material: HGRPMaterialParams;

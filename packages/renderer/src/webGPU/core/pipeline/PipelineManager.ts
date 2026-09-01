@@ -964,7 +964,9 @@ export class PipelineManager {
    * Create color targets based on blend state
    */
   private createColorTargetsFromGpuKey(gpuKey: GpuPipelineKey): GPUColorTargetState[] {
-    const format = this.context.getPreferredFormat();
+    // Material pipelines render into the HDR scene-color target; only the tonemap pass
+    // (pass-private pipeline) targets the swapchain format.
+    const format = this.context.getSceneColorFormat();
 
     if (gpuKey.blendState === 'alpha-blend') {
       // Alpha blending

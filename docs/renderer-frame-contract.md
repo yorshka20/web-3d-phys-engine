@@ -74,20 +74,28 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
 
 - `webGPU/renderer/frame/DrawListBuilder.ts` — pure data step: builds, partitions, and sorts
   the frame's `DrawItem` lists. No GPU access, no DI; unit-testable in isolation.
-- `webGPU/renderer/passes/ForwardPass.ts` — the single render pass (forward shading: geometry
-  and lighting computed in one pass writing straight to swapchain color + depth, as opposed to
-  a deferred G-buffer chain). A render pass is the unit that resolves and draws its own draw
+- `webGPU/renderer/passes/ForwardPass.ts` — the forward shading pass (geometry and lighting
+  computed in one pass writing to the HDR scene-color target + depth, as opposed to a
+  deferred G-buffer chain). A render pass is the unit that resolves and draws its own draw
   lists into an encoder, so it owns all three steps: attachment descriptors, the async prepare
   phase, and the synchronous encode walk. The walk is deliberately NOT a separate "executor"
-  object — one pass exists today, and machinery is extracted for sharing only when a second
-  pass (shadow / depth-prepass / post-process) actually needs it. PMX-specific resolution
-  (per-material geometry, animation buffers) lives as pass privates under the same rule.
-  Passes are renderer-private objects wired by constructor, not DI services; attachment views
-  are injected as closures (the swapchain texture changes per frame, depth on resize).
+  object — machinery is extracted for sharing only when another draw-list pass (shadow /
+  depth-prepass / outline) actually needs it. PMX-specific resolution (per-material geometry,
+  animation buffers) lives as pass privates under the same rule. Passes are renderer-private
+  objects wired by constructor, not DI services; attachment views are injected as closures
+  (the swapchain texture changes per frame, depth on resize).
+- `webGPU/renderer/passes/TonemapPass.ts` — fullscreen resolve of the HDR scene-color target
+  (rgba16float, format authority `WebGPUContext.getSceneColorFormat`) to the swapchain:
+  identity below the shoulder, rational soft-shoulder above it. A fixed post-process pass
+  with exactly one pipeline, so it builds its shader module and pipeline directly instead of
+  going through the material-pipeline machinery (ShaderManager registration and semantic
+  pipeline keys are material-shader concerns). Material pipelines consequently declare the
+  scene-color format as their color target, not the swapchain format.
 - `webGPU/core/MaterialBinder.ts` — `@Injectable` DI service resolving material-tier bind
   groups by `materialKey` (regular + glTF + HGRP families; PMX material bind groups come
   pre-built from `PMXMaterialProcessor`).
 - `WebGPURenderer` — device/context lifecycle, manager construction, frame loop
-  (`beginFrame`/`renderTick`/`endFrame`), and pass sequencing: today the dormant PMX morph
-  compute pass (commented out) followed by `ForwardPass.execute`. Future passes join as
-  sibling objects under `passes/` and `renderTick` becomes the pass schedule.
+  (`beginFrame`/`renderTick`/`endFrame`), and pass sequencing: the dormant PMX morph compute
+  pass (commented out), `ForwardPass.execute` into the scene-color target, then
+  `TonemapPass.execute` to the swapchain. Future passes join as sibling objects under
+  `passes/` in this schedule.

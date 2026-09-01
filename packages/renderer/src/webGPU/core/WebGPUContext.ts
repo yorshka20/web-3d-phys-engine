@@ -219,6 +219,14 @@ export class WebGPUContext {
   }
 
   /**
+   * Format of the HDR intermediate scene-color target. Material pipelines render into this
+   * (not the swapchain); the tonemap pass resolves it to the preferred canvas format.
+   */
+  getSceneColorFormat(): GPUTextureFormat {
+    return 'rgba16float';
+  }
+
+  /**
    * get device features
    */
   getFeatures(): GPUSupportedFeatures | null {

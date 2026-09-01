@@ -84,7 +84,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 96, // HGRPMaterialParams: 2x vec4 + 16 f32
+      size: 128, // HGRPMaterialParams: 3x vec4 + 20 f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -112,7 +112,7 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    const params = new Float32Array(24);
+    const params = new Float32Array(32);
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
     params.set(baseColor, 0);
     params.set(material.colors._ColorAdjustmentRimColor ?? [1, 1, 1, 1], 4);
@@ -135,6 +135,9 @@ export class MaterialBinder {
     params[19] = material.floats._Smoothness ?? 0.5;
     params[20] = material.floats._Specular ?? 0.5;
     params[21] = material.floats._AnisotropyIntensity ?? 0;
+    params.set(material.colors._EmissionColor ?? [0, 0, 0, 1], 24);
+    params[28] = material.floats._UseEmission ?? 0;
+    params[29] = material.floats._EmissionBrightness ?? 1;
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;

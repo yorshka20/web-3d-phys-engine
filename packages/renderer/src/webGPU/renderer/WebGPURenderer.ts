@@ -18,6 +18,7 @@ import { ShadingParamsManager } from '../core/ShadingParamsManager';
 import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
 import { ForwardPass } from './passes/ForwardPass';
+import { TonemapPass } from './passes/TonemapPass';
 import {
   BindGroup,
   ComputePass,
@@ -70,6 +71,7 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   // frame orchestration (renderer-private, constructor-wired)
   private forwardPass!: ForwardPass;
+  private tonemapPass!: TonemapPass;
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
@@ -77,6 +79,10 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   // depth buffer
   private depthTexture!: GPUTexture;
+
+  // HDR scene-color target: the forward pass renders here, the tonemap pass resolves it to
+  // the swapchain (format authority: WebGPUContext.getSceneColorFormat)
+  private sceneColorTexture!: GPUTexture;
 
   private get device(): GPUDevice {
     return this.context.getDevice();
@@ -210,7 +216,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.pmxAnimationBufferManager = new PMXAnimationBufferManager();
     this.materialBinder = new MaterialBinder();
 
-    // Renderer-private pass object (constructor-wired, not a DI service)
+    // Renderer-private pass objects (constructor-wired, not DI services)
     this.forwardPass = new ForwardPass({
       pipelineFactory: this.pipelineFactory,
       geometryManager: this.geometryManager,
@@ -219,8 +225,14 @@ export class WebGPURenderer implements IWebGPURenderer {
       pmxMaterialProcessor: this.pmxMaterialProcessor,
       pmxAnimationBufferManager: this.pmxAnimationBufferManager,
       resourceManager: this.resourceManager,
-      getColorView: () => this.context.getContext().getCurrentTexture().createView(),
+      getColorView: () => this.sceneColorTexture.createView(),
       getDepthView: () => this.depthTexture.createView(),
+    });
+    this.tonemapPass = new TonemapPass({
+      device: this.device,
+      outputFormat: this.context.getPreferredFormat(),
+      getInputTexture: () => this.sceneColorTexture,
+      getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
 
     // Ensure essential resources are created for PipelineManager
@@ -306,6 +318,18 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'Depth Texture',
     });
     console.log('[WebGPURenderer] Created depth texture');
+
+    // create HDR scene-color target (same lifetime rules as the depth texture)
+    this.sceneColorTexture = this.device.createTexture({
+      size: {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      format: this.context.getSceneColorFormat(),
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      label: 'Scene Color Texture',
+    });
+    console.log('[WebGPURenderer] Created HDR scene color texture');
 
     const texture = this.textureManager.createTexture('default_white_texture', {
       id: 'default_white_texture',
@@ -632,8 +656,10 @@ export class WebGPURenderer implements IWebGPURenderer {
     // begin compute pass. used for morph type1 animation
     // await this.computePass(commandEncoder, frameData);
 
-    // begin render pass
+    // pass sequence: forward shading into the HDR scene-color target, then tonemap resolve
+    // to the swapchain
     await this.forwardPass.execute(commandEncoder, frameData);
+    this.tonemapPass.execute(commandEncoder);
 
     // submit command
     this.device.queue.submit([commandEncoder.finish()]);

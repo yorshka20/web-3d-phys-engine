@@ -1,11 +1,12 @@
 // HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV shadow
-// color, plus spec-ramp highlights on the metallic zones. Emission (_EmissionMap, needs
-// Stage E tonemap) layers on here. Binding indices must match the
-// HGRP_TEXTURE_SLOTS_BY_VARIANT slot order in HGRPMaterialResources.ts.
+// color, spec-ramp highlights on the metallic zones, and HDR emission (rolls off through
+// the tonemap shoulder). Binding indices must match the HGRP_TEXTURE_SLOTS_BY_VARIANT slot
+// order in HGRPMaterialResources.ts.
 
 @group(2) @binding(5) var bump_map: texture_2d<f32>; // _BumpMap
 @group(2) @binding(6) var spec_ramp_map: texture_2d<f32>; // _SpecRampMap
 @group(2) @binding(7) var metallic_gloss_map: texture_2d<f32>; // _MetallicGlossMap
+@group(2) @binding(8) var emission_map: texture_2d<f32>; // _EmissionMap
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
@@ -43,5 +44,9 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         (shape * smoothstep(0.0, 0.3, ndotl) * metallic * hgrp_material.spec_intensity *
             hgrp_material.use_spec_ramp);
 
-    return vec4<f32>(core.rgb + spec, core.a);
+    let emission = textureSample(emission_map, base_sampler, input.uv0).rgb *
+        hgrp_material.emission_color.rgb *
+        (hgrp_material.emission_brightness * hgrp_material.use_emission);
+
+    return vec4<f32>(core.rgb + spec + emission, core.a);
 }

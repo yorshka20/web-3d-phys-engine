@@ -54,10 +54,10 @@ export class ShaderManager {
   resourceCache: Map<string, GPUShaderModule> = new Map();
   resourceLifecycles: Map<string, string> = new Map();
 
-  constructor() {
-    this.initialize();
-  }
-
+  // Initialization is invoked explicitly by WebGPURenderer.init (like every other manager),
+  // NOT from the constructor — the constructor self-call duplicated the whole register +
+  // compile cycle (every shader module was created twice; found via a WebGPU Inspector
+  // frame capture, 2026-09-01).
   initialize(): void {
     this.registerShaderModules();
     this.compileShaderModules();
