@@ -119,8 +119,21 @@ export class MaterialBinder {
     });
 
     const params = new Float32Array(76);
+    // _HairBaseTintColor pre-multiplies the hair base color (identity in Pelica's preset;
+    // _HairAddTintColor's target region is unknown and stays unwired — see the param ledger)
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
-    params.set(baseColor, 0);
+    const hairBaseTint = material.colors._HairBaseTintColor;
+    params.set(
+      hairBaseTint
+        ? [
+            baseColor[0] * hairBaseTint[0],
+            baseColor[1] * hairBaseTint[1],
+            baseColor[2] * hairBaseTint[2],
+            baseColor[3],
+          ]
+        : baseColor,
+      0,
+    );
     // The skin family carries _SDFRimColor (warm pink) — its rim color, taking precedence
     // over the generic white _ColorAdjustmentRimColor (v1 interpretation)
     params.set(

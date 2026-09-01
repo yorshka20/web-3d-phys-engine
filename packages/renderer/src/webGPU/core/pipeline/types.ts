@@ -80,6 +80,9 @@ export interface SemanticPipelineKey {
   // Material characteristics (business layer concerns)
   alphaMode: AlphaMode;
   doubleSided: boolean;
+  // Blend materials that still write depth (_TransparentDepthWrite — the game's transparent
+  // cloth/hair self-occludes; only meaningful when alphaMode is 'blend')
+  transparentDepthWrite: boolean;
 
   // Vertex format (affects shader compilation)
   vertexFormat: VertexFormat; // simple=position, full=position+normal+uv, colored=position+color
@@ -262,6 +265,11 @@ export function generateSemanticPipelineKey(
     renderPass: determineRenderPass(material, options),
     alphaMode: material.alphaMode || 'opaque',
     doubleSided: material.doubleSided || false,
+    transparentDepthWrite:
+      material.alphaMode === 'blend' &&
+      ('floats' in material
+        ? (material as { floats: Record<string, number> }).floats._TransparentDepthWrite === 1
+        : false),
     hasTextures: hasAnyTexture(material),
     primitiveType: determinePrimitiveType(geometry, options),
     vertexFormat: geometry.vertexFormat,
@@ -279,6 +287,7 @@ export function generateSemanticCacheKey(key: SemanticPipelineKey): string {
     key.renderPass,
     key.alphaMode,
     key.doubleSided,
+    key.transparentDepthWrite,
     key.vertexFormat,
     key.hasTextures,
     key.primitiveType,
@@ -432,7 +441,7 @@ function determineTopology(semanticKey: SemanticPipelineKey): 'triangle-list' | 
  * Determine depth write from semantic key
  */
 function determineDepthWrite(semanticKey: SemanticPipelineKey): boolean {
-  return semanticKey.alphaMode !== 'blend';
+  return semanticKey.alphaMode !== 'blend' || semanticKey.transparentDepthWrite;
 }
 
 /**

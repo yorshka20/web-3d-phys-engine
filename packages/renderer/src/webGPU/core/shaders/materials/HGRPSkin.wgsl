@@ -9,6 +9,7 @@
 @group(2) @binding(6) var shadow_lut: texture_2d<f32>; // _ShadowLutTex
 @group(2) @binding(7) var sdf_lightmap: texture_2d<f32>; // _SDFLightmap
 @group(2) @binding(9) var highlight_map: texture_2d<f32>; // _HighlightMap (hl_M)
+@group(2) @binding(11) var emission_map: texture_2d<f32>; // _EmissionMap
 
 // SDF face shadow v1 (channel semantics still under calibration — see hgrp-shading.md):
 // R holds the light-yaw threshold field for one side; the other side samples mirrored UVs.
@@ -72,5 +73,9 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     ).r;
     let highlight = vec3<f32>(hl * hgrp_material.use_face_highlight);
 
-    return vec4<f32>(mix(shadow_color, base.rgb, w) + rim + highlight, base.a);
+    let emission = textureSample(emission_map, base_sampler, input.uv0).rgb *
+        hgrp_material.emission_color.rgb *
+        (hgrp_material.emission_brightness * hgrp_material.use_emission);
+
+    return vec4<f32>(mix(shadow_color, base.rgb, w) + rim + highlight + emission, base.a);
 }

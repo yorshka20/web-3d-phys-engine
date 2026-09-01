@@ -11,6 +11,8 @@ export interface DrawItem {
   renderable: RenderData;
   pipelineKey: string;
   viewDepth: number;
+  // _TransparentSortPriority: higher renders later (on top), between renderOrder and depth
+  sortPriority?: number;
   pipeline?: GPURenderPipeline;
   geometry?: GeometryCacheItem;
 }
@@ -101,6 +103,7 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
 
     if ((renderable.material as { alphaMode?: AlphaMode }).alphaMode === 'blend') {
       item.viewDepth = computeViewDepth(renderable, viewMatrix);
+      item.sortPriority = hgrpMaterial?.floats._TransparentSortPriority ?? 0;
       transparent.push(item);
     } else {
       opaque.push(item);
@@ -128,7 +131,10 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
       compareKeys(a.renderable.geometryId, b.renderable.geometryId),
   );
   transparent.sort(
-    (a, b) => a.renderable.renderOrder - b.renderable.renderOrder || b.viewDepth - a.viewDepth,
+    (a, b) =>
+      a.renderable.renderOrder - b.renderable.renderOrder ||
+      (a.sortPriority ?? 0) - (b.sortPriority ?? 0) ||
+      b.viewDepth - a.viewDepth,
   );
   outline.sort(
     (a, b) =>
