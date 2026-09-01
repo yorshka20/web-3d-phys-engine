@@ -188,20 +188,22 @@ export class PipelineManager {
     // Create vertex buffer layout
     const vertexBuffers = this.createVertexBufferLayoutsFromGpuKey(gpuKey);
 
-    // Create render pipeline descriptor
+    // Create render pipeline descriptor.
+    // gpuKey.shaderDefines are cache-key discriminators only — they must NOT be passed as
+    // pipeline `constants`: WebGPU rejects any constant whose name has no matching
+    // `override` declaration in the shader module, so a define name that no shader declares
+    // (e.g. ALPHA_MODE_MASK) invalidates the whole pipeline.
     const descriptor: GPURenderPipelineDescriptor = {
       layout,
       vertex: {
         module: shaderModules,
         entryPoint: 'vs_main',
         buffers: vertexBuffers,
-        constants: this.convertShaderDefinesToNumbers(gpuKey.shaderDefines),
       },
       fragment: {
         module: shaderModules,
         entryPoint: 'fs_main',
         targets: this.createColorTargetsFromGpuKey(gpuKey),
-        constants: this.convertShaderDefinesToNumbers(gpuKey.shaderDefines),
       },
       primitive: this.createPrimitiveStateFromGpuKey(gpuKey),
       depthStencil: this.createDepthStencilStateFromGpuKey(gpuKey),
