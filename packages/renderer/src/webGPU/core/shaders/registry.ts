@@ -35,6 +35,7 @@ import vectorFragment from './math/vector.wgsl';
 
 // Lighting fragments
 import hgrpNprFragment from './lighting/hgrp_npr.wgsl';
+import hgrpShadowLutFragment from './lighting/hgrp_shadow_lut.wgsl';
 import pbrFragment from './lighting/pbr.wgsl';
 import phongFragment from './lighting/phong.wgsl';
 import toonFragment from './lighting/toon.wgsl';
@@ -73,6 +74,7 @@ export const shaderFragmentRegistry = new Map([
   ['lighting/pbr.wgsl', pbrFragment],
   ['lighting/toon.wgsl', toonFragment],
   ['lighting/hgrp_npr.wgsl', hgrpNprFragment],
+  ['lighting/hgrp_shadow_lut.wgsl', hgrpShadowLutFragment],
 
   // Pass fragments
   ['passes/forward.wgsl', forwardFragment],

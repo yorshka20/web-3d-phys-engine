@@ -84,7 +84,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 32, // HGRPMaterialParams: vec4 + 4 f32
+      size: 48, // HGRPMaterialParams: vec4 + 8 f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -112,12 +112,18 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    const params = new Float32Array(8);
+    const params = new Float32Array(12);
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
     params.set(baseColor, 0);
     params[4] = material.floats._UseDiffRampMap ?? 0;
     // alpha_cutoff doubles as the clip switch: 0 disables the discard in the shader
     params[5] = material.alphaMode === 'mask' ? material.alphaCutoff : 0;
+    params[6] = material.floats._ShadowColorBrightness ?? 1;
+    params[7] = material.floats._ShadowColorSaturation ?? 1;
+    params[8] = material.floats._UseShadowLutTex ?? 0;
+    params[9] = material.floats._UseBumpMap ?? 0;
+    params[10] = material.floats._BumpScale ?? 1;
+    params[11] = material.floats._UseSDFLightmap ?? 0;
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;

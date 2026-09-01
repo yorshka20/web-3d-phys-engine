@@ -401,8 +401,10 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
       'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/gltf_types.wgsl',
+      'math/color.wgsl',
       'bindings/hgrp_bindings.wgsl',
       'core/hgrp_vertex.wgsl',
+      'lighting/hgrp_shadow_lut.wgsl',
       'lighting/hgrp_npr.wgsl',
     ],
     compilationOptions: {

@@ -126,7 +126,8 @@ export function createDefaultHGRPMaterial(
     materialName,
     variant: 'CharacterNPR',
     textures: {},
-    floats: {},
+    // Explicit shadow params so the flat-grey fill still shades instead of rendering unlit
+    floats: { _ShadowColorBrightness: 0.5, _ShadowColorSaturation: 1 },
     colors: { _BaseColor: [0.5, 0.5, 0.5, 1] },
     alphaMode: 'opaque',
     alphaCutoff: 0.5,

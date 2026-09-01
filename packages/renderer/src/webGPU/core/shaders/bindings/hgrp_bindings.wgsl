@@ -17,8 +17,12 @@ struct HGRPMaterialParams {
     base_color: vec4<f32>,
     use_diff_ramp: f32,
     alpha_cutoff: f32, // 0.0 = alpha clip disabled
-    reserved0: f32,
-    reserved1: f32,
+    shadow_color_brightness: f32,
+    shadow_color_saturation: f32,
+    use_shadow_lut: f32,
+    use_bump_map: f32,
+    bump_scale: f32,
+    use_sdf_lightmap: f32,
 }
 
 @group(2) @binding(0) var<uniform> hgrp_material: HGRPMaterialParams;
