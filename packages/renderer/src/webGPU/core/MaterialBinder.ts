@@ -134,6 +134,7 @@ export class MaterialBinder {
     params[18] = material.floats._UseSpecRampMap ?? 0;
     params[19] = material.floats._Smoothness ?? 0.5;
     params[20] = material.floats._Specular ?? 0.5;
+    params[21] = material.floats._AnisotropyIntensity ?? 0;
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;

@@ -30,7 +30,7 @@ struct HGRPMaterialParams {
     use_spec_ramp: f32,
     spec_smoothness: f32,
     spec_intensity: f32,
-    reserved0: f32,
+    aniso_intensity: f32, // hair strand highlight (_AnisotropyIntensity)
     reserved1: f32,
     reserved2: f32,
 }

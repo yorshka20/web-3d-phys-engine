@@ -1,9 +1,11 @@
 // HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV shadow
-// color. Spec ramp (_SpecRampMap + _MetallicGlossMap) and emission (_EmissionMap, needs
-// Stage E tonemap) layer on here. Binding indices must match the
+// color, plus spec-ramp highlights on the metallic zones. Emission (_EmissionMap, needs
+// Stage E tonemap) layers on here. Binding indices must match the
 // HGRP_TEXTURE_SLOTS_BY_VARIANT slot order in HGRPMaterialResources.ts.
 
 @group(2) @binding(5) var bump_map: texture_2d<f32>; // _BumpMap
+@group(2) @binding(6) var spec_ramp_map: texture_2d<f32>; // _SpecRampMap
+@group(2) @binding(7) var metallic_gloss_map: texture_2d<f32>; // _MetallicGlossMap
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
@@ -17,5 +19,29 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         hgrp_material.use_bump_map,
         hgrp_material.bump_scale,
     );
-    return hgrp_shade_core(input.uv0, n, input.world_position);
+    let core = hgrp_shade_core(input.uv0, n, input.world_position);
+
+    // Spec ramp v2: the cloth RS is bright across its full width, so it is a specular COLOR
+    // lookup (tint per x = n.h, y = 1 - _Smoothness), not a self-shaped highlight — adding it
+    // raw whitewashed the cloth. The highlight shape comes from a Blinn-Phong lobe whose
+    // exponent follows _Smoothness, gated to the lit side and masked to the metallic zones
+    // in _MetallicGlossMap.r so fabric stays matte.
+    let view_dir = normalize(mvp.camera_pos - input.world_position);
+    let light = normalize(MAIN_LIGHT_DIRECTION);
+    let h = normalize(light + view_dir);
+    let ndoth = clamp(dot(n, h), 0.0, 1.0);
+    let ndotl = clamp(dot(n, light), 0.0, 1.0);
+    let spec_y = hgrp_ramp_inset(1.0 - hgrp_material.spec_smoothness);
+    let spec_color = textureSample(
+        spec_ramp_map,
+        ramp_sampler,
+        vec2<f32>(hgrp_ramp_inset(ndoth), spec_y),
+    ).rgb;
+    let shape = pow(ndoth, mix(8.0, 128.0, hgrp_material.spec_smoothness));
+    let metallic = textureSample(metallic_gloss_map, base_sampler, input.uv0).r;
+    let spec = spec_color *
+        (shape * smoothstep(0.0, 0.3, ndotl) * metallic * hgrp_material.spec_intensity *
+            hgrp_material.use_spec_ramp);
+
+    return vec4<f32>(core.rgb + spec, core.a);
 }
