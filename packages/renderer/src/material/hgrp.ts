@@ -113,8 +113,10 @@ export function createHGRPMaterialFromPreset(
   };
 }
 
-// glb materials with no preset entry (shared meshes like eye-white/hair shadow whose ripped
-// material JSON does not exist) render flat grey until their compositing stage lands.
+// glb materials with no preset entry: the shared eye-white/hair shadow overlay meshes, whose
+// ripped material JSON does not exist. They are shadow overlay layers in-game, so the fill
+// renders them as translucent dark shells (an opaque grey fill read as blank grey eyes /
+// a grey cap); the real overlay formulas belong to the material-forensics session.
 export function createDefaultHGRPMaterial(
   character: string,
   materialName: string,
@@ -126,10 +128,10 @@ export function createDefaultHGRPMaterial(
     materialName,
     variant: 'CharacterNPR',
     textures: {},
-    // Explicit shadow params so the flat-grey fill still shades instead of rendering unlit
+    // Explicit shadow params so the fill still shades instead of rendering unlit
     floats: { _ShadowColorBrightness: 0.5, _ShadowColorSaturation: 1 },
-    colors: { _BaseColor: [0.5, 0.5, 0.5, 1] },
-    alphaMode: 'opaque',
+    colors: { _BaseColor: [0.08, 0.08, 0.12, 0.35] },
+    alphaMode: 'blend',
     alphaCutoff: 0.5,
     doubleSided: false,
   };

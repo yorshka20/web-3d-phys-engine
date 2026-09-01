@@ -104,3 +104,6 @@ packages/web-client/assets/
 .claude-workbook/
 .claude-learnings/
 ROADMAP.md
+
+# WebGPU Inspector frame captures (local debug dumps)
+/frame

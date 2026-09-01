@@ -18,6 +18,7 @@ import { ShadingParamsManager } from '../core/ShadingParamsManager';
 import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
 import { ForwardPass } from './passes/ForwardPass';
+import { HGRPEyeOverlayStage } from './passes/HGRPEyeOverlayStage';
 import { HGRPOutlineStage } from './passes/HGRPOutlineStage';
 import { TonemapPass } from './passes/TonemapPass';
 import {
@@ -226,6 +227,17 @@ export class WebGPURenderer implements IWebGPURenderer {
       mvpUniformManager: this.mvpUniformManager,
       geometryManager: this.geometryManager,
       sceneColorFormat: this.context.getSceneColorFormat(),
+      depthStencilFormat: this.context.getDepthStencilFormat(),
+    });
+    const eyeOverlayStage = new HGRPEyeOverlayStage({
+      device: this.device,
+      shaderManager: this.shaderManager,
+      bindGroupManager: this.bindGroupManager,
+      materialBinder: this.materialBinder,
+      mvpUniformManager: this.mvpUniformManager,
+      geometryManager: this.geometryManager,
+      sceneColorFormat: this.context.getSceneColorFormat(),
+      depthStencilFormat: this.context.getDepthStencilFormat(),
     });
     this.forwardPass = new ForwardPass({
       pipelineFactory: this.pipelineFactory,
@@ -236,6 +248,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       pmxAnimationBufferManager: this.pmxAnimationBufferManager,
       resourceManager: this.resourceManager,
       outlineStage,
+      eyeOverlayStage,
       getColorView: () => this.sceneColorTexture.createView(),
       getDepthView: () => this.depthTexture.createView(),
     });
@@ -324,7 +337,7 @@ export class WebGPURenderer implements IWebGPURenderer {
         width: canvas.width,
         height: canvas.height,
       },
-      format: 'depth24plus',
+      format: this.context.getDepthStencilFormat(),
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
       label: 'Depth Texture',
     });

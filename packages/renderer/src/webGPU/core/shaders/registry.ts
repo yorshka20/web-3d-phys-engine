@@ -35,6 +35,7 @@ import noiseFragment from './math/noise.wgsl';
 import vectorFragment from './math/vector.wgsl';
 
 // Lighting fragments
+import hgrpEyeShadingFragment from './lighting/hgrp_eye_shading.wgsl';
 import hgrpNprFragment from './lighting/hgrp_npr.wgsl';
 import hgrpShadowLutFragment from './lighting/hgrp_shadow_lut.wgsl';
 import pbrFragment from './lighting/pbr.wgsl';
@@ -44,6 +45,7 @@ import toonFragment from './lighting/toon.wgsl';
 // Pass fragments
 import deferredFragment from './passes/deferred.wgsl';
 import forwardFragment from './passes/forward.wgsl';
+import hgrpEyeOverlayShader from './passes/hgrp_eye_overlay.wgsl';
 import hgrpOutlineShader from './passes/hgrp_outline.wgsl';
 import shadowFragment from './passes/shadow.wgsl';
 
@@ -78,12 +80,14 @@ export const shaderFragmentRegistry = new Map([
   ['lighting/toon.wgsl', toonFragment],
   ['lighting/hgrp_npr.wgsl', hgrpNprFragment],
   ['lighting/hgrp_shadow_lut.wgsl', hgrpShadowLutFragment],
+  ['lighting/hgrp_eye_shading.wgsl', hgrpEyeShadingFragment],
 
   // Pass fragments
   ['passes/forward.wgsl', forwardFragment],
   ['passes/deferred.wgsl', deferredFragment],
   ['passes/shadow.wgsl', shadowFragment],
   ['passes/hgrp_outline.wgsl', hgrpOutlineShader],
+  ['passes/hgrp_eye_overlay.wgsl', hgrpEyeOverlayShader],
 
   // Binding fragments
   ['bindings/pmx_bindings.wgsl', pmxBindingsFragment],

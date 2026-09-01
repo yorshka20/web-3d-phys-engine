@@ -9,6 +9,7 @@ import { PMXMaterialProcessor } from '../../core/PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../../core/ResourceManager';
 import { GeometryCacheItem } from '../../core/types';
 import { buildDrawLists, DrawItem } from '../frame/DrawListBuilder';
+import { HGRPEyeOverlayStage } from './HGRPEyeOverlayStage';
 import { HGRPOutlineStage } from './HGRPOutlineStage';
 
 // GPU resources resolved once per frame during prepare, consumed by the synchronous encode.
@@ -35,6 +36,7 @@ export interface ForwardPassDeps {
   pmxAnimationBufferManager: PMXAnimationBufferManager;
   resourceManager: WebGPUResourceManager;
   outlineStage: HGRPOutlineStage;
+  eyeOverlayStage: HGRPEyeOverlayStage;
   // Attachment views are provided as closures because the swapchain texture changes every
   // frame and the depth texture is recreated on resize.
   getColorView(): GPUTextureView;
@@ -60,7 +62,7 @@ export class ForwardPass {
     // Prepare phase (async): build the ordered draw lists and resolve every GPU resource up
     // front, so the encode phase below is fully synchronous — no await between beginRenderPass
     // and end.
-    const { opaque, transparent, outline } = buildDrawLists(frameData);
+    const { opaque, transparent, outline, eyeOverlay } = buildDrawLists(frameData);
     const frame: FrameResources = {
       pipelines: new Map(),
       materials: new Map(),
@@ -69,6 +71,7 @@ export class ForwardPass {
     await this.prepare(opaque, frame);
     await this.prepare(transparent, frame);
     await this.deps.outlineStage.prepare(outline);
+    await this.deps.eyeOverlayStage.prepare(eyeOverlay);
 
     const renderPass = commandEncoder.beginRenderPass({
       label: 'main_render_pass',
@@ -85,16 +88,22 @@ export class ForwardPass {
         depthClearValue: 1.0,
         depthLoadOp: 'clear',
         depthStoreOp: 'store',
+        stencilClearValue: 0,
+        stencilLoadOp: 'clear',
+        stencilStoreOp: 'store',
       },
     });
 
     this.setFrameBindGroups(renderPass);
 
     // Opaque first (state-sorted), then the HGRP outline hulls (depth-tested against the
-    // opaque geometry), then transparent (back-to-front) on top of both. The outline stage
-    // binds its own pipeline/groups, so the transparent walk starts from a fresh state cache.
+    // opaque geometry), then the depth-biased iris overlays, then transparent
+    // (back-to-front) on top of everything — the translucent eye-white shadow shell blends
+    // over the iris. The stages bind their own pipeline/groups, so the transparent walk
+    // starts from a fresh state cache.
     this.encode(renderPass, opaque, frameData, frame, {});
     this.deps.outlineStage.encode(renderPass, outline, frameData);
+    this.deps.eyeOverlayStage.encode(renderPass, eyeOverlay, frameData);
     this.encode(renderPass, transparent, frameData, frame, {});
 
     renderPass.end();

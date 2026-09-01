@@ -22,6 +22,12 @@ export interface DrawLists {
   // renderables again, drawn by the single pass-private outline pipeline after the opaque
   // walk. pipelineKey is a fixed tag — outline has exactly one pipeline.
   outline: DrawItem[];
+  // Eye overlay (see HGRPEyeOverlayStage): the iris draws with a depth-biased projection
+  // after the opaque walk, leaving the opaque list. Identified as the Eye-variant material
+  // of the _PreZStencilRefOption 52 "shows-through" group that carries a matcap slot; the
+  // brow (same group, no matcap) stays a regular opaque draw. The 36 group (cloth/hair) is
+  // a different system.
+  eyeOverlay: DrawItem[];
 }
 
 // Plain code-unit comparison: sort keys are opaque cache ids, locale rules must not apply.
@@ -58,6 +64,7 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
   const opaque: DrawItem[] = [];
   const transparent: DrawItem[] = [];
   const outline: DrawItem[] = [];
+  const eyeOverlay: DrawItem[] = [];
   const viewMatrix = frameData.scene.camera.viewMatrix;
 
   for (const renderable of frameData.renderables) {
@@ -71,16 +78,27 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
       viewDepth: 0,
     };
 
+    const hgrpMaterial =
+      renderable.material.materialType === 'hgrp'
+        ? (renderable.material as HGRPMaterialDescriptor)
+        : undefined;
+
+    if (
+      hgrpMaterial?.variant === 'CharacterNPR_Eye' &&
+      hgrpMaterial.floats._PreZStencilRefOption !== undefined &&
+      hgrpMaterial.textures._MatcapTex !== undefined
+    ) {
+      eyeOverlay.push({ renderable, pipelineKey: 'hgrp_eye_overlay', viewDepth: 0 });
+      continue;
+    }
+
     if ((renderable.material as { alphaMode?: AlphaMode }).alphaMode === 'blend') {
       item.viewDepth = computeViewDepth(renderable, viewMatrix);
       transparent.push(item);
     } else {
       opaque.push(item);
 
-      if (
-        renderable.material.materialType === 'hgrp' &&
-        (renderable.material as HGRPMaterialDescriptor).floats._EnableOutline === 1
-      ) {
+      if (hgrpMaterial && hgrpMaterial.floats._EnableOutline === 1) {
         outline.push({ renderable, pipelineKey: 'hgrp_outline', viewDepth: 0 });
       }
     }
@@ -101,6 +119,11 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
       compareKeys(a.renderable.materialKey, b.renderable.materialKey) ||
       compareKeys(a.renderable.geometryId, b.renderable.geometryId),
   );
+  eyeOverlay.sort(
+    (a, b) =>
+      compareKeys(a.renderable.materialKey, b.renderable.materialKey) ||
+      compareKeys(a.renderable.geometryId, b.renderable.geometryId),
+  );
 
-  return { opaque, transparent, outline };
+  return { opaque, transparent, outline, eyeOverlay };
 }

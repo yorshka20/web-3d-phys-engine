@@ -1,14 +1,14 @@
 import { FrameData } from '@renderer/frame/types';
 import { BindGroupManager } from '../../core/BindGroupManager';
 import { GeometryManager } from '../../core/GeometryManager';
-import { getOrCreateHGRPOutlineBindGroupLayout } from '../../core/HGRPMaterialResources';
+import { getOrCreateHGRPMaterialBindGroupLayout } from '../../core/HGRPMaterialResources';
 import { MaterialBinder } from '../../core/MaterialBinder';
 import { MVPUniformManager } from '../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../core/pipeline/vertexLayouts';
 import { ShaderManager } from '../../core/shaders/ShaderManager';
 import { DrawItem } from '../frame/DrawListBuilder';
 
-export interface HGRPOutlineStageDeps {
+export interface HGRPEyeOverlayStageDeps {
   device: GPUDevice;
   shaderManager: ShaderManager;
   bindGroupManager: BindGroupManager;
@@ -20,19 +20,25 @@ export interface HGRPOutlineStageDeps {
 }
 
 /**
- * HGRP Outline Stage
+ * HGRP Eye Overlay Stage
  *
- * Draws the inverted-hull outline list inside the forward render pass (same attachments, so
- * this is a draw stage of ForwardPass, not a render pass of its own). Exactly one pipeline:
- * front-face culling cannot be expressed through the semantic pipeline key, so the pipeline
- * is built here directly from the compiled outline shader; per-material state is just the
- * outline bind group (material uniform + base map) resolved by MaterialBinder.
+ * Draws the iris, which sits behind the face's eye-white surface. The overlay shader
+ * (passes/hgrp_eye_overlay.wgsl) pulls the projected position slightly toward the camera,
+ * so the iris wins the depth test against the eye-white millimetres in front of it but
+ * still loses to the cheek/hair centimetres in front at grazing angles — the game's pre-Z
+ * stencil compositing achieves the same gating, but its writer semantics did not survive
+ * the rip (and the eye-white shadow shell only covers the upper eye, so it cannot stamp
+ * the opening; probed 2026-09-01).
+ *
+ * Fragment shading is the shared Eye-variant path with the regular variant bind groups;
+ * only the vertex projection and depth-write state differ, which the semantic pipeline key
+ * cannot express — so the pipeline is pass-private (same rule as HGRPOutlineStage).
  */
-export class HGRPOutlineStage {
+export class HGRPEyeOverlayStage {
   private pipeline?: GPURenderPipeline;
-  private frameBindings = new Map<string, GPUBindGroup>();
+  private frameBindings = new Map<string, GPUBindGroup | undefined>();
 
-  constructor(private readonly deps: HGRPOutlineStageDeps) {}
+  constructor(private readonly deps: HGRPEyeOverlayStageDeps) {}
 
   async prepare(items: DrawItem[]): Promise<void> {
     this.frameBindings.clear();
@@ -47,17 +53,16 @@ export class HGRPOutlineStage {
         geometryData: renderable.geometryData,
       });
       if (!this.frameBindings.has(renderable.materialKey)) {
-        this.frameBindings.set(
-          renderable.materialKey,
-          await this.deps.materialBinder.ensureHGRPOutlineBindGroup(renderable),
-        );
+        const bindings = await this.deps.materialBinder.ensureMaterialBindings(renderable);
+        this.frameBindings.set(renderable.materialKey, bindings.group2);
       }
     }
   }
 
   /**
-   * Encode the outline draws. Runs between the opaque and transparent walks; the caller's
-   * encode-state cache is invalid afterwards (this stage binds its own pipeline/groups).
+   * Encode the overlay draws. Runs after the opaque/outline walks and before transparent
+   * (the translucent eye-white shadow shell blends on top); the caller's encode-state cache
+   * is invalid afterwards.
    */
   encode(renderPass: GPURenderPassEncoder, items: DrawItem[], frameData: FrameData): void {
     if (items.length === 0 || !this.pipeline) {
@@ -75,7 +80,10 @@ export class HGRPOutlineStage {
       const geometry = item.geometry!;
 
       if (renderable.materialKey !== boundMaterialKey) {
-        renderPass.setBindGroup(2, this.frameBindings.get(renderable.materialKey)!);
+        const bindGroup = this.frameBindings.get(renderable.materialKey);
+        if (bindGroup) {
+          renderPass.setBindGroup(2, bindGroup);
+        }
         boundMaterialKey = renderable.materialKey;
       }
       if (renderable.geometryId !== boundGeometryId) {
@@ -84,8 +92,6 @@ export class HGRPOutlineStage {
         boundGeometryId = renderable.geometryId;
       }
       if (renderable.uniformKey !== boundUniformKey) {
-        // Same uniformKey as the base draw: updateMVPUniforms rewrites identical values
-        // (allowed by the uniformKey contract) and returns the shared bind group.
         const mvpBindGroup = this.deps.mvpUniformManager.updateMVPUniforms(renderable, frameData);
         renderPass.setBindGroup(1, mvpBindGroup);
         boundUniformKey = renderable.uniformKey;
@@ -100,23 +106,26 @@ export class HGRPOutlineStage {
       return;
     }
 
-    const shaderModule = this.deps.shaderManager.getShaderModule('hgrp_outline_shader');
+    const shaderModule = this.deps.shaderManager.getShaderModule('hgrp_eye_overlay_shader');
     if (!shaderModule) {
-      throw new Error('HGRP outline shader module not compiled');
+      throw new Error('HGRP eye overlay shader module not compiled');
     }
 
     const timeLayout = this.deps.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
     const mvpLayout = this.deps.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
     if (!timeLayout || !mvpLayout) {
-      throw new Error('Time/MVP bind group layouts not found for the outline pipeline');
+      throw new Error('Time/MVP bind group layouts not found for the eye overlay pipeline');
     }
-    const outlineLayout = getOrCreateHGRPOutlineBindGroupLayout(this.deps.bindGroupManager);
+    const eyeLayout = getOrCreateHGRPMaterialBindGroupLayout(
+      this.deps.bindGroupManager,
+      'CharacterNPR_Eye',
+    );
 
     this.pipeline = this.deps.device.createRenderPipeline({
-      label: 'hgrp_outline_pipeline',
+      label: 'hgrp_eye_overlay_pipeline',
       layout: this.deps.device.createPipelineLayout({
-        label: 'hgrp_outline_pipeline_layout',
-        bindGroupLayouts: [timeLayout, mvpLayout, outlineLayout],
+        label: 'hgrp_eye_overlay_pipeline_layout',
+        bindGroupLayouts: [timeLayout, mvpLayout, eyeLayout],
       }),
       vertex: {
         module: shaderModule,
@@ -128,11 +137,12 @@ export class HGRPOutlineStage {
         entryPoint: 'fs_main',
         targets: [{ format: this.deps.sceneColorFormat }],
       },
-      // Inverted hull: cull the front faces so only the extruded back-facing shell shows
-      primitive: { topology: 'triangle-list', cullMode: 'front', frontFace: 'ccw' },
+      primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
       depthStencil: {
         format: this.deps.depthStencilFormat,
-        depthWriteEnabled: true,
+        // Depth-tested against the real scene; the biased projection provides the gating.
+        // No depth write: the biased depths must not pollute the buffer.
+        depthWriteEnabled: false,
         depthCompare: 'less',
       },
     });

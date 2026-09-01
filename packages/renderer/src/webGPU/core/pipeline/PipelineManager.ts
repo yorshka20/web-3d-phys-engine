@@ -985,7 +985,7 @@ export class PipelineManager {
     }
 
     return {
-      format: 'depth24plus',
+      format: this.context.getDepthStencilFormat(),
       depthWriteEnabled: gpuKey.depthWrite,
       depthCompare: 'less',
     };

@@ -9,6 +9,7 @@ import {
   createEmissiveShaderModule,
   createFireMaterialShaderModule,
   createGLTFMaterialShaderModule,
+  createHGRPEyeOverlayShaderModule,
   createHGRPMaterialShaderModules,
   createHGRPOutlineShaderModule,
   createPMXMaterialShaderModule,
@@ -119,6 +120,10 @@ export class ShaderManager {
     // Register HGRP Outline Shader
     this.registerShaderModule(createHGRPOutlineShaderModule());
     console.log('✓ Registered HGRP Outline Shader');
+
+    // Register HGRP Eye Overlay Shader
+    this.registerShaderModule(createHGRPEyeOverlayShaderModule());
+    console.log('✓ Registered HGRP Eye Overlay Shader');
   }
 
   private compileShaderModules(): void {
@@ -206,6 +211,13 @@ export class ShaderManager {
     }
 
     this.compileShaderModule('hgrp_outline_shader', {
+      vertexFormat: 'full',
+      defines: {
+        ENABLE_HGRP_MATERIAL: true,
+      },
+    });
+
+    this.compileShaderModule('hgrp_eye_overlay_shader', {
       vertexFormat: 'full',
       defines: {
         ENABLE_HGRP_MATERIAL: true,

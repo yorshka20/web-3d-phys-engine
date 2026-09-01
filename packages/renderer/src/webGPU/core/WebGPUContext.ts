@@ -227,6 +227,15 @@ export class WebGPUContext {
   }
 
   /**
+   * Depth-stencil format shared by the depth texture and every pipeline drawing in the
+   * forward pass (WebGPU validates exact format equality). Stencil is consumed by the HGRP
+   * eye compositing; pipelines that ignore it keep the default keep/always stencil state.
+   */
+  getDepthStencilFormat(): GPUTextureFormat {
+    return 'depth24plus-stencil8';
+  }
+
+  /**
    * get device features
    */
   getFeatures(): GPUSupportedFeatures | null {

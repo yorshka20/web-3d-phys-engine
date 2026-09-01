@@ -407,6 +407,7 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
       'core/hgrp_vertex.wgsl',
       'lighting/hgrp_shadow_lut.wgsl',
       'lighting/hgrp_npr.wgsl',
+      ...(variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
     ],
     compilationOptions: {
       vertexFormat: ['full' as const],
@@ -424,6 +425,46 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
     author: 'WebGPU 3D Physics Engine',
     tags: ['hgrp', 'npr', 'character', variant],
   }));
+}
+
+// The eye overlay shader draws the iris with a depth-biased projection (pass-private
+// pipeline in HGRPEyeOverlayStage); it shares the Eye variant's fragment shading but brings
+// its own vertex stage, so core/hgrp_vertex.wgsl is NOT included.
+export function createHGRPEyeOverlayShaderModule(): ShaderModule {
+  return {
+    id: 'hgrp_eye_overlay_shader',
+    name: 'HGRP Eye Overlay Shader',
+    description: 'HGRP iris overlay (Eye shading with camera-biased depth)',
+    type: 'render',
+    fileName: 'passes/hgrp_eye_overlay.wgsl',
+    sourceCode: shaderFragmentRegistry.get('passes/hgrp_eye_overlay.wgsl') || '',
+    includes: [
+      'core/constants.wgsl',
+      'core/uniforms.wgsl',
+      'core/gltf_types.wgsl',
+      'core/hgrp_types.wgsl',
+      'math/color.wgsl',
+      'bindings/hgrp_bindings.wgsl',
+      'lighting/hgrp_shadow_lut.wgsl',
+      'lighting/hgrp_npr.wgsl',
+      'lighting/hgrp_eye_shading.wgsl',
+    ],
+    compilationOptions: {
+      vertexFormat: ['full'],
+    },
+    runtimeParams: {},
+    renderState: {
+      blendMode: 'replace',
+      depthTest: true,
+      depthWrite: false,
+      cullMode: 'back',
+      frontFace: 'ccw',
+      sampleCount: 1,
+    },
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: ['hgrp', 'eye', 'npr'],
+  };
 }
 
 // The outline shader is shared by every HGRP variant (its pipeline is pass-private —
