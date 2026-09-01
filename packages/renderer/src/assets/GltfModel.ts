@@ -1,11 +1,16 @@
 import { AlphaMode, BaseMaterial } from '../material/types';
+import { HGRPMaterialDescriptor } from '../material/hgrp';
 import { mat4 } from 'gl-matrix';
 import { GeometryData } from '../geometry/GeometryFactory';
+
+// A glTF document material converted for rendering: either the standard PBR family or an
+// externally-joined family (HGRP presets keyed by material name).
+export type GLTFPrimitiveMaterial = GLTFMaterial | HGRPMaterialDescriptor;
 
 // Minimal CPU-side representation for GLTF
 export interface GLTFPrimitive {
   geometry: GeometryData; // interleaved vertices [pos, normal, uv]
-  material?: GLTFMaterial;
+  material?: GLTFPrimitiveMaterial;
 }
 
 export interface GLTFMesh {

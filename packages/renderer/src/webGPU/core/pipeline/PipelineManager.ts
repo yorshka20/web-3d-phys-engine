@@ -1,5 +1,7 @@
+import { hgrpVariantForShaderId, isHGRPShaderId } from '@renderer/material/hgrp';
 import { BindGroupManager } from '../BindGroupManager';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
+import { getOrCreateHGRPMaterialBindGroupLayout } from '../HGRPMaterialResources';
 import { PMXMaterialProcessor } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../shaders/ShaderManager';
@@ -353,21 +355,27 @@ export class PipelineManager {
   ): Promise<GPUPipelineLayout> {
     const bindGroupLayouts: GPUBindGroupLayout[] = [];
 
-    switch (gpuKey.customShaderId) {
-      case 'pmx_material_shader':
-        // PMX Pipeline: TIME + MVP + PMX_MATERIAL + PMX_ANIMATION
-        await this.addPmxBindGroups(bindGroupLayouts, gpuKey);
-        break;
+    // HGRP Pipeline: TIME + MVP + per-variant HGRP_MATERIAL (four variant shader ids share
+    // one branch; the variant layout is resolved from the shader id)
+    if (isHGRPShaderId(gpuKey.customShaderId)) {
+      await this.addHgrpBindGroups(bindGroupLayouts, gpuKey);
+    } else {
+      switch (gpuKey.customShaderId) {
+        case 'pmx_material_shader':
+          // PMX Pipeline: TIME + MVP + PMX_MATERIAL + PMX_ANIMATION
+          await this.addPmxBindGroups(bindGroupLayouts, gpuKey);
+          break;
 
-      case 'gltf_material_shader':
-        // GLTF Pipeline: TIME + MVP + GLTF_PBR_MATERIAL
-        await this.addGltfBindGroups(bindGroupLayouts, gpuKey);
-        break;
+        case 'gltf_material_shader':
+          // GLTF Pipeline: TIME + MVP + GLTF_PBR_MATERIAL
+          await this.addGltfBindGroups(bindGroupLayouts, gpuKey);
+          break;
 
-      default:
-        // Standard Pipeline: TIME + MVP + TEXTURE + MATERIAL + optional groups
-        await this.addStandardBindGroups(bindGroupLayouts, gpuKey, semanticKey);
-        break;
+        default:
+          // Standard Pipeline: TIME + MVP + TEXTURE + MATERIAL + optional groups
+          await this.addStandardBindGroups(bindGroupLayouts, gpuKey, semanticKey);
+          break;
+      }
     }
 
     return this.device.createPipelineLayout({
@@ -448,6 +456,39 @@ export class PipelineManager {
     // Group 2: GLTF PBR Material layout with textures and samplers
     const gltfMaterialLayout = this.createGltfMaterialBindGroupLayout();
     bindGroupLayouts.push(gltfMaterialLayout);
+  }
+
+  /**
+   * Add HGRP-specific bind groups (layout shared with MaterialBinder via HGRPMaterialResources)
+   */
+  private async addHgrpBindGroups(
+    bindGroupLayouts: GPUBindGroupLayout[],
+    gpuKey: GpuPipelineKey,
+  ): Promise<void> {
+    // Group 0: Time uniforms
+    const timeLayout = await this.getOrCreateBindGroupLayoutByOrder(
+      BindGroupLayoutOrder.TIME,
+      gpuKey,
+    );
+    if (timeLayout) {
+      bindGroupLayouts.push(timeLayout);
+    }
+
+    // Group 1: MVP matrices
+    const mvpLayout = await this.getOrCreateBindGroupLayoutByOrder(
+      BindGroupLayoutOrder.MVP,
+      gpuKey,
+    );
+    if (mvpLayout) {
+      bindGroupLayouts.push(mvpLayout);
+    }
+
+    // Group 2: HGRP material uniforms + textures + shared samplers, per variant
+    const variant = hgrpVariantForShaderId(gpuKey.customShaderId ?? '');
+    if (!variant) {
+      throw new Error(`Unknown HGRP shader id: ${gpuKey.customShaderId}`);
+    }
+    bindGroupLayouts.push(getOrCreateHGRPMaterialBindGroupLayout(this.bindGroupManager, variant));
   }
 
   /**
@@ -769,8 +810,9 @@ export class PipelineManager {
    * Create vertex buffer layouts based on vertex attributes in an optimized way.
    */
   private createVertexBufferLayoutsFromGpuKey(gpuKey: GpuPipelineKey): GPUVertexBufferLayout[] {
-    // Handle GLTF vertex layout
-    if (gpuKey.customShaderId === 'gltf_material_shader') {
+    // Handle GLTF vertex layout (the HGRP family renders glTF-converted geometry, so it
+    // shares the same fixed 26-float layout)
+    if (gpuKey.customShaderId === 'gltf_material_shader' || isHGRPShaderId(gpuKey.customShaderId)) {
       return this.createGltfVertexBufferLayouts(gpuKey);
     }
 

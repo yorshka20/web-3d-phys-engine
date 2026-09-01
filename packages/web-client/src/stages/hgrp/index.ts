@@ -1,21 +1,34 @@
 import { Mesh3DComponent, Transform3DComponent, WebGPU3DRenderComponent } from '@ecs';
 import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
+import { HGRPPreset } from '@renderer/material/hgrp';
 import { rgba } from '@ecs/utils/color';
 
 import pelicaModel from '../../../assets/hgrp/pelica/pelica.glb?url';
+import pelicaPreset from '../../../assets/hgrp/pelica/preset.json';
 
-// Stage A2 milestone: the converted HGRP character renders through the existing glTF/PBR
-// path (baseColor only, bind pose). HGRP materials/shaders replace this in Stage B.
+// Every texture in the character folder, keyed by filename; the loader registers the ones
+// the preset references. eager+url keeps them as served URLs, not inlined data.
+const pelicaTextureUrls = Object.fromEntries(
+  Object.entries(
+    import.meta.glob('../../../assets/hgrp/pelica/textures/*.png', {
+      eager: true,
+      query: '?url',
+      import: 'default',
+    }),
+  ).map(([path, url]) => [path.split('/').pop()!, url as string]),
+);
+
+// Stage B: the converted HGRP character renders through the HGRP material family — materials
+// joined from preset.json by glb material name, BaseMap + DiffRamp lighting (M2). Variant
+// features (SDF/matcap/rim, outline/stencil, tonemap) land in Stages C–E.
 export async function createHGRPStage(world: World) {
-  await AssetLoader.loadAssets([
-    {
-      type: 'gltf_model_url' as const,
-      url: pelicaModel,
-      assetId: 'hgrp_pelica',
-      priority: 'normal' as const,
-    },
-  ]);
+  await AssetLoader.loadHGRPCharacter({
+    url: pelicaModel,
+    assetId: 'hgrp_pelica',
+    preset: pelicaPreset as HGRPPreset,
+    textureUrls: pelicaTextureUrls,
+  });
 
   const entity = world.createEntity('object');
   entity.setLabel('pelica');
@@ -40,6 +53,8 @@ export async function createHGRPStage(world: World) {
     }),
   );
 
+  // Component material is only the fallback for primitives without a document material;
+  // every pelica primitive carries an HGRP material joined at load time.
   entity.addComponent(
     world.createComponent(WebGPU3DRenderComponent, {
       material: {

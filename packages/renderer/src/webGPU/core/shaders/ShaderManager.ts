@@ -9,6 +9,7 @@ import {
   createEmissiveShaderModule,
   createFireMaterialShaderModule,
   createGLTFMaterialShaderModule,
+  createHGRPMaterialShaderModules,
   createPMXMaterialShaderModule,
   createPMXMorphComputeShaderModule,
   createPulsewaveShaderModule,
@@ -107,6 +108,12 @@ export class ShaderManager {
     // Register GLTF Material Shader
     this.registerShaderModule(createGLTFMaterialShaderModule());
     console.log('✓ Registered GLTF Material Shader');
+
+    // Register HGRP Material Shaders (one per CharacterNPR variant)
+    for (const module of createHGRPMaterialShaderModules()) {
+      this.registerShaderModule(module);
+    }
+    console.log('✓ Registered HGRP Material Shaders');
   }
 
   private compileShaderModules(): void {
@@ -183,6 +190,15 @@ export class ShaderManager {
         ENABLE_GLTF_MATERIAL: true,
       },
     });
+
+    for (const module of createHGRPMaterialShaderModules()) {
+      this.compileShaderModule(module.id, {
+        vertexFormat: 'full',
+        defines: {
+          ENABLE_HGRP_MATERIAL: true,
+        },
+      });
+    }
 
     console.log('✓ Compiled shader modules');
   }

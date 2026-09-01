@@ -142,6 +142,14 @@ import myShader from './materials/MyShader.wgsl';
 shaderFragmentRegistry.set('MyShader.wgsl', myShader);
 ```
 
+5. **Wire it up** — a render/compute shader additionally needs, in order:
+   a module factory in `create.ts` (includes / defines / render state), a
+   `registerShaderModule(createMyShaderModule())` call in
+   `ShaderManager.registerShaderModules()`, and a `compileShaderModule('my_shader', ...)`
+   call in `ShaderManager.compileShaderModules()`. Missing any of the four places leaves
+   the shader unavailable at pipeline creation. (Converging these to a single declaration
+   point plus on-demand compilation is a recorded follow-up goal.)
+
 ### Compiling Shaders
 
 ```typescript

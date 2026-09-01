@@ -5,8 +5,15 @@ import {
   GLTFMeshInstance,
   GLTFModel,
   GLTFPrimitive,
+  GLTFPrimitiveMaterial,
 } from '@renderer/assets/GltfModel';
 import { PMXModel } from '@renderer/assets/PMXModel';
+import {
+  createDefaultHGRPMaterial,
+  createHGRPMaterialFromPreset,
+  HGRPPreset,
+  hgrpTextureAssetId,
+} from '@renderer/material/hgrp';
 import { AlphaMode } from '@renderer/material/types';
 import { Document, Material, Mesh, Node, Primitive, WebIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
@@ -145,17 +152,14 @@ export class AssetLoader {
     try {
       console.log(`[AssetLoader] Loading texture from URL: ${url}`);
 
-      // Load image
-      const image = await this.loadImageFromURL(url);
-
-      // Register with asset registry
-      const metadata: AssetMetadata = {
-        type: 'texture',
-        dependencies: [],
-        memorySize: image.width * image.height * 4, // RGBA
-      };
-
-      assetRegistry.register(assetId, image, metadata);
+      // The registry holds exactly one decoded-image type — ImageBitmap — so every GPU-texture
+      // creation site can rely on it (HTMLImageElement registrations silently fell through
+      // MaterialBinder's ImageBitmap check and rendered as the default white texture).
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch texture: ${response.statusText}`);
+      }
+      await this.loadTextureFromBlob(await response.blob(), assetId);
 
       console.log(`[AssetLoader] Successfully loaded texture: ${assetId}`);
     } catch (error) {
@@ -179,17 +183,8 @@ export class AssetLoader {
     try {
       console.log(`[AssetLoader] Loading texture from file: ${file.name}`);
 
-      // Load image
-      const image = await this.loadImageFromFile(file);
-
-      // Register with asset registry
-      const metadata: AssetMetadata = {
-        type: 'texture',
-        dependencies: [],
-        memorySize: image.width * image.height * 4, // RGBA
-      };
-
-      assetRegistry.register(assetId, image, metadata);
+      // File is a Blob; decode through the same ImageBitmap registration path as URLs
+      await this.loadTextureFromBlob(file, assetId);
 
       console.log(`[AssetLoader] Successfully loaded texture: ${assetId}`);
     } catch (error) {
@@ -251,6 +246,10 @@ export class AssetLoader {
     url: string,
     assetId: string,
     priority: 'low' | 'normal' | 'high' = 'normal',
+    // Optional per-document material conversion hook: material families that join external
+    // data onto glb materials (HGRP presets by material name) replace the default PBR
+    // extraction here instead of maintaining a second glTF ingestion path.
+    materialResolver?: (mat: Material, materialIndex: number) => Promise<GLTFPrimitiveMaterial>,
   ): Promise<void> {
     try {
       console.log(`[AssetLoader] Loading GLTF model from URL: ${url}`);
@@ -276,7 +275,11 @@ export class AssetLoader {
       // glTF materials are document-level and shared across primitives: convert each source
       // material once and let sharing primitives reference the same GLTFMaterial (and its
       // textures), instead of duplicating per primitive.
-      const materials = new Map<Material, GLTFMaterial>();
+      const materials = new Map<Material, GLTFPrimitiveMaterial>();
+      const resolveMaterial =
+        materialResolver ??
+        ((mat: Material, materialIndex: number) =>
+          this.extractMaterial(mat, assetId, materialIndex));
 
       for (const node of meshNodes) {
         const mesh = node.getMesh()!;
@@ -290,7 +293,7 @@ export class AssetLoader {
             if (mat) {
               let material = materials.get(mat);
               if (!material) {
-                material = await this.extractMaterial(mat, assetId, materials.size);
+                material = await resolveMaterial(mat, materials.size);
                 materials.set(mat, material);
               }
               cpuPrim.material = material;
@@ -330,6 +333,56 @@ export class AssetLoader {
       console.error(`[AssetLoader] Failed to load GLTF model ${assetId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Load an HGRP character: register the preset's textures (namespaced per character), then
+   * load the glb with materials joined from the preset by material name. The preset is the
+   * material authority; glb materials without a preset entry are default-filled.
+   */
+  static async loadHGRPCharacter(config: {
+    url: string;
+    assetId: string;
+    preset: HGRPPreset;
+    textureUrls: Record<string, string>; // texture filename -> served URL
+    priority?: 'low' | 'normal' | 'high';
+  }): Promise<void> {
+    const { url, assetId, preset, textureUrls, priority = 'normal' } = config;
+    const character = preset.character;
+
+    const filenames = new Set<string>();
+    for (const material of Object.values(preset.materials)) {
+      for (const filename of Object.values(material.textures)) {
+        filenames.add(filename);
+      }
+    }
+
+    await Promise.all(
+      Array.from(filenames).map(async (filename) => {
+        const textureUrl = textureUrls[filename];
+        if (!textureUrl) {
+          console.warn(`[AssetLoader] HGRP preset references a missing texture file: ${filename}`);
+          return;
+        }
+        await this.loadTextureFromURL(
+          textureUrl,
+          hgrpTextureAssetId(character, filename),
+          priority,
+        );
+      }),
+    );
+
+    await this.loadGLTFModelFromURL(url, assetId, priority, async (mat) => {
+      const materialName = mat.getName();
+      const presetMaterial = preset.materials[materialName];
+      if (!presetMaterial) {
+        console.warn(
+          `[AssetLoader] glb material has no HGRP preset entry, default-filling: ${materialName}`,
+        );
+        return createDefaultHGRPMaterial(character, materialName);
+      }
+      return createHGRPMaterialFromPreset(character, materialName, presetMaterial);
+    });
   }
 
   /**
@@ -797,42 +850,6 @@ export class AssetLoader {
       byType: memoryStats.byType,
       memoryUsage: memoryStats.totalMemory,
     };
-  }
-
-  /**
-   * Load image from URL
-   */
-  private static async loadImageFromURL(url: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-
-      img.src = url;
-    });
-  }
-
-  /**
-   * Load image from File object
-   */
-  private static async loadImageFromFile(file: File): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Failed to load image: ${file.name}`));
-
-      const url = URL.createObjectURL(file);
-      img.src = url;
-
-      // Clean up object URL after loading
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        resolve(img);
-      };
-    });
   }
 
   /**

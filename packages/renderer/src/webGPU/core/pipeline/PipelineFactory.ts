@@ -1,5 +1,6 @@
 import { GLTFMaterial } from '@renderer/assets/GltfModel';
 import { GeometryData } from '@renderer/geometry/GeometryFactory';
+import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
 import { WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import { PMXMaterialCacheData } from '../PMXMaterialProcessor';
@@ -39,7 +40,11 @@ export interface PredefinedComputePipelineConfig {
 }
 
 // union type support regular materials and PMX materials
-export type MaterialDescriptor = WebGPUMaterialDescriptor | PMXMaterialCacheData | GLTFMaterial;
+export type MaterialDescriptor =
+  | WebGPUMaterialDescriptor
+  | PMXMaterialCacheData
+  | GLTFMaterial
+  | HGRPMaterialDescriptor;
 
 /**
  * Pipeline Factory for creating specialized pipelines

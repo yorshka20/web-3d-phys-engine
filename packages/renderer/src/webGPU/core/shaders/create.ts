@@ -1,3 +1,4 @@
+import { HGRP_SHADER_ID_BY_VARIANT, HGRPShaderVariant } from '@renderer/material/hgrp';
 import { shaderFragmentRegistry } from './registry';
 import {
   CheckerboardShaderModule,
@@ -6,6 +7,7 @@ import {
   FIRE_MATERIAL_DEFAULT_PARAMS,
   FireMaterialShaderModule,
   GLTFMaterialShaderModule,
+  HGRPMaterialShaderModule,
   PMX_MATERIAL_DEFAULT_PARAMS,
   PMXMaterialShaderModule,
   PMXMorphComputeShaderModule,
@@ -359,6 +361,66 @@ export function createDefaultShaderModule(): ShaderModule {
     author: 'WebGPU 3D Physics Engine',
     tags: ['default', 'fallback'],
   };
+}
+
+// One module per CharacterNPR variant: shared vertex stage and shading core come from
+// includes; the per-variant file is where variant features (SDF / matcap / hair aniso / spec
+// ramp) land.
+export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
+  const variants: { variant: HGRPShaderVariant; fileName: string; description: string }[] = [
+    {
+      variant: 'CharacterNPR',
+      fileName: 'HGRPNpr.wgsl',
+      description: 'HGRP CharacterNPR material shader (cloth / general)',
+    },
+    {
+      variant: 'CharacterNPR_Skin',
+      fileName: 'HGRPSkin.wgsl',
+      description: 'HGRP CharacterNPR_Skin material shader (face + body)',
+    },
+    {
+      variant: 'CharacterNPR_Hair',
+      fileName: 'HGRPHair.wgsl',
+      description: 'HGRP CharacterNPR_Hair material shader',
+    },
+    {
+      variant: 'CharacterNPR_Eye',
+      fileName: 'HGRPEye.wgsl',
+      description: 'HGRP CharacterNPR_Eye material shader (brow + iris)',
+    },
+  ];
+
+  return variants.map(({ variant, fileName, description }) => ({
+    id: HGRP_SHADER_ID_BY_VARIANT[variant],
+    name: `HGRP ${variant} Shader`,
+    description,
+    type: 'render' as const,
+    fileName,
+    sourceCode: shaderFragmentRegistry.get(fileName) || '',
+    includes: [
+      'core/constants.wgsl',
+      'core/uniforms.wgsl',
+      'core/gltf_types.wgsl',
+      'bindings/hgrp_bindings.wgsl',
+      'core/hgrp_vertex.wgsl',
+      'lighting/hgrp_npr.wgsl',
+    ],
+    compilationOptions: {
+      vertexFormat: ['full' as const],
+    },
+    runtimeParams: {},
+    renderState: {
+      blendMode: 'replace' as const,
+      depthTest: true,
+      depthWrite: true,
+      cullMode: 'back' as const,
+      frontFace: 'ccw' as const,
+      sampleCount: 1,
+    },
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: ['hgrp', 'npr', 'character', variant],
+  }));
 }
 
 export function createGLTFMaterialShaderModule(): GLTFMaterialShaderModule {

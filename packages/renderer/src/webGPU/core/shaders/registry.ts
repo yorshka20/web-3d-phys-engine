@@ -11,12 +11,19 @@ import waterMaterialShader from './materials/WaterMaterial.wgsl';
 // GLTF material shaders
 import gltfMaterialShader from './materials/Gltf.wgsl';
 
+// HGRP material shaders (one per CharacterNPR variant)
+import hgrpNprShader from './materials/HGRPNpr.wgsl';
+import hgrpSkinShader from './materials/HGRPSkin.wgsl';
+import hgrpHairShader from './materials/HGRPHair.wgsl';
+import hgrpEyeShader from './materials/HGRPEye.wgsl';
+
 // Compute shaders
 import pmxMorphComputeShader from './compute/PMXMorphCompute.wgsl';
 
 // Core fragments
 import constantsFragment from './core/constants.wgsl';
 import gltfTypesFragment from './core/gltf_types.wgsl';
+import hgrpVertexFragment from './core/hgrp_vertex.wgsl';
 import uniformsFragment from './core/uniforms.wgsl';
 import vertexTypesFragment from './core/vertex_types.wgsl';
 
@@ -27,6 +34,7 @@ import noiseFragment from './math/noise.wgsl';
 import vectorFragment from './math/vector.wgsl';
 
 // Lighting fragments
+import hgrpNprFragment from './lighting/hgrp_npr.wgsl';
 import pbrFragment from './lighting/pbr.wgsl';
 import phongFragment from './lighting/phong.wgsl';
 import toonFragment from './lighting/toon.wgsl';
@@ -39,6 +47,7 @@ import shadowFragment from './passes/shadow.wgsl';
 // Binding fragments
 import fireBindingsFragment from './bindings/fire_bindings.wgsl';
 import gltfBindingsFragment from './bindings/gltf_bindings.wgsl';
+import hgrpBindingsFragment from './bindings/hgrp_bindings.wgsl';
 import pmxBindingsFragment from './bindings/pmx_bindings.wgsl';
 import pmxMorphComputeBindingsFragment from './bindings/pmx_morph_compute_bindings.wgsl';
 import simpleBindingsFragment from './bindings/simple_bindings.wgsl';
@@ -51,6 +60,7 @@ export const shaderFragmentRegistry = new Map([
   ['core/vertex_types.wgsl', vertexTypesFragment],
   ['core/constants.wgsl', constantsFragment],
   ['core/gltf_types.wgsl', gltfTypesFragment],
+  ['core/hgrp_vertex.wgsl', hgrpVertexFragment],
 
   // Math fragments
   ['math/color.wgsl', colorFragment],
@@ -62,6 +72,7 @@ export const shaderFragmentRegistry = new Map([
   ['lighting/phong.wgsl', phongFragment],
   ['lighting/pbr.wgsl', pbrFragment],
   ['lighting/toon.wgsl', toonFragment],
+  ['lighting/hgrp_npr.wgsl', hgrpNprFragment],
 
   // Pass fragments
   ['passes/forward.wgsl', forwardFragment],
@@ -75,6 +86,7 @@ export const shaderFragmentRegistry = new Map([
   ['bindings/simple_bindings.wgsl', simpleBindingsFragment],
   ['bindings/pmx_morph_compute_bindings.wgsl', pmxMorphComputeBindingsFragment],
   ['bindings/gltf_bindings.wgsl', gltfBindingsFragment],
+  ['bindings/hgrp_bindings.wgsl', hgrpBindingsFragment],
 
   // Material shaders
   ['PMXMaterial.wgsl', pmxMaterialShader],
@@ -85,6 +97,10 @@ export const shaderFragmentRegistry = new Map([
   ['Emissive.wgsl', emissiveShader],
   ['Pulsewave.wgsl', pulsewaveShader],
   ['Gltf.wgsl', gltfMaterialShader],
+  ['HGRPNpr.wgsl', hgrpNprShader],
+  ['HGRPSkin.wgsl', hgrpSkinShader],
+  ['HGRPHair.wgsl', hgrpHairShader],
+  ['HGRPEye.wgsl', hgrpEyeShader],
 
   // Compute shaders
   ['PMXMorphCompute.wgsl', pmxMorphComputeShader],

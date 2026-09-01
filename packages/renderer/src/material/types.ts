@@ -1,6 +1,6 @@
 import { Color, Vec3 } from '../types/base';
 
-export type MaterialType = 'normal' | 'pmx' | 'gltf';
+export type MaterialType = 'normal' | 'pmx' | 'gltf' | 'hgrp';
 
 export type AlphaMode = 'opaque' | 'mask' | 'blend';
 

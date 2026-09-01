@@ -1,11 +1,17 @@
 import { GLTFMaterial } from '@renderer/assets/GltfModel';
 import { RenderData } from '@renderer/frame/types';
+import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
 import { WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { assetRegistry } from './AssetRegistry';
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable } from './decorators/ResourceDecorators';
+import {
+  getOrCreateHGRPMaterialBindGroupLayout,
+  HGRP_SAMPLER_BINDINGS,
+  hgrpTextureBindings,
+} from './HGRPMaterialResources';
 import { MaterialManager } from './MaterialManager';
 import { WebGPUResourceManager } from './ResourceManager';
 import { TextureManager } from './TextureManager';
@@ -55,10 +61,66 @@ export class MaterialBinder {
     if (renderable.material.materialType === 'gltf') {
       return { group2: await this.ensureGLTFMaterialBindGroup(renderable) };
     }
+    if (renderable.material.materialType === 'hgrp') {
+      return { group2: await this.ensureHGRPMaterialBindGroup(renderable) };
+    }
     return {
       group2: this.ensureTextureBindGroup(renderable) ?? undefined,
       group3: this.ensureRegularMaterialBindGroup(renderable) ?? undefined,
     };
+  }
+
+  /**
+   * Get or create the HGRP material bind group (group 2) and write its preset-driven params.
+   * The entry list derives from the variant slot tables in HGRPMaterialResources (the same
+   * source the layout is built from). Texture slots resolve through the same registry chain
+   * as glTF textures; ramps/LUTs bind a clamp sampler because they are lookup strips, not
+   * tiling images.
+   */
+  private async ensureHGRPMaterialBindGroup(renderable: RenderData): Promise<GPUBindGroup> {
+    const material = renderable.material as HGRPMaterialDescriptor;
+    const layout = getOrCreateHGRPMaterialBindGroupLayout(this.bindGroupManager, material.variant);
+    const materialId = renderable.materialKey;
+
+    const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
+      type: BufferType.UNIFORM,
+      size: 32, // HGRPMaterialParams: vec4 + 4 f32
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    const textureEntries: GPUBindGroupEntry[] = await Promise.all(
+      hgrpTextureBindings(material.variant).map(async ({ binding, slot }) => {
+        const texture = await this.getGLTFTexture(material.textures[slot], 'gltf_default_white');
+        return { binding, resource: texture.createView() };
+      }),
+    );
+
+    const bindGroup = this.bindGroupManager.createBindGroup(materialId, {
+      layout,
+      entries: [
+        { binding: 0, resource: { buffer: materialBuffer } },
+        ...textureEntries,
+        {
+          binding: HGRP_SAMPLER_BINDINGS.base,
+          resource: this.textureManager.getSampler('linear'),
+        },
+        {
+          binding: HGRP_SAMPLER_BINDINGS.ramp,
+          resource: this.textureManager.getSampler('clamp'),
+        },
+      ],
+      label: materialId,
+    });
+
+    const params = new Float32Array(8);
+    const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
+    params.set(baseColor, 0);
+    params[4] = material.floats._UseDiffRampMap ?? 0;
+    // alpha_cutoff doubles as the clip switch: 0 disables the discard in the shader
+    params[5] = material.alphaMode === 'mask' ? material.alphaCutoff : 0;
+    this.device.queue.writeBuffer(materialBuffer, 0, params);
+
+    return bindGroup;
   }
 
   /**

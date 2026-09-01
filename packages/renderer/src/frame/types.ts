@@ -1,6 +1,7 @@
 import { mat4 } from 'gl-matrix';
 import { GLTFMaterial } from '../assets/GltfModel';
 import { GeometryData } from '../geometry/GeometryFactory';
+import { HGRPMaterialDescriptor } from '../material/hgrp';
 import { WebGPUMaterialDescriptor } from '../material/types';
 import { Vec3 } from '../types/base';
 import { AssetDescriptor, AssetType } from '../webGPU/core/AssetRegistry';
@@ -104,7 +105,7 @@ export interface RenderData {
   normalMatrix: mat4; // normal transformation matrix (mat4 for WGSL compatibility)
 
   // Material information
-  material: WebGPUMaterialDescriptor | PMXMaterialCacheData | GLTFMaterial;
+  material: WebGPUMaterialDescriptor | PMXMaterialCacheData | GLTFMaterial | HGRPMaterialDescriptor;
   // Identifies the MATERIAL identity: keys material uniform-buffer/bind-group caches, so
   // renderables sharing one material (glTF document-level materials, PMX per-index materials)
   // share GPU material resources.

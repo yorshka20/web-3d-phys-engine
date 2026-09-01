@@ -24,6 +24,9 @@ Key formats by extract path (`WebGPURenderSystem`):
   `materialKey = gltf_{assetId}_mat_{index}` (stamped on `GLTFMaterial` by the loader, which
   dedupes document materials; a primitive without a material falls back to the entity's
   component material under `gltf_mat_fallback_{entityId}`).
+- HGRP (glTF carrier, materials joined from a character preset by glb material name):
+  geometry/uniform keys as glTF; `materialKey = hgrp_{character}_{materialName}` (stamped on
+  `HGRPMaterialDescriptor` by the loader's material resolver).
 - mesh: `geometryId` per entity (geometry params may differ per entity),
   `uniformKey = mesh_{entityId}`, `materialKey = bindGroupId || uniformBufferId || mesh_mat_{entityId}`.
 - PMX: `geometryId` per entity+material, `uniformKey = pmx_{entityId}` (all material draws of an
@@ -59,6 +62,8 @@ encode:  fully synchronous state-cached walk over opaque then transparent, one p
 
 Bind-slot semantics by material family (group 0 = time, group 1 = MVP, always):
 regular = group 2 textures + group 3 material; glTF = group 2 PBR material+textures;
+HGRP = group 2 material+textures+shared samplers (layout defined once in
+`HGRPMaterialResources.ts`, consumed by both PipelineManager and MaterialBinder);
 PMX = group 2 material + group 3 animation.
 
 Known deferred items: alpha MASK shader discard is unverified; PMX animation buffers are keyed
@@ -80,8 +85,8 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   Passes are renderer-private objects wired by constructor, not DI services; attachment views
   are injected as closures (the swapchain texture changes per frame, depth on resize).
 - `webGPU/core/MaterialBinder.ts` — `@Injectable` DI service resolving material-tier bind
-  groups by `materialKey` (regular + glTF families; PMX material bind groups come pre-built
-  from `PMXMaterialProcessor`).
+  groups by `materialKey` (regular + glTF + HGRP families; PMX material bind groups come
+  pre-built from `PMXMaterialProcessor`).
 - `WebGPURenderer` — device/context lifecycle, manager construction, frame loop
   (`beginFrame`/`renderTick`/`endFrame`), and pass sequencing: today the dormant PMX morph
   compute pass (commented out) followed by `ForwardPass.execute`. Future passes join as

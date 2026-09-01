@@ -167,10 +167,13 @@ fragment paths, spliced by `ShaderCompiler` at runtime. All WGSL lives under
 `packages/renderer/src/webGPU/core/shaders/` (`core/`, `math/`, `lighting/`, `bindings/`
 snake_case, `materials/` PascalCase, `passes/`, `compute/`); see `shaders/README.md`.
 
-**Adding a shader requires editing two files**: `registry.ts` (static-imports every `.wgsl`,
-inlined as strings by the Vite `wgsl-loader` plugin) and `create.ts` (per-shader factory
-declaring includes, defines, vertexFormat, renderState). Materials select shaders via
-`material.customShaderId`, which flows into the semantic pipeline key.
+**Adding a shader requires editing four places**: `registry.ts` (static-imports every `.wgsl`,
+inlined as strings by the Vite `wgsl-loader` plugin), `create.ts` (per-shader factory
+declaring includes, defines, vertexFormat, renderState), and in `ShaderManager` both a
+`registerShaderModules()` and a `compileShaderModules()` call — every registered shader is
+eagerly compiled at startup (single-point registration + on-demand compilation is a recorded
+follow-up goal). Materials select shaders via `material.customShaderId`, which flows into the
+semantic pipeline key.
 
 ### web-client
 
