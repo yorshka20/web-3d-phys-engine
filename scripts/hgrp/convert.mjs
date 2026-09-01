@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
+import { buildPreset } from './material-preset.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const blenderBin = process.env.BLENDER_BIN || 'blender';
@@ -191,6 +192,11 @@ for (const charName of chars) {
 
   const assigned = await embedBaseColor(glbPath, charDir, texDir);
   console.log(`[convert] embedded ${assigned} baseColor textures`);
+
+  const preset = buildPreset(charDir, texDir, charName.toLowerCase());
+  const presetPath = path.join(outDir, 'preset.json');
+  fs.writeFileSync(presetPath, JSON.stringify(preset, null, 2));
+  console.log(`[preset] wrote ${Object.keys(preset.materials).length} materials -> ${presetPath}`);
 
   const problems = await verifyGlb(glbPath);
   if (problems.length > 0) {
