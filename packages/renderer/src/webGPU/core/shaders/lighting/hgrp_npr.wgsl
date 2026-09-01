@@ -68,15 +68,20 @@ fn hgrp_perturb_normal(
 }
 
 // View-dependent fresnel rim, masked toward the lit side.
-// Stage E dependency: HGRP rim intensities (up to 4.0 on skin) assume the game's HDR +
-// tonemap pipeline; without it the additive term blows out, so the intensity is clamped
-// and scaled down here — remove the clamp when Stage E lands.
+// Formula-unit normalization: the official _ColorAdjustmentRimIntensity (4.0) belongs to
+// the game's rim formula — a thin screen-space edge, judging from reference screenshots —
+// where 4.0 over a few pixels is sane. Ours is a v1 broad fresnel band, so the official
+// value is converted into this formula's unit by the constant below; releasing it raw
+// flooded every silhouette white (linearization first check, 2026-09-01). The real fix is
+// implementing the game's rim (forensics item), not tuning this constant.
+const HGRP_RIM_FORMULA_SCALE: f32 = 0.1;
+
 fn hgrp_rim(n: vec3<f32>, view_dir: vec3<f32>, ndotl: f32) -> vec3<f32> {
     let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
     let edge = smoothstep(1.0 - hgrp_material.rim_width, 1.0, 1.0 - ndotv);
-    let intensity = min(hgrp_material.rim_intensity, 1.0) * 0.35;
     let light_side = clamp(ndotl * 0.5 + 0.5, 0.0, 1.0);
-    return hgrp_material.rim_color.rgb * (edge * intensity * light_side);
+    return hgrp_material.rim_color.rgb *
+        (edge * hgrp_material.rim_intensity * HGRP_RIM_FORMULA_SCALE * light_side);
 }
 
 // Base + shadow-blend + rim composition for a given (already normalized) shading normal.

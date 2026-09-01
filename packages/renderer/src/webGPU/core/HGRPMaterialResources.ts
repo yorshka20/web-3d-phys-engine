@@ -22,6 +22,17 @@ import { BindGroupManager } from './BindGroupManager';
 
 export const HGRP_TEXTURE_SLOTS_COMMON = ['_BaseMap', '_DiffRampMap'] as const;
 
+// Slots whose content is color (created as rgba8unorm-srgb so sampling decodes to linear);
+// everything else is data (normals/masks/ramp weights) and stays raw. _DiffRampMap
+// (per-channel blend weights), _ShadowLutTex and _SpecRampMap are deliberately raw for now —
+// their authoring domain is a calibration experiment (learnings color-pipeline.md, L4).
+export const HGRP_SRGB_TEXTURE_SLOTS: ReadonlySet<string> = new Set([
+  '_BaseMap',
+  '_EmissionMap',
+  '_MatcapTex',
+  '_EmotionMap',
+]);
+
 export const HGRP_SAMPLER_BINDINGS = { base: 3, ramp: 4 } as const;
 
 export const HGRP_VARIANT_TEXTURE_BINDING_START = 5;

@@ -6,6 +6,7 @@ import {
   HGRPMaterialDescriptor,
 } from '@renderer/material/hgrp';
 import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
+import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
 import { Pane } from 'tweakpane';
 
 // Per-material calibration overrides for one HGRP character, keyed by material name.
@@ -160,6 +161,11 @@ export function mountHGRPShadingPanel(assetId: string) {
   document.body.appendChild(host);
 
   const pane = new Pane({ container: host, title: 'HGRP Shading (H)' });
+
+  // Global linear-light exposure ahead of the ACES curve (session-only calibration knob,
+  // not part of the per-material preset state)
+  const tonemapFolder = pane.addFolder({ title: 'Tonemap (global)', expanded: true });
+  tonemapFolder.addBinding(tonemapSettings, 'exposure', { min: 0.1, max: 4, step: 0.01 });
 
   const persist = () => {
     try {

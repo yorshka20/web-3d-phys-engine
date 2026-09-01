@@ -11,6 +11,7 @@ import {
   getOrCreateHGRPMaterialBindGroupLayout,
   getOrCreateHGRPOutlineBindGroupLayout,
   HGRP_SAMPLER_BINDINGS,
+  HGRP_SRGB_TEXTURE_SLOTS,
   hgrpTextureBindings,
 } from './HGRPMaterialResources';
 import { MaterialManager } from './MaterialManager';
@@ -91,7 +92,11 @@ export class MaterialBinder {
 
     const textureEntries: GPUBindGroupEntry[] = await Promise.all(
       hgrpTextureBindings(material.variant).map(async ({ binding, slot }) => {
-        const texture = await this.getGLTFTexture(material.textures[slot], 'gltf_default_white');
+        const texture = await this.getGLTFTexture(
+          material.textures[slot],
+          'gltf_default_white',
+          HGRP_SRGB_TEXTURE_SLOTS.has(slot),
+        );
         return { binding, resource: texture.createView() };
       }),
     );
@@ -181,7 +186,11 @@ export class MaterialBinder {
       size: 256,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    const baseMap = await this.getGLTFTexture(material.textures._BaseMap, 'gltf_default_white');
+    const baseMap = await this.getGLTFTexture(
+      material.textures._BaseMap,
+      'gltf_default_white',
+      true,
+    );
     // Width mask (ST): white = full stroke, so the default-white fallback is a no-op
     const outlineMask = await this.getGLTFTexture(
       material.textures._OutlineMask,
@@ -226,9 +235,11 @@ export class MaterialBinder {
     const gltfMaterial = renderable.material as GLTFMaterial;
 
     // Get textures from material properties, fallback to defaults if not found
+    // Color-space classification per glTF 2.0: baseColor/emissive are sRGB, the rest are data
     const baseColorTexture = await this.getGLTFTexture(
       gltfMaterial.baseColorTexture,
       'gltf_default_white',
+      true,
     );
     const metallicRoughnessTexture = await this.getGLTFTexture(
       gltfMaterial.metallicRoughnessTexture,
@@ -245,6 +256,7 @@ export class MaterialBinder {
     const emissiveTexture = await this.getGLTFTexture(
       gltfMaterial.emissiveTexture,
       'gltf_default_emissive',
+      true,
     );
 
     const gltfSampler = this.textureManager.getSampler('linear');
@@ -335,16 +347,27 @@ export class MaterialBinder {
   }
 
   /**
-   * Helper method to get GLTF texture with fallback to default
+   * Helper method to get GLTF texture with fallback to default. `srgb` marks COLOR content:
+   * the texture is created as rgba8unorm-srgb so sampling decodes to linear light (alpha is
+   * never decoded — density/mask alphas keep their raw values). Data textures (normals,
+   * masks, ramps) stay raw. The GPU texture is cached by id and the first creation fixes the
+   * format, so one image must not be used in both roles.
    */
   private async getGLTFTexture(
     textureId: string | undefined,
     defaultTextureId: string,
+    srgb = false,
   ): Promise<GPUTexture> {
+    const format: GPUTextureFormat = srgb ? 'rgba8unorm-srgb' : 'rgba8unorm';
     if (textureId) {
       // First check if GPU texture already exists in TextureManager
       let texture = this.textureManager.getTexture(textureId);
       if (texture) {
+        if (texture.format !== format) {
+          console.warn(
+            `[MaterialBinder] Texture ${textureId} already created as ${texture.format}, requested ${format} — one image is used in both color and data roles`,
+          );
+        }
         return texture;
       }
 
@@ -359,7 +382,7 @@ export class MaterialBinder {
               id: textureId,
               width: textureData.width,
               height: textureData.height,
-              format: 'rgba8unorm',
+              format,
               usage:
                 GPUTextureUsage.TEXTURE_BINDING |
                 GPUTextureUsage.COPY_DST |

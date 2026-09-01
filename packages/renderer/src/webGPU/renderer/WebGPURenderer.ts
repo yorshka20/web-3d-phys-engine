@@ -254,9 +254,13 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
     this.tonemapPass = new TonemapPass({
       device: this.device,
-      outputFormat: this.context.getPreferredFormat(),
+      outputFormat: this.context.getSwapchainSrgbViewFormat(),
       getInputTexture: () => this.sceneColorTexture,
-      getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
+      getOutputView: () =>
+        this.context
+          .getContext()
+          .getCurrentTexture()
+          .createView({ format: this.context.getSwapchainSrgbViewFormat() }),
     });
 
     // Ensure essential resources are created for PipelineManager
@@ -859,6 +863,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.context.getContext().configure({
       device: this.device,
       format: navigator.gpu.getPreferredCanvasFormat(),
+      // Keep the sRGB view usable after reconfiguration (the tonemap pass targets it)
+      viewFormats: [this.context.getSwapchainSrgbViewFormat()],
       alphaMode: 'opaque',
     });
   }

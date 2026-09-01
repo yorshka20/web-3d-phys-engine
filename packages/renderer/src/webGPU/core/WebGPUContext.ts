@@ -143,6 +143,10 @@ export class WebGPUContext {
     this.context.configure({
       device: this.device,
       format: canvasFormat,
+      // The tonemap pass writes linear display-referred values through an sRGB view so the
+      // hardware performs the sRGB encode; a view format must be declared at configure time
+      // or createView({ format }) is a validation error.
+      viewFormats: [this.getSwapchainSrgbViewFormat()],
       alphaMode: 'premultiplied',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
@@ -216,6 +220,14 @@ export class WebGPUContext {
    */
   getPreferredFormat(): GPUTextureFormat {
     return navigator.gpu.getPreferredCanvasFormat();
+  }
+
+  /**
+   * sRGB view format of the swapchain, declared in configure() viewFormats. The tonemap
+   * pass targets this view: it outputs linear values and the hardware encodes to sRGB.
+   */
+  getSwapchainSrgbViewFormat(): GPUTextureFormat {
+    return `${navigator.gpu.getPreferredCanvasFormat()}-srgb` as GPUTextureFormat;
   }
 
   /**

@@ -9,6 +9,15 @@ export interface TonemapPassDeps {
   getOutputView(): GPUTextureView;
 }
 
+// Global tonemap controls, mutated by the calibration GUI (module-scoped like the pass
+// itself — TonemapPass is renderer-private and constructor-wired, not a DI service).
+export const tonemapSettings = {
+  // Linear-light multiplier applied before the ACES curve. The scene's static lights are
+  // normalized around 1.0, which may sit darker in linear space than the old
+  // display-referred calibration — this is the knob that re-anchors mid-grey.
+  exposure: 1.0,
+};
+
 /**
  * Tonemap Pass
  *
@@ -17,18 +26,26 @@ export interface TonemapPassDeps {
  * module and pipeline directly instead of going through the material-pipeline machinery
  * (ShaderManager registration and semantic pipeline keys exist for material shaders).
  * Renderer-private, constructor-wired — same rules as ForwardPass.
+ *
+ * Writes through the swapchain's sRGB view: the shader outputs linear display-referred
+ * values (exposure x ACES) and the hardware performs the sRGB encode.
  */
 export class TonemapPass {
   private pipeline?: GPURenderPipeline;
   private bindGroupLayout?: GPUBindGroupLayout;
   private bindGroup?: GPUBindGroup;
   private bindGroupInput?: GPUTexture;
+  private settingsBuffer?: GPUBuffer;
+  private readonly settingsData = new Float32Array(4);
 
   constructor(private readonly deps: TonemapPassDeps) {}
 
   execute(commandEncoder: GPUCommandEncoder): void {
     const pipeline = this.ensurePipeline();
     const bindGroup = this.ensureBindGroup();
+
+    this.settingsData[0] = tonemapSettings.exposure;
+    this.deps.device.queue.writeBuffer(this.settingsBuffer!, 0, this.settingsData);
 
     const renderPass = commandEncoder.beginRenderPass({
       label: 'tonemap_pass',
@@ -67,6 +84,11 @@ export class TonemapPass {
           // textureLoad only — no sampler, works regardless of float filterability
           texture: { sampleType: 'unfilterable-float' },
         },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
       ],
     });
 
@@ -94,10 +116,21 @@ export class TonemapPass {
       return this.bindGroup;
     }
 
+    if (!this.settingsBuffer) {
+      this.settingsBuffer = this.deps.device.createBuffer({
+        label: 'tonemap_settings',
+        size: this.settingsData.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+    }
+
     this.bindGroup = this.deps.device.createBindGroup({
       label: 'tonemap_bind_group',
       layout: this.bindGroupLayout!,
-      entries: [{ binding: 0, resource: input.createView() }],
+      entries: [
+        { binding: 0, resource: input.createView() },
+        { binding: 1, resource: { buffer: this.settingsBuffer } },
+      ],
     });
     this.bindGroupInput = input;
     return this.bindGroup;

@@ -14,8 +14,11 @@
 @group(2) @binding(5) var spec_ramp_map: texture_2d<f32>; // _SpecRampMap
 @group(2) @binding(9) var line_map: texture_2d<f32>; // _LineMap
 
-// Pre-tonemap clamp on _AnisotropyIntensity (3.0 in presets) until the calibration
-// session's proper filmic curve, same rule as rim.
+// Formula-unit normalization, same rationale as HGRP_RIM_FORMULA_SCALE: the official
+// _AnisotropyIntensity (3.0) belongs to the game's band formula (unknown); raw release
+// whitewashed the whole band area under ACES.
+const HGRP_ANISO_FORMULA_SCALE: f32 = 0.1;
+
 fn hgrp_hair_band(world_normal: vec3<f32>) -> vec3<f32> {
     let n_view = normalize((mvp.view_matrix * vec4<f32>(normalize(world_normal), 0.0)).xyz);
     // Folded coordinate: only the crisp left half + peak of the RS is sampled — the signed
@@ -24,7 +27,7 @@ fn hgrp_hair_band(world_normal: vec3<f32>) -> vec3<f32> {
     let x = hgrp_ramp_inset(hgrp_material.aniso_value - abs(n_view.y) * 0.5);
     let y = hgrp_ramp_inset(1.0 - hgrp_material.spec_smoothness);
     let band = textureSample(spec_ramp_map, ramp_sampler, vec2<f32>(x, y)).rgb;
-    return band * (min(hgrp_material.aniso_intensity, 1.0) * 0.6);
+    return band * (hgrp_material.aniso_intensity * HGRP_ANISO_FORMULA_SCALE);
 }
 
 // The LineMap is a 1D strand-intensity pattern (every row identical — thin bright lines on
