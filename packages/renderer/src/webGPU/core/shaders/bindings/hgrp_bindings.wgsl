@@ -13,8 +13,10 @@
 // Samplers are shared across textures (not one per texture): default WebGPU limits allow
 // 16 sampled textures AND 16 samplers per stage, and the skin variant alone carries
 // 9 textures.
+// Field order must match the Float32Array layout written by MaterialBinder (96 bytes).
 struct HGRPMaterialParams {
     base_color: vec4<f32>,
+    rim_color: vec4<f32>,
     use_diff_ramp: f32,
     alpha_cutoff: f32, // 0.0 = alpha clip disabled
     shadow_color_brightness: f32,
@@ -23,6 +25,14 @@ struct HGRPMaterialParams {
     use_bump_map: f32,
     bump_scale: f32,
     use_sdf_lightmap: f32,
+    rim_intensity: f32, // pre-scaled by _SkinRimOffScale on skin in the binder
+    rim_width: f32,
+    use_spec_ramp: f32,
+    spec_smoothness: f32,
+    spec_intensity: f32,
+    reserved0: f32,
+    reserved1: f32,
+    reserved2: f32,
 }
 
 @group(2) @binding(0) var<uniform> hgrp_material: HGRPMaterialParams;

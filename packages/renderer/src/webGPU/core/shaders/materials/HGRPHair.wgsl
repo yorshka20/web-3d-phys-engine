@@ -5,5 +5,5 @@
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
-    return hgrp_shade_standard(input.uv0, input.world_normal);
+    return hgrp_shade_standard(input.uv0, input.world_normal, input.world_position);
 }

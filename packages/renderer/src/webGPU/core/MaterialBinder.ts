@@ -84,7 +84,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 48, // HGRPMaterialParams: vec4 + 8 f32
+      size: 96, // HGRPMaterialParams: 2x vec4 + 16 f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -112,18 +112,28 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    const params = new Float32Array(12);
+    const params = new Float32Array(24);
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
     params.set(baseColor, 0);
-    params[4] = material.floats._UseDiffRampMap ?? 0;
+    params.set(material.colors._ColorAdjustmentRimColor ?? [1, 1, 1, 1], 4);
+    params[8] = material.floats._UseDiffRampMap ?? 0;
     // alpha_cutoff doubles as the clip switch: 0 disables the discard in the shader
-    params[5] = material.alphaMode === 'mask' ? material.alphaCutoff : 0;
-    params[6] = material.floats._ShadowColorBrightness ?? 1;
-    params[7] = material.floats._ShadowColorSaturation ?? 1;
-    params[8] = material.floats._UseShadowLutTex ?? 0;
-    params[9] = material.floats._UseBumpMap ?? 0;
-    params[10] = material.floats._BumpScale ?? 1;
-    params[11] = material.floats._UseSDFLightmap ?? 0;
+    params[9] = material.alphaMode === 'mask' ? material.alphaCutoff : 0;
+    params[10] = material.floats._ShadowColorBrightness ?? 1;
+    params[11] = material.floats._ShadowColorSaturation ?? 1;
+    params[12] = material.floats._UseShadowLutTex ?? 0;
+    params[13] = material.floats._UseBumpMap ?? 0;
+    params[14] = material.floats._BumpScale ?? 1;
+    params[15] = material.floats._UseSDFLightmap ?? 0;
+    // _SkinRimOff reduces the rim on skin by its scale factor; pre-composed here so the
+    // shader sees one effective intensity
+    const rimOffScale =
+      (material.floats._SkinRimOff ?? 0) > 0 ? (material.floats._SkinRimOffScale ?? 1) : 1;
+    params[16] = (material.floats._ColorAdjustmentRimIntensity ?? 0) * rimOffScale;
+    params[17] = material.floats._ColorAdjustmentRimWidth ?? 0.35;
+    params[18] = material.floats._UseSpecRampMap ?? 0;
+    params[19] = material.floats._Smoothness ?? 0.5;
+    params[20] = material.floats._Specular ?? 0.5;
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;

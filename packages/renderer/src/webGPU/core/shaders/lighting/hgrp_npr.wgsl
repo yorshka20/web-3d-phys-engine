@@ -67,8 +67,20 @@ fn hgrp_perturb_normal(
     return select(n, perturbed, use_bump > 0.5);
 }
 
-// Base + shadow-blend composition for a given (already normalized) shading normal.
-fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>) -> vec4<f32> {
+// View-dependent fresnel rim, masked toward the lit side.
+// Stage E dependency: HGRP rim intensities (up to 4.0 on skin) assume the game's HDR +
+// tonemap pipeline; without it the additive term blows out, so the intensity is clamped
+// and scaled down here — remove the clamp when Stage E lands.
+fn hgrp_rim(n: vec3<f32>, view_dir: vec3<f32>, ndotl: f32) -> vec3<f32> {
+    let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
+    let edge = smoothstep(1.0 - hgrp_material.rim_width, 1.0, 1.0 - ndotv);
+    let intensity = min(hgrp_material.rim_intensity, 1.0) * 0.35;
+    let light_side = clamp(ndotl * 0.5 + 0.5, 0.0, 1.0);
+    return hgrp_material.rim_color.rgb * (edge * intensity * light_side);
+}
+
+// Base + shadow-blend + rim composition for a given (already normalized) shading normal.
+fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>, world_position: vec3<f32>) -> vec4<f32> {
     let base = hgrp_base_color(uv0);
     let ndotl = dot(n, normalize(MAIN_LIGHT_DIRECTION));
 
@@ -79,10 +91,17 @@ fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>) -> vec4<f32> {
     );
     let w = hgrp_shadow_weight(ndotl * 0.5 + 0.5, hgrp_material.use_diff_ramp);
 
-    return vec4<f32>(mix(shadow_color, base.rgb, w), base.a);
+    let view_dir = normalize(mvp.camera_pos - world_position);
+    let rim = hgrp_rim(n, view_dir, ndotl);
+
+    return vec4<f32>(mix(shadow_color, base.rgb, w) + rim, base.a);
 }
 
 // Full standard shading for variants without a shadow LUT or bump map (hair for now).
-fn hgrp_shade_standard(uv0: vec2<f32>, world_normal: vec3<f32>) -> vec4<f32> {
-    return hgrp_shade_core(uv0, normalize(world_normal));
+fn hgrp_shade_standard(
+    uv0: vec2<f32>,
+    world_normal: vec3<f32>,
+    world_position: vec3<f32>,
+) -> vec4<f32> {
+    return hgrp_shade_core(uv0, normalize(world_normal), world_position);
 }

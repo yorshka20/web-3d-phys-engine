@@ -17,5 +17,5 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         hgrp_material.use_bump_map,
         hgrp_material.bump_scale,
     );
-    return hgrp_shade_core(input.uv0, n);
+    return hgrp_shade_core(input.uv0, n, input.world_position);
 }
