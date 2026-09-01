@@ -34,6 +34,12 @@ export class MVPUniformManager {
   private mvpBuffers = new Map<string, GPUBuffer>();
   private mvpBindGroups = new Map<string, GPUBindGroup>();
 
+  // Joint palettes, keyed by RenderData.skinKey (one skeleton, many draws) plus the frame in
+  // which each was last uploaded, so a character's primitives share a single writeBuffer.
+  private jointBuffers = new Map<string, GPUBuffer>();
+  private jointUploadFrames = new Map<string, number>();
+  private identityJointBuffer?: GPUBuffer;
+
   // Constants for uniform buffer layout
   private readonly MVP_BUFFER_SIZE = 384; // 96 floats × 4 bytes = 384 bytes
   private readonly FLOATS_PER_MATRIX = 16;
@@ -57,9 +63,51 @@ export class MVPUniformManager {
           visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' },
         },
+        // Skeletal joint palette. It shares group 1 with the model matrix because both are
+        // this draw's vertex transform, and because WebGPU caps maxBindGroups at 4 — the
+        // HGRP pipelines already use time/mvp/material/frame. Shaders that do no skinning
+        // simply do not declare it (a layout may carry more entries than a shader uses).
+        {
+          binding: 1,
+          visibility: GPUShaderStage.VERTEX,
+          buffer: { type: 'read-only-storage' },
+        },
       ],
       label: 'MVP Bind Group Layout',
     });
+  }
+
+  /**
+   * The palette bound by every draw that is not skinned: a single identity matrix, so the
+   * default vertex attributes (joint 0, weight 1) skin to a no-op.
+   */
+  private getIdentityJointBuffer(): GPUBuffer {
+    if (!this.identityJointBuffer) {
+      this.identityJointBuffer = this.bufferManager.createCustomBuffer('Joint_Palette_Identity', {
+        type: BufferType.STORAGE,
+        size: 64,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(this.identityJointBuffer, 0, new Float32Array(mat4.create()));
+    }
+    return this.identityJointBuffer;
+  }
+
+  /**
+   * Get or create the joint palette buffer for a skin instance. Sized from the first upload:
+   * a skeleton's joint count is fixed by its asset, so growth would mean a different skin.
+   */
+  private getOrCreateJointBuffer(skinKey: string, byteLength: number): GPUBuffer {
+    let buffer = this.jointBuffers.get(skinKey);
+    if (!buffer) {
+      buffer = this.bufferManager.createCustomBuffer(`Joint_Palette_${skinKey}`, {
+        type: BufferType.STORAGE,
+        size: byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      this.jointBuffers.set(skinKey, buffer);
+    }
+    return buffer;
   }
 
   /**
@@ -81,12 +129,14 @@ export class MVPUniformManager {
   }
 
   /**
-   * Get or create MVP bind group for a draw instance
+   * Get or create MVP bind group for a draw instance. The cache key pairs the draw instance
+   * with its skin: the same transform slot bound to a different palette is a different group.
    */
-  getOrCreateMVPBindGroup(uniformKey: string): GPUBindGroup {
-    if (!this.mvpBindGroups.has(uniformKey)) {
+  getOrCreateMVPBindGroup(uniformKey: string, jointBuffer: GPUBuffer, skinKey = ''): GPUBindGroup {
+    const cacheKey = `${uniformKey}|${skinKey}`;
+    if (!this.mvpBindGroups.has(cacheKey)) {
       const mvpBuffer = this.getOrCreateMVPBuffer(uniformKey);
-      const bindGroupLabel = `MVP_BindGroup_${uniformKey}`;
+      const bindGroupLabel = `MVP_BindGroup_${cacheKey}`;
 
       const mvpBindGroupLayout = this.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
       if (!mvpBindGroupLayout) {
@@ -100,14 +150,18 @@ export class MVPUniformManager {
             binding: 0,
             resource: { buffer: mvpBuffer },
           },
+          {
+            binding: 1,
+            resource: { buffer: jointBuffer },
+          },
         ],
         label: bindGroupLabel,
       });
 
-      this.mvpBindGroups.set(uniformKey, bindGroup);
+      this.mvpBindGroups.set(cacheKey, bindGroup);
     }
 
-    return this.mvpBindGroups.get(uniformKey)!;
+    return this.mvpBindGroups.get(cacheKey)!;
   }
 
   /**
@@ -115,7 +169,12 @@ export class MVPUniformManager {
    */
   updateMVPUniforms(renderable: RenderData, frameData: FrameData): GPUBindGroup {
     const mvpBuffer = this.getOrCreateMVPBuffer(renderable.uniformKey);
-    const mvpBindGroup = this.getOrCreateMVPBindGroup(renderable.uniformKey);
+    const jointBuffer = this.updateJointPalette(renderable, frameData);
+    const mvpBindGroup = this.getOrCreateMVPBindGroup(
+      renderable.uniformKey,
+      jointBuffer,
+      renderable.skinKey,
+    );
 
     // Calculate MVP matrix and camera data
     const uniformData = this.calculateMVPUniformData(renderable, frameData);
@@ -124,6 +183,25 @@ export class MVPUniformManager {
     this.device.queue.writeBuffer(mvpBuffer, 0, uniformData.buffer);
 
     return mvpBindGroup;
+  }
+
+  /**
+   * Upload a skinned renderable's joint palette at most once per frame — every primitive of
+   * a character carries the same skinKey and the same matrix array.
+   */
+  private updateJointPalette(renderable: RenderData, frameData: FrameData): GPUBuffer {
+    const { skinKey, boneMatrices } = renderable;
+    if (!skinKey || !boneMatrices) {
+      return this.getIdentityJointBuffer();
+    }
+
+    const buffer = this.getOrCreateJointBuffer(skinKey, boneMatrices.byteLength);
+    const frame = frameData.globalUniforms.frameCount;
+    if (this.jointUploadFrames.get(skinKey) !== frame) {
+      this.device.queue.writeBuffer(buffer, 0, boneMatrices);
+      this.jointUploadFrames.set(skinKey, frame);
+    }
+    return buffer;
   }
 
   /**
@@ -204,7 +282,13 @@ export class MVPUniformManager {
    */
   clearInstance(uniformKey: string): void {
     this.mvpBuffers.delete(uniformKey);
-    this.mvpBindGroups.delete(uniformKey);
+    // Bind groups are keyed by draw instance AND skin, so one instance may hold several
+    const prefix = `${uniformKey}|`;
+    for (const key of this.mvpBindGroups.keys()) {
+      if (key.startsWith(prefix)) {
+        this.mvpBindGroups.delete(key);
+      }
+    }
   }
 
   /**
@@ -213,6 +297,8 @@ export class MVPUniformManager {
   clearAll(): void {
     this.mvpBuffers.clear();
     this.mvpBindGroups.clear();
+    this.jointBuffers.clear();
+    this.jointUploadFrames.clear();
   }
 
   /**

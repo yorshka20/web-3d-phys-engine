@@ -124,6 +124,11 @@ export interface RenderData {
   pmxComponent?: PMXAssetSource;
   materialIndex?: number; // Material index for PMX models
 
+  // Identifies the SKIN INSTANCE: keys the joint-palette storage buffer, so every primitive
+  // posed by one skeleton (all 12 meshes of a character) shares a single per-frame upload.
+  // Set together with boneMatrices; absent renderables bind the shared identity palette.
+  skinKey?: string;
+
   // Animation data (optional)
   boneMatrices?: Float32Array; // Bone transformation matrices
   morphWeights?: Float32Array; // Morph weights

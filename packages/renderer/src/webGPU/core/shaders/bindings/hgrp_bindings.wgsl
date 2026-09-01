@@ -8,8 +8,10 @@
 // Group 0: Global uniforms (Time)
 @group(0) @binding(0) var<uniform> time_data: TimeUniforms;
 
-// Group 1: Transform uniforms (MVP)
+// Group 1: per-draw vertex transform — the MVP uniform plus the skeletal joint palette
+// (skinning math in core/gltf_skinning.wgsl; non-skinned draws bind a single identity).
 @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
+@group(1) @binding(1) var<storage, read> joint_matrices: array<mat4x4<f32>>;
 
 // Group 2: HGRP material params + textures.
 // Samplers are shared across textures (not one per texture): default WebGPU limits allow

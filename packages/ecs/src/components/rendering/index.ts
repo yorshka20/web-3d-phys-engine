@@ -6,3 +6,4 @@ export * from './PMXAnimationComponent';
 export * from './PMXBoneComponent';
 export * from './PMXMorphComponent';
 export * from './render';
+export * from './SkeletonComponent';

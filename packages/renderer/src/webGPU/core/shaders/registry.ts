@@ -22,6 +22,7 @@ import pmxMorphComputeShader from './compute/PMXMorphCompute.wgsl';
 
 // Core fragments
 import constantsFragment from './core/constants.wgsl';
+import gltfSkinningFragment from './core/gltf_skinning.wgsl';
 import gltfTypesFragment from './core/gltf_types.wgsl';
 import hgrpTypesFragment from './core/hgrp_types.wgsl';
 import hgrpVertexFragment from './core/hgrp_vertex.wgsl';
@@ -67,6 +68,7 @@ export const shaderFragmentRegistry = new Map([
   ['core/vertex_types.wgsl', vertexTypesFragment],
   ['core/constants.wgsl', constantsFragment],
   ['core/gltf_types.wgsl', gltfTypesFragment],
+  ['core/gltf_skinning.wgsl', gltfSkinningFragment],
   ['core/hgrp_types.wgsl', hgrpTypesFragment],
   ['core/hgrp_vertex.wgsl', hgrpVertexFragment],
 

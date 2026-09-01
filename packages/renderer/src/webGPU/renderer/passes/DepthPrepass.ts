@@ -1,5 +1,6 @@
 import { FrameData } from '@renderer/frame/types';
 import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
+import gltfSkinningShader from '../../core/shaders/core/gltf_skinning.wgsl';
 import depthPrepassShader from '../../core/shaders/passes/depth_prepass.wgsl';
 import { BindGroupManager } from '../../core/BindGroupManager';
 import { GeometryManager } from '../../core/GeometryManager';
@@ -95,7 +96,9 @@ export class DepthPrepass {
 
     const shaderModule = this.deps.device.createShaderModule({
       label: 'depth_prepass_shader',
-      code: depthPrepassShader,
+      // Standalone pass source, so the shared skinning fragment is spliced in here rather
+      // than through the material-shader include machinery
+      code: `${gltfSkinningShader}\n${depthPrepassShader}`,
     });
 
     this.pipeline = this.deps.device.createRenderPipeline({

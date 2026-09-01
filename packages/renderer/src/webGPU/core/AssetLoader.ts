@@ -1,11 +1,15 @@
 import { GeometryData, VertexFormat } from '@renderer/geometry/GeometryFactory';
 import {
+  GLTFAnimation,
+  GLTFAnimationSampler,
   GLTFMaterial,
   GLTFMesh,
   GLTFMeshInstance,
   GLTFModel,
+  GLTFNode,
   GLTFPrimitive,
   GLTFPrimitiveMaterial,
+  GLTFSkin,
 } from '@renderer/assets/GltfModel';
 import { PMXModel } from '@renderer/assets/PMXModel';
 import {
@@ -308,9 +312,13 @@ export class AssetLoader {
 
         // A skinned mesh is positioned by its joints alone — glTF 2.0 §3.7.3.2 requires
         // ignoring the transform of the node that references the skinned mesh.
-        const worldMatrix = node.getSkin() ? mat4.create() : mat4.clone(node.getWorldMatrix());
-        instances.push({ meshIndex, worldMatrix });
+        const skin = node.getSkin();
+        const worldMatrix = skin ? mat4.create() : mat4.clone(node.getWorldMatrix());
+        const skinIndex = skin ? root.listSkins().indexOf(skin) : undefined;
+        instances.push({ meshIndex, worldMatrix, skinIndex });
       }
+
+      const rig = this.extractGLTFRig(doc);
 
       if (instances.length === 0) {
         console.warn(`[AssetLoader] GLTF model has no renderable scene nodes: ${assetId}`);
@@ -322,7 +330,7 @@ export class AssetLoader {
         dependencies,
       };
 
-      const model: GLTFModel = { meshes, instances };
+      const model: GLTFModel = { meshes, instances, ...rig };
       assetRegistry.register(assetId, model, metadata);
 
       // Load textures referenced by the model (best-effort)
@@ -464,6 +472,83 @@ export class AssetLoader {
   }
 
   /**
+   * Extract the posing data a static load throws away: the node hierarchy (kept as local TRS
+   * so animation channels can drive t/r/s independently), the skins' joint lists and inverse
+   * bind matrices, and the animation clips. Returns nothing for a document with neither a
+   * skin nor an animation, so static models keep their flattened-instance representation.
+   */
+  private static extractGLTFRig(doc: Document): Partial<GLTFModel> {
+    const root = doc.getRoot();
+    const sourceSkins = root.listSkins();
+    const sourceAnimations = root.listAnimations();
+    if (sourceSkins.length === 0 && sourceAnimations.length === 0) {
+      return {};
+    }
+
+    const sourceNodes = root.listNodes();
+    const nodeIndices = new Map<Node, number>(sourceNodes.map((node, i) => [node, i]));
+
+    const nodes: GLTFNode[] = sourceNodes.map((node) => ({
+      name: node.getName(),
+      translation: [...node.getTranslation()] as [number, number, number],
+      rotation: [...node.getRotation()] as [number, number, number, number],
+      scale: [...node.getScale()] as [number, number, number],
+      children: node.listChildren().map((child) => nodeIndices.get(child)!),
+    }));
+
+    const scene = root.getDefaultScene() ?? root.listScenes()[0];
+    const roots = (scene?.listChildren() ?? []).map((node) => nodeIndices.get(node)!);
+
+    const skins: GLTFSkin[] = sourceSkins.map((skin) => ({
+      joints: skin.listJoints().map((joint) => nodeIndices.get(joint)!),
+      inverseBindMatrices: new Float32Array(
+        (skin.getInverseBindMatrices()?.getArray() as ArrayLike<number>) ?? [],
+      ),
+    }));
+
+    const animations: GLTFAnimation[] = sourceAnimations.map((animation) => {
+      const sourceSamplers = animation.listSamplers();
+      const samplerIndices = new Map(sourceSamplers.map((sampler, i) => [sampler, i]));
+      let duration = 0;
+
+      const samplers: GLTFAnimationSampler[] = sourceSamplers.map((sampler) => {
+        const input = new Float32Array((sampler.getInput()?.getArray() as ArrayLike<number>) ?? []);
+        duration = Math.max(duration, input[input.length - 1] ?? 0);
+        return {
+          input,
+          output: new Float32Array((sampler.getOutput()?.getArray() as ArrayLike<number>) ?? []),
+          interpolation: (sampler.getInterpolation() ??
+            'LINEAR') as GLTFAnimationSampler['interpolation'],
+        };
+      });
+
+      return {
+        name: animation.getName(),
+        // A channel with no target node or an unresolvable sampler is legal-but-inert glTF;
+        // dropping it here keeps the sampling loop free of null checks.
+        channels: animation
+          .listChannels()
+          .map((channel) => {
+            const node = channel.getTargetNode();
+            const sampler = channel.getSampler();
+            const path = channel.getTargetPath();
+            if (!node || !sampler || !path) return undefined;
+            return {
+              node: nodeIndices.get(node)!,
+              path: path as 'translation' | 'rotation' | 'scale' | 'weights',
+              sampler: samplerIndices.get(sampler)!,
+            };
+          })
+          .filter((channel) => channel !== undefined),
+        samplers,
+        duration,
+      };
+    });
+
+    return { nodes, roots, skins, animations };
+  }
+
+  /**
    * Convert a glTF primitive to our interleaved GeometryData (pos+normal+uv) format.
    */
   private static convertGLTFPrimitiveToGeometry(primitive: Primitive): GLTFPrimitive {
@@ -515,6 +600,10 @@ export class AssetLoader {
     const stride = 3 + 3 + 2 + 2 + 4 + 4 + 4 + 4; // Total: 26 floats per vertex
 
     const vertices = new Float32Array(vertexCount * stride);
+    // JOINTS_0 is declared uint32x4 in the vertex layout, so its four slots must carry the
+    // integer BIT PATTERN, not a float conversion — writing 5 through the Float32Array view
+    // stores 0x40A00000 and the shader reads joint 1084227584. Same buffer, integer view.
+    const verticesAsU32 = new Uint32Array(vertices.buffer);
 
     for (let i = 0; i < vertexCount; i++) {
       const pi = i * 3;
@@ -582,17 +671,17 @@ export class AssetLoader {
         vertices[vi++] = 1.0;
       }
 
-      // Joints (4 floats) - use actual data or default (0, 0, 0, 0)
+      // Joints (4 uints, written through the integer view - see verticesAsU32 above)
       if (jointsArr) {
-        vertices[vi++] = jointsArr[ci] || 0;
-        vertices[vi++] = jointsArr[ci + 1] || 0;
-        vertices[vi++] = jointsArr[ci + 2] || 0;
-        vertices[vi++] = jointsArr[ci + 3] || 0;
+        verticesAsU32[vi++] = jointsArr[ci];
+        verticesAsU32[vi++] = jointsArr[ci + 1];
+        verticesAsU32[vi++] = jointsArr[ci + 2];
+        verticesAsU32[vi++] = jointsArr[ci + 3];
       } else {
-        vertices[vi++] = 0.0;
-        vertices[vi++] = 0.0;
-        vertices[vi++] = 0.0;
-        vertices[vi++] = 0.0;
+        verticesAsU32[vi++] = 0;
+        verticesAsU32[vi++] = 0;
+        verticesAsU32[vi++] = 0;
+        verticesAsU32[vi++] = 0;
       }
 
       // Weights (4 floats) - use actual data or default (1, 0, 0, 0)

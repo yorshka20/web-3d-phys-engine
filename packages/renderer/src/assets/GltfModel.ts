@@ -23,6 +23,9 @@ export interface GLTFMesh {
 export interface GLTFMeshInstance {
   meshIndex: number;
   worldMatrix: mat4;
+  // Index into GLTFModel.skins. A skinned instance is posed entirely by its joint palette:
+  // worldMatrix is identity for it (glTF 2.0 §3.7.3.2 ignores the node transform).
+  skinIndex?: number;
 }
 
 export interface GLTFMaterial extends BaseMaterial {
@@ -57,29 +60,46 @@ export interface GLTFMaterial extends BaseMaterial {
 export interface GLTFModel {
   meshes: GLTFMesh[];
   instances: GLTFMeshInstance[]; // flattened default-scene nodes that carry a mesh
-  nodes?: GLTFNode[]; // scene graph
-  animations?: GLTFAnimation[]; // animations
-  skins?: GLTFSkin[]; // skinning data
+  // The scene graph, present only when the document is skinned or animated: posing needs the
+  // node hierarchy alive, whereas a static model has its transforms flattened into instances.
+  nodes?: GLTFNode[];
+  roots?: number[]; // default-scene root node indices
+  animations?: GLTFAnimation[];
+  skins?: GLTFSkin[];
 }
 
+// A node keeps its local transform as TRS rather than a matrix: animation channels drive
+// translation/rotation/scale independently, and a matrix would have to be decomposed back.
 export interface GLTFNode {
-  name?: string;
-  transform: mat4; // local transform
+  name: string;
+  translation: [number, number, number];
+  rotation: [number, number, number, number]; // quaternion xyzw
+  scale: [number, number, number];
   children: number[]; // child node indices
-  mesh?: number; // mesh index if this node has geometry
 }
 
 export interface GLTFSkin {
-  joints: number[]; // joint node indices
-  inverseBindMatrices: mat4[]; // inverse bind matrices
+  joints: number[]; // joint node indices, in palette order
+  inverseBindMatrices: Float32Array; // 16 floats per joint, palette order
 }
 
-export interface GLTFAnimation {
-  name?: string;
-  channels: GLTFAnimationChannel[];
+export interface GLTFAnimationSampler {
+  input: Float32Array; // keyframe times, seconds
+  output: Float32Array; // keyframe values (3/4 floats per key, ×3 for CUBICSPLINE)
+  interpolation: 'STEP' | 'LINEAR' | 'CUBICSPLINE';
 }
 
 export interface GLTFAnimationChannel {
-  target: { node: number; path: 'translation' | 'rotation' | 'scale' };
-  sampler: { input: Float32Array; output: Float32Array; interpolation: string };
+  node: number;
+  path: 'translation' | 'rotation' | 'scale' | 'weights';
+  sampler: number; // index into GLTFAnimation.samplers
+}
+
+export interface GLTFAnimation {
+  name: string;
+  channels: GLTFAnimationChannel[];
+  // Samplers are shared between channels in real documents, so they stay a separate list
+  // instead of being inlined per channel.
+  samplers: GLTFAnimationSampler[];
+  duration: number; // seconds, max sampler input
 }

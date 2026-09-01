@@ -11,6 +11,7 @@
 // group 0 (time) exists in the pipeline layout but is not used here.
 
 @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
+@group(1) @binding(1) var<storage, read> joint_matrices: array<mat4x4<f32>>;
 
 @group(2) @binding(0) var<uniform> hgrp_material: HGRPMaterialParams;
 @group(2) @binding(1) var base_map: texture_2d<f32>;
@@ -32,9 +33,11 @@ const OUTLINE_OFFSET_Z_SCALE: f32 = 0.1;
 fn vs_main(input: GLTFVertexInput) -> OutlineVertexOutput {
     var output: OutlineVertexOutput;
 
-    let world_position = mvp.model_matrix * vec4<f32>(input.position, 1.0);
+    let skin = gltf_skin_matrix(input.joints_0, input.weights_0);
+    let world_position = mvp.model_matrix * skin * vec4<f32>(input.position, 1.0);
     let view_pos = mvp.view_matrix * world_position;
-    let world_normal = normalize((mvp.normal_matrix * vec4<f32>(input.normal, 0.0)).xyz);
+    let skinned_normal = (skin * vec4<f32>(input.normal, 0.0)).xyz;
+    let world_normal = normalize((mvp.normal_matrix * vec4<f32>(skinned_normal, 0.0)).xyz);
     let view_normal = (mvp.view_matrix * vec4<f32>(world_normal, 0.0)).xyz;
 
     let mask = textureSampleLevel(outline_mask, base_sampler, input.texcoord_0, 0.0).r;

@@ -18,6 +18,14 @@ corrupted multi-mesh models (shared geometry cache entries) and blocked per-node
 | `uniformKey` | **Draw instance** (transform slot) | Unique per world matrix per frame; renderables with *identical* matrices may share it | `MVPUniformManager` MVP uniform buffer + bind group |
 | `materialKey` | **Material** | Same source material ⇒ same key (glTF materials are document-level, shared across primitives) | Material uniform buffers, texture/material bind groups |
 
+A fourth key, `skinKey`, is **optional** and follows the same rule: it identifies the *skin
+instance* (one posed skeleton) and keys the joint-palette storage buffer in
+`MVPUniformManager`, so every primitive of a skinned character shares one upload per frame.
+It is set together with `boneMatrices`; a renderable without it binds the shared
+single-identity palette, which makes the default vertex attributes (joint 0, weight 1) skin to
+a no-op. Because the palette lives in the MVP bind group, that group's cache key is
+`uniformKey|skinKey`, not `uniformKey` alone.
+
 Key formats by extract path (`WebGPURenderSystem`):
 
 - glTF: `geometryId = gltf_{assetId}_m{mesh}_p{prim}`, `uniformKey = gltf_{entityId}_i{instance}`,
@@ -31,6 +39,8 @@ Key formats by extract path (`WebGPURenderSystem`):
   `uniformKey = mesh_{entityId}`, `materialKey = bindGroupId || uniformBufferId || mesh_mat_{entityId}`.
 - PMX: `geometryId` per entity+material, `uniformKey = pmx_{entityId}` (all material draws of an
   entity share one matrix), `materialKey = pmx_{assetId}_mat_{index}`.
+- Skinned glTF/HGRP: `skinKey = gltf_{entityId}_s{skinIndex}` (PMX drives its bones through its
+  own group-3 animation bind group and sets no `skinKey`).
 
 ## The two invariants that force this design
 

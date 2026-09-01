@@ -1,6 +1,12 @@
-import { Mesh3DComponent, Transform3DComponent, WebGPU3DRenderComponent } from '@ecs';
+import {
+  Mesh3DComponent,
+  SkeletonComponent,
+  Transform3DComponent,
+  WebGPU3DRenderComponent,
+} from '@ecs';
 import { World } from '@ecs/core/ecs/World';
-import { AssetLoader } from '@renderer';
+import { AssetLoader, assetRegistry } from '@renderer';
+import { GLTFModel } from '@renderer/assets/GltfModel';
 import { HGRPPreset } from '@renderer/material/hgrp';
 import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 import { rgba } from '@ecs/utils/color';
@@ -57,6 +63,28 @@ export async function createHGRPStage(world: World) {
       position: [2.07 * scale, -1 - 0.69 * scale, -4.96 * scale],
       rotation: [0, 0, 0],
       scale: [scale, scale, scale],
+    }),
+  );
+
+  // The rig is posed every render tick by SkeletalAnimationSystem. Clip 0 is the summon
+  // entrance and clip 1 its standing idle loop (scripts/hgrp/anim-convert.mjs); `?clip=`
+  // picks between them for look comparison against in-game footage of the same animation.
+  const model = assetRegistry.getAssetDescriptor<'gltf'>(HGRP_PELICA_ASSET_ID)?.rawData as
+    | GLTFModel
+    | undefined;
+  const clips = model?.animations ?? [];
+  if (clips.length > 0) {
+    console.log(
+      `[hgrp] clips: ${clips.map((clip, i) => `${i}:${clip.name} (${clip.duration.toFixed(2)}s)`).join(', ')}`,
+    );
+  }
+  const requestedClip = Number.parseInt(
+    new URLSearchParams(window.location.search).get('clip') ?? '0',
+    10,
+  );
+  entity.addComponent(
+    world.createComponent(SkeletonComponent, {
+      clipIndex: Number.isNaN(requestedClip) ? 0 : requestedClip,
     }),
   );
 

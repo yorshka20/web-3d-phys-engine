@@ -21,16 +21,20 @@ const HGRP_EYE_DEPTH_OFFSET: f32 = 0.03;
 fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {
     var output: GLTFVertexOutput;
 
-    let world_position = mvp.model_matrix * vec4<f32>(input.position, 1.0);
+    let skin = gltf_skin_matrix(input.joints_0, input.weights_0);
+    let world_position = mvp.model_matrix * skin * vec4<f32>(input.position, 1.0);
     output.world_position = world_position.xyz;
 
     let to_camera = normalize(mvp.camera_pos - world_position.xyz);
     let biased = world_position.xyz + to_camera * HGRP_EYE_DEPTH_OFFSET;
     output.position = mvp.projection_matrix * mvp.view_matrix * vec4<f32>(biased, 1.0);
 
-    output.world_normal = normalize((mvp.normal_matrix * vec4<f32>(input.normal, 0.0)).xyz);
+    let skinned_normal = (skin * vec4<f32>(input.normal, 0.0)).xyz;
+    output.world_normal = normalize((mvp.normal_matrix * vec4<f32>(skinned_normal, 0.0)).xyz);
     if length(input.tangent.xyz) > 0.0 {
-        output.world_tangent = normalize((mvp.model_matrix * vec4<f32>(input.tangent.xyz, 0.0)).xyz);
+        let skinned_tangent = (skin * vec4<f32>(input.tangent.xyz, 0.0)).xyz;
+        output.world_tangent =
+            normalize((mvp.model_matrix * vec4<f32>(skinned_tangent, 0.0)).xyz);
         output.world_bitangent = cross(output.world_normal, output.world_tangent) * input.tangent.w;
     } else {
         output.world_tangent = vec3<f32>(1.0, 0.0, 0.0);

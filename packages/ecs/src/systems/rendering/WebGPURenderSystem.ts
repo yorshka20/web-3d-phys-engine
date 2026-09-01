@@ -5,6 +5,7 @@ import {
   PMXBoneComponent,
   PMXMeshComponent,
   PMXMorphComponent,
+  SkeletonComponent,
   Transform3DComponent,
   WebGPU3DRenderComponent,
 } from '@ecs/components';
@@ -326,6 +327,8 @@ export class WebGPURenderSystem extends System {
     const gltfModel = assetResolver.rawData as GLTFModel;
     const entityWorldMatrix = transformComponent.getWorldMatrix();
     const assetId = meshComponent.descriptor.assetId;
+    // Palettes are posed by SkeletalAnimationSystem earlier in this same render tick
+    const skeleton = entity.getComponent<SkeletonComponent>(SkeletonComponent.componentName);
 
     // One renderable per (mesh instance × primitive): each glTF scene node carries its own
     // baked world matrix, composed here with the entity transform. geometryId identifies the
@@ -337,6 +340,10 @@ export class WebGPURenderSystem extends System {
       mat4.multiply(worldMatrix, entityWorldMatrix, instance.worldMatrix);
       const normalMatrix = this.calculateNormalMatrix(worldMatrix as Float32Array);
       const uniformKey = `gltf_${entity.id}_i${instanceIndex}`;
+      // One palette per (entity, skin): every primitive of a character shares the upload
+      const boneMatrices =
+        instance.skinIndex !== undefined ? skeleton?.palettes[instance.skinIndex] : undefined;
+      const skinKey = boneMatrices ? `gltf_${entity.id}_s${instance.skinIndex}` : undefined;
 
       const mesh = gltfModel.meshes[instance.meshIndex];
       mesh.primitives.forEach((primitive, primitiveIndex) => {
@@ -356,6 +363,8 @@ export class WebGPURenderSystem extends System {
           renderOrder: renderComponent.getLayer() || 0,
           castShadow: renderComponent.getCastShadow() ?? true,
           receiveShadow: renderComponent.getReceiveShadow() ?? true,
+          skinKey,
+          boneMatrices,
         });
       });
     });

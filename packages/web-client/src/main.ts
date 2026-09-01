@@ -9,6 +9,7 @@ import {
   OrbitCameraControlSystem,
   PhysicsComponent,
   PhysicsSystem,
+  SkeletalAnimationSystem,
   StatsComponent,
   Transform3DComponent,
   Transform3DSystem,
@@ -86,6 +87,7 @@ async function main() {
   world.addSystem(new Transform3DSystem());
   world.addSystem(new PhysicsSystem());
   world.addSystem(new OrbitCameraControlSystem());
+  world.addSystem(new SkeletalAnimationSystem());
   world.addSystem(new WebGPURenderSystem(rootElement));
 
   const camera = create3DCamera(world, stageCameraConfig[stage]);
