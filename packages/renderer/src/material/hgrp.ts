@@ -106,6 +106,8 @@ export const HGRP_TUNABLE_FLOATS: readonly HGRPTunableFloatDef[] = [
   { key: '_OutlineColorSaturation', default: 1, min: 0, max: 3, step: 0.01 },
   { key: '_OutlineOffsetZ', default: 0, min: 0, max: 1, step: 0.01 },
   { key: '_UseLineMap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_DrawUnderBrow', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_HairBrowMaskThreshold', default: 0.5, min: 0, max: 1, step: 0.01 },
   { key: '_LineAmount', default: 300, min: 0, max: 600, step: 1 },
   { key: '_LineIntensity', default: 0, min: 0, max: 1, step: 0.01 },
   { key: '_LineRange', default: 1, min: 0, max: 1, step: 0.01 },

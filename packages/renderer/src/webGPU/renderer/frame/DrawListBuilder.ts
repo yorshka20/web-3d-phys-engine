@@ -28,6 +28,11 @@ export interface DrawLists {
   // brow (same group, no matcap) stays a regular opaque draw. The 36 group (cloth/hair) is
   // a different system.
   eyeOverlay: DrawItem[];
+  // Brow-through compositing (see HGRPBrowCompositeStage): hair with _DrawUnderBrow stamps
+  // a sw_M-masked stencil mark, then the brow (also kept in opaque for its normal draw)
+  // re-draws where occluded through that mark.
+  hairStencil: DrawItem[];
+  browThrough: DrawItem[];
 }
 
 // Plain code-unit comparison: sort keys are opaque cache ids, locale rules must not apply.
@@ -65,6 +70,8 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
   const transparent: DrawItem[] = [];
   const outline: DrawItem[] = [];
   const eyeOverlay: DrawItem[] = [];
+  const hairStencil: DrawItem[] = [];
+  const browThrough: DrawItem[] = [];
   const viewMatrix = frameData.scene.camera.viewMatrix;
 
   for (const renderable of frameData.renderables) {
@@ -101,6 +108,15 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
       if (hgrpMaterial && hgrpMaterial.floats._EnableOutline === 1) {
         outline.push({ renderable, pipelineKey: 'hgrp_outline', viewDepth: 0 });
       }
+      if (
+        hgrpMaterial?.variant === 'CharacterNPR_Hair' &&
+        hgrpMaterial.floats._DrawUnderBrow === 1
+      ) {
+        hairStencil.push({ renderable, pipelineKey: 'hgrp_hair_stencil', viewDepth: 0 });
+      }
+      if (hgrpMaterial?.variant === 'CharacterNPR_Eye') {
+        browThrough.push({ renderable, pipelineKey: 'hgrp_brow_through', viewDepth: 0 });
+      }
     }
   }
 
@@ -124,6 +140,11 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
       compareKeys(a.renderable.materialKey, b.renderable.materialKey) ||
       compareKeys(a.renderable.geometryId, b.renderable.geometryId),
   );
+  const byMaterialThenGeometry = (a: DrawItem, b: DrawItem) =>
+    compareKeys(a.renderable.materialKey, b.renderable.materialKey) ||
+    compareKeys(a.renderable.geometryId, b.renderable.geometryId);
+  hairStencil.sort(byMaterialThenGeometry);
+  browThrough.sort(byMaterialThenGeometry);
 
-  return { opaque, transparent, outline, eyeOverlay };
+  return { opaque, transparent, outline, eyeOverlay, hairStencil, browThrough };
 }

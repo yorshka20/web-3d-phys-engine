@@ -45,7 +45,9 @@ import toonFragment from './lighting/toon.wgsl';
 // Pass fragments
 import deferredFragment from './passes/deferred.wgsl';
 import forwardFragment from './passes/forward.wgsl';
+import hgrpBrowThroughShader from './passes/hgrp_brow_through.wgsl';
 import hgrpEyeOverlayShader from './passes/hgrp_eye_overlay.wgsl';
+import hgrpHairStencilShader from './passes/hgrp_hair_stencil.wgsl';
 import hgrpOutlineShader from './passes/hgrp_outline.wgsl';
 import shadowFragment from './passes/shadow.wgsl';
 
@@ -88,6 +90,8 @@ export const shaderFragmentRegistry = new Map([
   ['passes/shadow.wgsl', shadowFragment],
   ['passes/hgrp_outline.wgsl', hgrpOutlineShader],
   ['passes/hgrp_eye_overlay.wgsl', hgrpEyeOverlayShader],
+  ['passes/hgrp_hair_stencil.wgsl', hgrpHairStencilShader],
+  ['passes/hgrp_brow_through.wgsl', hgrpBrowThroughShader],
 
   // Binding fragments
   ['bindings/pmx_bindings.wgsl', pmxBindingsFragment],

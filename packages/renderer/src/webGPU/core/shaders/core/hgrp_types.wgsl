@@ -48,7 +48,7 @@ struct HGRPMaterialParams {
     highlight_vector: vec4<f32>, // _HighlightMapVector — hl_M UV offset (xy)
     eye_tint_color: vec4<f32>, // _EyeTintColor (identity in Pelica's preset)
     use_metallic_gloss_map: f32, // _UseMetallicGlossMap (cloth spec v3 gate)
-    reserved2: f32,
+    hair_brow_mask_threshold: f32, // _HairBrowMaskThreshold (sw_M cutoff, brow-through mark)
     reserved3: f32,
     reserved4: f32,
 }

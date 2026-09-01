@@ -501,6 +501,80 @@ export function createHGRPOutlineShaderModule(): ShaderModule {
   };
 }
 
+// Brow-through compositing pair: the hair stencil mark and the occluded-brow overlay
+// (pipelines are pass-private — stencil states are not expressible in the semantic key).
+export function createHGRPHairStencilShaderModule(): ShaderModule {
+  return {
+    id: 'hgrp_hair_stencil_shader',
+    name: 'HGRP Hair Stencil Shader',
+    description: 'HGRP hair stencil mark (sw_M-masked, brow-through compositing)',
+    type: 'render',
+    fileName: 'passes/hgrp_hair_stencil.wgsl',
+    sourceCode: shaderFragmentRegistry.get('passes/hgrp_hair_stencil.wgsl') || '',
+    includes: [
+      'core/constants.wgsl',
+      'core/uniforms.wgsl',
+      'core/gltf_types.wgsl',
+      'core/hgrp_types.wgsl',
+      'bindings/hgrp_bindings.wgsl',
+      'core/hgrp_vertex.wgsl',
+    ],
+    compilationOptions: {
+      vertexFormat: ['full'],
+    },
+    runtimeParams: {},
+    renderState: {
+      blendMode: 'replace',
+      depthTest: true,
+      depthWrite: false,
+      cullMode: 'back',
+      frontFace: 'ccw',
+      sampleCount: 1,
+    },
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: ['hgrp', 'hair', 'stencil', 'npr'],
+  };
+}
+
+export function createHGRPBrowThroughShaderModule(): ShaderModule {
+  return {
+    id: 'hgrp_brow_through_shader',
+    name: 'HGRP Brow Through Shader',
+    description: 'HGRP occluded-brow overlay (stencil-gated through the hair mark)',
+    type: 'render',
+    fileName: 'passes/hgrp_brow_through.wgsl',
+    sourceCode: shaderFragmentRegistry.get('passes/hgrp_brow_through.wgsl') || '',
+    includes: [
+      'core/constants.wgsl',
+      'core/uniforms.wgsl',
+      'core/gltf_types.wgsl',
+      'core/hgrp_types.wgsl',
+      'math/color.wgsl',
+      'bindings/hgrp_bindings.wgsl',
+      'core/hgrp_vertex.wgsl',
+      'lighting/hgrp_shadow_lut.wgsl',
+      'lighting/hgrp_npr.wgsl',
+      'lighting/hgrp_eye_shading.wgsl',
+    ],
+    compilationOptions: {
+      vertexFormat: ['full'],
+    },
+    runtimeParams: {},
+    renderState: {
+      blendMode: 'alpha-blend',
+      depthTest: true,
+      depthWrite: false,
+      cullMode: 'back',
+      frontFace: 'ccw',
+      sampleCount: 1,
+    },
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: ['hgrp', 'brow', 'stencil', 'npr'],
+  };
+}
+
 export function createGLTFMaterialShaderModule(): GLTFMaterialShaderModule {
   return {
     id: 'gltf_material_shader',

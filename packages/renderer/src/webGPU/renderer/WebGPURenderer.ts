@@ -22,6 +22,7 @@ import { BloomPass } from './passes/BloomPass';
 import { DepthPrepass } from './passes/DepthPrepass';
 import { ForwardPass } from './passes/ForwardPass';
 import { FXAAPass } from './passes/FXAAPass';
+import { HGRPBrowCompositeStage } from './passes/HGRPBrowCompositeStage';
 import { HGRPEyeOverlayStage } from './passes/HGRPEyeOverlayStage';
 import { HGRPOutlineStage } from './passes/HGRPOutlineStage';
 import { TonemapPass } from './passes/TonemapPass';
@@ -256,6 +257,17 @@ export class WebGPURenderer implements IWebGPURenderer {
       depthStencilFormat: this.context.getDepthStencilFormat(),
       getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });
+    const browCompositeStage = new HGRPBrowCompositeStage({
+      device: this.device,
+      shaderManager: this.shaderManager,
+      bindGroupManager: this.bindGroupManager,
+      materialBinder: this.materialBinder,
+      mvpUniformManager: this.mvpUniformManager,
+      geometryManager: this.geometryManager,
+      sceneColorFormat: this.context.getSceneColorFormat(),
+      depthStencilFormat: this.context.getDepthStencilFormat(),
+      getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
+    });
     this.forwardPass = new ForwardPass({
       pipelineFactory: this.pipelineFactory,
       geometryManager: this.geometryManager,
@@ -266,6 +278,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       resourceManager: this.resourceManager,
       outlineStage,
       eyeOverlayStage,
+      browCompositeStage,
       getColorView: () => this.sceneColorTexture.createView(),
       getDepthView: () => this.depthTexture.createView(),
       getHGRPFrameBindGroup: () => this.getHGRPFrameBindGroup(),

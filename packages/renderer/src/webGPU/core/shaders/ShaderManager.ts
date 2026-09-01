@@ -9,7 +9,9 @@ import {
   createEmissiveShaderModule,
   createFireMaterialShaderModule,
   createGLTFMaterialShaderModule,
+  createHGRPBrowThroughShaderModule,
   createHGRPEyeOverlayShaderModule,
+  createHGRPHairStencilShaderModule,
   createHGRPMaterialShaderModules,
   createHGRPOutlineShaderModule,
   createPMXMaterialShaderModule,
@@ -124,6 +126,11 @@ export class ShaderManager {
     // Register HGRP Eye Overlay Shader
     this.registerShaderModule(createHGRPEyeOverlayShaderModule());
     console.log('✓ Registered HGRP Eye Overlay Shader');
+
+    // Register HGRP brow-through compositing pair
+    this.registerShaderModule(createHGRPHairStencilShaderModule());
+    this.registerShaderModule(createHGRPBrowThroughShaderModule());
+    console.log('✓ Registered HGRP Brow Compositing Shaders');
   }
 
   private compileShaderModules(): void {
@@ -218,6 +225,20 @@ export class ShaderManager {
     });
 
     this.compileShaderModule('hgrp_eye_overlay_shader', {
+      vertexFormat: 'full',
+      defines: {
+        ENABLE_HGRP_MATERIAL: true,
+      },
+    });
+
+    this.compileShaderModule('hgrp_hair_stencil_shader', {
+      vertexFormat: 'full',
+      defines: {
+        ENABLE_HGRP_MATERIAL: true,
+      },
+    });
+
+    this.compileShaderModule('hgrp_brow_through_shader', {
       vertexFormat: 'full',
       defines: {
         ENABLE_HGRP_MATERIAL: true,

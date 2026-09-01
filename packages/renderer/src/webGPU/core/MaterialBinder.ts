@@ -179,6 +179,7 @@ export class MaterialBinder {
     params.set(material.colors._HighlightMapVector ?? [0, 0, 0, 0], 64);
     params.set(material.colors._EyeTintColor ?? [1, 1, 1, 1], 68);
     params[72] = material.floats._UseMetallicGlossMap ?? 0;
+    params[73] = material.floats._HairBrowMaskThreshold ?? 0.5;
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;

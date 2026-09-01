@@ -10,6 +10,7 @@ import { WebGPUResourceManager } from '../../core/ResourceManager';
 import { GeometryCacheItem } from '../../core/types';
 import { buildDrawLists, DrawItem } from '../frame/DrawListBuilder';
 import { sceneSettings } from '../sceneSettings';
+import { HGRPBrowCompositeStage } from './HGRPBrowCompositeStage';
 import { HGRPEyeOverlayStage } from './HGRPEyeOverlayStage';
 import { HGRPOutlineStage } from './HGRPOutlineStage';
 
@@ -38,6 +39,7 @@ export interface ForwardPassDeps {
   resourceManager: WebGPUResourceManager;
   outlineStage: HGRPOutlineStage;
   eyeOverlayStage: HGRPEyeOverlayStage;
+  browCompositeStage: HGRPBrowCompositeStage;
   // Attachment views are provided as closures because the swapchain texture changes every
   // frame and the depth texture is recreated on resize.
   getColorView(): GPUTextureView;
@@ -65,7 +67,8 @@ export class ForwardPass {
     // Prepare phase (async): build the ordered draw lists and resolve every GPU resource up
     // front, so the encode phase below is fully synchronous — no await between beginRenderPass
     // and end.
-    const { opaque, transparent, outline, eyeOverlay } = buildDrawLists(frameData);
+    const { opaque, transparent, outline, eyeOverlay, hairStencil, browThrough } =
+      buildDrawLists(frameData);
     const frame: FrameResources = {
       pipelines: new Map(),
       materials: new Map(),
@@ -75,6 +78,7 @@ export class ForwardPass {
     await this.prepare(transparent, frame);
     await this.deps.outlineStage.prepare(outline);
     await this.deps.eyeOverlayStage.prepare(eyeOverlay);
+    await this.deps.browCompositeStage.prepare(hairStencil, browThrough);
 
     const renderPass = commandEncoder.beginRenderPass({
       label: 'main_render_pass',
@@ -107,6 +111,7 @@ export class ForwardPass {
     this.encode(renderPass, opaque, frameData, frame, {});
     this.deps.outlineStage.encode(renderPass, outline, frameData);
     this.deps.eyeOverlayStage.encode(renderPass, eyeOverlay, frameData);
+    this.deps.browCompositeStage.encode(renderPass, hairStencil, browThrough, frameData);
     this.encode(renderPass, transparent, frameData, frame, {});
 
     renderPass.end();
