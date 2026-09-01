@@ -18,7 +18,7 @@ fn hgrp_eye_matcap(n: vec3<f32>) -> vec3<f32> {
 fn hgrp_shade_eye(
     uv0: vec2<f32>,
     world_normal: vec3<f32>,
-    world_position: vec3<f32>,
+    frag_coord: vec4<f32>,
 ) -> vec4<f32> {
     let base = hgrp_base_color(uv0);
     let n = normalize(world_normal);
@@ -34,8 +34,7 @@ fn hgrp_shade_eye(
 
     let w = hgrp_shadow_weight(ndotl * 0.5 + 0.5, hgrp_material.use_diff_ramp);
 
-    let view_dir = normalize(mvp.camera_pos - world_position);
-    let rim = hgrp_rim(n, view_dir, ndotl);
+    let rim = hgrp_rim(n, frag_coord, ndotl);
 
     // _EyeScatteringColor lifts the shaded iris into HDR (identity on the brow); the base
     // alpha is the catchlight mask (bright only at the highlight patch, NOT opacity — the

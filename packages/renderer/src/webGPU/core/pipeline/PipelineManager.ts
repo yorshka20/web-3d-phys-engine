@@ -1,7 +1,10 @@
 import { hgrpVariantForShaderId, isHGRPShaderId } from '@renderer/material/hgrp';
 import { BindGroupManager } from '../BindGroupManager';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
-import { getOrCreateHGRPMaterialBindGroupLayout } from '../HGRPMaterialResources';
+import {
+  getOrCreateHGRPFrameBindGroupLayout,
+  getOrCreateHGRPMaterialBindGroupLayout,
+} from '../HGRPMaterialResources';
 import { PMXMaterialProcessor } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../shaders/ShaderManager';
@@ -492,6 +495,9 @@ export class PipelineManager {
       throw new Error(`Unknown HGRP shader id: ${gpuKey.customShaderId}`);
     }
     bindGroupLayouts.push(getOrCreateHGRPMaterialBindGroupLayout(this.bindGroupManager, variant));
+
+    // Group 3: per-frame globals (prepass depth for the screen-space rim)
+    bindGroupLayouts.push(getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager));
   }
 
   /**

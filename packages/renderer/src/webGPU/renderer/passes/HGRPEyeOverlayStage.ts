@@ -1,7 +1,10 @@
 import { FrameData } from '@renderer/frame/types';
 import { BindGroupManager } from '../../core/BindGroupManager';
 import { GeometryManager } from '../../core/GeometryManager';
-import { getOrCreateHGRPMaterialBindGroupLayout } from '../../core/HGRPMaterialResources';
+import {
+  getOrCreateHGRPFrameBindGroupLayout,
+  getOrCreateHGRPMaterialBindGroupLayout,
+} from '../../core/HGRPMaterialResources';
 import { MaterialBinder } from '../../core/MaterialBinder';
 import { MVPUniformManager } from '../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../core/pipeline/vertexLayouts';
@@ -17,6 +20,8 @@ export interface HGRPEyeOverlayStageDeps {
   geometryManager: GeometryManager;
   sceneColorFormat: GPUTextureFormat;
   depthStencilFormat: GPUTextureFormat;
+  // HGRP group 3 (per-frame globals: prepass depth for the screen-space rim)
+  getFrameBindGroup(): GPUBindGroup;
 }
 
 /**
@@ -70,6 +75,7 @@ export class HGRPEyeOverlayStage {
     }
 
     renderPass.setPipeline(this.pipeline);
+    renderPass.setBindGroup(3, this.deps.getFrameBindGroup());
 
     let boundMaterialKey: string | undefined;
     let boundGeometryId: string | undefined;
@@ -120,12 +126,13 @@ export class HGRPEyeOverlayStage {
       this.deps.bindGroupManager,
       'CharacterNPR_Eye',
     );
+    const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.deps.bindGroupManager);
 
     this.pipeline = this.deps.device.createRenderPipeline({
       label: 'hgrp_eye_overlay_pipeline',
       layout: this.deps.device.createPipelineLayout({
         label: 'hgrp_eye_overlay_pipeline_layout',
-        bindGroupLayouts: [timeLayout, mvpLayout, eyeLayout],
+        bindGroupLayouts: [timeLayout, mvpLayout, eyeLayout, frameLayout],
       }),
       vertex: {
         module: shaderModule,

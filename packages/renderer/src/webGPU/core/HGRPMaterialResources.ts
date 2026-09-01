@@ -72,6 +72,31 @@ export function hgrpTextureBindings(
   return bindings;
 }
 
+// Group 3 for every HGRP variant pipeline: per-frame global resources — the prepass depth
+// texture read by the screen-space rim. One bind group per frame (owned by WebGPURenderer),
+// shared across all HGRP draws.
+export const HGRP_FRAME_BIND_GROUP_LAYOUT_ID = 'hgrpFrameBindGroupLayout';
+
+export function getOrCreateHGRPFrameBindGroupLayout(
+  bindGroupManager: BindGroupManager,
+): GPUBindGroupLayout {
+  const existing = bindGroupManager.getBindGroupLayout(HGRP_FRAME_BIND_GROUP_LAYOUT_ID);
+  if (existing) {
+    return existing;
+  }
+
+  return bindGroupManager.createBindGroupLayout(HGRP_FRAME_BIND_GROUP_LAYOUT_ID, {
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'depth' },
+      },
+    ],
+    label: HGRP_FRAME_BIND_GROUP_LAYOUT_ID,
+  });
+}
+
 // Group 2 for the HGRP outline stage: the material uniform (same buffer as the variant bind
 // group; outline_width/offset_z are read in the vertex stage) plus the base map for the
 // outline color and the _OutlineMask width mask (sampled in the VERTEX stage via

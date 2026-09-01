@@ -59,8 +59,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     );
     let w = hgrp_shadow_weight(shade_coord, hgrp_material.use_diff_ramp);
 
-    let view_dir = normalize(mvp.camera_pos - input.world_position);
-    let rim = hgrp_rim(n, view_dir, ndotl);
+    let rim = hgrp_rim(n, input.position, ndotl);
 
     return vec4<f32>(mix(shadow_color, base.rgb, w) + rim, base.a);
 }

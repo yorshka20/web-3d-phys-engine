@@ -49,7 +49,7 @@ fn hgrp_hair_lines(shaded: vec3<f32>, uv0: vec2<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
-    let shaded = hgrp_shade_standard(input.uv0, input.world_normal, input.world_position);
+    let shaded = hgrp_shade_standard(input.uv0, input.world_normal, input.position);
     let lined = hgrp_hair_lines(shaded.rgb, input.uv0);
     return vec4<f32>(lined + hgrp_hair_band(input.world_normal), shaded.a);
 }

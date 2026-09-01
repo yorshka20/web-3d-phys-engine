@@ -43,5 +43,7 @@ fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
-    return hgrp_shade_eye(input.uv0, input.world_normal, input.world_position);
+    // frag_coord.z carries the camera-biased overlay depth (slightly nearer than the true
+    // surface), which only widens the rim's depth margin — acceptable for the iris.
+    return hgrp_shade_eye(input.uv0, input.world_normal, input.position);
 }

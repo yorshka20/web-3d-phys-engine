@@ -41,6 +41,8 @@ export interface ForwardPassDeps {
   // frame and the depth texture is recreated on resize.
   getColorView(): GPUTextureView;
   getDepthView(): GPUTextureView;
+  // HGRP group 3 (per-frame globals: prepass depth for the screen-space rim)
+  getHGRPFrameBindGroup(): GPUBindGroup;
 }
 
 /**
@@ -182,10 +184,14 @@ export class ForwardPass {
         );
 
         if (!frame.materials.has(renderable.materialKey)) {
-          frame.materials.set(
-            renderable.materialKey,
-            await this.deps.materialBinder.ensureMaterialBindings(renderable),
-          );
+          const bindings = await this.deps.materialBinder.ensureMaterialBindings(renderable);
+          // Group 3 of HGRP pipelines is pass-level state (per-frame globals: prepass
+          // depth), so the pass completes the binding plan here — the encode walk below
+          // binds whatever prepare resolved, with no per-family knowledge.
+          if (renderable.material.materialType === 'hgrp') {
+            bindings.group3 = this.deps.getHGRPFrameBindGroup();
+          }
+          frame.materials.set(renderable.materialKey, bindings);
         }
       }
     }

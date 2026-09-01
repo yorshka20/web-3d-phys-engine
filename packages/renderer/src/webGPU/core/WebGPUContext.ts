@@ -239,6 +239,15 @@ export class WebGPUContext {
   }
 
   /**
+   * Format of the sampleable depth texture written by the depth prepass and read by
+   * screen-space effects (HGRP depth rim). Depth-only — the forward pass keeps its own
+   * depth-stencil attachment.
+   */
+  getPrepassDepthFormat(): GPUTextureFormat {
+    return 'depth24plus';
+  }
+
+  /**
    * Depth-stencil format shared by the depth texture and every pipeline drawing in the
    * forward pass (WebGPU validates exact format equality). Stencil is consumed by the HGRP
    * eye compositing; pipelines that ignore it keep the default keep/always stencil state.

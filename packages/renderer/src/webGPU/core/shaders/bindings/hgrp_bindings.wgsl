@@ -20,3 +20,7 @@
 @group(2) @binding(2) var diff_ramp_map: texture_2d<f32>;
 @group(2) @binding(3) var base_sampler: sampler;
 @group(2) @binding(4) var ramp_sampler: sampler;
+
+// Group 3: per-frame globals — the depth-prepass texture (cleared to the far plane where
+// nothing was drawn), read by the screen-space rim.
+@group(3) @binding(0) var scene_depth: texture_depth_2d;

@@ -7,6 +7,7 @@ import { DIContainer, initContainer } from '../core/decorators';
 import { GeometryManager } from '../core/GeometryManager';
 import { GPUResourceCoordinator } from '../core/GPUResourceCoordinator';
 import { InstanceManager } from '../core/InstanceManager';
+import { getOrCreateHGRPFrameBindGroupLayout } from '../core/HGRPMaterialResources';
 import { MaterialBinder } from '../core/MaterialBinder';
 import { MaterialManager } from '../core/MaterialManager';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
@@ -17,6 +18,7 @@ import { ShaderManager } from '../core/shaders/ShaderManager';
 import { ShadingParamsManager } from '../core/ShadingParamsManager';
 import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
+import { DepthPrepass } from './passes/DepthPrepass';
 import { ForwardPass } from './passes/ForwardPass';
 import { HGRPEyeOverlayStage } from './passes/HGRPEyeOverlayStage';
 import { HGRPOutlineStage } from './passes/HGRPOutlineStage';
@@ -72,8 +74,12 @@ export class WebGPURenderer implements IWebGPURenderer {
   private materialBinder!: MaterialBinder;
 
   // frame orchestration (renderer-private, constructor-wired)
+  private depthPrepass!: DepthPrepass;
   private forwardPass!: ForwardPass;
   private tonemapPass!: TonemapPass;
+  // Per-frame HGRP globals (group 3): rebuilt when the prepass depth texture is recreated
+  private hgrpFrameBindGroup?: GPUBindGroup;
+  private hgrpFrameBindGroupTexture?: GPUTexture;
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
@@ -81,6 +87,9 @@ export class WebGPURenderer implements IWebGPURenderer {
 
   // depth buffer
   private depthTexture!: GPUTexture;
+
+  // Sampleable depth written by the depth prepass, read by screen-space effects (HGRP rim)
+  private prepassDepthTexture!: GPUTexture;
 
   // HDR scene-color target: the forward pass renders here, the tonemap pass resolves it to
   // the swapchain (format authority: WebGPUContext.getSceneColorFormat)
@@ -238,6 +247,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       geometryManager: this.geometryManager,
       sceneColorFormat: this.context.getSceneColorFormat(),
       depthStencilFormat: this.context.getDepthStencilFormat(),
+      getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });
     this.forwardPass = new ForwardPass({
       pipelineFactory: this.pipelineFactory,
@@ -251,6 +261,15 @@ export class WebGPURenderer implements IWebGPURenderer {
       eyeOverlayStage,
       getColorView: () => this.sceneColorTexture.createView(),
       getDepthView: () => this.depthTexture.createView(),
+      getHGRPFrameBindGroup: () => this.getHGRPFrameBindGroup(),
+    });
+    this.depthPrepass = new DepthPrepass({
+      device: this.device,
+      bindGroupManager: this.bindGroupManager,
+      mvpUniformManager: this.mvpUniformManager,
+      geometryManager: this.geometryManager,
+      depthFormat: this.context.getPrepassDepthFormat(),
+      getDepthView: () => this.prepassDepthTexture.createView(),
     });
     this.tonemapPass = new TonemapPass({
       device: this.device,
@@ -346,6 +365,18 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'Depth Texture',
     });
     console.log('[WebGPURenderer] Created depth texture');
+
+    // create the prepass depth texture (sampleable; same lifetime rules as the depth texture)
+    this.prepassDepthTexture = this.device.createTexture({
+      size: {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      format: this.context.getPrepassDepthFormat(),
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      label: 'Prepass Depth Texture',
+    });
+    console.log('[WebGPURenderer] Created prepass depth texture');
 
     // create HDR scene-color target (same lifetime rules as the depth texture)
     this.sceneColorTexture = this.device.createTexture({
@@ -684,13 +715,31 @@ export class WebGPURenderer implements IWebGPURenderer {
     // begin compute pass. used for morph type1 animation
     // await this.computePass(commandEncoder, frameData);
 
-    // pass sequence: forward shading into the HDR scene-color target, then tonemap resolve
-    // to the swapchain
+    // pass sequence: depth prepass (sampleable scene depth for screen-space effects),
+    // forward shading into the HDR scene-color target, then tonemap resolve to the swapchain
+    this.depthPrepass.execute(commandEncoder, frameData);
     await this.forwardPass.execute(commandEncoder, frameData);
     this.tonemapPass.execute(commandEncoder);
 
     // submit command
     this.device.queue.submit([commandEncoder.finish()]);
+  }
+
+  /**
+   * Group 3 for HGRP pipelines: per-frame globals (the prepass depth view). Rebuilt only
+   * when the prepass texture is recreated (resize) — deliberately NOT cached by label in
+   * BindGroupManager, which would go stale then.
+   */
+  private getHGRPFrameBindGroup(): GPUBindGroup {
+    if (!this.hgrpFrameBindGroup || this.hgrpFrameBindGroupTexture !== this.prepassDepthTexture) {
+      this.hgrpFrameBindGroup = this.device.createBindGroup({
+        label: 'hgrpFrameBindGroup',
+        layout: getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager),
+        entries: [{ binding: 0, resource: this.prepassDepthTexture.createView() }],
+      });
+      this.hgrpFrameBindGroupTexture = this.prepassDepthTexture;
+    }
+    return this.hgrpFrameBindGroup;
   }
 
   private async computePass(

@@ -84,10 +84,15 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   animation buffers) lives as pass privates under the same rule. Passes are renderer-private
   objects wired by constructor, not DI services; attachment views are injected as closures
   (the swapchain texture changes per frame, depth on resize).
+- `webGPU/renderer/passes/DepthPrepass.ts` — depth-only prepass of the HGRP character into a
+  sampleable depth texture (format authority `WebGPUContext.getPrepassDepthFormat`), bound to
+  every HGRP pipeline as group 3 (per-frame globals) and read by the screen-space depth rim.
+  The forward pass still writes its own depth attachment.
 - `webGPU/renderer/passes/TonemapPass.ts` — fullscreen resolve of the HDR scene-color target
-  (rgba16float, format authority `WebGPUContext.getSceneColorFormat`) to the swapchain:
-  identity below the shoulder, rational soft-shoulder above it. A fixed post-process pass
-  with exactly one pipeline, so it builds its shader module and pipeline directly instead of
+  (rgba16float, format authority `WebGPUContext.getSceneColorFormat`): exposure × ACES in
+  linear light, written through the swapchain's sRGB view (declared in the canvas configure
+  `viewFormats`) so the hardware performs the sRGB encode. A fixed post-process pass with
+  exactly one pipeline, so it builds its shader module and pipeline directly instead of
   going through the material-pipeline machinery (ShaderManager registration and semantic
   pipeline keys are material-shader concerns). Material pipelines consequently declare the
   scene-color format as their color target, not the swapchain format.
@@ -96,6 +101,6 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   pre-built from `PMXMaterialProcessor`).
 - `WebGPURenderer` — device/context lifecycle, manager construction, frame loop
   (`beginFrame`/`renderTick`/`endFrame`), and pass sequencing: the dormant PMX morph compute
-  pass (commented out), `ForwardPass.execute` into the scene-color target, then
-  `TonemapPass.execute` to the swapchain. Future passes join as sibling objects under
-  `passes/` in this schedule.
+  pass (commented out), `DepthPrepass.execute`, `ForwardPass.execute` into the scene-color
+  target, then `TonemapPass.execute` to the swapchain. Future passes join as sibling objects
+  under `passes/` in this schedule.

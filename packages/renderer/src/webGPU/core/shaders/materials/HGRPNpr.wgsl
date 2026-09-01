@@ -20,7 +20,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         hgrp_material.use_bump_map,
         hgrp_material.bump_scale,
     );
-    let core = hgrp_shade_core(input.uv0, n, input.world_position);
+    let core = hgrp_shade_core(input.uv0, n, input.position);
 
     // Spec ramp v2: the cloth RS is bright across its full width, so it is a specular COLOR
     // lookup (tint per x = n.h, y = 1 - _Smoothness), not a self-shaped highlight — adding it
