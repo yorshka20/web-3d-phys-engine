@@ -93,6 +93,7 @@ export const HGRP_TUNABLE_FLOATS: readonly HGRPTunableFloatDef[] = [
   { key: '_Smoothness', default: 0.5, min: 0, max: 1, step: 0.01 },
   { key: '_Specular', default: 0.5, min: 0, max: 4, step: 0.05 },
   { key: '_AnisotropyIntensity', default: 0, min: 0, max: 8, step: 0.05 },
+  { key: '_AnisotropyValue', default: 0.5, min: 0, max: 1, step: 0.01 },
   { key: '_UseMatcap', default: 0, min: 0, max: 1, step: 1 },
   { key: '_MatcapNormalScale', default: 1, min: 0, max: 2, step: 0.01 },
   { key: '_EyeHighLight', default: 0, min: 0, max: 1, step: 1 },
@@ -100,6 +101,17 @@ export const HGRP_TUNABLE_FLOATS: readonly HGRPTunableFloatDef[] = [
   { key: '_OutlineWidth', default: 0, min: 0, max: 3, step: 0.01 },
   { key: '_OutlineColorBrightness', default: 0.5, min: 0, max: 2, step: 0.01 },
   { key: '_OutlineColorSaturation', default: 1, min: 0, max: 3, step: 0.01 },
+  { key: '_OutlineOffsetZ', default: 0, min: 0, max: 1, step: 0.01 },
+  { key: '_UseLineMap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_LineAmount', default: 300, min: 0, max: 600, step: 1 },
+  { key: '_LineIntensity', default: 0, min: 0, max: 1, step: 0.01 },
+  { key: '_LineRange', default: 1, min: 0, max: 1, step: 0.01 },
+  { key: '_LineSaturation', default: 1, min: 0, max: 2, step: 0.01 },
+  { key: '_LineValue', default: 1, min: 0, max: 2, step: 0.01 },
+  { key: '_Pantyhose', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_PantyhoseSpecularInt', default: 0, min: 0, max: 1, step: 0.01 },
+  { key: '_PantyhoseSpecularValue', default: 0, min: 0, max: 1, step: 0.01 },
+  { key: '_PantyhoseAnisotropyDirection', default: 0, min: -1, max: 1, step: 0.01 },
 ];
 
 export interface HGRPTunableColorDef {
@@ -114,6 +126,7 @@ export const HGRP_TUNABLE_COLORS: readonly HGRPTunableColorDef[] = [
   { key: '_ColorAdjustmentRimColor', default: [1, 1, 1, 1] },
   { key: '_EmissionColor', default: [0, 0, 0, 1] },
   { key: '_MatcapColor', default: [1, 1, 1, 1] },
+  { key: '_PantyhoseColor', default: [0, 0, 0, 1] },
 ];
 
 export function hgrpTextureAssetId(character: string, filename: string): string {

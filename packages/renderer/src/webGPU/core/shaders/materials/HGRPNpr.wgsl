@@ -48,5 +48,37 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         hgrp_material.emission_color.rgb *
         (hgrp_material.emission_brightness * hgrp_material.use_emission);
 
-    return vec4<f32>(core.rgb + spec + emission, core.a);
+    // Pantyhose v2 (_Pantyhose, tights on cloth_04). Grounded in the base texture (probed
+    // 2026-09-01): the tights region's RGB is the pre-mixed warm skin-through tone and its
+    // ALPHA (~0.52, kept just above the clip threshold) is the authored fabric-density map —
+    // so sheerness derives from (1 - base alpha). Facing the viewer the fabric thins out and
+    // the lit through-tone glows (transmit, scaled by _PantyhoseSpecularValue); edge-on the
+    // layers stack up and densify toward _PantyhoseColor (its alpha = layer weight). The
+    // silky sheen is a Kajiya-Kay lobe along the tangent rotated by
+    // _PantyhoseAnisotropyDirection (-1..1 read as quarter turns, v1 assumption — the
+    // formula did not survive the rip).
+    let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
+    let density = pow(1.0 - ndotv, 2.0);
+    var color = mix(
+        core.rgb,
+        hgrp_material.pantyhose_color.rgb,
+        density * hgrp_material.pantyhose_color.a * hgrp_material.use_pantyhose,
+    );
+
+    let sheer = clamp((1.0 - core.a) * 2.0, 0.0, 1.0);
+    let transmit = (ndotv * ndotv) * (0.4 + 0.6 * ndotl) * sheer *
+        hgrp_material.pantyhose_specular_value;
+    color += core.rgb * (transmit * hgrp_material.use_pantyhose);
+
+    let angle = hgrp_material.pantyhose_aniso_direction * HALF_PI;
+    let strand = normalize(
+        normalize(input.world_tangent) * cos(angle) +
+        normalize(input.world_bitangent) * sin(angle),
+    );
+    let strand_dot_h = dot(strand, h);
+    let sin_th = sqrt(max(0.0, 1.0 - strand_dot_h * strand_dot_h));
+    let sheen = pow(sin_th, 16.0) *
+        (hgrp_material.pantyhose_specular_int * 1.5 * hgrp_material.use_pantyhose);
+
+    return vec4<f32>(color + vec3<f32>(sheen) + spec + emission, core.a);
 }

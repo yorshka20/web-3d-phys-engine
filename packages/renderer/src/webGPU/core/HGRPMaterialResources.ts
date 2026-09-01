@@ -62,8 +62,9 @@ export function hgrpTextureBindings(
 }
 
 // Group 2 for the HGRP outline stage: the material uniform (same buffer as the variant bind
-// group; outline_width is read in the vertex stage) plus the base map for the outline color.
-// One layout for every variant — the outline shader only touches these three bindings.
+// group; outline_width/offset_z are read in the vertex stage) plus the base map for the
+// outline color and the _OutlineMask width mask (sampled in the VERTEX stage via
+// textureSampleLevel, hence the sampler/mask visibilities). One layout for every variant.
 export const HGRP_OUTLINE_BIND_GROUP_LAYOUT_ID = 'hgrpOutlineBindGroupLayout';
 
 export function getOrCreateHGRPOutlineBindGroupLayout(
@@ -88,8 +89,13 @@ export function getOrCreateHGRPOutlineBindGroupLayout(
       },
       {
         binding: 2,
-        visibility: GPUShaderStage.FRAGMENT,
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
         sampler: { type: 'filtering' },
+      },
+      {
+        binding: 3,
+        visibility: GPUShaderStage.VERTEX,
+        texture: { sampleType: 'float' },
       },
     ],
     label: HGRP_OUTLINE_BIND_GROUP_LAYOUT_ID,

@@ -85,7 +85,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 192, // HGRPMaterialParams: 6x vec4 + 24 f32
+      size: 256, // HGRPMaterialParams: 7x vec4 + 36 f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -113,7 +113,7 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    const params = new Float32Array(48);
+    const params = new Float32Array(64);
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
     params.set(baseColor, 0);
     params.set(material.colors._ColorAdjustmentRimColor ?? [1, 1, 1, 1], 4);
@@ -145,9 +145,22 @@ export class MaterialBinder {
     params[31] = material.floats._OutlineColorBrightness ?? 0.5;
     params[32] = material.floats._OutlineColorSaturation ?? 1;
     params[33] = material.floats._EyeHighLight ?? 0;
+    params[34] = material.floats._OutlineOffsetZ ?? 0;
+    params[35] = material.floats._UseLineMap ?? 0;
     params.set(material.colors._MatcapColor ?? [1, 1, 1, 1], 36);
     params.set(material.colors._EyeHighLightColor ?? [1, 1, 1, 1], 40);
     params.set(material.colors._EyeScatteringColor ?? [1, 1, 1, 1], 44);
+    params[48] = material.floats._LineAmount ?? 300;
+    params[49] = material.floats._LineIntensity ?? 0;
+    params[50] = material.floats._LineRange ?? 1;
+    params[51] = material.floats._LineSaturation ?? 1;
+    params[52] = material.floats._LineValue ?? 1;
+    params[53] = material.floats._Pantyhose ?? 0;
+    params[54] = material.floats._PantyhoseSpecularInt ?? 0;
+    params[55] = material.floats._PantyhoseSpecularValue ?? 0;
+    params[56] = material.floats._PantyhoseAnisotropyDirection ?? 0;
+    params[57] = material.floats._AnisotropyValue ?? 0.5;
+    params.set(material.colors._PantyhoseColor ?? [0, 0, 0, 1], 60);
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;
@@ -165,10 +178,15 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 192,
+      size: 256,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const baseMap = await this.getGLTFTexture(material.textures._BaseMap, 'gltf_default_white');
+    // Width mask (ST): white = full stroke, so the default-white fallback is a no-op
+    const outlineMask = await this.getGLTFTexture(
+      material.textures._OutlineMask,
+      'gltf_default_white',
+    );
 
     return this.bindGroupManager.createBindGroup(`${materialId}_outline`, {
       layout,
@@ -176,6 +194,7 @@ export class MaterialBinder {
         { binding: 0, resource: { buffer: materialBuffer } },
         { binding: 1, resource: baseMap.createView() },
         { binding: 2, resource: this.textureManager.getSampler('linear') },
+        { binding: 3, resource: outlineMask.createView() },
       ],
       label: `${materialId}_outline`,
     });

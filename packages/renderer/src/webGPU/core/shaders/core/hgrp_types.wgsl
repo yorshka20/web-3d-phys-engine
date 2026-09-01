@@ -1,6 +1,6 @@
 // HGRP material uniform block, shared by the variant shaders (bindings/hgrp_bindings.wgsl)
 // and the outline shader (passes/hgrp_outline.wgsl).
-// Field order must match the Float32Array layout written by MaterialBinder (192 bytes).
+// Field order must match the Float32Array layout written by MaterialBinder (256 bytes).
 struct HGRPMaterialParams {
     base_color: vec4<f32>,
     rim_color: vec4<f32>,
@@ -27,9 +27,22 @@ struct HGRPMaterialParams {
     outline_color_brightness: f32,
     outline_color_saturation: f32,
     eye_highlight: f32, // _EyeHighLight — the iris base alpha is the highlight mask
-    reserved1: f32,
-    reserved2: f32,
+    outline_offset_z: f32, // _OutlineOffsetZ — pushes the hull away so inner lines recede
+    use_line_map: f32, // _UseLineMap (hair strand lines)
     matcap_color: vec4<f32>,
     eye_highlight_color: vec4<f32>, // HDR (~2.2); the tonemap shoulder absorbs it
     eye_scattering_color: vec4<f32>,
+    line_amount: f32, // _LineAmount — strand-line tiling driver (preset 300 = 1x)
+    line_intensity: f32, // _LineIntensity
+    line_range: f32, // _LineRange
+    line_saturation: f32, // _LineSaturation
+    line_value: f32, // _LineValue
+    use_pantyhose: f32, // _Pantyhose (cloth tights shading)
+    pantyhose_specular_int: f32, // _PantyhoseSpecularInt
+    pantyhose_specular_value: f32, // _PantyhoseSpecularValue
+    pantyhose_aniso_direction: f32, // _PantyhoseAnisotropyDirection (-1..1, quarter-turn units)
+    aniso_value: f32, // _AnisotropyValue — hair RS band center (0.5 = the RS peak)
+    reserved1: f32,
+    reserved2: f32,
+    pantyhose_color: vec4<f32>,
 }
