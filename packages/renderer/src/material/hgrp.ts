@@ -83,6 +83,7 @@ export const HGRP_TUNABLE_FLOATS: readonly HGRPTunableFloatDef[] = [
   { key: '_UseBumpMap', default: 0, min: 0, max: 1, step: 1 },
   { key: '_UseSDFLightmap', default: 0, min: 0, max: 1, step: 1 },
   { key: '_UseSpecRampMap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_UseMetallicGlossMap', default: 0, min: 0, max: 1, step: 1 },
   { key: '_UseEmission', default: 0, min: 0, max: 1, step: 1 },
   { key: '_EnableOutline', default: 0, min: 0, max: 1, step: 1 },
   { key: '_ShadowColorBrightness', default: 1, min: 0, max: 2, step: 0.01 },

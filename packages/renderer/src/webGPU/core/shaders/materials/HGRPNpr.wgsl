@@ -22,27 +22,36 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     );
     let core = hgrp_shade_core(input.uv0, n, input.position);
 
-    // Spec ramp v2: the cloth RS is bright across its full width, so it is a specular COLOR
-    // lookup (tint per x = n.h, y = 1 - _Smoothness), not a self-shaped highlight — adding it
-    // raw whitewashed the cloth. The highlight shape comes from a Blinn-Phong lobe whose
-    // exponent follows _Smoothness, gated to the lit side and masked to the metallic zones
-    // in _MetallicGlossMap.r so fabric stays matte.
+    // Spec v3 (reference-screenshot driven): the RS stays a specular COLOR lookup (raw
+    // addition whitewashes — v1 lesson). _MetallicGlossMap.r holds discrete METALLIC zones:
+    // metal has no diffuse, so the shaded base is suppressed there and the albedo tints the
+    // spec color (silver parts read as metal instead of white); .g is per-texel GLOSS
+    // modulating the RS row and the Blinn-Phong exponent — the leather/satin sheen on
+    // non-metal parts, which v2's metallic-only mask killed. mix(0.15, 1, metallic) keeps
+    // fabric sheen modest without a separate parameter (v3 assumption, GUI-calibrated via
+    // _Specular). Gated by _UseMetallicGlossMap.
     let view_dir = normalize(mvp.camera_pos - input.world_position);
     let light = normalize(MAIN_LIGHT_DIRECTION);
     let h = normalize(light + view_dir);
     let ndoth = clamp(dot(n, h), 0.0, 1.0);
     let ndotl = clamp(dot(n, light), 0.0, 1.0);
-    let spec_y = hgrp_ramp_inset(1.0 - hgrp_material.spec_smoothness);
+
+    let mg = textureSample(metallic_gloss_map, base_sampler, input.uv0);
+    let use_mg = hgrp_material.use_metallic_gloss_map;
+    let metallic = mg.r * use_mg;
+    let gloss = clamp(hgrp_material.spec_smoothness * mix(1.0, mg.g, use_mg), 0.0, 1.0);
+
     let spec_color = textureSample(
         spec_ramp_map,
         ramp_sampler,
-        vec2<f32>(hgrp_ramp_inset(ndoth), spec_y),
+        vec2<f32>(hgrp_ramp_inset(ndoth), hgrp_ramp_inset(1.0 - gloss)),
     ).rgb;
-    let shape = pow(ndoth, mix(8.0, 128.0, hgrp_material.spec_smoothness));
-    let metallic = textureSample(metallic_gloss_map, base_sampler, input.uv0).r;
-    let spec = spec_color *
-        (shape * smoothstep(0.0, 0.3, ndotl) * metallic * hgrp_material.spec_intensity *
-            hgrp_material.use_spec_ramp);
+    let shape = pow(ndoth, mix(8.0, 128.0, gloss));
+    let spec = spec_color * mix(vec3<f32>(1.0), core.rgb, metallic) *
+        (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity *
+            mix(0.15, 1.0, metallic) * hgrp_material.use_spec_ramp);
+
+    let diffuse = core.rgb * (1.0 - metallic * 0.7);
 
     let emission = textureSample(emission_map, base_sampler, input.uv0).rgb *
         hgrp_material.emission_color.rgb *
@@ -60,7 +69,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
     let density = pow(1.0 - ndotv, 2.0);
     var color = mix(
-        core.rgb,
+        diffuse,
         hgrp_material.pantyhose_color.rgb,
         density * hgrp_material.pantyhose_color.a * hgrp_material.use_pantyhose,
     );
@@ -68,7 +77,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let sheer = clamp((1.0 - core.a) * 2.0, 0.0, 1.0);
     let transmit = (ndotv * ndotv) * (0.4 + 0.6 * ndotl) * sheer *
         hgrp_material.pantyhose_specular_value;
-    color += core.rgb * (transmit * hgrp_material.use_pantyhose);
+    color += diffuse * (transmit * hgrp_material.use_pantyhose);
 
     let angle = hgrp_material.pantyhose_aniso_direction * HALF_PI;
     let strand = normalize(

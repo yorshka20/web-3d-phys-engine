@@ -1,6 +1,6 @@
 // HGRP material uniform block, shared by the variant shaders (bindings/hgrp_bindings.wgsl)
 // and the outline shader (passes/hgrp_outline.wgsl).
-// Field order must match the Float32Array layout written by MaterialBinder (288 bytes).
+// Field order must match the Float32Array layout written by MaterialBinder (304 bytes).
 struct HGRPMaterialParams {
     base_color: vec4<f32>,
     rim_color: vec4<f32>,
@@ -47,4 +47,8 @@ struct HGRPMaterialParams {
     pantyhose_color: vec4<f32>,
     highlight_vector: vec4<f32>, // _HighlightMapVector — hl_M UV offset (xy)
     eye_tint_color: vec4<f32>, // _EyeTintColor (identity in Pelica's preset)
+    use_metallic_gloss_map: f32, // _UseMetallicGlossMap (cloth spec v3 gate)
+    reserved2: f32,
+    reserved3: f32,
+    reserved4: f32,
 }

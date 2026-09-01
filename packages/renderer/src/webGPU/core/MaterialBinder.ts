@@ -86,7 +86,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 288, // HGRPMaterialParams: 9x vec4 + 36 f32
+      size: 304, // HGRPMaterialParams: 9x vec4 + 40 f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -118,7 +118,7 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    const params = new Float32Array(72);
+    const params = new Float32Array(76);
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
     params.set(baseColor, 0);
     // The skin family carries _SDFRimColor (warm pink) — its rim color, taking precedence
@@ -178,6 +178,7 @@ export class MaterialBinder {
     params.set(material.colors._PantyhoseColor ?? [0, 0, 0, 1], 60);
     params.set(material.colors._HighlightMapVector ?? [0, 0, 0, 0], 64);
     params.set(material.colors._EyeTintColor ?? [1, 1, 1, 1], 68);
+    params[72] = material.floats._UseMetallicGlossMap ?? 0;
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;
@@ -195,7 +196,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 288,
+      size: 304,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const baseMap = await this.getGLTFTexture(
