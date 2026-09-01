@@ -8,6 +8,7 @@
 @group(2) @binding(5) var bump_map: texture_2d<f32>; // _BumpMap
 @group(2) @binding(6) var shadow_lut: texture_2d<f32>; // _ShadowLutTex
 @group(2) @binding(7) var sdf_lightmap: texture_2d<f32>; // _SDFLightmap
+@group(2) @binding(9) var highlight_map: texture_2d<f32>; // _HighlightMap (hl_M)
 
 // SDF face shadow v1 (channel semantics still under calibration — see hgrp-shading.md):
 // R holds the light-yaw threshold field for one side; the other side samples mirrored UVs.
@@ -61,5 +62,15 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
 
     let rim = hgrp_rim(n, input.position, ndotl);
 
-    return vec4<f32>(mix(shadow_color, base.rgb, w) + rim, base.a);
+    // Nose highlight: hl_M holds a single small grey dot (probed 2026-09-01);
+    // _HighlightMapVector offsets its UV (view-tracking in-game, static v1). The default
+    // white fallback texture is gated off by use_face_highlight on materials without hl_M.
+    let hl = textureSample(
+        highlight_map,
+        base_sampler,
+        input.uv0 + hgrp_material.highlight_vector.xy,
+    ).r;
+    let highlight = vec3<f32>(hl * hgrp_material.use_face_highlight);
+
+    return vec4<f32>(mix(shadow_color, base.rgb, w) + rim + highlight, base.a);
 }

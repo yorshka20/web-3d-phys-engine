@@ -95,6 +95,7 @@ export const HGRP_TUNABLE_FLOATS: readonly HGRPTunableFloatDef[] = [
   { key: '_AnisotropyIntensity', default: 0, min: 0, max: 8, step: 0.05 },
   { key: '_AnisotropyValue', default: 0.5, min: 0, max: 1, step: 0.01 },
   { key: '_UseMatcap', default: 0, min: 0, max: 1, step: 1 },
+  { key: '_FaceHighlightMap', default: 0, min: 0, max: 1, step: 1 },
   { key: '_MatcapNormalScale', default: 1, min: 0, max: 2, step: 0.01 },
   { key: '_EyeHighLight', default: 0, min: 0, max: 1, step: 1 },
   { key: '_EmissionBrightness', default: 1, min: 0, max: 40, step: 0.1 },
@@ -127,6 +128,7 @@ export const HGRP_TUNABLE_COLORS: readonly HGRPTunableColorDef[] = [
   { key: '_EmissionColor', default: [0, 0, 0, 1] },
   { key: '_MatcapColor', default: [1, 1, 1, 1] },
   { key: '_PantyhoseColor', default: [0, 0, 0, 1] },
+  { key: '_SDFRimColor', default: [1, 1, 1, 1] },
 ];
 
 export function hgrpTextureAssetId(character: string, filename: string): string {

@@ -86,7 +86,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 256, // HGRPMaterialParams: 7x vec4 + 36 f32
+      size: 272, // HGRPMaterialParams: 8x vec4 + 36 f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -118,10 +118,15 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    const params = new Float32Array(64);
+    const params = new Float32Array(68);
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
     params.set(baseColor, 0);
-    params.set(material.colors._ColorAdjustmentRimColor ?? [1, 1, 1, 1], 4);
+    // The skin family carries _SDFRimColor (warm pink) — its rim color, taking precedence
+    // over the generic white _ColorAdjustmentRimColor (v1 interpretation)
+    params.set(
+      material.colors._SDFRimColor ?? material.colors._ColorAdjustmentRimColor ?? [1, 1, 1, 1],
+      4,
+    );
     params[8] = material.floats._UseDiffRampMap ?? 0;
     // alpha_cutoff doubles as the clip switch: 0 disables the discard in the shader
     params[9] = material.alphaMode === 'mask' ? material.alphaCutoff : 0;
@@ -135,7 +140,10 @@ export class MaterialBinder {
     // shader sees one effective intensity
     const rimOffScale =
       (material.floats._SkinRimOff ?? 0) > 0 ? (material.floats._SkinRimOffScale ?? 1) : 1;
-    params[16] = (material.floats._ColorAdjustmentRimIntensity ?? 0) * rimOffScale;
+    params[16] =
+      (material.floats._ColorAdjustmentRimIntensity ?? 0) *
+      rimOffScale *
+      (material.floats._FaceRimOffScale ?? 1);
     params[17] = material.floats._ColorAdjustmentRimWidth ?? 0.35;
     params[18] = material.floats._UseSpecRampMap ?? 0;
     params[19] = material.floats._Smoothness ?? 0.5;
@@ -165,7 +173,9 @@ export class MaterialBinder {
     params[55] = material.floats._PantyhoseSpecularValue ?? 0;
     params[56] = material.floats._PantyhoseAnisotropyDirection ?? 0;
     params[57] = material.floats._AnisotropyValue ?? 0.5;
+    params[58] = material.floats._FaceHighlightMap ?? 0;
     params.set(material.colors._PantyhoseColor ?? [0, 0, 0, 1], 60);
+    params.set(material.colors._HighlightMapVector ?? [0, 0, 0, 0], 64);
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;
@@ -183,7 +193,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 256,
+      size: 272,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const baseMap = await this.getGLTFTexture(

@@ -1,6 +1,6 @@
 // HGRP material uniform block, shared by the variant shaders (bindings/hgrp_bindings.wgsl)
 // and the outline shader (passes/hgrp_outline.wgsl).
-// Field order must match the Float32Array layout written by MaterialBinder (256 bytes).
+// Field order must match the Float32Array layout written by MaterialBinder (272 bytes).
 struct HGRPMaterialParams {
     base_color: vec4<f32>,
     rim_color: vec4<f32>,
@@ -42,7 +42,8 @@ struct HGRPMaterialParams {
     pantyhose_specular_value: f32, // _PantyhoseSpecularValue
     pantyhose_aniso_direction: f32, // _PantyhoseAnisotropyDirection (-1..1, quarter-turn units)
     aniso_value: f32, // _AnisotropyValue — hair RS band center (0.5 = the RS peak)
+    use_face_highlight: f32, // _FaceHighlightMap (skin: hl_M nose-highlight layer)
     reserved1: f32,
-    reserved2: f32,
     pantyhose_color: vec4<f32>,
+    highlight_vector: vec4<f32>, // _HighlightMapVector — hl_M UV offset (xy)
 }
