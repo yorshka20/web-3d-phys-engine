@@ -9,6 +9,7 @@ import { PMXMaterialProcessor } from '../../core/PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../../core/ResourceManager';
 import { GeometryCacheItem } from '../../core/types';
 import { buildDrawLists, DrawItem } from '../frame/DrawListBuilder';
+import { HGRPOutlineStage } from './HGRPOutlineStage';
 
 // GPU resources resolved once per frame during prepare, consumed by the synchronous encode.
 interface FrameResources {
@@ -33,6 +34,7 @@ export interface ForwardPassDeps {
   pmxMaterialProcessor: PMXMaterialProcessor;
   pmxAnimationBufferManager: PMXAnimationBufferManager;
   resourceManager: WebGPUResourceManager;
+  outlineStage: HGRPOutlineStage;
   // Attachment views are provided as closures because the swapchain texture changes every
   // frame and the depth texture is recreated on resize.
   getColorView(): GPUTextureView;
@@ -58,7 +60,7 @@ export class ForwardPass {
     // Prepare phase (async): build the ordered draw lists and resolve every GPU resource up
     // front, so the encode phase below is fully synchronous — no await between beginRenderPass
     // and end.
-    const { opaque, transparent } = buildDrawLists(frameData);
+    const { opaque, transparent, outline } = buildDrawLists(frameData);
     const frame: FrameResources = {
       pipelines: new Map(),
       materials: new Map(),
@@ -66,6 +68,7 @@ export class ForwardPass {
     };
     await this.prepare(opaque, frame);
     await this.prepare(transparent, frame);
+    await this.deps.outlineStage.prepare(outline);
 
     const renderPass = commandEncoder.beginRenderPass({
       label: 'main_render_pass',
@@ -87,11 +90,12 @@ export class ForwardPass {
 
     this.setFrameBindGroups(renderPass);
 
-    // Opaque first (state-sorted), then transparent (back-to-front). The bind-state cache
-    // spans both phases because they share one pass encoder.
-    const cache: EncodeStateCache = {};
-    this.encode(renderPass, opaque, frameData, frame, cache);
-    this.encode(renderPass, transparent, frameData, frame, cache);
+    // Opaque first (state-sorted), then the HGRP outline hulls (depth-tested against the
+    // opaque geometry), then transparent (back-to-front) on top of both. The outline stage
+    // binds its own pipeline/groups, so the transparent walk starts from a fresh state cache.
+    this.encode(renderPass, opaque, frameData, frame, {});
+    this.deps.outlineStage.encode(renderPass, outline, frameData);
+    this.encode(renderPass, transparent, frameData, frame, {});
 
     renderPass.end();
   }

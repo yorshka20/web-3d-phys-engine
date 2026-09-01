@@ -18,6 +18,7 @@ import { ShadingParamsManager } from '../core/ShadingParamsManager';
 import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
 import { ForwardPass } from './passes/ForwardPass';
+import { HGRPOutlineStage } from './passes/HGRPOutlineStage';
 import { TonemapPass } from './passes/TonemapPass';
 import {
   BindGroup,
@@ -217,6 +218,15 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.materialBinder = new MaterialBinder();
 
     // Renderer-private pass objects (constructor-wired, not DI services)
+    const outlineStage = new HGRPOutlineStage({
+      device: this.device,
+      shaderManager: this.shaderManager,
+      bindGroupManager: this.bindGroupManager,
+      materialBinder: this.materialBinder,
+      mvpUniformManager: this.mvpUniformManager,
+      geometryManager: this.geometryManager,
+      sceneColorFormat: this.context.getSceneColorFormat(),
+    });
     this.forwardPass = new ForwardPass({
       pipelineFactory: this.pipelineFactory,
       geometryManager: this.geometryManager,
@@ -225,6 +235,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       pmxMaterialProcessor: this.pmxMaterialProcessor,
       pmxAnimationBufferManager: this.pmxAnimationBufferManager,
       resourceManager: this.resourceManager,
+      outlineStage,
       getColorView: () => this.sceneColorTexture.createView(),
       getDepthView: () => this.depthTexture.createView(),
     });

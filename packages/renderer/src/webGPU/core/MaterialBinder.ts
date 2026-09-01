@@ -9,6 +9,7 @@ import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable } from './decorators/ResourceDecorators';
 import {
   getOrCreateHGRPMaterialBindGroupLayout,
+  getOrCreateHGRPOutlineBindGroupLayout,
   HGRP_SAMPLER_BINDINGS,
   hgrpTextureBindings,
 } from './HGRPMaterialResources';
@@ -84,7 +85,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 128, // HGRPMaterialParams: 3x vec4 + 20 f32
+      size: 144, // HGRPMaterialParams: 3x vec4 + 24 f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -112,7 +113,7 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    const params = new Float32Array(32);
+    const params = new Float32Array(36);
     const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
     params.set(baseColor, 0);
     params.set(material.colors._ColorAdjustmentRimColor ?? [1, 1, 1, 1], 4);
@@ -138,9 +139,40 @@ export class MaterialBinder {
     params.set(material.colors._EmissionColor ?? [0, 0, 0, 1], 24);
     params[28] = material.floats._UseEmission ?? 0;
     params[29] = material.floats._EmissionBrightness ?? 1;
+    params[30] = material.floats._OutlineWidth ?? 0;
+    params[31] = material.floats._OutlineColorBrightness ?? 0.5;
+    params[32] = material.floats._OutlineColorSaturation ?? 1;
     this.device.queue.writeBuffer(materialBuffer, 0, params);
 
     return bindGroup;
+  }
+
+  /**
+   * Get or create the outline bind group (group 2 of the outline pipeline) for an HGRP
+   * material: the same uniform buffer as the variant bind group (created above, cached by
+   * label) plus the base map that drives the outline color.
+   */
+  async ensureHGRPOutlineBindGroup(renderable: RenderData): Promise<GPUBindGroup> {
+    const material = renderable.material as HGRPMaterialDescriptor;
+    const layout = getOrCreateHGRPOutlineBindGroupLayout(this.bindGroupManager);
+    const materialId = renderable.materialKey;
+
+    const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
+      type: BufferType.UNIFORM,
+      size: 144,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const baseMap = await this.getGLTFTexture(material.textures._BaseMap, 'gltf_default_white');
+
+    return this.bindGroupManager.createBindGroup(`${materialId}_outline`, {
+      layout,
+      entries: [
+        { binding: 0, resource: { buffer: materialBuffer } },
+        { binding: 1, resource: baseMap.createView() },
+        { binding: 2, resource: this.textureManager.getSampler('linear') },
+      ],
+      label: `${materialId}_outline`,
+    });
   }
 
   /**

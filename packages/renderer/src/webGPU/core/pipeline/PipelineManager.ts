@@ -8,6 +8,7 @@ import { ShaderManager } from '../shaders/ShaderManager';
 import { CompiledShader } from '../shaders/types/shader';
 import { BindGroupLayoutDescriptor } from '../types';
 import { WebGPUContext } from '../WebGPUContext';
+import { createGltfVertexBufferLayout } from './vertexLayouts';
 import {
   BindGroupLayoutName,
   BindGroupLayoutOrder,
@@ -908,56 +909,10 @@ export class PipelineManager {
    * Create GLTF vertex buffer layouts
    * GLTF format always includes all vertex attributes with fixed layout
    * Must match the vertex data packing order in AssetLoader.ts
+   * (single definition in pipeline/vertexLayouts.ts, shared with pass-private pipelines)
    */
   private createGltfVertexBufferLayouts(gpuKey: GpuPipelineKey): GPUVertexBufferLayout[] {
-    const attributes: GPUVertexAttribute[] = [];
-    let offset = 0;
-
-    // GLTF vertex layout is fixed: pos(3) + normal(3) + uv0(2) + uv1(2) + color(4) + joints(4) + weights(4) + tangent(4)
-    // Total: 26 floats per vertex
-
-    /**
-     * always add all attributes for gltf vertex buffer layout
-     */
-
-    // Position (location 0) - 3 floats
-    attributes.push({ format: 'float32x3', offset, shaderLocation: 0 });
-    offset += 12;
-
-    // Normal (location 1) - 3 floats
-    attributes.push({ format: 'float32x3', offset, shaderLocation: 1 });
-    offset += 12;
-
-    // Texcoord_0 (location 2) - 2 floats
-    attributes.push({ format: 'float32x2', offset, shaderLocation: 2 });
-    offset += 8;
-
-    // Texcoord_1 (location 3) - 2 floats
-    attributes.push({ format: 'float32x2', offset, shaderLocation: 3 });
-    offset += 8;
-
-    // Color_0 (location 4) - 4 floats
-    attributes.push({ format: 'float32x4', offset, shaderLocation: 4 });
-    offset += 16;
-
-    // Joints_0 (location 5) - 4 uints
-    attributes.push({ format: 'uint32x4', offset, shaderLocation: 5 });
-    offset += 16;
-
-    // Weights_0 (location 6) - 4 floats
-    attributes.push({ format: 'float32x4', offset, shaderLocation: 6 });
-    offset += 16;
-
-    // Tangent (location 7) - 4 floats
-    attributes.push({ format: 'float32x4', offset, shaderLocation: 7 });
-    offset += 16;
-
-    return [
-      {
-        arrayStride: offset, // Should be 26 * 4 = 104 bytes
-        attributes,
-      },
-    ];
+    return [createGltfVertexBufferLayout()];
   }
 
   /**

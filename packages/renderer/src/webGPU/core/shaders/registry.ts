@@ -23,6 +23,7 @@ import pmxMorphComputeShader from './compute/PMXMorphCompute.wgsl';
 // Core fragments
 import constantsFragment from './core/constants.wgsl';
 import gltfTypesFragment from './core/gltf_types.wgsl';
+import hgrpTypesFragment from './core/hgrp_types.wgsl';
 import hgrpVertexFragment from './core/hgrp_vertex.wgsl';
 import uniformsFragment from './core/uniforms.wgsl';
 import vertexTypesFragment from './core/vertex_types.wgsl';
@@ -43,6 +44,7 @@ import toonFragment from './lighting/toon.wgsl';
 // Pass fragments
 import deferredFragment from './passes/deferred.wgsl';
 import forwardFragment from './passes/forward.wgsl';
+import hgrpOutlineShader from './passes/hgrp_outline.wgsl';
 import shadowFragment from './passes/shadow.wgsl';
 
 // Binding fragments
@@ -61,6 +63,7 @@ export const shaderFragmentRegistry = new Map([
   ['core/vertex_types.wgsl', vertexTypesFragment],
   ['core/constants.wgsl', constantsFragment],
   ['core/gltf_types.wgsl', gltfTypesFragment],
+  ['core/hgrp_types.wgsl', hgrpTypesFragment],
   ['core/hgrp_vertex.wgsl', hgrpVertexFragment],
 
   // Math fragments
@@ -80,6 +83,7 @@ export const shaderFragmentRegistry = new Map([
   ['passes/forward.wgsl', forwardFragment],
   ['passes/deferred.wgsl', deferredFragment],
   ['passes/shadow.wgsl', shadowFragment],
+  ['passes/hgrp_outline.wgsl', hgrpOutlineShader],
 
   // Binding fragments
   ['bindings/pmx_bindings.wgsl', pmxBindingsFragment],

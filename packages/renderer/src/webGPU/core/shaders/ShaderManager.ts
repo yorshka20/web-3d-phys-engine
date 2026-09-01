@@ -10,6 +10,7 @@ import {
   createFireMaterialShaderModule,
   createGLTFMaterialShaderModule,
   createHGRPMaterialShaderModules,
+  createHGRPOutlineShaderModule,
   createPMXMaterialShaderModule,
   createPMXMorphComputeShaderModule,
   createPulsewaveShaderModule,
@@ -114,6 +115,10 @@ export class ShaderManager {
       this.registerShaderModule(module);
     }
     console.log('✓ Registered HGRP Material Shaders');
+
+    // Register HGRP Outline Shader
+    this.registerShaderModule(createHGRPOutlineShaderModule());
+    console.log('✓ Registered HGRP Outline Shader');
   }
 
   private compileShaderModules(): void {
@@ -199,6 +204,13 @@ export class ShaderManager {
         },
       });
     }
+
+    this.compileShaderModule('hgrp_outline_shader', {
+      vertexFormat: 'full',
+      defines: {
+        ENABLE_HGRP_MATERIAL: true,
+      },
+    });
 
     console.log('✓ Compiled shader modules');
   }

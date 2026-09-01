@@ -1,4 +1,5 @@
 import { FrameData, RenderData } from '@renderer/frame/types';
+import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
 import { AlphaMode, WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { vec3 } from 'gl-matrix';
 import { generateSemanticCacheKey, generateSemanticPipelineKey } from '../../core/pipeline/types';
@@ -17,6 +18,10 @@ export interface DrawItem {
 export interface DrawLists {
   opaque: DrawItem[];
   transparent: DrawItem[];
+  // Inverted-hull outline draws (HGRP materials with _EnableOutline, opaque only): the same
+  // renderables again, drawn by the single pass-private outline pipeline after the opaque
+  // walk. pipelineKey is a fixed tag — outline has exactly one pipeline.
+  outline: DrawItem[];
 }
 
 // Plain code-unit comparison: sort keys are opaque cache ids, locale rules must not apply.
@@ -52,6 +57,7 @@ function computeViewDepth(renderable: RenderData, viewMatrix: Float32Array): num
 export function buildDrawLists(frameData: FrameData): DrawLists {
   const opaque: DrawItem[] = [];
   const transparent: DrawItem[] = [];
+  const outline: DrawItem[] = [];
   const viewMatrix = frameData.scene.camera.viewMatrix;
 
   for (const renderable of frameData.renderables) {
@@ -70,6 +76,13 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
       transparent.push(item);
     } else {
       opaque.push(item);
+
+      if (
+        renderable.material.materialType === 'hgrp' &&
+        (renderable.material as HGRPMaterialDescriptor).floats._EnableOutline === 1
+      ) {
+        outline.push({ renderable, pipelineKey: 'hgrp_outline', viewDepth: 0 });
+      }
     }
   }
 
@@ -83,6 +96,11 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
   transparent.sort(
     (a, b) => a.renderable.renderOrder - b.renderable.renderOrder || b.viewDepth - a.viewDepth,
   );
+  outline.sort(
+    (a, b) =>
+      compareKeys(a.renderable.materialKey, b.renderable.materialKey) ||
+      compareKeys(a.renderable.geometryId, b.renderable.geometryId),
+  );
 
-  return { opaque, transparent };
+  return { opaque, transparent, outline };
 }

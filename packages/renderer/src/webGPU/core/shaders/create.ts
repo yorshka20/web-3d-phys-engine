@@ -401,6 +401,7 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
       'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/gltf_types.wgsl',
+      'core/hgrp_types.wgsl',
       'math/color.wgsl',
       'bindings/hgrp_bindings.wgsl',
       'core/hgrp_vertex.wgsl',
@@ -423,6 +424,40 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
     author: 'WebGPU 3D Physics Engine',
     tags: ['hgrp', 'npr', 'character', variant],
   }));
+}
+
+// The outline shader is shared by every HGRP variant (its pipeline is pass-private —
+// front-face culling is not expressible in the semantic pipeline key).
+export function createHGRPOutlineShaderModule(): ShaderModule {
+  return {
+    id: 'hgrp_outline_shader',
+    name: 'HGRP Outline Shader',
+    description: 'HGRP inverted-hull outline (extruded along normals, HSV-adjusted base color)',
+    type: 'render',
+    fileName: 'passes/hgrp_outline.wgsl',
+    sourceCode: shaderFragmentRegistry.get('passes/hgrp_outline.wgsl') || '',
+    includes: [
+      'core/uniforms.wgsl',
+      'core/gltf_types.wgsl',
+      'core/hgrp_types.wgsl',
+      'math/color.wgsl',
+    ],
+    compilationOptions: {
+      vertexFormat: ['full'],
+    },
+    runtimeParams: {},
+    renderState: {
+      blendMode: 'replace',
+      depthTest: true,
+      depthWrite: true,
+      cullMode: 'front',
+      frontFace: 'ccw',
+      sampleCount: 1,
+    },
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: ['hgrp', 'outline', 'npr'],
+  };
 }
 
 export function createGLTFMaterialShaderModule(): GLTFMaterialShaderModule {
