@@ -7,6 +7,7 @@ import {
 } from '@renderer/material/hgrp';
 import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
 import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
+import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 import { Pane } from 'tweakpane';
 
 // Per-material calibration overrides for one HGRP character, keyed by material name.
@@ -162,10 +163,22 @@ export function mountHGRPShadingPanel(assetId: string) {
 
   const pane = new Pane({ container: host, title: 'HGRP Shading (H)' });
 
-  // Global linear-light exposure ahead of the ACES curve (session-only calibration knob,
-  // not part of the per-material preset state)
-  const tonemapFolder = pane.addFolder({ title: 'Tonemap (global)', expanded: true });
-  tonemapFolder.addBinding(tonemapSettings, 'exposure', { min: 0.1, max: 4, step: 0.01 });
+  // Global linear-light exposure ahead of the ACES curve and the scene backdrop color
+  // (session-only calibration knobs, not part of the per-material preset state)
+  const globalFolder = pane.addFolder({ title: 'Scene (global)', expanded: true });
+  globalFolder.addBinding(tonemapSettings, 'exposure', { min: 0.1, max: 4, step: 0.01 });
+  const backdrop = {
+    clearColor: {
+      r: sceneSettings.clearColor[0],
+      g: sceneSettings.clearColor[1],
+      b: sceneSettings.clearColor[2],
+    },
+  };
+  globalFolder
+    .addBinding(backdrop, 'clearColor', { label: 'backdrop', color: { type: 'float' } })
+    .on('change', (ev) => {
+      sceneSettings.clearColor = [ev.value.r, ev.value.g, ev.value.b];
+    });
 
   const persist = () => {
     try {

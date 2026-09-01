@@ -2,6 +2,7 @@ import { Mesh3DComponent, Transform3DComponent, WebGPU3DRenderComponent } from '
 import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
 import { HGRPPreset } from '@renderer/material/hgrp';
+import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 import { rgba } from '@ecs/utils/color';
 
 import pelicaModel from '../../../assets/hgrp/pelica/pelica.glb?url';
@@ -25,6 +26,10 @@ export const HGRP_PELICA_ASSET_ID = 'hgrp_pelica';
 // joined from preset.json by glb material name, BaseMap + DiffRamp lighting (M2). Variant
 // features (SDF/matcap/rim, outline/stencil, tonemap) land in Stages C–E.
 export async function createHGRPStage(world: World) {
+  // Bright studio backdrop (linear light, pre-tonemap) — the in-game character showcase
+  // sits on a light grey ground, and look comparison against screenshots needs it
+  sceneSettings.clearColor = [0.7, 0.7, 0.73];
+
   await AssetLoader.loadHGRPCharacter({
     url: pelicaModel,
     assetId: HGRP_PELICA_ASSET_ID,

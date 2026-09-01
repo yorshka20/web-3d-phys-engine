@@ -9,6 +9,7 @@ import { PMXMaterialProcessor } from '../../core/PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../../core/ResourceManager';
 import { GeometryCacheItem } from '../../core/types';
 import { buildDrawLists, DrawItem } from '../frame/DrawListBuilder';
+import { sceneSettings } from '../sceneSettings';
 import { HGRPEyeOverlayStage } from './HGRPEyeOverlayStage';
 import { HGRPOutlineStage } from './HGRPOutlineStage';
 
@@ -80,7 +81,7 @@ export class ForwardPass {
       colorAttachments: [
         {
           view: this.deps.getColorView(),
-          clearValue: [0, 0, 0, 1],
+          clearValue: [...sceneSettings.clearColor, 1],
           loadOp: 'clear',
           storeOp: 'store',
         },
