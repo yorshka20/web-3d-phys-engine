@@ -35,21 +35,23 @@ pnpm dev
 
 ### Tests
 
-There is **no root `test` script**. Only the ecs package has a working Vitest setup
-(`packages/ecs/vitest.config.ts`, jsdom + setup file):
+There is **no root `test` script**. Two packages have a Vitest setup: ecs
+(`packages/ecs/vitest.config.ts`, jsdom + setup file) and renderer
+(`packages/renderer/vitest.config.ts`, node environment, mirrors the ecs aliases/loaders):
 
 ```bash
 pnpm --filter @web-3d-phys-engine/ecs test:run        # all ecs tests
 pnpm --filter @web-3d-phys-engine/ecs test            # watch mode
 pnpm --filter @web-3d-phys-engine/ecs exec vitest run src/core/pool/__tests__/PoolMemoryLeakTest.test.ts   # single file
 pnpm --filter @web-3d-phys-engine/ecs exec vitest run -t "name pattern"                                    # single test
+pnpm --filter @web-3d-phys-engine/renderer exec vitest run src/webGPU/core/__tests__   # HGRP contract tests (green)
+pnpm --filter @web-3d-phys-engine/renderer test       # everything, incl. the rotten decorator tests (12 fail)
 ```
 
 Known-broken test infrastructure (do not trust it, fix it before relying on it):
 
 - Root `vitest.config.ts` points at a nonexistent `src/` — leftover from the pre-monorepo layout.
 - `tests/` at repo root is **Jest** (with jest deps in root devDependencies) and is referenced by nothing.
-- `packages/renderer` has a `test` script but no vitest config, so `@ecs`/`@renderer` aliases don't resolve there.
 - Any vitest config that loads renderer/ecs source needs the shared `wgslLoader`/`gltfLoader`
   plugins from `scripts/vite-asset-loaders.ts` (ecs's config uses them; web-client's vite config
   imports the same module — don't fork a second copy).
@@ -60,7 +62,9 @@ Known-broken test infrastructure (do not trust it, fix it before relying on it):
 
 1. `pnpm typecheck`
 2. `pnpm lint`
-3. `pnpm --filter @web-3d-phys-engine/ecs test:run` (when ecs is touched)
+3. `pnpm --filter @web-3d-phys-engine/ecs test:run` (when ecs is touched);
+   `pnpm --filter @web-3d-phys-engine/renderer exec vitest run src/webGPU/core/__tests__`
+   (when the HGRP material contract or its derivations are touched)
 4. `pnpm --filter @web-3d-phys-engine/web-client exec vite build` — catches resolution/bundling
    errors that typecheck cannot
 5. Rendering behavior can only be confirmed in the browser — ask the user to check.
@@ -175,6 +179,12 @@ eagerly compiled at startup (single-point registration + on-demand compilation i
 follow-up goal). Materials select shaders via `material.customShaderId`, which flows into the
 semantic pipeline key.
 
+The HGRP family adds **generated fragments** (`generated/*.wgsl`, registered by `registry.ts`
+from `HGRPMaterialLayout.ts`): its uniform structs and per-variant `@group(2)` bindings are
+derived from the declaration tables in `packages/renderer/src/material/hgrpContract.ts`, which
+also drive the CPU packer, the bind group layouts and the calibration GUI schema. Change the
+table, never a derived copy; `hgrp_outline.wgsl` is the one hand-written group-2 layout left.
+
 ### web-client
 
 Wiring is fully explicit in `main.ts`: construct `Game`, `world.addSystem(...)` each system,
@@ -228,7 +238,8 @@ Current state that is easy to misread as bugs or dead code — check here before
 - Known pre-existing test rot: pool tests fail with `ComponentClass.poolConfig` on undefined
   (a `ComponentPoolList` entry is undefined under Vitest's SSR module order — same barrel-cycle
   disease as the ShaderCompiler case in Domain Notes); several `PerformanceSystem` assertions
-  drifted from evolved constants.
+  drifted from evolved constants; renderer's `decorators/tests/*` (12 failures) never ran
+  before the renderer vitest config existed (2026-09-02).
 
 ## Code Conventions
 
@@ -350,8 +361,8 @@ answer depends on knowing the history of this change, delete it.
 **Write them in English — subject and body both**, whatever language the conversation was in.
 
 **Keep them short**: a conventional-commit subject plus at most a few sentences of prose on what
-changed and why. Root-cause analyses, benchmark numbers, design trade-offs go into that day's
-`.claude-workbook/` entry, and the commit body points at it (`See workbook YYYY-MM-DD.`).
+changed and why. Root-cause analyses, benchmark numbers, design trade-offs go into this session's
+`.claude-workbook/` file, and the commit body points at it (`See workbook YYYY-MM-DD-N.`).
 Body ≤ 5 lines of prose; no bullet lists, tables, code blocks, or logs.
 
 Write the workbook entry first, then write the commit against it, so the analysis exists in
@@ -383,6 +394,11 @@ tracked record exists.
 `.claude-workbook/`, `.claude-learnings/`, and `/ROADMAP.md` are **gitignored, local-only
 notes** — never `git add` them. Delivery relies on tracked code and docs.
 
+**One workbook file per session** (user convention, 2026-09-02): a session opens its own
+`YYYY-MM/YYYY-MM-DD.md` and appends to it as work lands; a second session on the same day
+opens `YYYY-MM-DD-2.md`, a third `-3`, and so on. Never append to a previous session's file
+— its content is that session's record and commit messages already point at it.
+
 ### When starting work
 
 1. Read this file.
@@ -392,9 +408,10 @@ notes** — never `git add` them. Delivery relies on tracked code and docs.
 
 ### When work is done
 
-1. **Workbook**: record the work in `YYYY-MM/YYYY-MM-DD.md` (problem, root cause, solution,
-   files, verification), add a line to that month's `YYYY-MM/index.md`. New month → new folder +
-   month index + one line in the top-level `index.md`.
+1. **Workbook**: record the work in this session's file `YYYY-MM/YYYY-MM-DD[-N].md` (problem,
+   root cause, solution, files, verification), add a line for the file to that month's
+   `YYYY-MM/index.md`. New month → new folder + month index + one line in the top-level
+   `index.md`.
 2. **Learnings**: write newly discovered key details into the matching scope file (or a new
    scope), update its `index.md`.
 3. **Roadmap**: move finished items to ✅ in the scope file (with workbook date / commit hash);
