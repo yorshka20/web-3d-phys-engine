@@ -78,8 +78,16 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let sheen = pow(sin_th, 16.0) *
         (hgrp_material.pantyhose_specular_int * 1.5 * hgrp_material.use_pantyhose);
 
-    return vec4<f32>(
-        color + vec3<f32>(sheen) + spec + emission + hgrp_ambient(core.albedo),
-        core.alpha,
+    // Opt-in environment reflection on the metallic zones (sceneSettings.envReflection,
+    // 0 by default): the ambient hemisphere along the reflected view direction, through the
+    // normal-mapped normal — the hypothesis under test is that the quilted metallic lining
+    // reads bright in-game because its normal map reflects the surroundings everywhere,
+    // where a flat metal plate does not (guess ledger A8).
+    let env_spec = hgrp_env(reflect(-view_dir, n)) *
+        (metallic * mg.y * scene_lighting.ambient.w);
+
+    return hgrp_debug_view(
+        vec4<f32>(color + vec3<f32>(sheen) + spec + emission + hgrp_ambient(core.albedo) + env_spec, core.alpha),
+        input.uv0,
     );
 }

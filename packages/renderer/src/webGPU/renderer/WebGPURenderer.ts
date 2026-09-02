@@ -8,7 +8,13 @@ import { GeometryManager } from '../core/GeometryManager';
 import { GPUResourceCoordinator } from '../core/GPUResourceCoordinator';
 import { InstanceManager } from '../core/InstanceManager';
 import { getOrCreateHGRPFrameBindGroupLayout } from '../core/HGRPMaterialResources';
-import { packSceneLighting, SCENE_LIGHTING_BYTE_SIZE, sceneSettings } from './sceneSettings';
+import {
+  HGRP_DEBUG_VIEW_BYTE_SIZE,
+  packHGRPDebugView,
+  packSceneLighting,
+  SCENE_LIGHTING_BYTE_SIZE,
+  sceneSettings,
+} from './sceneSettings';
 import { MaterialBinder } from '../core/MaterialBinder';
 import { MaterialManager } from '../core/MaterialManager';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
@@ -95,6 +101,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   // SceneLighting uniform (group 3 binding 1), rewritten from sceneSettings every frame
   private sceneLightingBuffer?: GPUBuffer;
   private readonly sceneLightingData = new Float32Array(SCENE_LIGHTING_BYTE_SIZE / 4);
+  // Material debug view selector (group 3 binding 2)
+  private debugViewBuffer?: GPUBuffer;
+  private readonly debugViewData = new Float32Array(HGRP_DEBUG_VIEW_BYTE_SIZE / 4);
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
@@ -798,6 +807,11 @@ export class WebGPURenderer implements IWebGPURenderer {
       0,
       packSceneLighting(this.sceneLightingData),
     );
+    this.device.queue.writeBuffer(
+      this.getDebugViewBuffer(),
+      0,
+      packHGRPDebugView(this.debugViewData),
+    );
     this.depthPrepass.execute(commandEncoder, frameData);
     await this.forwardPass.execute(commandEncoder, frameData);
     this.bloomPass.execute(commandEncoder);
@@ -834,11 +848,23 @@ export class WebGPURenderer implements IWebGPURenderer {
         entries: [
           { binding: 0, resource: this.prepassDepthTexture.createView() },
           { binding: 1, resource: { buffer: this.getSceneLightingBuffer() } },
+          { binding: 2, resource: { buffer: this.getDebugViewBuffer() } },
         ],
       });
       this.hgrpFrameBindGroupTexture = this.prepassDepthTexture;
     }
     return this.hgrpFrameBindGroup;
+  }
+
+  private getDebugViewBuffer(): GPUBuffer {
+    if (!this.debugViewBuffer) {
+      this.debugViewBuffer = this.device.createBuffer({
+        label: 'hgrpDebugView',
+        size: HGRP_DEBUG_VIEW_BYTE_SIZE,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+    }
+    return this.debugViewBuffer;
   }
 
   private getSceneLightingBuffer(): GPUBuffer {

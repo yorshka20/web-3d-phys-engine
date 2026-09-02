@@ -16,3 +16,4 @@
 // nothing was drawn), read by the screen-space rim, and the scene lighting block.
 @group(3) @binding(0) var scene_depth: texture_depth_2d;
 @group(3) @binding(1) var<uniform> scene_lighting: SceneLighting;
+@group(3) @binding(2) var<uniform> hgrp_debug: HGRPDebugView;

@@ -26,6 +26,14 @@ fn hgrp_ambient(albedo: vec3<f32>) -> vec3<f32> {
     return albedo * scene_lighting.ambient.rgb;
 }
 
+// Environment color seen along a direction, for the opt-in metal reflection term: the ambient
+// color as a hemisphere whose up/down contrast is sceneSettings.envGradient
+// (scene_lighting.light_dir.w). A stand-in for a reflection probe.
+fn hgrp_env(dir: vec3<f32>) -> vec3<f32> {
+    let gradient = scene_lighting.light_dir.w;
+    return scene_lighting.ambient.rgb * mix(1.0 - gradient, 1.0 + gradient, dir.y * 0.5 + 0.5);
+}
+
 // HGRP diffuse ramps are 256x1 LUTs; sample half a texel away from the edges so clamp
 // addressing doesn't bleed the outermost texels.
 fn hgrp_ramp_inset(u: f32) -> f32 {

@@ -14,8 +14,9 @@ import { BindGroupManager } from './BindGroupManager';
  */
 
 // Group 3 for every HGRP variant pipeline: per-frame global resources — the prepass depth
-// texture read by the screen-space rim and the SceneLighting uniform (key light + ambient).
-// One bind group per frame (owned by WebGPURenderer), shared across all HGRP draws.
+// texture read by the screen-space rim, the SceneLighting uniform (key light + ambient) and
+// the material debug view selector. One bind group per frame (owned by WebGPURenderer),
+// shared across all HGRP draws.
 export const HGRP_FRAME_BIND_GROUP_LAYOUT_ID = 'hgrpFrameBindGroupLayout';
 
 export function getOrCreateHGRPFrameBindGroupLayout(
@@ -35,6 +36,11 @@ export function getOrCreateHGRPFrameBindGroupLayout(
       },
       {
         binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: { type: 'uniform' },
+      },
+      {
+        binding: 2,
         visibility: GPUShaderStage.FRAGMENT,
         buffer: { type: 'uniform' },
       },

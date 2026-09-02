@@ -18,5 +18,8 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let highlight = hgrp_face_highlight(input.uv0);
     let emission = hgrp_emission(input.uv0);
 
-    return vec4<f32>(core.lit + hgrp_ambient(core.albedo) + highlight + emission, core.alpha);
+    return hgrp_debug_view(
+        vec4<f32>(core.lit + hgrp_ambient(core.albedo) + highlight + emission, core.alpha),
+        input.uv0,
+    );
 }

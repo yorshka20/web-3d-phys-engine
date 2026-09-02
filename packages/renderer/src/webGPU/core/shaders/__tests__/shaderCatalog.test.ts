@@ -198,6 +198,23 @@ describe('HGRP derived shader modules', () => {
     expect(body).toMatch(/\bbump_map\b/);
   });
 
+  it('generates a debug view that switches only over the slots the permutation binds', () => {
+    const body: HGRPPermutation = {
+      variant: 'CharacterNPR_Skin',
+      enabled: ['ramp', 'shadowLut', 'normal'],
+    };
+    const source = compose(derive(hgrpPermutationShaderId(body)));
+    const view = source.slice(source.indexOf('fn hgrp_debug_view('));
+    expect(view).toMatch(/textureSample\(base_map, base_sampler, uv0\)/);
+    expect(view).toMatch(/textureSample\(shadow_lut_tex, base_sampler, uv0\)/);
+    expect(view).not.toMatch(/sdf_lightmap|highlight_map|emission_map|emotion_map/);
+    for (const variant of VARIANTS) {
+      expect(compose(derive(hgrpPermutationShaderId(allOff(variant))))).toContain(
+        'fn hgrp_debug_view(',
+      );
+    }
+  });
+
   it('rejects ids that are not canonical permutations', () => {
     expect(() => createDerivedShaderModule('hgrp_skin_shader+normal+ramp')).toThrow(/order/);
     expect(() => createDerivedShaderModule('hgrp_skin_shader+nothing')).toThrow(/static subsystem/);

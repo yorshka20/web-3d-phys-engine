@@ -1,5 +1,6 @@
 import {
   HGRP_MATERIAL_PARAMS_LAYOUT,
+  hgrpDebugViewFragment,
   hgrpGroup2BindingsFragment,
   hgrpParamsLayoutForVariant,
   hgrpPermutation,
@@ -497,6 +498,8 @@ function hgrpNprFamilyIncludes(
           ...hgrpSubsystemIncludes(permutation),
           'lighting/hgrp_npr.wgsl',
           ...(permutation.variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
+          'core/hgrp_debug.wgsl',
+          hgrpDebugViewFragment(permutation),
         ]
       : []),
   ];
@@ -512,6 +515,8 @@ function hgrpVfxIncludes(permutation: HGRPPermutation): string[] {
     'bindings/hgrp_bindings.wgsl',
     hgrpGroup2BindingsFragment(permutation),
     'core/hgrp_vertex.wgsl',
+    'core/hgrp_debug.wgsl',
+    hgrpDebugViewFragment(permutation),
   ];
 }
 

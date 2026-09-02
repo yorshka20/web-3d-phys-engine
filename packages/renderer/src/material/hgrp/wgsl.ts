@@ -6,7 +6,7 @@ import {
   hgrpPermutationShaderId,
 } from './permutation';
 import { hgrpSubsystem, HGRPSubsystem, HGRPSubsystemId } from './subsystems';
-import { HGRP_SAMPLER_BINDINGS, hgrpTextureBindings } from './textures';
+import { HGRP_SAMPLER_BINDINGS, hgrpDebugSlotId, hgrpTextureBindings } from './textures';
 
 // Generated WGSL fragments, resolved on demand by webGPU/core/shaders/registry.ts
 // (resolveShaderFragment) and included by the HGRP shader modules (create.ts):
@@ -14,15 +14,55 @@ import { HGRP_SAMPLER_BINDINGS, hgrpTextureBindings } from './textures';
 //   generated/hgrp_material_params.wgsl      struct declaration, one per params struct
 //   generated/hgrp_group2_<shaderId>.wgsl    @group(2) bindings of one permutation
 //   generated/hgrp_off_<subsystem>.wgsl      off-stub of one static subsystem's hook
+//   generated/hgrp_debug_<shaderId>.wgsl     material debug view over the permutation's slots
 //
 // Nothing here is enumerated up front: a permutation's fragment is generated the first time a
 // module including it is compiled.
 
 const GROUP2_PREFIX = 'generated/hgrp_group2_';
 const OFF_STUB_PREFIX = 'generated/hgrp_off_';
+const DEBUG_VIEW_PREFIX = 'generated/hgrp_debug_';
 
 export function hgrpGroup2BindingsFragment(permutation: HGRPPermutation): string {
   return `${GROUP2_PREFIX}${hgrpPermutationShaderId(permutation)}.wgsl`;
+}
+
+export function hgrpDebugViewFragment(permutation: HGRPPermutation): string {
+  return `${DEBUG_VIEW_PREFIX}${hgrpPermutationShaderId(permutation)}.wgsl`;
+}
+
+// hgrp_debug_view(shaded, uv0): the material debug view of one permutation. A switch over the
+// slot ids of exactly the slots this permutation binds — a slot that is not bound has no case
+// and reports itself unbound (magenta) — so the fragment never references a texture the
+// permutation does not declare. The slot id comes from the HGRPDebugView uniform (group 3),
+// which is uniform control flow, so textureSample is legal inside the switch.
+function debugViewWgsl(permutation: HGRPPermutation): string {
+  const shaderId = hgrpPermutationShaderId(permutation);
+  const cases = hgrpTextureBindings(permutation).map(
+    (tex) =>
+      `        case ${hgrpDebugSlotId(tex.slot)}: { // ${tex.slot}\n` +
+      `            texel = textureSample(${tex.wgslName}, base_sampler, uv0);\n` +
+      `            bound = true;\n` +
+      `        }`,
+  );
+  return [
+    `// Generated material debug view for ${shaderId}: one case per bound slot, by slot id`,
+    '// (material/hgrp/textures.ts hgrpDebugSlotId). Edit material/hgrp/wgsl.ts, not this text.',
+    'fn hgrp_debug_view(shaded: vec4<f32>, uv0: vec2<f32>) -> vec4<f32> {',
+    '    let slot = i32(hgrp_debug.view.x);',
+    '    if slot < 0 {',
+    '        return shaded;',
+    '    }',
+    '    var texel = vec4<f32>(0.0);',
+    '    var bound = false;',
+    '    switch slot {',
+    ...cases,
+    '        default: {}',
+    '    }',
+    '    return hgrp_debug_color(texel, bound, i32(hgrp_debug.view.y));',
+    '}',
+    '',
+  ].join('\n');
 }
 
 export function hgrpOffStubFragment(subsystem: HGRPSubsystemId): string {
@@ -113,6 +153,10 @@ export function hgrpGeneratedFragment(
   if (path.startsWith(GROUP2_PREFIX) && path.endsWith('.wgsl')) {
     const shaderId = path.slice(GROUP2_PREFIX.length, -'.wgsl'.length);
     return group2BindingsWgsl(hgrpPermutationForShaderId(shaderId));
+  }
+  if (path.startsWith(DEBUG_VIEW_PREFIX) && path.endsWith('.wgsl')) {
+    const shaderId = path.slice(DEBUG_VIEW_PREFIX.length, -'.wgsl'.length);
+    return debugViewWgsl(hgrpPermutationForShaderId(shaderId));
   }
   if (path.startsWith(OFF_STUB_PREFIX) && path.endsWith('.wgsl')) {
     const subsystem = hgrpSubsystem(

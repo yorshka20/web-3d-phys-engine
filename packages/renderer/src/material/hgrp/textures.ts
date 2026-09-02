@@ -108,6 +108,17 @@ export const HGRP_UNIMPLEMENTED_SLOTS: Partial<
   },
 };
 
+// Stable id of a slot across variants — its index in the HGRP_TEXTURE_SLOTS registry. The
+// material debug view selects a slot by this id (renderer/sceneSettings.ts), and the generated
+// per-permutation debug fragment switches on it (wgsl.ts).
+export function hgrpDebugSlotId(slot: string): number {
+  const index = Object.keys(HGRP_TEXTURE_SLOTS).indexOf(slot);
+  if (index < 0) {
+    throw new Error(`HGRP contract: unregistered slot ${slot}`);
+  }
+  return index;
+}
+
 export const HGRP_SAMPLER_BINDINGS = { base: 1, ramp: 2 } as const;
 
 export const HGRP_TEXTURE_BINDING_START = 3;

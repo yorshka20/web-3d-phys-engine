@@ -1,4 +1,5 @@
 import tonemapShader from '../../core/shaders/passes/tonemap.wgsl';
+import { isHGRPDebugViewOn } from '../sceneSettings';
 import { bloomSettings } from './BloomPass';
 
 export interface TonemapPassDeps {
@@ -59,6 +60,7 @@ export class TonemapPass {
     this.settingsData[2] = tonemapSettings.contrast;
     this.settingsData[3] = tonemapSettings.saturation;
     this.settingsData[4] = tonemapSettings.temperature;
+    this.settingsData[5] = isHGRPDebugViewOn() ? 1 : 0;
     this.deps.device.queue.writeBuffer(this.settingsBuffer!, 0, this.settingsData);
 
     const renderPass = commandEncoder.beginRenderPass({

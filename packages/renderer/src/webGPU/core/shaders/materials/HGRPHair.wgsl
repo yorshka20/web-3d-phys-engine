@@ -56,5 +56,8 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.uv0,
     );
     let mg = hgrp_metallic_gloss(input.uv0);
-    return vec4<f32>(lined + hgrp_hair_band(n_spec, mg.y, mg.z), shaded.alpha);
+    return hgrp_debug_view(
+        vec4<f32>(lined + hgrp_hair_band(n_spec, mg.y, mg.z), shaded.alpha),
+        input.uv0,
+    );
 }

@@ -37,7 +37,9 @@ All shader fragments are managed through `registry.ts`: `shaderFragmentRegistry`
 `wgsl-loader`) and keys it by its path relative to `shaders/` — `core/uniforms.wgsl`,
 `materials/HGRPNpr.wgsl`. Dropping a file into the tree is its registration. Lookups go through
 `resolveShaderFragment(path)`, which falls back to fragments a family **generates on demand**
-under `generated/` and memoizes them: the HGRP material contract (`material/hgrp/wgsl.ts`)
+under `generated/` and memoizes them (struct declarations, per-permutation `@group(2)` bindings,
+off-stubs, and the per-permutation material debug view `hgrp_debug_view` that switches over
+exactly the slots the permutation binds): the HGRP material contract (`material/hgrp/wgsl.ts`)
 emits its uniform structs, one group-2 binding block per shader permutation and one off-stub
 per static subsystem, so the WGSL declarations, the bind group layout and the CPU packer share
 one declaration table.

@@ -70,5 +70,5 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let base = hgrp_vfx.tint_color.rgb * hgrp_vfx.tint_intensity;
     let embers = blend_value * hgrp_vfx.blend_tint.rgb * hgrp_vfx.use_blend;
 
-    return vec4<f32>((base + embers) * coverage, coverage);
+    return hgrp_debug_view(vec4<f32>((base + embers) * coverage, coverage), input.uv0);
 }

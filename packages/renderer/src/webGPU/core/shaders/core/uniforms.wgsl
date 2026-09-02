@@ -23,12 +23,20 @@ struct MVPUniforms {
 }
 
 // Per-frame scene lighting for the HGRP family (renderer/sceneSettings.ts packSceneLighting):
-// the key light direction (toward the light, normalized), the key light color pre-multiplied
-// by its intensity, and the ambient color pre-multiplied by its intensity.
+// the key light direction (toward the light, normalized; w = envGradient), the key light color
+// pre-multiplied by its intensity, and the ambient color pre-multiplied by its intensity
+// (w = envReflection, the opt-in metal environment-reflection strength).
 struct SceneLighting {
     light_dir: vec4<f32>,
     light: vec4<f32>,
     ambient: vec4<f32>,
+}
+
+// Material debug view (renderer/sceneSettings.ts packHGRPDebugView): x = texture slot id
+// (index in the HGRP_TEXTURE_SLOTS registry, -1 = off), y = channel mode
+// (core/hgrp_debug.wgsl). The generated per-permutation hgrp_debug_view switches on x.
+struct HGRPDebugView {
+    view: vec4<f32>,
 }
 
 // Standard PBR material uniforms

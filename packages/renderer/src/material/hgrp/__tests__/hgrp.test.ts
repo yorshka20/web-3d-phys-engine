@@ -14,6 +14,8 @@ import {
   HGRP_VFX_PARAMS_LAYOUT,
   hgrpAllTextureBindings,
   hgrpApplicableSubsystems,
+  hgrpDebugSlotId,
+  hgrpDebugViewFragment,
   hgrpGeneratedFragment,
   hgrpGroup2BindingsFragment,
   HGRPMaterialDescriptor,
@@ -497,6 +499,19 @@ describe('generated WGSL', () => {
     expect(vfx).toContain('@group(2) @binding(0) var<uniform> hgrp_vfx: HGRPVfxParams;');
     expect(vfx).toContain('@group(2) @binding(6) var mask_tex: texture_2d<f32>;');
     expect(vfx).not.toContain('base_map');
+  });
+
+  it('generates the debug view over the permutation slots by registry slot id', () => {
+    const iris: HGRPPermutation = { variant: 'CharacterNPR_Eye', enabled: ['ramp', 'eyeMatcap'] };
+    const path = hgrpDebugViewFragment(iris);
+    expect(path).toBe('generated/hgrp_debug_hgrp_eye_shader+ramp+eyeMatcap.wgsl');
+    const view = hgrpGeneratedFragment(path, lookup)!;
+    expect(view).toContain('fn hgrp_debug_view(shaded: vec4<f32>, uv0: vec2<f32>) -> vec4<f32>');
+    expect(view).toContain(`case ${hgrpDebugSlotId('_BaseMap')}: { // _BaseMap`);
+    expect(view).toContain(`case ${hgrpDebugSlotId('_MatcapTex')}: { // _MatcapTex`);
+    expect(view).not.toContain('shadow_lut_tex');
+    expect(hgrpDebugSlotId('_BaseMap')).toBe(0);
+    expect(() => hgrpDebugSlotId('_Nothing')).toThrow(/unregistered/);
   });
 
   it('copies the hook signature into the off-stub', () => {

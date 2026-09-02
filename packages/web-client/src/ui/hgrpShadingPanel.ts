@@ -12,7 +12,11 @@ import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
 import { bloomSettings } from '@renderer/webGPU/renderer/passes/BloomPass';
 import { taaSettings } from '@renderer/webGPU/renderer/passes/TAAPass';
 import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
-import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
+import {
+  HGRP_DEBUG_CHANNELS,
+  HGRP_DEBUG_SLOT_NAMES,
+  sceneSettings,
+} from '@renderer/webGPU/renderer/sceneSettings';
 import { Pane } from 'tweakpane';
 import { DebugTab } from './debugTabs';
 
@@ -249,6 +253,18 @@ function mountPane(container: HTMLElement, assetIds: readonly string[]): () => v
     .on('change', (ev) => {
       sceneSettings.ambientColor = [ev.value.r, ev.value.g, ev.value.b];
     });
+  lighting.addBinding(sceneSettings, 'envReflection', { min: 0, max: 3, step: 0.01 });
+  lighting.addBinding(sceneSettings, 'envGradient', { min: 0, max: 1, step: 0.01 });
+
+  // Material debug view: show one texture slot of every HGRP material on the mesh instead of
+  // its shading. Magenta = the material's permutation does not bind that slot.
+  const debug = globalFolder.addFolder({ title: 'Debug view (textures)', expanded: true });
+  debug.addBinding(sceneSettings.debugView, 'slot', {
+    options: Object.fromEntries(HGRP_DEBUG_SLOT_NAMES.map((name) => [name, name])),
+  });
+  debug.addBinding(sceneSettings.debugView, 'channel', {
+    options: Object.fromEntries(HGRP_DEBUG_CHANNELS.map((name) => [name, name])),
+  });
 
   assetIds.forEach((assetId, index) => addCharacterFolder(pane, assetId, index === 0));
 
