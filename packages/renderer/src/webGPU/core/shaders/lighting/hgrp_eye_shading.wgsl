@@ -25,14 +25,15 @@ fn hgrp_shade_eye(
 ) -> vec4<f32> {
     let n = normalize(world_normal);
     // Iris parallax: shift the sampled UV along the tangent-space view direction to fake
-    // eye depth (_ParallaxScale 0.03 on the iris). Gated to the matcap path — the brow
-    // carries an unrelated 0.5 that would tear its UVs apart.
+    // eye depth (_ParallaxScale 0.03 on the iris). Gated to the iris — the brow carries an
+    // unrelated 0.5 that would tear its UVs apart.
+    let is_iris = hgrp_material.is_iris > 0.5;
     let view_dir = normalize(mvp.camera_pos - world_position);
     let t_view = vec2<f32>(
         dot(view_dir, normalize(world_tangent)),
         dot(view_dir, normalize(world_bitangent)),
     );
-    let uv = uv0 - t_view * (hgrp_material.parallax_scale * hgrp_material.use_matcap);
+    let uv = uv0 - t_view * (hgrp_material.parallax_scale * hgrp_material.is_iris);
 
     let base = hgrp_base_color(uv);
     let tinted = base.rgb * hgrp_material.eye_tint_color.rgb;
@@ -47,9 +48,9 @@ fn hgrp_shade_eye(
     let shadow_color = select(hsv_shadow, lut_shadow, hgrp_material.use_shadow_lut > 0.5);
 
     // Unlit iris: the in-game iris is uniformly luminous with no diffuse terminator
-    // (reference screenshot, 2026-09-01) — the matcap path forces full lit weight and
-    // takes no rim, while the brow keeps ramp shading.
-    let is_iris = hgrp_material.use_matcap > 0.5;
+    // (reference screenshot, 2026-09-01) — the iris forces full lit weight and takes no
+    // rim, while the brow keeps ramp shading. The role comes from the descriptor's eyeLayer
+    // (material/hgrp.ts), not from a feature gate.
     let w = select(
         hgrp_shadow_weight(ndotl * 0.5 + 0.5, hgrp_material.use_diff_ramp),
         vec3<f32>(1.0),

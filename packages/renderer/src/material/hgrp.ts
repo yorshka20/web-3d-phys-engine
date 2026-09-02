@@ -86,6 +86,27 @@ export function hgrpBlendMode(floats: Record<string, number>): HGRPBlendMode {
     : 'straight';
 }
 
+// Which eye-region surface a CharacterNPR_Eye material is. The two share one shader in the
+// game and the rip carries no explicit tag; the engine needs the distinction because the iris
+// card sits behind the eye-white and is drawn through it (HGRPEyeOverlayStage) and shades
+// unlit, while the brow is a regular opaque surface that shows through the bangs.
+export type HGRPEyeLayer = 'iris' | 'brow';
+
+// Derivation rule: the catchlight (_EyeHighLight) is the only Eye-variant feature that is
+// definitionally an eyeball feature — a brow can legitimately carry a matcap, a shadow LUT or
+// a ramp, so none of those is an identity. No render-state key separates the two either: both
+// sit in the _PreZStencilRefOption 52 show-through group (_AlphaDstBlend differs, 0 vs 10, but
+// its semantics did not survive the rip). Holds for both ripped characters (2026-09-02).
+export function hgrpEyeLayer(
+  variant: HGRPShaderVariant,
+  floats: Record<string, number>,
+): HGRPEyeLayer | undefined {
+  if (variant !== 'CharacterNPR_Eye') {
+    return undefined;
+  }
+  return floats._EyeHighLight === 1 ? 'iris' : 'brow';
+}
+
 export interface HGRPMaterialDescriptor extends BaseMaterial {
   materialType: 'hgrp';
   materialKey: string; // hgrp_<character>_<materialName>
@@ -98,6 +119,9 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
   alphaCutoff: number;
   doubleSided: boolean;
   blendMode: HGRPBlendMode;
+  // Resolved once at load (hgrpEyeLayer); the draw lists and the shader read this role, never
+  // a feature flag or a texture's presence, to tell the iris from the brow.
+  eyeLayer?: HGRPEyeLayer;
   // False keeps the material out of the draw lists entirely (see HGRPCharacterFlags). The
   // draw list reads this boolean and nothing else — it must never test a character or
   // material name to decide what to draw.
@@ -175,6 +199,7 @@ export function createHGRPMaterialFromPreset(
     alphaCutoff: floats._AlphaClipThreshold ?? 0.5,
     doubleSided: floats._Cull === 0,
     blendMode: hgrpBlendMode(floats),
+    eyeLayer: hgrpEyeLayer(variant, floats),
     enabled: gateFlag === undefined || flags[gateFlag] === true,
   };
 }

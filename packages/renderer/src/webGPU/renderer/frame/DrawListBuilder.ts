@@ -25,10 +25,9 @@ export interface DrawLists {
   // walk. pipelineKey is a fixed tag — outline has exactly one pipeline.
   outline: DrawItem[];
   // Eye overlay (see HGRPEyeOverlayStage): the iris draws with a depth-biased projection
-  // after the opaque walk, leaving the opaque list. Identified as the Eye-variant material
-  // of the _PreZStencilRefOption 52 "shows-through" group that carries a matcap slot; the
-  // brow (same group, no matcap) stays a regular opaque draw. The 36 group (cloth/hair) is
-  // a different system.
+  // after the opaque walk, leaving the opaque list. Identified by the descriptor's declared
+  // eyeLayer within the _PreZStencilRefOption show-through group; the brow (same group)
+  // stays a regular opaque draw. The 36 group (cloth/hair) is a different system.
   eyeOverlay: DrawItem[];
   // Brow-through compositing (see HGRPBrowCompositeStage): hair with _DrawUnderBrow stamps
   // a sw_M-masked stencil mark, then the brow (also kept in opaque for its normal draw)
@@ -98,9 +97,8 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
     }
 
     if (
-      hgrpMaterial?.variant === 'CharacterNPR_Eye' &&
-      hgrpMaterial.floats._PreZStencilRefOption !== undefined &&
-      hgrpMaterial.textures._MatcapTex !== undefined
+      hgrpMaterial?.eyeLayer === 'iris' &&
+      hgrpMaterial.floats._PreZStencilRefOption !== undefined
     ) {
       eyeOverlay.push({ renderable, pipelineKey: 'hgrp_eye_overlay', viewDepth: 0 });
       continue;

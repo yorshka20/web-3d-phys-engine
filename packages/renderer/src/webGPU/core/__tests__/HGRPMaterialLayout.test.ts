@@ -1,4 +1,8 @@
-import { HGRPMaterialDescriptor, HGRPShaderVariant } from '@renderer/material/hgrp';
+import {
+  createHGRPMaterialFromPreset,
+  HGRPMaterialDescriptor,
+  HGRPShaderVariant,
+} from '@renderer/material/hgrp';
 import {
   HGRP_MATERIAL_PARAMS,
   HGRP_PARAMS_STRUCTS,
@@ -72,6 +76,7 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   eye_tint_color: 68,
   use_metallic_gloss_map: 72,
   hair_brow_mask_threshold: 73,
+  is_iris: 74,
 };
 
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
@@ -288,6 +293,43 @@ describe('HGRP material contract', () => {
     );
     const lineAmount = HGRP_TUNABLE_FLOATS.find((d) => d.key === '_LineAmount')!;
     expect(lineAmount).toEqual({ key: '_LineAmount', default: 300, min: 0, max: 600, step: 1 });
+  });
+});
+
+describe('eye layer role', () => {
+  const preset = (shader: string, floats: Record<string, number>) => ({
+    shader,
+    textures: {},
+    floats,
+    ints: {},
+    colors: {},
+  });
+
+  it('is derived from the catchlight gate, not from the matcap texture', () => {
+    const iris = createHGRPMaterialFromPreset(
+      'c',
+      'iris',
+      preset('HGRP/CharacterNPR_Eye', { _EyeHighLight: 1, _UseMatcap: 0 }),
+    );
+    const brow = createHGRPMaterialFromPreset(
+      'c',
+      'brow',
+      preset('HGRP/CharacterNPR_Eye', { _EyeHighLight: 0, _UseMatcap: 1 }),
+    );
+    const cloth = createHGRPMaterialFromPreset(
+      'c',
+      'cloth',
+      preset('HGRP/CharacterNPR', { _EyeHighLight: 1 }),
+    );
+    expect(iris.eyeLayer).toBe('iris');
+    expect(brow.eyeLayer).toBe('brow');
+    expect(cloth.eyeLayer).toBeUndefined();
+    expect(
+      packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, iris)[MATERIAL_PARAMS_F32_INDEX.is_iris],
+    ).toBe(1);
+    expect(
+      packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, brow)[MATERIAL_PARAMS_F32_INDEX.is_iris],
+    ).toBe(0);
   });
 });
 

@@ -80,6 +80,7 @@ export type HGRPSubsystemId =
   | 'eyeScatter'
   | 'eyeTint'
   | 'eyeParallax'
+  | 'eyeLayer'
   | 'pantyhose'
   | 'browThrough'
   | 'vfx';
@@ -165,6 +166,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
   { id: 'eyeScatter' },
   { id: 'eyeTint' },
   { id: 'eyeParallax' },
+  { id: 'eyeLayer' },
   { id: 'pantyhose', gate: '_Pantyhose' },
   {
     id: 'browThrough',
@@ -461,7 +463,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'parallax_scale',
       'eyeParallax',
       float('_ParallaxScale', 0, { min: 0, max: 0.2, step: 0.001 }),
-      'iris depth-parallax UV shift (matcap path only)',
+      'iris depth-parallax UV shift (iris only)',
     ),
     vec4('pantyhose_color', 'pantyhose', color('_PantyhoseColor', BLACK_OPAQUE, true)),
     vec4(
@@ -488,6 +490,14 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_HairBrowMaskThreshold', 0.5, { min: 0, max: 1, step: 0.01 }),
       'sw_M cutoff, brow-through mark',
     ),
+    {
+      name: 'is_iris',
+      type: 'f32',
+      subsystem: 'eyeLayer',
+      params: [],
+      pack: (material) => (material.eyeLayer === 'iris' ? 1 : 0),
+      comment: 'HGRPMaterialDescriptor.eyeLayer: 1 = iris card (unlit, parallax), 0 = brow',
+    },
   ],
 };
 
