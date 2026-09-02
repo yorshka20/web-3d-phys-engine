@@ -62,7 +62,7 @@ import simpleBindingsFragment from './bindings/simple_bindings.wgsl';
 import waterBindingsFragment from './bindings/water_bindings.wgsl';
 
 // Generated fragments (uniform structs + per-variant group-2 bindings of the HGRP contract)
-import { hgrpGeneratedShaderFragments } from '../HGRPMaterialLayout';
+import { hgrpGeneratedShaderFragments } from '../../../material/hgrp';
 
 // Shader fragment registry - maps file paths to actual fragment content. Static .wgsl files
 // are inlined by the Vite wgsl-loader; the HGRP material contract contributes generated

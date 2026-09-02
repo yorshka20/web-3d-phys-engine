@@ -1,19 +1,19 @@
-import { GLTFMaterial } from '@renderer/assets/GltfModel';
-import { RenderData } from '@renderer/frame/types';
-import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
-import { WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { GLTFMaterial } from '../../assets/GltfModel';
+import { RenderData } from '../../frame/types';
+import {
+  HGRP_MATERIAL_PARAMS_LAYOUT,
+  HGRP_SAMPLER_BINDINGS,
+  HGRPMaterialDescriptor,
+  hgrpParamsLayoutForVariant,
+  hgrpTextureBindings,
+  packHGRPParams,
+} from '../../material/hgrp';
+import { WebGPUMaterialDescriptor } from '../../material/types';
 import { assetRegistry } from './AssetRegistry';
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable } from './decorators/ResourceDecorators';
-import {
-  HGRP_MATERIAL_PARAMS_LAYOUT,
-  HGRP_SAMPLER_BINDINGS,
-  hgrpParamsLayoutForVariant,
-  hgrpTextureBindings,
-  packHGRPParams,
-} from './HGRPMaterialLayout';
 import {
   getOrCreateHGRPMaterialBindGroupLayout,
   getOrCreateHGRPOutlineBindGroupLayout,

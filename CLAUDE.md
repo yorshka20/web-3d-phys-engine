@@ -44,7 +44,7 @@ pnpm --filter @web-3d-phys-engine/ecs test:run        # all ecs tests
 pnpm --filter @web-3d-phys-engine/ecs test            # watch mode
 pnpm --filter @web-3d-phys-engine/ecs exec vitest run src/core/pool/__tests__/PoolMemoryLeakTest.test.ts   # single file
 pnpm --filter @web-3d-phys-engine/ecs exec vitest run -t "name pattern"                                    # single test
-pnpm --filter @web-3d-phys-engine/renderer exec vitest run src/webGPU/core/__tests__   # HGRP contract tests (green)
+pnpm --filter @web-3d-phys-engine/renderer exec vitest run src/material   # HGRP contract tests (green)
 pnpm --filter @web-3d-phys-engine/renderer test       # everything, incl. the rotten decorator tests (12 fail)
 ```
 
@@ -63,7 +63,7 @@ Known-broken test infrastructure (do not trust it, fix it before relying on it):
 1. `pnpm typecheck`
 2. `pnpm lint`
 3. `pnpm --filter @web-3d-phys-engine/ecs test:run` (when ecs is touched);
-   `pnpm --filter @web-3d-phys-engine/renderer exec vitest run src/webGPU/core/__tests__`
+   `pnpm --filter @web-3d-phys-engine/renderer exec vitest run src/material`
    (when the HGRP material contract or its derivations are touched)
 4. `pnpm --filter @web-3d-phys-engine/web-client exec vite build` — catches resolution/bundling
    errors that typecheck cannot
@@ -180,10 +180,12 @@ follow-up goal). Materials select shaders via `material.customShaderId`, which f
 semantic pipeline key.
 
 The HGRP family adds **generated fragments** (`generated/*.wgsl`, registered by `registry.ts`
-from `HGRPMaterialLayout.ts`): its uniform structs and per-variant `@group(2)` bindings are
-derived from the declaration tables in `packages/renderer/src/material/hgrpContract.ts`, which
-also drive the CPU packer, the bind group layouts and the calibration GUI schema. Change the
-table, never a derived copy; `hgrp_outline.wgsl` is the one hand-written group-2 layout left.
+from `material/hgrp/wgsl.ts`): its uniform structs and per-variant `@group(2)` bindings are
+derived from the declaration tables in `packages/renderer/src/material/hgrp/` (one folder =
+descriptor, subsystems, texture slots, field tables, layout/packer, WGSL codegen, GUI schema,
+self-check), which also drive the CPU packer and the bind group layouts. Change the table,
+never a derived copy; `hgrp_outline.wgsl` is the one hand-written group-2 layout left. HGRP
+pass stages live in `webGPU/renderer/passes/hgrp/`.
 
 ### web-client
 
@@ -245,7 +247,10 @@ Current state that is easy to misread as bugs or dead code — check here before
 
 - **TypeScript strict mode**; `noImplicitAny` is off — don't introduce new implicit `any`s anyway.
 - **Path aliases**: always import cross-package via `@ecs/*` / `@renderer/*`; never deep-relative
-  across package boundaries, never via `@web-3d-phys-engine/*` package names.
+  across package boundaries, never via `@web-3d-phys-engine/*` package names. **Inside a
+  package, imports are relative** (user convention, 2026-09-02) — an alias inside its own
+  package hides which module boundary a file sits on. Pre-existing intra-package alias
+  imports are being converted as files are touched.
 - **Native decorators only** (TC39 stage 3). Never turn `experimentalDecorators` back on; new
   renderer services follow the `@Injectable`/`@Inject` + `ServiceTokens` pattern.
 - **Formatting**: Prettier + ESLint (root scripts). Comments in **English**.

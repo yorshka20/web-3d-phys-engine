@@ -1,5 +1,5 @@
-import { FrameData } from '@renderer/frame/types';
-import { RectArea } from '@renderer/types/base';
+import { FrameData } from '../../frame/types';
+import { RectArea } from '../../types/base';
 import { MVPUniformManager, TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { BindGroupManager } from '../core/BindGroupManager';
 import { BufferManager } from '../core/BufferManager';
@@ -22,9 +22,9 @@ import { BloomPass } from './passes/BloomPass';
 import { DepthPrepass } from './passes/DepthPrepass';
 import { ForwardPass } from './passes/ForwardPass';
 import { FXAAPass } from './passes/FXAAPass';
-import { HGRPBrowCompositeStage } from './passes/HGRPBrowCompositeStage';
-import { HGRPEyeOverlayStage } from './passes/HGRPEyeOverlayStage';
-import { HGRPOutlineStage } from './passes/HGRPOutlineStage';
+import { HGRPBrowCompositeStage } from './passes/hgrp/HGRPBrowCompositeStage';
+import { HGRPEyeOverlayStage } from './passes/hgrp/HGRPEyeOverlayStage';
+import { HGRPOutlineStage } from './passes/hgrp/HGRPOutlineStage';
 import { TonemapPass } from './passes/TonemapPass';
 import {
   BindGroup,

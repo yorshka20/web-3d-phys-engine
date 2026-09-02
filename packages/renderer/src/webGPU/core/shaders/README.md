@@ -34,9 +34,9 @@ const shaderModule: ShaderModule = {
 
 All shader fragments are managed through `shaderFragmentRegistry` in `registry.ts`. Static
 `.wgsl` files are inlined by the Vite `wgsl-loader`; a family may also contribute **generated**
-fragments under `generated/` — the HGRP material contract (`material/hgrpContract.ts`) emits
-its uniform structs and per-variant group-2 bindings through `HGRPMaterialLayout.ts`, so the
-WGSL declarations, the bind group layout and the CPU packer share one field table.
+fragments under `generated/` — the HGRP material contract (`material/hgrp/`) emits its
+uniform structs and per-variant group-2 bindings (`material/hgrp/wgsl.ts`), so the WGSL
+declarations, the bind group layout and the CPU packer share one field table.
 
 ```typescript
 import { shaderFragmentRegistry } from './registry';

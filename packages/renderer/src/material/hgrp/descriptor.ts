@@ -1,4 +1,4 @@
-import { AlphaMode, BaseMaterial } from './types';
+import { AlphaMode, BaseMaterial } from '../types';
 
 // The HGRP (HypergryphRenderPipeline) material family reproduces the four CharacterNPR shader
 // variants from ripped Unity material data. Parameter and texture-slot names mirror the HGRP
@@ -127,9 +127,6 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
   // material name to decide what to draw.
   enabled: boolean;
 }
-
-// Parameter vocabulary, uniform fields, texture slots and the calibration GUI schema are
-// declared once in ./hgrpContract.ts.
 
 export function hgrpTextureAssetId(character: string, filename: string): string {
   return `hgrp_${character}_${filename}`;

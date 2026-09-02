@@ -1,12 +1,12 @@
-import { FrameData } from '@renderer/frame/types';
-import { BindGroupManager } from '../../core/BindGroupManager';
-import { GeometryManager } from '../../core/GeometryManager';
-import { getOrCreateHGRPOutlineBindGroupLayout } from '../../core/HGRPMaterialResources';
-import { MaterialBinder } from '../../core/MaterialBinder';
-import { MVPUniformManager } from '../../core/MVPUniformManager';
-import { createGltfVertexBufferLayout } from '../../core/pipeline/vertexLayouts';
-import { ShaderManager } from '../../core/shaders/ShaderManager';
-import { DrawItem } from '../frame/DrawListBuilder';
+import { FrameData } from '../../../../frame/types';
+import { BindGroupManager } from '../../../core/BindGroupManager';
+import { GeometryManager } from '../../../core/GeometryManager';
+import { getOrCreateHGRPOutlineBindGroupLayout } from '../../../core/HGRPMaterialResources';
+import { MaterialBinder } from '../../../core/MaterialBinder';
+import { MVPUniformManager } from '../../../core/MVPUniformManager';
+import { createGltfVertexBufferLayout } from '../../../core/pipeline/vertexLayouts';
+import { ShaderManager } from '../../../core/shaders/ShaderManager';
+import { DrawItem } from '../../frame/DrawListBuilder';
 
 export interface HGRPOutlineStageDeps {
   device: GPUDevice;

@@ -1,6 +1,6 @@
-import { FrameData, RenderData } from '@renderer/frame/types';
-import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
-import { AlphaMode, WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { FrameData, RenderData } from '../../../frame/types';
+import { HGRPMaterialDescriptor } from '../../../material/hgrp';
+import { AlphaMode, WebGPUMaterialDescriptor } from '../../../material/types';
 import { vec3 } from 'gl-matrix';
 import { generateSemanticCacheKey, generateSemanticPipelineKey } from '../../core/pipeline/types';
 import { GeometryCacheItem } from '../../core/types';

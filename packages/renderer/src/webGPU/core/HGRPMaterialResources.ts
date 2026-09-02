@@ -1,10 +1,9 @@
-import { HGRPShaderVariant } from '@renderer/material/hgrp';
+import { HGRP_SAMPLER_BINDINGS, HGRPShaderVariant, hgrpTextureBindings } from '../../material/hgrp';
 import { BindGroupManager } from './BindGroupManager';
-import { HGRP_SAMPLER_BINDINGS, hgrpTextureBindings } from './HGRPMaterialLayout';
 
 /**
  * Bind group layouts for the HGRP material family. The group-2 entries derive from the
- * contract's slot tables (HGRPMaterialLayout.ts) — the same source MaterialBinder builds the
+ * contract's slot tables (material/hgrp) — the same source MaterialBinder builds the
  * bind group entries from and the generated WGSL declares them from, so the three cannot
  * drift. Group 3 (per-frame globals) and the outline pass's private group 2 are declared here.
  */

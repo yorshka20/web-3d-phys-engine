@@ -1,30 +1,26 @@
+import { describe, expect, it } from 'vitest';
 import {
   createHGRPMaterialFromPreset,
-  HGRPMaterialDescriptor,
-  HGRPShaderVariant,
-} from '@renderer/material/hgrp';
-import {
   HGRP_MATERIAL_PARAMS,
+  HGRP_MATERIAL_PARAMS_LAYOUT,
   HGRP_PARAMS_STRUCTS,
   HGRP_TEXTURE_SLOTS,
   HGRP_TEXTURE_SLOTS_BY_VARIANT,
   HGRP_TUNABLE_COLORS,
   HGRP_TUNABLE_FLOATS,
   HGRP_VFX_PARAMS,
-  hgrpTextureWgslName,
-  validateHGRPContract,
-} from '@renderer/material/hgrpContract';
-import { describe, expect, it } from 'vitest';
-import {
-  HGRP_MATERIAL_PARAMS_LAYOUT,
   HGRP_VFX_PARAMS_LAYOUT,
   hgrpGeneratedShaderFragments,
   hgrpGroup2BindingsFragment,
+  HGRPMaterialDescriptor,
   hgrpParamsLayoutForVariant,
+  HGRPShaderVariant,
   hgrpTextureBindings,
+  hgrpTextureWgslName,
   packHGRPParams,
-} from '../HGRPMaterialLayout';
-import { layoutUniformStruct } from '../shaders/uniformStruct';
+  validateHGRPContract,
+} from '..';
+import { layoutUniformStruct } from '../../uniformStruct';
 
 // The uniform byte layout as it was hand-written before the contract existed (param ledger,
 // "uniform 布局速查"). Pinned so a reordered field table is a conscious change, not a drift.

@@ -1,15 +1,15 @@
-import { FrameData } from '@renderer/frame/types';
-import { BindGroupManager } from '../../core/BindGroupManager';
-import { GeometryManager } from '../../core/GeometryManager';
+import { FrameData } from '../../../../frame/types';
+import { BindGroupManager } from '../../../core/BindGroupManager';
+import { GeometryManager } from '../../../core/GeometryManager';
 import {
   getOrCreateHGRPFrameBindGroupLayout,
   getOrCreateHGRPMaterialBindGroupLayout,
-} from '../../core/HGRPMaterialResources';
-import { MaterialBinder } from '../../core/MaterialBinder';
-import { MVPUniformManager } from '../../core/MVPUniformManager';
-import { createGltfVertexBufferLayout } from '../../core/pipeline/vertexLayouts';
-import { ShaderManager } from '../../core/shaders/ShaderManager';
-import { DrawItem } from '../frame/DrawListBuilder';
+} from '../../../core/HGRPMaterialResources';
+import { MaterialBinder } from '../../../core/MaterialBinder';
+import { MVPUniformManager } from '../../../core/MVPUniformManager';
+import { createGltfVertexBufferLayout } from '../../../core/pipeline/vertexLayouts';
+import { ShaderManager } from '../../../core/shaders/ShaderManager';
+import { DrawItem } from '../../frame/DrawListBuilder';
 
 export interface HGRPEyeOverlayStageDeps {
   device: GPUDevice;

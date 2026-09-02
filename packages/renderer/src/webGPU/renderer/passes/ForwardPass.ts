@@ -1,5 +1,5 @@
-import { PMXModel } from '@renderer/assets/PMXModel';
-import { FrameData, RenderData } from '@renderer/frame/types';
+import { PMXModel } from '../../../assets/PMXModel';
+import { FrameData, RenderData } from '../../../frame/types';
 import { GeometryManager } from '../../core/GeometryManager';
 import { MaterialBinder, MaterialBindings } from '../../core/MaterialBinder';
 import { MVPUniformManager } from '../../core/MVPUniformManager';
@@ -10,9 +10,9 @@ import { WebGPUResourceManager } from '../../core/ResourceManager';
 import { GeometryCacheItem } from '../../core/types';
 import { buildDrawLists, DrawItem } from '../frame/DrawListBuilder';
 import { sceneSettings } from '../sceneSettings';
-import { HGRPBrowCompositeStage } from './HGRPBrowCompositeStage';
-import { HGRPEyeOverlayStage } from './HGRPEyeOverlayStage';
-import { HGRPOutlineStage } from './HGRPOutlineStage';
+import { HGRPBrowCompositeStage } from './hgrp/HGRPBrowCompositeStage';
+import { HGRPEyeOverlayStage } from './hgrp/HGRPEyeOverlayStage';
+import { HGRPOutlineStage } from './hgrp/HGRPOutlineStage';
 
 // GPU resources resolved once per frame during prepare, consumed by the synchronous encode.
 interface FrameResources {

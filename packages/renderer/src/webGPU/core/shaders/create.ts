@@ -1,9 +1,10 @@
-import { HGRP_SHADER_ID_BY_VARIANT, HGRPShaderVariant } from '@renderer/material/hgrp';
 import {
   HGRP_MATERIAL_PARAMS_LAYOUT,
+  HGRP_SHADER_ID_BY_VARIANT,
   HGRP_VFX_PARAMS_LAYOUT,
   hgrpGroup2BindingsFragment,
-} from '../HGRPMaterialLayout';
+  HGRPShaderVariant,
+} from '../../../material/hgrp';
 import { shaderFragmentRegistry } from './registry';
 import {
   CheckerboardShaderModule,
