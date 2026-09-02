@@ -194,7 +194,7 @@ describe('HGRP derived shader modules', () => {
         }),
       ),
     );
-    expect(body).not.toMatch(/\bsdf_lightmap\b|\bhighlight_map\b|\bemission_map\b/);
+    expect(body).not.toMatch(/\bsdf_lightmap\b|\bsdf_mask\b|\bhighlight_map\b|\bemission_map\b/);
     expect(body).toMatch(/\bbump_map\b/);
   });
 

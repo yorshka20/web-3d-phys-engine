@@ -16,11 +16,14 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // Spec v3 (reference-screenshot driven): the RS stays a specular COLOR lookup (raw
     // addition whitewashes — v1 lesson). _MetallicGlossMap.r holds discrete METALLIC zones:
     // metal has no diffuse, so the shaded base is suppressed there and the albedo tints the
-    // spec color (silver parts read as metal instead of white); .g is per-texel GLOSS
+    // spec color (silver parts read as metal instead of white); .a is per-texel SMOOTHNESS
     // modulating the RS row and the Blinn-Phong exponent — the leather/satin sheen on
-    // non-metal parts, which v2's metallic-only mask killed. mix(0.15, 1, metallic) keeps
-    // fabric sheen modest without a separate parameter (v3 assumption, GUI-calibrated via
-    // _Specular). Gated by _UseMetallicGlossMap / _UseSpecRampMap through the hooks.
+    // non-metal parts, which v2's metallic-only mask killed (v3 read .g here; the probe of
+    // 2026-09-02 found .g ~1 across every cloth map and .a the continuous channel that is
+    // smoother on the metal zones); .g masks where specular applies at all. mix(0.15, 1,
+    // metallic) keeps fabric sheen modest without a separate parameter (v3 assumption,
+    // GUI-calibrated via _Specular). Gated by _UseMetallicGlossMap / _UseSpecRampMap through
+    // the hooks.
     let view_dir = normalize(mvp.camera_pos - input.world_position);
     let light = normalize(MAIN_LIGHT_DIRECTION);
     let h = normalize(light + view_dir);
@@ -29,12 +32,12 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
 
     let mg = hgrp_metallic_gloss(input.uv0);
     let metallic = mg.x;
-    let gloss = clamp(hgrp_material.spec_smoothness * mg.y, 0.0, 1.0);
+    let gloss = clamp(hgrp_material.spec_smoothness * mg.z, 0.0, 1.0);
 
     let spec_color = hgrp_spec_ramp_color(ndoth, gloss);
     let shape = pow(ndoth, mix(8.0, 128.0, gloss));
     let spec = spec_color * mix(vec3<f32>(1.0), core.rgb, metallic) *
-        (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity *
+        (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity * mg.y *
             mix(0.15, 1.0, metallic));
 
     let diffuse = core.rgb * (1.0 - metallic * 0.7);

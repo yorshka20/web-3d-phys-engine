@@ -111,7 +111,11 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     gate: '_UseSDFLightmap',
     tier: 'static',
     textures: ['_SDFLightmap', '_SDFMask'],
-    wgsl: { include: 'lighting/hgrp/sdf.wgsl', fn: 'hgrp_shade_coord', off: 'ndotl * 0.5 + 0.5' },
+    wgsl: {
+      include: 'lighting/hgrp/sdf.wgsl',
+      fn: 'hgrp_shade_coord',
+      off: 'vec2<f32>(ndotl * 0.5 + 0.5, 0.0)',
+    },
   },
   { id: 'rim' },
   {
@@ -129,7 +133,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     wgsl: {
       include: 'lighting/hgrp/metallic_gloss.wgsl',
       fn: 'hgrp_metallic_gloss',
-      off: 'vec2<f32>(0.0, 1.0)',
+      off: 'vec3<f32>(0.0, 1.0, 1.0)',
     },
   },
   {
@@ -156,7 +160,17 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_LineMap'],
     wgsl: { include: 'lighting/hgrp/hair_lines.wgsl', fn: 'hgrp_hair_lines', off: 'shaded' },
   },
-  { id: 'hairSplitNormal', gate: '_UseSpecBumpMap', tier: 'static', textures: ['_SplitNormalMap'] },
+  {
+    id: 'hairSplitNormal',
+    gate: '_UseSpecBumpMap',
+    tier: 'static',
+    textures: ['_SplitNormalMap'],
+    wgsl: {
+      include: 'lighting/hgrp/hair_split_normal.wgsl',
+      fn: 'hgrp_hair_spec_normal',
+      off: 'normalize(world_normal)',
+    },
+  },
   {
     id: 'skinHighlight',
     gate: '_FaceHighlightMap',

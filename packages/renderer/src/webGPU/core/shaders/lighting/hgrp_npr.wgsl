@@ -79,14 +79,25 @@ fn hgrp_rim(n: vec3<f32>, frag_coord: vec4<f32>, ndotl: f32) -> vec3<f32> {
 
 // Base + shadow-blend + rim composition for a given (already normalized) shading normal. The
 // shadow color, the shade coordinate and the ramp weight come from the permutation's hooks.
+// The shade coordinate hook also returns the SDF mask's cheek-tint weight (0 without the SDF
+// subsystem): _SDFRimColor multiplies the shade blend where the coordinate crosses the
+// terminator inside that zone — the anime cheek-shadow tint, not a rim light.
 fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>, frag_coord: vec4<f32>) -> vec4<f32> {
     let base = hgrp_base_color(uv0);
     let ndotl = dot(n, normalize(MAIN_LIGHT_DIRECTION));
 
     let shadow_color = hgrp_shadow_color(base.rgb);
-    let w = hgrp_ramp_weight(hgrp_shade_coord(uv0, ndotl));
+    let shade = hgrp_shade_coord(uv0, ndotl);
+    let w = hgrp_ramp_weight(shade.x);
+
+    let terminator = 4.0 * shade.x * (1.0 - shade.x);
+    let tint = mix(
+        vec3<f32>(1.0),
+        hgrp_material.sdf_rim_color.rgb,
+        shade.y * terminator * hgrp_material.sdf_rim_color.a,
+    );
 
     let rim = hgrp_rim(n, frag_coord, ndotl);
 
-    return vec4<f32>(mix(shadow_color, base.rgb, w) + rim, base.a);
+    return vec4<f32>(mix(shadow_color, base.rgb, w) * tint + rim, base.a);
 }

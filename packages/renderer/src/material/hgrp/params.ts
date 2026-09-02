@@ -44,12 +44,6 @@ function packBaseColor(material: HGRPMaterialDescriptor): HGRPVec4 {
   return tint ? [base[0] * tint[0], base[1] * tint[1], base[2] * tint[2], base[3]] : base;
 }
 
-// The skin family carries _SDFRimColor (warm pink) — its rim color, taking precedence over
-// the generic white _ColorAdjustmentRimColor (v1 interpretation).
-function packRimColor(material: HGRPMaterialDescriptor): HGRPVec4 {
-  return material.colors[SDF_RIM_COLOR.key] ?? material.colors[RIM_COLOR.key] ?? RIM_COLOR.default;
-}
-
 // alpha_cutoff doubles as the clip switch: 0 disables the discard in the shader.
 function packAlphaCutoff(material: HGRPMaterialDescriptor): number {
   return material.alphaMode === 'mask' ? material.alphaCutoff : 0;
@@ -85,14 +79,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       pack: packBaseColor,
       comment: '_BaseColor, pre-multiplied by _HairBaseTintColor on hair',
     },
-    {
-      name: 'rim_color',
-      type: 'vec4',
-      subsystem: 'rim',
-      params: [SDF_RIM_COLOR, RIM_COLOR],
-      pack: packRimColor,
-      comment: '_SDFRimColor when present (skin), else _ColorAdjustmentRimColor',
-    },
+    vec4('rim_color', 'rim', RIM_COLOR),
     {
       name: 'alpha_cutoff',
       type: 'f32',
@@ -246,6 +233,18 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       pack: (material) => (material.eyeLayer === 'iris' ? 1 : 0),
       comment: 'HGRPMaterialDescriptor.eyeLayer: 1 = iris card (unlit, parallax), 0 = brow',
     },
+    f32(
+      'spec_bump_scale',
+      'hairSplitNormal',
+      float('_SpecBumpScale', 1, { min: 0, max: 3, step: 0.01 }),
+      'per-strand shift of the hair highlight normal (_SplitNormalMap.r)',
+    ),
+    vec4(
+      'sdf_rim_color',
+      'sdf',
+      SDF_RIM_COLOR,
+      'terminator tint inside the _SDFMask cheek zone; a = tint weight',
+    ),
   ],
 };
 

@@ -100,16 +100,11 @@ export const HGRP_UNIMPLEMENTED_SLOTS: Partial<
   Record<HGRPShaderVariant, Readonly<Record<string, string>>>
 > = {
   CharacterNPR_Skin: {
-    _SDFMask:
-      'SDF face-shadow mask (cm_M): channel layout probed, its role needs an in-game A/B (param ledger group I)',
     _EmotionMap:
-      'expression atlas: Stage G, needs the _EmotionIndex/_EmotionBlend drivers before it can be sampled',
-  },
-  CharacterNPR_Hair: {
-    _MetallicGlossMap:
-      'hair spec/gloss: the hair highlight model (RS band, v5.1) is frozen pending the band rework',
-    _SplitNormalMap:
-      'per-strand normal shift (_UseSpecBumpMap): no consumer until the hair highlight rework',
+      'expression overlay library (two soft blush pairs and a dark mouth block, alpha-authored; ' +
+      'the face mesh has a single UV set and the atlas rects do not align with it): the ' +
+      'index -> rect table and the UV transform did not survive the rip, and the ' +
+      '_EmotionIndex/_EmotionBlend driver channel (Stage G) does not exist yet',
   },
 };
 

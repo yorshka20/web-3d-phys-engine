@@ -8,6 +8,12 @@
 // peak). Points whose normal is view-horizontal sample the crisp band; the crown drifts
 // into the soft right-half tail; downward-facing strands fall into the dark left half.
 // _AnisotropyValue is GUI-tunable so the band center can be verified live.
+//
+// v6 (2026-09-02, texture forensics): the band reads its own normal — the geometric normal
+// tilted per strand by _SplitNormalMap (lighting/hgrp/hair_split_normal.wgsl), so the ring
+// breaks into strand-wise offsets — and _MetallicGlossMap gates it: .g is the highlight
+// region (on Pelica only the bangs cards, where the in-game band sits) and .a the per-texel
+// smoothness that picks the RS row together with _Smoothness.
 // Group-2 bindings and the subsystem hooks come from the permutation's generated fragments
 // (material/hgrp).
 
@@ -16,18 +22,19 @@
 // whitewashed the whole band area under ACES.
 const HGRP_ANISO_FORMULA_SCALE: f32 = 0.1;
 
-// The band reads the GEOMETRIC normal: it is a broad camera-tracking sheen, and a normal
-// map's per-texel detail would only break it up.
-fn hgrp_hair_band(world_normal: vec3<f32>) -> vec3<f32> {
-    let n_view = normalize((mvp.view_matrix * vec4<f32>(normalize(world_normal), 0.0)).xyz);
+// The band reads the specular normal (geometric normal + per-strand shift), never the
+// _BumpMap-perturbed shading normal: it is a broad camera-tracking sheen, and a normal map's
+// per-texel detail would only break it up.
+fn hgrp_hair_band(n_spec: vec3<f32>, spec_mask: f32, smoothness: f32) -> vec3<f32> {
+    let n_view = normalize((mvp.view_matrix * vec4<f32>(n_spec, 0.0)).xyz);
     // Folded coordinate: only the crisp left half + peak of the RS is sampled — the signed
     // form drifted every upward normal into the mid-bright right tail and lifted the whole
     // hair (v5 first browser check).
     let band = hgrp_spec_ramp_color(
         hgrp_material.aniso_value - abs(n_view.y) * 0.5,
-        hgrp_material.spec_smoothness,
+        hgrp_material.spec_smoothness * smoothness,
     );
-    return band * (hgrp_material.aniso_intensity * HGRP_ANISO_FORMULA_SCALE);
+    return band * (hgrp_material.aniso_intensity * HGRP_ANISO_FORMULA_SCALE * spec_mask);
 }
 
 @fragment
@@ -40,5 +47,13 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     );
     let shaded = hgrp_shade_core(input.uv0, n, input.position);
     let lined = hgrp_hair_lines(shaded.rgb, input.uv0);
-    return vec4<f32>(lined + hgrp_hair_band(input.world_normal), shaded.a);
+
+    let n_spec = hgrp_hair_spec_normal(
+        input.world_normal,
+        input.world_tangent,
+        input.world_bitangent,
+        input.uv0,
+    );
+    let mg = hgrp_metallic_gloss(input.uv0);
+    return vec4<f32>(lined + hgrp_hair_band(n_spec, mg.y, mg.z), shaded.a);
 }

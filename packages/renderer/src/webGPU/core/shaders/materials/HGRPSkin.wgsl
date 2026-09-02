@@ -2,8 +2,9 @@
 // comes from the skin color-grading LUT (_UseShadowLutTex) when that subsystem is on, else
 // from the HSV adjustment. With the SDF subsystem on (face), the ramp coordinate is the SDF
 // face-shadow factor instead of half-Lambert n.l (lighting/hgrp/sdf.wgsl). The nose highlight
-// and emission layer on top; _SDFMask/emotion are still to come. Group-2 bindings and the
-// subsystem hooks come from the permutation's generated fragments (material/hgrp).
+// and emission layer on top; _SDFMask is consumed by the sdf hook, the emotion atlas is still
+// to come. Group-2 bindings and the subsystem hooks come from the permutation's generated
+// fragments (material/hgrp).
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {

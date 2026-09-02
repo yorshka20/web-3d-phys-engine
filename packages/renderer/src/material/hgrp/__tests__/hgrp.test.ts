@@ -38,7 +38,8 @@ import { layoutUniformStruct } from '../../uniformStruct';
 // The uniform byte layout (param ledger, "uniform 布局速查"). Pinned so a reordered or
 // removed field is a conscious change, not a drift. The ten static gates (use_diff_ramp,
 // use_shadow_lut, ...) left the struct when they became permutation selectors (2026-09-02);
-// the two numeric gates (eye_highlight, use_pantyhose) stay.
+// the two numeric gates (eye_highlight, use_pantyhose) stay. spec_bump_scale and
+// sdf_rim_color were appended when the hair split-normal and SDF-mask hooks landed.
 const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   base_color: 0,
   rim_color: 4,
@@ -78,6 +79,8 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   eye_tint_color: 64,
   hair_brow_mask_threshold: 68,
   is_iris: 69,
+  spec_bump_scale: 70,
+  sdf_rim_color: 72,
 };
 
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
@@ -170,8 +173,8 @@ describe('HGRP material contract', () => {
     expect(() => validateHGRPContract()).not.toThrow();
   });
 
-  it('keeps the HGRPMaterialParams byte layout (288 bytes, static gates removed)', () => {
-    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(288);
+  it('keeps the HGRPMaterialParams byte layout (304 bytes)', () => {
+    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(304);
     const actual = Object.fromEntries(
       HGRP_MATERIAL_PARAMS_LAYOUT.fields.map((f) => [f.name, f.offset / 4]),
     );
@@ -273,7 +276,7 @@ describe('HGRP material contract', () => {
     expect(new Set(Object.values(names)).size).toBe(Object.keys(names).length);
   });
 
-  it('exposes the same calibration GUI schema the panel used before (39 floats, 7 colors)', () => {
+  it('exposes the calibration GUI schema (41 floats, 7 colors)', () => {
     expect(HGRP_TUNABLE_FLOATS.map((d) => d.key).sort()).toEqual(
       [
         '_UseDiffRampMap',
@@ -304,6 +307,8 @@ describe('HGRP material contract', () => {
         '_OutlineColorSaturation',
         '_OutlineOffsetZ',
         '_UseLineMap',
+        '_UseSpecBumpMap',
+        '_SpecBumpScale',
         '_DrawUnderBrow',
         '_HairBrowMaskThreshold',
         '_LineAmount',
@@ -533,7 +538,7 @@ describe('generated WGSL', () => {
     expect(includes).toContain(hgrpOffStubFragment('sdf'));
     expect(includes).toContain(hgrpOffStubFragment('emission'));
     expect(includes).not.toContain(hgrpOffStubFragment('ramp'));
-    // hook-less static subsystems (emotion, hairSplitNormal, browThrough, outline) add nothing
+    // hook-less static subsystems (emotion, browThrough, outline) add nothing
     expect(includes.some((p) => p.includes('emotion'))).toBe(false);
     expect(includes).toHaveLength(HGRP_STATIC_SUBSYSTEMS.filter((s) => s.wgsl).length);
   });
@@ -571,7 +576,7 @@ describe('eye layer role', () => {
 describe('packHGRPParams', () => {
   it('packs defaults when a preset omits every key', () => {
     const packed = packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, material('CharacterNPR'));
-    expect(packed).toHaveLength(72);
+    expect(packed).toHaveLength(76);
     expect(Array.from(packed.subarray(0, 8))).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_width]).toBeCloseTo(0.35);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.line_amount]).toBe(300);
@@ -579,7 +584,7 @@ describe('packHGRPParams', () => {
     expect(packed[MATERIAL_PARAMS_F32_INDEX.alpha_cutoff]).toBe(0);
   });
 
-  it('applies the composite rules: hair tint, skin rim color, rim off-scale, alpha clip', () => {
+  it('applies the composite rules: hair tint, rim off-scale, alpha clip; SDF rim color has its own field', () => {
     const packed = packHGRPParams(
       HGRP_MATERIAL_PARAMS_LAYOUT,
       material('CharacterNPR_Skin', {
@@ -600,7 +605,9 @@ describe('packHGRPParams', () => {
       }),
     );
     expect(Array.from(packed.subarray(0, 4)).map((v) => +v.toFixed(3))).toEqual([1, 0.5, 1, 0.8]);
-    expect(Array.from(packed.subarray(4, 8)).map((v) => +v.toFixed(2))).toEqual([
+    expect(Array.from(packed.subarray(4, 8))).toEqual([1, 1, 1, 1]);
+    const sdfRim = MATERIAL_PARAMS_F32_INDEX.sdf_rim_color;
+    expect(Array.from(packed.subarray(sdfRim, sdfRim + 4)).map((v) => +v.toFixed(2))).toEqual([
       0.65, 0.4, 0.42, 1,
     ]);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.alpha_cutoff]).toBeCloseTo(0.42);
