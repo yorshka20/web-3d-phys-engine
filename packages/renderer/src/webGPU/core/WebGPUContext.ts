@@ -2,6 +2,33 @@ import { ServiceTokens } from './decorators/DIContainer';
 import { Injectable } from './decorators/ResourceDecorators';
 import { WebGPUContextOptions } from './types';
 
+// GPUSupportedLimits exposes every limit as a getter on its prototype, so Object.entries /
+// JSON.stringify see an empty object. for...in walks the prototype chain and is the only
+// way to read the whole set generically.
+function limitsToRecord(limits: GPUSupportedLimits): Record<string, number> {
+  const record: Record<string, number> = {};
+  for (const key in limits) {
+    const value = (limits as unknown as Record<string, unknown>)[key];
+    if (typeof value === 'number') record[key] = value;
+  }
+  return record;
+}
+
+// The limits that bound the shading architecture: how many textures a single shader may
+// sample, and how many bind groups a pipeline may carry. Whether a subsystem can stay a
+// runtime branch instead of a compile-time variant depends on the headroom here, so the
+// figures are logged rather than assumed (see learnings shader-feature-gating).
+const ARCHITECTURE_LIMITS = [
+  'maxSampledTexturesPerShaderStage',
+  'maxSamplersPerShaderStage',
+  'maxBindGroups',
+  'maxBindingsPerBindGroup',
+  'maxUniformBufferBindingSize',
+  'maxStorageBufferBindingSize',
+  // the only limit the renderer asks to raise above the WebGPU default
+  'maxComputeWorkgroupStorageSize',
+] as const;
+
 /**
  * WebGPU context manager
  * manage GPU adapter, device and canvas context
@@ -48,10 +75,10 @@ export class WebGPUContext {
 
     try {
       // 1. request GPU adapter
-      await this.requestAdapter(options);
+      const adapter = await this.requestAdapter(options);
 
       // 2. request GPU device
-      await this.requestDevice(options);
+      const device = await this.requestDevice(options);
 
       // 3. configure canvas context
       await this.configureCanvas();
@@ -59,7 +86,7 @@ export class WebGPUContext {
       console.log('WebGPU context initialized successfully');
       console.log('Device:', this.device);
       console.log('Features:', this.features);
-      console.log('Limits:', this.limits);
+      this.logLimits(device.limits, adapter.limits);
     } catch (error) {
       console.error('Failed to initialize WebGPU context:', error);
       throw error;
@@ -113,6 +140,8 @@ export class WebGPUContext {
     }
 
     this.device = device;
+    this.features = device.features;
+    this.limits = device.limits;
 
     // handle device lost
     this.device.lost.then(this.handleDeviceLost);
@@ -282,6 +311,25 @@ export class WebGPUContext {
   /**
    * get device info summary
    */
+  /**
+   * Report the granted limits against what the adapter could have given, so raising a
+   * limit is a decision made against real numbers instead of an assumption about the
+   * platform. Only the architecture-relevant subset is called out; the full adapter set
+   * follows for anything else.
+   */
+  private logLimits(deviceLimits: GPUSupportedLimits, adapterLimits: GPUSupportedLimits): void {
+    const granted = limitsToRecord(deviceLimits);
+    const available = limitsToRecord(adapterLimits);
+    const headroom = ARCHITECTURE_LIMITS.map((key) => ({
+      limit: key,
+      granted: granted[key],
+      available: available[key],
+    }));
+    console.log('Limits (granted / adapter maximum):');
+    console.table(headroom);
+    console.log('Adapter limits (full):', available);
+  }
+
   getDeviceInfo(): {
     name: string;
     vendor: string;
@@ -298,9 +346,7 @@ export class WebGPUContext {
       vendor: this.device.adapterInfo.vendor,
       architecture: this.device.adapterInfo.architecture,
       features: Array.from(this.device.features),
-      limits: Object.fromEntries(
-        Object.entries(this.device.limits).map(([key, value]) => [key, value]),
-      ),
+      limits: limitsToRecord(this.device.limits),
     };
   }
 

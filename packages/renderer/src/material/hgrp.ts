@@ -161,11 +161,21 @@ export function createHGRPMaterialFromPreset(
     colors[name] = [rgba[0] ?? 1, rgba[1] ?? 1, rgba[2] ?? 1, rgba[3] ?? 1];
   }
 
+  // An unimplemented HGRP variant (Laevatian carries HGRP/CharacterNPR_VFX) still renders,
+  // through the generic CharacterNPR model — with the wrong shading and none of its own
+  // parameter vocabulary. Silence would make that indistinguishable from a correct render,
+  // which is the same failure mode as a missing texture quietly resolving to white.
   const variantName = preset.shader.split('/').pop();
-  const variant: HGRPShaderVariant =
-    variantName && variantName in HGRP_SHADER_ID_BY_VARIANT
-      ? (variantName as HGRPShaderVariant)
-      : 'CharacterNPR';
+  const isKnownVariant = !!variantName && variantName in HGRP_SHADER_ID_BY_VARIANT;
+  if (!isKnownVariant) {
+    console.warn(
+      `[hgrp] ${materialName}: shader "${preset.shader}" has no variant implementation, ` +
+        'falling back to CharacterNPR — shading will be wrong for this material',
+    );
+  }
+  const variant: HGRPShaderVariant = isKnownVariant
+    ? (variantName as HGRPShaderVariant)
+    : 'CharacterNPR';
 
   // Unity material semantics: _SurfaceType 1 = transparent, _Cull 0 = two-sided (2 =
   // back-face culling). Cutout has TWO gates in HGRP: _AlphaClip and _EnableAlphaTest
