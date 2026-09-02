@@ -24,20 +24,16 @@ export const sceneSettings = {
   lightDirection: [0.5, 1, 0.5] as [number, number, number], // toward the light, world space
   lightColor: [1, 1, 1] as [number, number, number],
   lightIntensity: 0.75,
-  // Hemisphere ambient: sky for normals pointing up, ground for normals pointing down, both
-  // scaled by the intensity. A darker ground gives the ambient the up/down gradient that
-  // lets normal-mapped detail (the quilted lining) read where the key light does not reach.
   ambientColor: [1, 1, 1] as [number, number, number],
-  ambientGroundColor: [0.6, 0.6, 0.6] as [number, number, number],
   ambientIntensity: 0.25,
 };
 
-// SceneLighting uniform block (core/uniforms.wgsl): four vec4s — the normalized light
-// direction, the key light color pre-multiplied by its intensity, the ambient sky and ground
-// colors pre-multiplied by the ambient intensity.
-export const SCENE_LIGHTING_BYTE_SIZE = 64;
+// SceneLighting uniform block (core/uniforms.wgsl): three vec4s — the normalized light
+// direction, the key light color pre-multiplied by its intensity, the ambient color
+// pre-multiplied by its intensity.
+export const SCENE_LIGHTING_BYTE_SIZE = 48;
 
-export function packSceneLighting(out: Float32Array = new Float32Array(16)): Float32Array {
+export function packSceneLighting(out: Float32Array = new Float32Array(12)): Float32Array {
   const [dx, dy, dz] = sceneSettings.lightDirection;
   const len = Math.hypot(dx, dy, dz) || 1;
   out[0] = dx / len;
@@ -47,10 +43,8 @@ export function packSceneLighting(out: Float32Array = new Float32Array(16)): Flo
   for (let i = 0; i < 3; i++) {
     out[4 + i] = sceneSettings.lightColor[i] * sceneSettings.lightIntensity;
     out[8 + i] = sceneSettings.ambientColor[i] * sceneSettings.ambientIntensity;
-    out[12 + i] = sceneSettings.ambientGroundColor[i] * sceneSettings.ambientIntensity;
   }
   out[7] = 0;
   out[11] = 0;
-  out[15] = 0;
   return out;
 }

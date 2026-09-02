@@ -47,7 +47,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.uv0,
     );
     let shaded = hgrp_shade_core(input.uv0, n, input.position);
-    let lined = hgrp_hair_lines(shaded.lit + hgrp_ambient(shaded.albedo, n), input.uv0);
+    let lined = hgrp_hair_lines(shaded.lit + hgrp_ambient(shaded.albedo), input.uv0);
 
     let n_spec = hgrp_hair_spec_normal(
         input.world_normal,

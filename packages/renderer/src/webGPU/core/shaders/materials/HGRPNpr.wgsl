@@ -1,10 +1,9 @@
 // HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV (or LUT)
-// shadow color, spec-ramp highlights on the normal-mapped surface, HDR emission
-// (rolls off through the tonemap shoulder), and the hemisphere ambient split the PBR way —
-// diffuse ambient on the non-metal albedo, ambient specular on the reflected direction
-// weighted by a Schlick fresnel with F0 = metallic (the quilted silver lining reads as satin
-// under ambient alone, where its key-light highlight cannot reach). Group-2 bindings and the
-// subsystem hooks come from the permutation's generated fragments (material/hgrp).
+// shadow color, spec-ramp highlights on the metallic zones, HDR emission (rolls off through
+// the tonemap shoulder) and the scene ambient on the unsuppressed albedo — a metal zone
+// keeps 30% diffuse under the key light but reflects the ambient at full albedo, so silver
+// fabric in shadow reads as grey instead of black. Group-2 bindings and the subsystem hooks
+// come from the permutation's generated fragments (material/hgrp).
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
@@ -18,9 +17,8 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
 
     // Spec v3 (reference-screenshot driven): the RS stays a specular COLOR lookup (raw
     // addition whitewashes — v1 lesson). _MetallicGlossMap.r holds discrete METALLIC zones:
-    // metal has no diffuse, so the shaded base is suppressed there. The spec color is the RS
-    // alone (v3 tinted it by the shaded albedo, which dimmed silver painted mid-grey in the
-    // base map to nothing — the RS is the game's specular color source); .a is per-texel SMOOTHNESS
+    // metal has no diffuse, so the shaded base is suppressed there and the albedo tints the
+    // spec color (silver parts read as metal instead of white); .a is per-texel SMOOTHNESS
     // modulating the RS row and the Blinn-Phong exponent — the leather/satin sheen on
     // non-metal parts, which v2's metallic-only mask killed (v3 read .g here; the probe of
     // 2026-09-02 found .g ~1 across every cloth map and .a the continuous channel that is
@@ -40,21 +38,11 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
 
     let spec_color = hgrp_spec_ramp_color(ndoth, gloss);
     let shape = pow(ndoth, mix(8.0, 128.0, gloss));
-    let spec = spec_color * scene_lighting.light.rgb *
+    let spec = spec_color * mix(vec3<f32>(1.0), core.lit, metallic) * scene_lighting.light.rgb *
         (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity * mg.y *
             mix(0.15, 1.0, metallic));
 
     let diffuse = core.lit * (1.0 - metallic * 0.7);
-
-    // Ambient: hemisphere diffuse on the dielectric share of the albedo, plus the hemisphere
-    // reflected off the normal-mapped surface, weighted by Schlick fresnel with F0 rising
-    // from 0.04 to 1 with metallic and the grazing term scaled by gloss (rough fabric keeps
-    // no edge sheen). Masked like the key-light specular.
-    let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
-    let f0 = vec3<f32>(mix(0.04, 1.0, metallic));
-    let fresnel = f0 + (vec3<f32>(1.0) - f0) * (pow(1.0 - ndotv, 5.0) * gloss);
-    let ambient = hgrp_ambient(core.albedo, n) * (1.0 - metallic) +
-        hgrp_hemisphere(reflect(-view_dir, n)) * fresnel * mg.y;
 
     let emission = hgrp_emission(input.uv0);
 
@@ -67,6 +55,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // silky sheen is a Kajiya-Kay lobe along the tangent rotated by
     // _PantyhoseAnisotropyDirection (-1..1 read as quarter turns, v1 assumption — the
     // formula did not survive the rip).
+    let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
     let density = pow(1.0 - ndotv, 2.0);
     var color = mix(
         diffuse,
@@ -89,5 +78,8 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let sheen = pow(sin_th, 16.0) *
         (hgrp_material.pantyhose_specular_int * 1.5 * hgrp_material.use_pantyhose);
 
-    return vec4<f32>(color + vec3<f32>(sheen) + spec + emission + ambient, core.alpha);
+    return vec4<f32>(
+        color + vec3<f32>(sheen) + spec + emission + hgrp_ambient(core.albedo),
+        core.alpha,
+    );
 }

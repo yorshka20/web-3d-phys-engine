@@ -230,7 +230,6 @@ function mountPane(container: HTMLElement, assetIds: readonly string[]): () => v
     direction: { x: dx, y: dy, z: dz },
     lightColor: rgb(sceneSettings.lightColor),
     ambientColor: rgb(sceneSettings.ambientColor),
-    ambientGroundColor: rgb(sceneSettings.ambientGroundColor),
   };
   const axis = { min: -1, max: 1, step: 0.01 };
   lighting
@@ -246,17 +245,9 @@ function mountPane(container: HTMLElement, assetIds: readonly string[]): () => v
     });
   lighting.addBinding(sceneSettings, 'ambientIntensity', { min: 0, max: 2, step: 0.01 });
   lighting
-    .addBinding(lightingState, 'ambientColor', { label: 'ambientSky', color: { type: 'float' } })
+    .addBinding(lightingState, 'ambientColor', { color: { type: 'float' } })
     .on('change', (ev) => {
       sceneSettings.ambientColor = [ev.value.r, ev.value.g, ev.value.b];
-    });
-  lighting
-    .addBinding(lightingState, 'ambientGroundColor', {
-      label: 'ambientGround',
-      color: { type: 'float' },
-    })
-    .on('change', (ev) => {
-      sceneSettings.ambientGroundColor = [ev.value.r, ev.value.g, ev.value.b];
     });
 
   assetIds.forEach((assetId, index) => addCharacterFolder(pane, assetId, index === 0));
