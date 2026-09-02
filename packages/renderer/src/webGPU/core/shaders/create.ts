@@ -32,8 +32,8 @@ export function createPMXMaterialShaderModule(): PMXMaterialShaderModule {
     name: 'PMX Material Shader',
     description: 'PMX model material shader with multi-texture support and PMX-specific features',
     type: 'render',
-    fileName: 'PMXMaterial.wgsl',
-    sourceCode: shaderFragmentRegistry.get('PMXMaterial.wgsl') || '',
+    fileName: 'materials/PMXMaterial.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/PMXMaterial.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -47,7 +47,8 @@ export function createPMXMaterialShaderModule(): PMXMaterialShaderModule {
       defines: {
         ENABLE_TOON_SHADING: false,
         ENABLE_NORMAL_MAPPING: true,
-        ENABLE_ENVIRONMENT_MAPPING: true,
+        // No environment-map bind group exists yet (PipelineManager only reserves one)
+        ENABLE_ENVIRONMENT_MAPPING: false,
       },
       optimization: 'performance',
       debug: false,
@@ -76,8 +77,8 @@ export function createPMXMorphComputeShaderModule(): PMXMorphComputeShaderModule
     name: 'PMX Morph Compute Shader',
     description: 'PMX morph compute shader',
     type: 'compute',
-    fileName: 'PMXMorphCompute.wgsl',
-    sourceCode: shaderFragmentRegistry.get('PMXMorphCompute.wgsl') || '',
+    fileName: 'compute/PMXMorphCompute.wgsl',
+    sourceCode: shaderFragmentRegistry.get('compute/PMXMorphCompute.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -115,8 +116,8 @@ export function createWaterMaterialShaderModule(): WaterMaterialShaderModule {
     name: 'Water Material Shader',
     description: 'Animated water with wave effects and fresnel reflection',
     type: 'render',
-    fileName: 'WaterMaterial.wgsl',
-    sourceCode: shaderFragmentRegistry.get('WaterMaterial.wgsl') || '',
+    fileName: 'materials/WaterMaterial.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/WaterMaterial.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -158,8 +159,8 @@ export function createFireMaterialShaderModule(): FireMaterialShaderModule {
     name: 'Fire Material Shader',
     description: 'Flickering fire with distortion and color gradients',
     type: 'render',
-    fileName: 'FireMaterial.wgsl',
-    sourceCode: shaderFragmentRegistry.get('FireMaterial.wgsl') || '',
+    fileName: 'materials/FireMaterial.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/FireMaterial.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -198,8 +199,8 @@ export function createCheckerboardShaderModule(): CheckerboardShaderModule {
     name: 'Checkerboard Shader',
     description: 'Checkerboard pattern shader',
     type: 'render',
-    fileName: 'Checkerboard.wgsl',
-    sourceCode: shaderFragmentRegistry.get('Checkerboard.wgsl') || '',
+    fileName: 'materials/Checkerboard.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/Checkerboard.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -244,8 +245,8 @@ export function createCoordinateShaderModule(): CoordinateShaderModule {
     name: 'Coordinate Shader',
     description: 'Coordinate system visualization shader with color-coded axes',
     type: 'render',
-    fileName: 'Coordinate.wgsl',
-    sourceCode: shaderFragmentRegistry.get('Coordinate.wgsl') || '',
+    fileName: 'materials/Coordinate.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/Coordinate.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -279,8 +280,8 @@ export function createEmissiveShaderModule(): EmissiveShaderModule {
     name: 'Emissive Shader',
     description: 'Emissive material with animated color cycling and pulsing effects',
     type: 'render',
-    fileName: 'Emissive.wgsl',
-    sourceCode: shaderFragmentRegistry.get('Emissive.wgsl') || '',
+    fileName: 'materials/Emissive.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/Emissive.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -315,8 +316,8 @@ export function createPulsewaveShaderModule(): PulsewaveShaderModule {
     name: 'Pulsewave Shader',
     description: 'Animated pulsewave effect with HSV color cycling and wave distortion',
     type: 'render',
-    fileName: 'Pulsewave.wgsl',
-    sourceCode: shaderFragmentRegistry.get('Pulsewave.wgsl') || '',
+    fileName: 'materials/Pulsewave.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/Pulsewave.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -348,8 +349,8 @@ export function createDefaultShaderModule(): ShaderModule {
     name: 'Default Shader',
     description: 'Default shader for fallback',
     type: 'render',
-    fileName: 'Default.wgsl',
-    sourceCode: shaderFragmentRegistry.get('Default.wgsl') || '',
+    fileName: 'materials/Default.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/Default.wgsl') || '',
     includes: ['core/constants.wgsl'],
     compilationOptions: {
       vertexFormat: ['full'],
@@ -401,27 +402,27 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
   const variants: { variant: HGRPShaderVariant; fileName: string; description: string }[] = [
     {
       variant: 'CharacterNPR',
-      fileName: 'HGRPNpr.wgsl',
+      fileName: 'materials/HGRPNpr.wgsl',
       description: 'HGRP CharacterNPR material shader (cloth / general)',
     },
     {
       variant: 'CharacterNPR_Skin',
-      fileName: 'HGRPSkin.wgsl',
+      fileName: 'materials/HGRPSkin.wgsl',
       description: 'HGRP CharacterNPR_Skin material shader (face + body)',
     },
     {
       variant: 'CharacterNPR_Hair',
-      fileName: 'HGRPHair.wgsl',
+      fileName: 'materials/HGRPHair.wgsl',
       description: 'HGRP CharacterNPR_Hair material shader',
     },
     {
       variant: 'CharacterNPR_Eye',
-      fileName: 'HGRPEye.wgsl',
+      fileName: 'materials/HGRPEye.wgsl',
       description: 'HGRP CharacterNPR_Eye material shader (brow + iris)',
     },
     {
       variant: 'CharacterNPR_VFX',
-      fileName: 'HGRPVfx.wgsl',
+      fileName: 'materials/HGRPVfx.wgsl',
       description: 'HGRP CharacterNPR_VFX material shader (character effect layers)',
     },
   ];
@@ -617,8 +618,8 @@ export function createGLTFMaterialShaderModule(): GLTFMaterialShaderModule {
     name: 'GLTF Material Shader',
     description: 'GLTF model material shader with multi-texture support and GLTF-specific features',
     type: 'render',
-    fileName: 'Gltf.wgsl',
-    sourceCode: shaderFragmentRegistry.get('Gltf.wgsl') || '',
+    fileName: 'materials/Gltf.wgsl',
+    sourceCode: shaderFragmentRegistry.get('materials/Gltf.wgsl') || '',
     includes: [
       'core/constants.wgsl',
       'core/uniforms.wgsl',
@@ -641,4 +642,28 @@ export function createGLTFMaterialShaderModule(): GLTFMaterialShaderModule {
     author: 'WebGPU 3D Physics Engine',
     tags: ['gltf', 'material', 'multi-texture'],
   };
+}
+
+// Every shader module the renderer knows about. Registering is this list; compilation happens
+// on first use (ShaderManager.ensureCompiled), so a module nothing draws is never compiled.
+// Adding a shader = one .wgsl file under shaders/ (auto-registered by the fragment registry
+// glob) + one factory entry here.
+export function createShaderModules(): ShaderModule[] {
+  return [
+    createDefaultShaderModule(),
+    createCheckerboardShaderModule(),
+    createCoordinateShaderModule(),
+    createEmissiveShaderModule(),
+    createPulsewaveShaderModule(),
+    createPMXMaterialShaderModule(),
+    createPMXMorphComputeShaderModule(),
+    createWaterMaterialShaderModule(),
+    createFireMaterialShaderModule(),
+    createGLTFMaterialShaderModule(),
+    ...createHGRPMaterialShaderModules(),
+    createHGRPOutlineShaderModule(),
+    createHGRPEyeOverlayShaderModule(),
+    createHGRPHairStencilShaderModule(),
+    createHGRPBrowThroughShaderModule(),
+  ];
 }

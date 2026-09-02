@@ -171,13 +171,14 @@ fragment paths, spliced by `ShaderCompiler` at runtime. All WGSL lives under
 `packages/renderer/src/webGPU/core/shaders/` (`core/`, `math/`, `lighting/`, `bindings/`
 snake_case, `materials/` PascalCase, `passes/`, `compute/`); see `shaders/README.md`.
 
-**Adding a shader requires editing four places**: `registry.ts` (static-imports every `.wgsl`,
-inlined as strings by the Vite `wgsl-loader` plugin), `create.ts` (per-shader factory
-declaring includes, defines, vertexFormat, renderState), and in `ShaderManager` both a
-`registerShaderModules()` and a `compileShaderModules()` call — every registered shader is
-eagerly compiled at startup (single-point registration + on-demand compilation is a recorded
-follow-up goal). Materials select shaders via `material.customShaderId`, which flows into the
-semantic pipeline key.
+**Adding a shader = one `.wgsl` file + one factory entry** (2026-09-02): `registry.ts` globs
+`shaders/**/*.wgsl` (`import.meta.glob`, inlined as strings by the Vite `wgsl-loader` plugin;
+keys are paths relative to `shaders/`, e.g. `materials/HGRPNpr.wgsl`), and `create.ts` holds
+one factory per shader plus the `createShaderModules()` catalog `ShaderManager` registers from.
+**Nothing is compiled at startup**: `ShaderManager` compiles a module the first time a pipeline
+or pass stage asks for it, with the defines the module itself declares — a shader no material
+in the scene uses is never compiled. Materials select shaders via `material.customShaderId`,
+which flows into the semantic pipeline key.
 
 The HGRP family adds **generated fragments** (`generated/*.wgsl`, registered by `registry.ts`
 from `material/hgrp/wgsl.ts`): its uniform structs and per-variant `@group(2)` bindings are

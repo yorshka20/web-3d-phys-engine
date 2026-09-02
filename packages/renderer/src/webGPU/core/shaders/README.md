@@ -32,11 +32,18 @@ const shaderModule: ShaderModule = {
 
 ### 3. Registry System
 
-All shader fragments are managed through `shaderFragmentRegistry` in `registry.ts`. Static
-`.wgsl` files are inlined by the Vite `wgsl-loader`; a family may also contribute **generated**
-fragments under `generated/` — the HGRP material contract (`material/hgrp/`) emits its
-uniform structs and per-variant group-2 bindings (`material/hgrp/wgsl.ts`), so the WGSL
-declarations, the bind group layout and the CPU packer share one field table.
+All shader fragments are managed through `shaderFragmentRegistry` in `registry.ts`, which
+globs every `.wgsl` under this directory (`import.meta.glob`, inlined as strings by the Vite
+`wgsl-loader`) and keys it by its path relative to `shaders/` — `core/uniforms.wgsl`,
+`materials/HGRPNpr.wgsl`. Dropping a file into the tree is its registration. A family may also
+contribute **generated** fragments under `generated/` — the HGRP material contract
+(`material/hgrp/`) emits its uniform structs and per-variant group-2 bindings
+(`material/hgrp/wgsl.ts`), so the WGSL declarations, the bind group layout and the CPU packer
+share one field table.
+
+Shader modules (a source file + includes + render state) are declared by factories in
+`create.ts` and listed once in `createShaderModules()`; `ShaderManager` registers that list and
+**compiles a module on first use** with the defines it declares. Nothing is compiled at startup.
 
 ```typescript
 import { shaderFragmentRegistry } from './registry';

@@ -1,25 +1,8 @@
-import { VertexFormat } from '@renderer/geometry';
+import { VertexFormat } from '../../../geometry';
 import { Inject, Injectable } from '../decorators';
 import { ServiceTokens } from '../decorators/DIContainer';
 import { WebGPUResourceManager } from '../ResourceManager';
-import {
-  createCheckerboardShaderModule,
-  createCoordinateShaderModule,
-  createDefaultShaderModule,
-  createEmissiveShaderModule,
-  createFireMaterialShaderModule,
-  createGLTFMaterialShaderModule,
-  createHGRPBrowThroughShaderModule,
-  createHGRPEyeOverlayShaderModule,
-  createHGRPHairStencilShaderModule,
-  createHGRPMaterialShaderModules,
-  createHGRPOutlineShaderModule,
-  createPMXMaterialShaderModule,
-  createPMXMorphComputeShaderModule,
-  createPulsewaveShaderModule,
-  createWaterMaterialShaderModule,
-} from './create';
-import { shaderFragmentRegistry } from './registry';
+import { createShaderModules } from './create';
 import { ShaderCompiler } from './ShaderCompiler';
 import {
   CompiledShader,
@@ -30,8 +13,10 @@ import {
 } from './types/shader';
 
 /**
- * WebGPU shader manager
- * manage shader modules and render pipelines
+ * WebGPU shader manager: holds the shader module catalog and compiles a module the first time
+ * something asks for it (a pipeline, a pass stage). Nothing is compiled at startup, so a shader
+ * no material or pass in the scene uses costs nothing — and the permutation shaders of the
+ * gating design can be registered by the dozen without multiplying startup time.
  */
 @Injectable(ServiceTokens.SHADER_MANAGER, {
   lifecycle: 'singleton',
@@ -59,233 +44,49 @@ export class ShaderManager {
   resourceLifecycles: Map<string, string> = new Map();
 
   // Initialization is invoked explicitly by WebGPURenderer.init (like every other manager),
-  // NOT from the constructor — the constructor self-call duplicated the whole register +
-  // compile cycle (every shader module was created twice; found via a WebGPU Inspector
-  // frame capture, 2026-09-01).
+  // NOT from the constructor — the constructor self-call duplicated the whole register cycle
+  // (every shader module was created twice; found via a WebGPU Inspector frame capture,
+  // 2026-09-01).
   initialize(): void {
-    this.registerShaderModules();
-    this.compileShaderModules();
-  }
-
-  /**
-   * Register shader modules
-   */
-  private registerShaderModules(): void {
-    console.log('Registering shader modules...');
-
-    // Register default shader
-    this.registerShaderModule(createDefaultShaderModule());
-    console.log('✓ Registered Default Shader');
-
-    // Register checkerboard shader
-    this.registerShaderModule(createCheckerboardShaderModule());
-    console.log('✓ Registered Checkerboard Shader');
-
-    // Register coordinate shader
-    this.registerShaderModule(createCoordinateShaderModule());
-    console.log('✓ Registered Coordinate Shader');
-
-    // Register emissive shader
-    this.registerShaderModule(createEmissiveShaderModule());
-    console.log('✓ Registered Emissive Shader');
-
-    // Register pulsewave shader
-    this.registerShaderModule(createPulsewaveShaderModule());
-    console.log('✓ Registered Pulsewave Shader');
-
-    // Register PMX Material Shader
-    this.registerShaderModule(createPMXMaterialShaderModule());
-    console.log('✓ Registered PMX Material Shader');
-
-    // Register PMX Morph Compute Shader
-    this.registerShaderModule(createPMXMorphComputeShaderModule());
-    console.log('✓ Registered PMX Morph Compute Shader');
-
-    // Register Water Material Shader
-    this.registerShaderModule(createWaterMaterialShaderModule());
-    console.log('✓ Registered Water Material Shader');
-
-    // Register Fire Material Shader
-    this.registerShaderModule(createFireMaterialShaderModule());
-    console.log('✓ Registered Fire Material Shader');
-
-    // Register GLTF Material Shader
-    this.registerShaderModule(createGLTFMaterialShaderModule());
-    console.log('✓ Registered GLTF Material Shader');
-
-    // Register HGRP Material Shaders (one per CharacterNPR variant)
-    for (const module of createHGRPMaterialShaderModules()) {
+    for (const module of createShaderModules()) {
       this.registerShaderModule(module);
     }
-    console.log('✓ Registered HGRP Material Shaders');
-
-    // Register HGRP Outline Shader
-    this.registerShaderModule(createHGRPOutlineShaderModule());
-    console.log('✓ Registered HGRP Outline Shader');
-
-    // Register HGRP Eye Overlay Shader
-    this.registerShaderModule(createHGRPEyeOverlayShaderModule());
-    console.log('✓ Registered HGRP Eye Overlay Shader');
-
-    // Register HGRP brow-through compositing pair
-    this.registerShaderModule(createHGRPHairStencilShaderModule());
-    this.registerShaderModule(createHGRPBrowThroughShaderModule());
-    console.log('✓ Registered HGRP Brow Compositing Shaders');
-  }
-
-  private compileShaderModules(): void {
-    console.log('Compiling shader modules...');
-
-    this.compileShaderModule('default_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_DEFAULT: true,
-      },
-    });
-
-    this.compileShaderModule('checkerboard_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_CHECKERBOARD: true,
-      },
-    });
-
-    this.compileShaderModule('coordinate_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_COORDINATE: true,
-      },
-    });
-
-    this.compileShaderModule('emissive_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_EMISSIVE: true,
-      },
-    });
-
-    this.compileShaderModule('pulsewave_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_PULSEWAVE: true,
-      },
-    });
-
-    this.compileShaderModule('pmx_material_shader', {
-      vertexFormat: 'pmx',
-      defines: {
-        ENABLE_TOON_SHADING: false,
-        ENABLE_NORMAL_MAPPING: true,
-        ENABLE_ENVIRONMENT_MAPPING: false,
-      },
-    });
-
-    this.compileShaderModule('pmx_morph_compute_shader', {
-      defines: {
-        ENABLE_PMX_MORPH_COMPUTE: true,
-        ENABLE_MORPH_PROCESSING: true,
-      },
-    });
-
-    this.compileShaderModule('water_material_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_WAVE_ANIMATION: true,
-      },
-    });
-
-    this.compileShaderModule('fire_material_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_FLICKER: true,
-      },
-    });
-
-    this.compileShaderModule('gltf_material_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_GLTF_MATERIAL: true,
-      },
-    });
-
-    for (const module of createHGRPMaterialShaderModules()) {
-      this.compileShaderModule(module.id, {
-        vertexFormat: 'full',
-        defines: {
-          ENABLE_HGRP_MATERIAL: true,
-        },
-      });
-    }
-
-    this.compileShaderModule('hgrp_outline_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_HGRP_MATERIAL: true,
-      },
-    });
-
-    this.compileShaderModule('hgrp_eye_overlay_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_HGRP_MATERIAL: true,
-      },
-    });
-
-    this.compileShaderModule('hgrp_hair_stencil_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_HGRP_MATERIAL: true,
-      },
-    });
-
-    this.compileShaderModule('hgrp_brow_through_shader', {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_HGRP_MATERIAL: true,
-      },
-    });
-
-    console.log('✓ Compiled shader modules');
+    console.log(`Registered ${this.shaderModules.size} shader modules (compiled on first use)`);
   }
 
   /**
-   * Safe get or create shader module (fast path with fallback to create)
-   * @param id shader id
-   * @param descriptor shader descriptor (required if not found)
-   * @returns existing or newly created shader module
+   * Compile a registered module on first use with the defines it declares. Throws on an
+   * unknown id or a failed compile: a pipeline built on a missing shader must fail here, not
+   * fall back to some other module and render the wrong thing.
+   */
+  private ensureCompiled(id: string): CompiledShader {
+    const existing = this.compiledShaders.get(id);
+    if (existing) {
+      return existing;
+    }
+    if (!this.shaderModules.has(id)) {
+      throw new Error(`Shader module '${id}' is not registered`);
+    }
+    const result = this.compileShaderModule(id);
+    if (!result.success || !result.compiledShader) {
+      throw new Error(`Shader module '${id}' failed to compile: ${result.errors.join('; ')}`);
+    }
+    return result.compiledShader;
+  }
+
+  /**
+   * GPU shader module for a pipeline; a material without a custom shader id gets the default
+   * shader. Compiles on first use.
    */
   safeGetShaderModule(id?: string): GPUShaderModule {
-    if (!id) {
-      return this.createDefaultShaderModule();
-    }
-
-    const existing = this.compiledShaders.get(id);
-    if (existing) {
-      return existing.shaderModule;
-    }
-
-    throw new Error(`Shader module '${id}' not found and no descriptor provided for creation`);
+    return this.ensureCompiled(id ?? 'default_shader').shaderModule;
   }
 
   /**
-   * get shader module
-   * @param id shader id
-   * @returns shader module or undefined
+   * GPU shader module by id, compiled on first use.
    */
-  getShaderModule(id: string): GPUShaderModule | undefined {
-    const existing = this.compiledShaders.get(id);
-    if (existing) {
-      return existing.shaderModule;
-    }
-
-    this.compileShaderModule(id, {
-      vertexFormat: 'full',
-      defines: {
-        ENABLE_CHECKERBOARD: true,
-      },
-    });
-
-    return this.compiledShaders.get(id)!.shaderModule;
+  getShaderModule(id: string): GPUShaderModule {
+    return this.ensureCompiled(id).shaderModule;
   }
 
   /**
@@ -370,28 +171,19 @@ export class ShaderManager {
   }
 
   /**
-   * Get compiled shader by ID
-   * @param id Shader ID
-   * @returns Compiled shader or undefined
+   * Compiled shader (module + composed source + defines) by id, compiled on first use.
    */
   getCompiledShader(id: string): CompiledShader | undefined {
-    return this.compiledShaders.get(id);
+    return this.shaderModules.has(id) ? this.ensureCompiled(id) : undefined;
   }
 
   /**
-   * Get compute shader module by ID
-   * @param id Shader ID
-   * @returns Compute shader module or undefined
+   * Compute shader module by id (undefined for render shaders), compiled on first use.
    */
   getComputeShaderModule(id: string): GPUShaderModule | undefined {
-    const compiledShader = this.compiledShaders.get(id);
-    if (compiledShader) {
-      const shaderModule = this.shaderModules.get(id);
-      if (shaderModule && shaderModule.type === 'compute') {
-        return compiledShader.shaderModule;
-      }
-    }
-    return undefined;
+    return this.shaderModules.get(id)?.type === 'compute'
+      ? this.ensureCompiled(id).shaderModule
+      : undefined;
   }
 
   /**
@@ -436,35 +228,5 @@ export class ShaderManager {
       console.error(`Hot reload error for shader '${moduleId}':`, error);
       return false;
     }
-  }
-
-  private createDefaultShaderModule(): GPUShaderModule {
-    const shader = this.compiledShaders.get('default_shader');
-    if (shader) {
-      return shader.shaderModule;
-    }
-
-    // Get default shader code from the new registry system
-    const defaultShaderCode = shaderFragmentRegistry.get('default.wgsl')!;
-
-    const compiledShader = this.device.createShaderModule({
-      code: defaultShaderCode,
-      label: 'default_shader',
-    });
-
-    this.compiledShaders.set('default_shader', {
-      id: 'default_shader',
-      sourceCode: defaultShaderCode,
-      shaderModule: compiledShader,
-      metadata: {
-        compilationTime: performance.now(),
-        includes: [],
-        defines: {},
-        errors: [],
-        warnings: [],
-      },
-    });
-
-    return compiledShader;
   }
 }
