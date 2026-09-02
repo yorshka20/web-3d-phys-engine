@@ -24,10 +24,11 @@ import { Game } from './game/Game';
 import { createEndfieldStage } from './stages/endfield';
 import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
-import { createHGRPStage, HGRP_PELICA_ASSET_ID } from './stages/hgrp';
-import { mountHGRPShadingPanel } from './ui/hgrpShadingPanel';
-import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
-import { mountShadingPanel } from './ui/shadingPanel';
+import { createHGRPStage } from './stages/hgrp';
+import { mountCameraPanel } from './ui/cameraPanel';
+import { mountDebugPanel } from './ui/debugPanel';
+import { registerDebugTab } from './ui/debugTabs';
+import { createSpawnTab } from './ui/spawnTab';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
 // import { createZZZPMXModelStage } from './stages/zzz';
@@ -123,19 +124,14 @@ async function main() {
   // Initialize the game
   await game.initialize();
 
-  // Create camera debug panel
-  createCameraDebugPanel(camera);
+  // Camera parameters, editable (top-left)
+  mountCameraPanel(camera);
 
-  // Mount entity spawn panel (press F to toggle)
-  mountEntityPanel(world);
-
-  // Mount PMX shading tuning panel (press G to toggle)
-  mountShadingPanel();
-
-  // Mount HGRP material calibration panel (press H to toggle)
-  if (stage === 'hgrp') {
-    mountHGRPShadingPanel(HGRP_PELICA_ASSET_ID);
-  }
+  // One debug panel (press P to toggle). Entity spawning is stage-independent so it is
+  // registered here; the calibration tabs come from whichever stage just loaded, so nothing
+  // mounts for content that is absent.
+  registerDebugTab(createSpawnTab(world));
+  mountDebugPanel();
 
   game.start();
 
@@ -365,76 +361,3 @@ function createCoordinate(world: World) {
 }
 
 // Create camera debug panel
-function createCameraDebugPanel(camera: Entity) {
-  const debugPanel = document.createElement('div');
-  debugPanel.id = 'camera-debug-panel';
-  debugPanel.style.cssText = `
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 15px;
-    border-radius: 8px;
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-    z-index: 1000;
-    min-width: 300px;
-    border: 1px solid #333;
-  `;
-
-  const title = document.createElement('div');
-  title.textContent = 'Camera Parameters';
-  title.style.cssText = `
-    font-weight: bold;
-    margin-bottom: 10px;
-    color: #00ff00;
-    border-bottom: 1px solid #333;
-    padding-bottom: 5px;
-  `;
-
-  const positionDiv = document.createElement('div');
-  positionDiv.id = 'camera-position';
-  positionDiv.style.marginBottom = '5px';
-
-  const rotationDiv = document.createElement('div');
-  rotationDiv.id = 'camera-rotation';
-  rotationDiv.style.marginBottom = '5px';
-
-  const fovDiv = document.createElement('div');
-  fovDiv.id = 'camera-fov';
-  fovDiv.style.marginBottom = '5px';
-
-  debugPanel.appendChild(title);
-  debugPanel.appendChild(positionDiv);
-  debugPanel.appendChild(rotationDiv);
-  debugPanel.appendChild(fovDiv);
-
-  document.body.appendChild(debugPanel);
-
-  // Update function
-  function updateCameraInfo() {
-    if (
-      !camera.hasComponent(Transform3DComponent.componentName) ||
-      !camera.hasComponent(Camera3DComponent.componentName)
-    ) {
-      return;
-    }
-
-    const transform = camera.getComponent<Transform3DComponent>(Transform3DComponent.componentName);
-    const cameraComp = camera.getComponent<Camera3DComponent>(Camera3DComponent.componentName);
-
-    if (transform && cameraComp) {
-      const pos = transform.getPosition();
-      const rot = transform.getRotation();
-
-      positionDiv.innerHTML = `Position: [${pos[0].toFixed(2)}, ${pos[1].toFixed(2)}, ${pos[2].toFixed(2)}]`;
-      rotationDiv.innerHTML = `Rotation: [${((rot[0] * 180) / Math.PI).toFixed(1)}°, ${((rot[1] * 180) / Math.PI).toFixed(1)}°, ${((rot[2] * 180) / Math.PI).toFixed(1)}°]`;
-      fovDiv.innerHTML = `FOV: ${cameraComp.fov}° | Mode: ${cameraComp.projectionMode}`;
-    }
-
-    requestAnimationFrame(updateCameraInfo);
-  }
-
-  updateCameraInfo();
-}

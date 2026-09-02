@@ -3,6 +3,8 @@ import {
   HGRP_SHADING_SCHEMA_VERSION,
   HGRP_TUNABLE_COLORS,
   HGRP_TUNABLE_FLOATS,
+  hgrpOptionalLayerFlag,
+  HGRPCharacterFlags,
   HGRPMaterialDescriptor,
 } from '@renderer/material/hgrp';
 import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
@@ -10,6 +12,7 @@ import { bloomSettings } from '@renderer/webGPU/renderer/passes/BloomPass';
 import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
 import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 import { Pane } from 'tweakpane';
+import { DebugTab } from './debugTabs';
 
 // Per-material calibration overrides for one HGRP character, keyed by material name.
 interface HGRPShadingState {
@@ -130,39 +133,26 @@ function importState(onLoaded: (imported: HGRPShadingState) => void): void {
 }
 
 /**
- * Mount the HGRP material calibration panel (toggle with H). Enumerates the live HGRP
- * material descriptors of one loaded character asset and edits them in place; the preset
- * stays authoritative — the panel layers a localStorage WIP overlay on top, with
- * export/import for handing calibrated values back to the preset pipeline.
- * No-op when the asset holds no HGRP materials.
+ * The HGRP calibration tab: every loaded character gets its own folder with its own
+ * save/export/reset, because the overrides are per character (localStorage key included) —
+ * two characters on screen are calibrated independently.
+ *
+ * Only the parameters a material actually declares get a widget. The preset's own key set
+ * is the reflection: the binder falls back to a default for an absent key, so drawing a
+ * slider for it would invite calibrating a value the material never carries — and the VFX
+ * variant, whose vocabulary is disjoint from the CharacterNPR family's, would otherwise
+ * show a full set of controls that do nothing.
  */
-export function mountHGRPShadingPanel(assetId: string) {
-  const materials = collectHGRPMaterials(assetId);
-  if (materials.length === 0) {
-    console.warn(`[hgrpShadingPanel] no HGRP materials on asset "${assetId}", panel not mounted`);
-    return () => {};
-  }
+export function createHGRPShadingTab(assetIds: readonly string[]): DebugTab {
+  return {
+    id: 'hgrp-shading',
+    label: 'Shading',
+    mount: (container) => mountPane(container, assetIds),
+  };
+}
 
-  const storageKey = `hgrp-shading-${assetId}`;
-  const pristine = snapshotState(materials);
-  try {
-    const stored = localStorage.getItem(storageKey);
-    if (stored) {
-      applyState(materials, JSON.parse(stored) as HGRPShadingState);
-    }
-  } catch (error) {
-    console.warn('[hgrpShadingPanel] Ignoring unreadable localStorage state:', error);
-  }
-
-  const host = document.createElement('div');
-  host.id = 'hgrp-shading-panel-host';
-  host.style.cssText =
-    'position: fixed; top: 10px; right: 10px; z-index: 1000; width: 320px; ' +
-    'max-height: calc(100vh - 20px); overflow-y: auto;';
-  host.hidden = true;
-  document.body.appendChild(host);
-
-  const pane = new Pane({ container: host, title: 'HGRP Shading (H)' });
+function mountPane(container: HTMLElement, assetIds: readonly string[]): () => void {
+  const pane = new Pane({ container });
 
   // Global linear-light exposure ahead of the ACES curve and the scene backdrop color
   // (session-only calibration knobs, not part of the per-material preset state)
@@ -193,6 +183,55 @@ export function mountHGRPShadingPanel(assetId: string) {
       sceneSettings.clearColor = [ev.value.r, ev.value.g, ev.value.b];
     });
 
+  assetIds.forEach((assetId, index) => addCharacterFolder(pane, assetId, index === 0));
+
+  return () => pane.dispose();
+}
+
+function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): void {
+  const materials = collectHGRPMaterials(assetId);
+  if (materials.length === 0) {
+    console.warn(`[hgrpShadingPanel] no HGRP materials on asset "${assetId}", section skipped`);
+    return;
+  }
+
+  const storageKey = `hgrp-shading-${assetId}`;
+  const pristine = snapshotState(materials);
+  try {
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      applyState(materials, JSON.parse(stored) as HGRPShadingState);
+    }
+  } catch (error) {
+    console.warn('[hgrpShadingPanel] Ignoring unreadable localStorage state:', error);
+  }
+
+  const character = pane.addFolder({
+    title: assetId.replace(/^hgrp_/, ''),
+    expanded,
+  });
+
+  // Optional layers this character actually has (HGRPCharacterFlags). The toggle flips the
+  // descriptors the draw list already reads every frame, so it takes effect immediately;
+  // it is session-only, since the load-time source of truth is the flag passed to
+  // loadHGRPCharacter. A character with no gated layer gets no dead switch.
+  const gated = new Map<keyof HGRPCharacterFlags, HGRPMaterialDescriptor[]>();
+  for (const material of materials) {
+    const flag = hgrpOptionalLayerFlag(material.variant);
+    if (!flag) continue;
+    const group = gated.get(flag) ?? [];
+    group.push(material);
+    gated.set(flag, group);
+  }
+  for (const [flag, layers] of gated) {
+    const state = { [flag]: layers.every((layer) => layer.enabled) } as Record<string, boolean>;
+    character.addBinding(state, flag).on('change', () => {
+      for (const layer of layers) {
+        layer.enabled = state[flag];
+      }
+    });
+  }
+
   // Persistence is EXPLICIT ('Save overrides' button): live tweaks are session-only, so
   // experiments never silently shadow the authoritative preset values across reloads.
   const persist = () => {
@@ -208,13 +247,19 @@ export function mountHGRPShadingPanel(assetId: string) {
   const syncers: (() => void)[] = [];
 
   for (const material of materials) {
-    const folder = pane.addFolder({
+    const floatDefs = HGRP_TUNABLE_FLOATS.filter((def) => def.key in material.floats);
+    const colorDefs = HGRP_TUNABLE_COLORS.filter((def) => def.key in material.colors);
+    if (floatDefs.length === 0 && colorDefs.length === 0) {
+      continue;
+    }
+
+    const folder = character.addFolder({
       title: `${material.materialName} · ${material.variant.replace('CharacterNPR', 'NPR')}`,
       expanded: false,
     });
 
     const floatValues: Record<string, number> = {};
-    for (const def of HGRP_TUNABLE_FLOATS) {
+    for (const def of floatDefs) {
       floatValues[def.key] = material.floats[def.key] ?? def.default;
       folder
         .addBinding(floatValues, def.key, {
@@ -228,13 +273,13 @@ export function mountHGRPShadingPanel(assetId: string) {
         });
     }
     syncers.push(() => {
-      for (const def of HGRP_TUNABLE_FLOATS) {
+      for (const def of floatDefs) {
         floatValues[def.key] = material.floats[def.key] ?? def.default;
       }
     });
 
     const colorValues: Record<string, { r: number; g: number; b: number; a: number }> = {};
-    for (const def of HGRP_TUNABLE_COLORS) {
+    for (const def of colorDefs) {
       const current = material.colors[def.key] ?? def.default;
       colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
       folder
@@ -248,7 +293,7 @@ export function mountHGRPShadingPanel(assetId: string) {
         });
     }
     syncers.push(() => {
-      for (const def of HGRP_TUNABLE_COLORS) {
+      for (const def of colorDefs) {
         const current = material.colors[def.key] ?? def.default;
         colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
       }
@@ -262,17 +307,17 @@ export function mountHGRPShadingPanel(assetId: string) {
     pane.refresh();
   };
 
-  pane.addButton({ title: 'Save overrides' }).on('click', () => persist());
-  pane.addButton({ title: 'Export JSON' }).on('click', () => {
+  character.addButton({ title: 'Save overrides' }).on('click', () => persist());
+  character.addButton({ title: 'Export JSON' }).on('click', () => {
     exportState(snapshotState(materials), assetId);
   });
-  pane.addButton({ title: 'Import JSON' }).on('click', () =>
+  character.addButton({ title: 'Import JSON' }).on('click', () =>
     importState((imported) => {
       applyState(materials, imported);
       syncWidgets();
     }),
   );
-  pane.addButton({ title: 'Reset to preset' }).on('click', () => {
+  character.addButton({ title: 'Reset to preset' }).on('click', () => {
     try {
       localStorage.removeItem(storageKey);
     } catch {
@@ -281,18 +326,4 @@ export function mountHGRPShadingPanel(assetId: string) {
     applyState(materials, pristine);
     syncWidgets();
   });
-
-  function handleKey(e: KeyboardEvent) {
-    if (e.code !== 'KeyH') return;
-    const target = e.target as HTMLElement | null;
-    if (target && /INPUT|SELECT|TEXTAREA/.test(target.tagName)) return;
-    host.hidden = !host.hidden;
-  }
-  window.addEventListener('keydown', handleKey);
-
-  return () => {
-    window.removeEventListener('keydown', handleKey);
-    pane.dispose();
-    host.remove();
-  };
 }

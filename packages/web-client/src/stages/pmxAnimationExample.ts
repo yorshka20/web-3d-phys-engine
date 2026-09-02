@@ -29,8 +29,14 @@ import { perlicaDescriptor } from './zzz/descriptors/perlica';
 import alenModel from '../../assets/alen/艾莲.pmx?url';
 import burniceModel from '../../assets/burnice/柏妮思.pmx?url';
 import perlicaModel from '../../assets/perlica/perlica.pmx?url';
+import { registerDebugTab } from '../ui/debugTabs';
+import { createPMXShadingTab } from '../ui/shadingPanel';
 
 export async function createPMXAnimationExample(world: World) {
+  // The PMX shading params only exist while a PMX model is loaded, so the tab is this
+  // stage's to contribute rather than something main mounts unconditionally.
+  registerDebugTab(createPMXShadingTab());
+
   // Create animation controller
   const animationController = new PMXAnimationController(world);
 

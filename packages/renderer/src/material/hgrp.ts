@@ -59,6 +59,18 @@ export interface HGRPCharacterFlags {
   maxPotential?: boolean;
 }
 
+// Which flag, if any, gates a variant. Single source for both the load-time decision and
+// the calibration UI's toggle — a second copy of this mapping is how the two drift apart.
+const OPTIONAL_LAYER_FLAG: Partial<Record<HGRPShaderVariant, keyof HGRPCharacterFlags>> = {
+  CharacterNPR_VFX: 'maxPotential',
+};
+
+export function hgrpOptionalLayerFlag(
+  variant: HGRPShaderVariant,
+): keyof HGRPCharacterFlags | undefined {
+  return OPTIONAL_LAYER_FLAG[variant];
+}
+
 export interface HGRPPreset {
   schemaVersion: number;
   character: string;
@@ -215,6 +227,7 @@ export function createHGRPMaterialFromPreset(
   const variant: HGRPShaderVariant = isKnownVariant
     ? (variantName as HGRPShaderVariant)
     : 'CharacterNPR';
+  const gateFlag = hgrpOptionalLayerFlag(variant);
 
   // Unity material semantics: _SurfaceType 1 = transparent, _Cull 0 = two-sided (2 =
   // back-face culling). Cutout has TWO gates in HGRP: _AlphaClip and _EnableAlphaTest
@@ -241,7 +254,7 @@ export function createHGRPMaterialFromPreset(
     alphaCutoff: floats._AlphaClipThreshold ?? 0.5,
     doubleSided: floats._Cull === 0,
     blendMode: hgrpBlendMode(floats),
-    enabled: variant === 'CharacterNPR_VFX' ? flags.maxPotential === true : true,
+    enabled: gateFlag === undefined || flags[gateFlag] === true,
   };
 }
 

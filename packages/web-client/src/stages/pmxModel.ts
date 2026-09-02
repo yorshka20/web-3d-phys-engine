@@ -10,8 +10,14 @@ import { perlicaDescriptor } from './zzz/descriptors/perlica';
 import endministratorModel from '../../assets/endministrator/endministrator.pmx?url';
 import nahidaModel from '../../assets/nahida/nahida.pmx?url';
 import perlicaModel from '../../assets/perlica/perlica.pmx?url';
+import { registerDebugTab } from '../ui/debugTabs';
+import { createPMXShadingTab } from '../ui/shadingPanel';
 
 export async function createPMXModelStage(world: World) {
+  // The PMX shading params only exist while a PMX model is loaded, so the tab is this
+  // stage's to contribute rather than something main mounts unconditionally.
+  registerDebugTab(createPMXShadingTab());
+
   createPMXEntity(world, { name: 'endministrator', position: [0, 0, -10], rotation: [0, 0, 0] });
   createPMXEntity(world, {
     name: 'nahida',

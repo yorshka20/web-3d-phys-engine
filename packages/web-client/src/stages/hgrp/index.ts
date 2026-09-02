@@ -11,6 +11,9 @@ import { HGRPCharacterFlags, HGRPPreset } from '@renderer/material/hgrp';
 import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 import { rgba } from '@ecs/utils/color';
 
+import { registerDebugTab } from '../../ui/debugTabs';
+import { createHGRPShadingTab } from '../../ui/hgrpShadingPanel';
+
 import laevatianModel from '../../../assets/hgrp/laevatian/laevatian.glb?url';
 import laevatianPreset from '../../../assets/hgrp/laevatian/preset.json';
 import laevatianWidgetModel from '../../../assets/hgrp/laevatian/widget.glb?url';
@@ -146,6 +149,10 @@ export async function createHGRPStage(world: World) {
       flags: character.flags ?? characterFlags(),
     });
   }
+
+  // The calibration UI belongs to this stage, not to main: every loaded model gets its own
+  // section, so two characters are tuned and saved independently.
+  registerDebugTab(createHGRPShadingTab(MODELS.map((model) => model.assetId)));
 
   const placements = MODELS.map((character) => {
     const model = assetRegistry.getAssetDescriptor<'gltf'>(character.assetId)?.rawData as

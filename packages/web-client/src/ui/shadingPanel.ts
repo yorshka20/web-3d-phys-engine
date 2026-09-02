@@ -5,6 +5,7 @@ import {
   ShadingParamsManager,
 } from '@renderer/webGPU/core/ShadingParamsManager';
 import { Pane } from 'tweakpane';
+import { DebugTab } from './debugTabs';
 import preset from '../presets/pmx-shading.json';
 
 const STORAGE_KEY = 'pmx-shading-params';
@@ -97,7 +98,11 @@ function importPreset(onLoaded: (imported: ShadingPreset) => void): void {
  * Mount the PMX shading tuning panel (toggle with G). Must be called after game.initialize()
  * so the renderer's DI container holds the ShadingParamsManager instance.
  */
-export function mountShadingPanel() {
+export function createPMXShadingTab(): DebugTab {
+  return { id: 'pmx-shading', label: 'PMX', mount: mountPane };
+}
+
+function mountPane(container: HTMLElement): () => void {
   const manager = globalContainer.resolve<ShadingParamsManager>(
     ServiceTokens.SHADING_PARAMS_MANAGER,
   );
@@ -105,13 +110,7 @@ export function mountShadingPanel() {
   const values = loadInitialValues();
   manager.setParams(values);
 
-  const host = document.createElement('div');
-  host.id = 'shading-panel-host';
-  host.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 1000; width: 300px;';
-  host.hidden = true;
-  document.body.appendChild(host);
-
-  const pane = new Pane({ container: host, title: 'PMX Shading (G)' });
+  const pane = new Pane({ container });
 
   for (const def of PMX_SHADING_PARAM_SCHEMA) {
     pane
@@ -154,17 +153,5 @@ export function mountShadingPanel() {
     pane.refresh();
   });
 
-  function handleKey(e: KeyboardEvent) {
-    if (e.code !== 'KeyG') return;
-    const target = e.target as HTMLElement | null;
-    if (target && /INPUT|SELECT|TEXTAREA/.test(target.tagName)) return;
-    host.hidden = !host.hidden;
-  }
-  window.addEventListener('keydown', handleKey);
-
-  return () => {
-    window.removeEventListener('keydown', handleKey);
-    pane.dispose();
-    host.remove();
-  };
+  return () => pane.dispose();
 }
