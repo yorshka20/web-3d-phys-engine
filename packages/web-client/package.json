@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "gl-matrix": "3.4.4",
     "svelte": "^5.0.0",
     "tweakpane": "^4.0.5"
   },

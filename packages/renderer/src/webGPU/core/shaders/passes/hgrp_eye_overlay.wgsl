@@ -7,12 +7,11 @@
 // world position/normal — only the clip-space depth is biased. Group-2 bindings come from
 // the Eye variant's generated fragment.
 
-// World-space pull toward the camera. The scene runs at the asset's own metre scale, so
-// this is 3mm on the model: large enough that the iris CENTER beats the eye-white just in
-// front of it, small enough that the card's top padding — which sits deeper behind the
-// upper eye-white — loses and lets the white show, approximating the game's stencil crop
-// (the near-black upper eye was the card padding showing through, diagnosed 2026-09-01).
-// Calibration constant.
+// Pull toward the camera, in asset metres (3mm on the model, scaled by the draw's world
+// scale at use): large enough that the iris CENTER beats the eye-white just in front of it,
+// small enough that the card's top padding — which sits deeper behind the upper eye-white —
+// loses and lets the white show, approximating the game's stencil crop (the near-black upper
+// eye was the card padding showing through, diagnosed 2026-09-01). Calibration constant.
 const HGRP_EYE_DEPTH_OFFSET: f32 = 0.003;
 
 @vertex
@@ -24,7 +23,7 @@ fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {
     output.world_position = world_position.xyz;
 
     let to_camera = normalize(mvp.camera_pos - world_position.xyz);
-    let biased = world_position.xyz + to_camera * HGRP_EYE_DEPTH_OFFSET;
+    let biased = world_position.xyz + to_camera * (HGRP_EYE_DEPTH_OFFSET * hgrp_model_scale());
     output.position = mvp.projection_matrix * mvp.view_matrix * vec4<f32>(biased, 1.0);
 
     let skinned_normal = (skin * vec4<f32>(input.normal, 0.0)).xyz;

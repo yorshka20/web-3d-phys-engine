@@ -47,9 +47,10 @@ fn hgrp_hsv_shadow_color(base: vec3<f32>, brightness: f32, saturation: f32) -> v
 // hyperbolic, so any fixed raw threshold small enough to catch edges also fires on a curved
 // surface's own recession toward grazing angles (first check whitewashed hair/cloth — thin
 // hair cards additionally need the offset to stay small, a few px, or every fragment's
-// sample escapes its own card). Pixel scale and gap are v1 calibration constants.
+// sample escapes its own card). Pixel scale and gap are v1 calibration constants; the gap
+// is in asset metres (5 cm on the model) and follows the draw's world scale at use.
 const HGRP_RIM_WIDTH_PX: f32 = 4.0;
-const HGRP_RIM_DEPTH_GAP: f32 = 0.05; // world units; the scene runs at the asset's own metre scale
+const HGRP_RIM_DEPTH_GAP: f32 = 0.05;
 
 // Raw depth -> positive view distance, inverted from the perspective projection
 // (clip.z = m22 * z_view + m32, w = -z_view, so distance = m32 / (depth + m22)).
@@ -70,7 +71,7 @@ fn hgrp_rim(n: vec3<f32>, frag_coord: vec4<f32>, ndotl: f32) -> vec3<f32> {
     let coord = clamp(frag_coord.xy + offset, vec2<f32>(0.0), dims - vec2<f32>(1.0));
     let neighbour_depth = textureLoad(scene_depth, vec2<i32>(coord), 0);
     let gap = hgrp_view_distance(neighbour_depth) - hgrp_view_distance(frag_coord.z);
-    let edge = step(HGRP_RIM_DEPTH_GAP, gap);
+    let edge = step(HGRP_RIM_DEPTH_GAP * hgrp_model_scale(), gap);
 
     let light_side = clamp(ndotl * 0.5 + 0.5, 0.0, 1.0);
     return hgrp_material.rim_color.rgb * (edge * hgrp_material.rim_intensity * light_side);

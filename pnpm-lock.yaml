@@ -101,6 +101,9 @@ importers:
 
   packages/web-client:
     dependencies:
+      gl-matrix:
+        specifier: 3.4.4
+        version: 3.4.4
       svelte:
         specifier: ^5.0.0
         version: 5.56.3

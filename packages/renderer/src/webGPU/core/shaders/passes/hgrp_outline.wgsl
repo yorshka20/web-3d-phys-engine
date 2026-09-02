@@ -24,9 +24,9 @@ struct OutlineVertexOutput {
 }
 
 // View-space width per _OutlineWidth unit per unit view distance (presets: 0.5-0.65) and
-// world units pushed back per _OutlineOffsetZ unit (presets: 0.75 face / 0.01-0.02 hair,
+// asset metres pushed back per _OutlineOffsetZ unit (presets: 0.75 face / 0.01-0.02 hair,
 // cloth). v1 calibration constants. The width term cancels view distance so it is scale
-// invariant; the z push is in world units and tracks the scene's metre scale.
+// invariant; the z push is a length on the model and follows the draw's world scale at use.
 const OUTLINE_WIDTH_SCALE: f32 = 0.006;
 const OUTLINE_OFFSET_Z_SCALE: f32 = 0.01;
 
@@ -46,7 +46,7 @@ fn vs_main(input: GLTFVertexInput) -> OutlineVertexOutput {
     let width = hgrp_material.outline_width * mask * OUTLINE_WIDTH_SCALE * view_distance;
 
     var extruded = view_pos.xyz + vec3<f32>(view_normal.xy, 0.0) * width;
-    extruded.z -= hgrp_material.outline_offset_z * OUTLINE_OFFSET_Z_SCALE;
+    extruded.z -= hgrp_material.outline_offset_z * OUTLINE_OFFSET_Z_SCALE * hgrp_model_scale();
 
     output.position = mvp.projection_matrix * vec4<f32>(extruded, 1.0);
     output.uv0 = input.texcoord_0;

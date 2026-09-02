@@ -487,6 +487,7 @@ function hgrpNprFamilyIncludes(
     'core/gltf_types.wgsl',
     hgrpParamsLayoutForVariant(permutation.variant).fragmentPath,
     'core/gltf_skinning.wgsl',
+    'core/hgrp_transform.wgsl',
     'math/color.wgsl',
     'bindings/hgrp_bindings.wgsl',
     hgrpGroup2BindingsFragment(permutation),
@@ -586,6 +587,7 @@ export function createHGRPOutlineShaderModule(): ShaderModule {
       'core/gltf_types.wgsl',
       HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
       'core/gltf_skinning.wgsl',
+      'core/hgrp_transform.wgsl',
       'math/color.wgsl',
     ],
     compilationOptions: {

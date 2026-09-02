@@ -13,6 +13,13 @@ import { rgba } from '@ecs/utils/color';
 
 import { registerDebugTab } from '../../ui/debugTabs';
 import { createHGRPShadingTab } from '../../ui/hgrpShadingPanel';
+import { createHGRPStageTab } from '../../ui/hgrpStagePanel';
+import {
+  applyHGRPPlacement,
+  hgrpScaleFromUrl,
+  hgrpStagePlacement,
+  HGRPCharacterPlacement,
+} from './placement';
 
 import laevatianModel from '../../../assets/hgrp/laevatian/laevatian.glb?url';
 import laevatianPreset from '../../../assets/hgrp/laevatian/preset.json';
@@ -98,9 +105,7 @@ const MODELS: HGRPModelSource[] = [
   },
 ];
 
-// Ground plane sits here (main.ts cretePlane); models stand on it.
-const GROUND_Y = -1;
-// Clear space between two models' bind-pose bounding boxes.
+// Clear space between two models' bind-pose bounding boxes, in layout metres.
 const CHARACTER_GAP = 0.5;
 
 interface ModelBounds {
@@ -132,9 +137,10 @@ function modelBounds(model: GLTFModel): ModelBounds {
 }
 
 // Stage B: the converted HGRP characters render through the HGRP material family — materials
-// joined from preset.json by glb material name. The scene runs at the assets' own scale
-// (metres, character ≈ 1.7 tall); the world-unit shading constants (rim depth gap, outline
-// z-offset, eye depth bias) are calibrated against that.
+// joined from preset.json by glb material name. The layout is authored at the assets' own
+// scale (metres, character ≈ 1.7 tall) and scaled as a whole by hgrpStagePlacement.globalScale;
+// the shaders read the resulting world scale off the model matrix, so no shading constant is
+// tied to it.
 export async function createHGRPStage(world: World) {
   // Bright studio backdrop (linear light, pre-tonemap) — the in-game character showcase
   // sits on a light grey ground, and look comparison against screenshots needs it
@@ -153,6 +159,10 @@ export async function createHGRPStage(world: World) {
   // The calibration UI belongs to this stage, not to main: every loaded model gets its own
   // section, so two characters are tuned and saved independently.
   registerDebugTab(createHGRPShadingTab(MODELS.map((model) => model.assetId)));
+  registerDebugTab(createHGRPStageTab());
+
+  hgrpStagePlacement.globalScale = hgrpScaleFromUrl();
+  hgrpStagePlacement.characters.length = 0;
 
   const placements = MODELS.map((character) => {
     const model = assetRegistry.getAssetDescriptor<'gltf'>(character.assetId)?.rawData as
@@ -181,13 +191,26 @@ export async function createHGRPStage(world: World) {
       }),
     );
 
+    // Placed below (applyHGRPPlacement) once the entity carries its transform; the anchor
+    // is the model's feet, the slot its ground point in the row.
     entity.addComponent(
       world.createComponent(Transform3DComponent, {
-        position: [slotCentreX - (min[0] + max[0]) / 2, GROUND_Y - min[1], -(min[2] + max[2]) / 2],
+        position: [0, 0, 0],
         rotation: [0, 0, 0],
         scale: [1, 1, 1],
       }),
     );
+    const placement: HGRPCharacterPlacement = {
+      label: character.label,
+      entity,
+      anchor: [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2],
+      slot: [slotCentreX, 0, 0],
+      offset: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: 1,
+    };
+    hgrpStagePlacement.characters.push(placement);
+    applyHGRPPlacement(placement);
 
     // The rig is posed every render tick by SkeletalAnimationSystem. Pelica's clip 0 is the
     // summon entrance and clip 1 its standing idle loop (scripts/hgrp/anim-convert.mjs);
