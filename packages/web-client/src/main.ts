@@ -21,7 +21,6 @@ import { rgba } from '@ecs/utils/color';
 import { Vertex3D } from '@renderer/geometry/types';
 import { AssetLoader } from '@renderer/webGPU/core/AssetLoader';
 import { Game } from './game/Game';
-import { createEndfieldStage } from './stages/endfield';
 import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
 import { createHGRPStage } from './stages/hgrp';
@@ -29,6 +28,7 @@ import { mountCameraPanel } from './ui/cameraPanel';
 import { mountDebugPanel } from './ui/debugPanel';
 import { registerDebugTab } from './ui/debugTabs';
 import { createSpawnTab } from './ui/spawnTab';
+// import { createEndfieldStage } from './stages/endfield';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
 // import { createZZZPMXModelStage } from './stages/zzz';
@@ -108,12 +108,11 @@ async function main() {
     // case 'pmxAnimationExample':
     //   await createPMXAnimationExample(world);
     //   break;
-    case 'endfield':
-      await createEndfieldStage(world);
-      break;
+    // await createEndfieldStage(world);
     case 'gltfModel':
       await createGLTFStage(world);
       break;
+    case 'endfield':
     case 'hgrp':
       await createHGRPStage(world);
       break;
@@ -196,7 +195,7 @@ function create3DCamera(world: World, config: CameraConfig = {}) {
     far = 1000,
 
     // Control sensitivity (optimized for better UX)
-    zoomSensitivity = 0.005, // Faster zoom
+    zoomSensitivity = 0.002, // Faster zoom
     panSensitivity = 0.01, // Faster panning
     rotationSensitivity = 0.008, // Slightly faster rotation
     moveSpeed = 15.0, // Faster WASD movement
