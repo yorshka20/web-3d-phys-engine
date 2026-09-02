@@ -80,7 +80,7 @@ fn hgrp_perturb_normal(
 // hair cards additionally need the offset to stay small, a few px, or every fragment's
 // sample escapes its own card). Pixel scale and gap are v1 calibration constants.
 const HGRP_RIM_WIDTH_PX: f32 = 4.0;
-const HGRP_RIM_DEPTH_GAP: f32 = 0.5; // world units (scene at 10x model scale = 5cm on model)
+const HGRP_RIM_DEPTH_GAP: f32 = 0.05; // world units; the scene runs at the asset's own metre scale
 
 // Raw depth -> positive view distance, inverted from the perspective projection
 // (clip.z = m22 * z_view + m32, w = -z_view, so distance = m32 / (depth + m22)).

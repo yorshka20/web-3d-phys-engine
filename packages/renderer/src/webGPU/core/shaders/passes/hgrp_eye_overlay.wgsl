@@ -9,13 +9,13 @@
 @group(2) @binding(5) var matcap_tex: texture_2d<f32>; // _MatcapTex
 @group(2) @binding(6) var shadow_lut: texture_2d<f32>; // _ShadowLutTex
 
-// World-space pull toward the camera. The scene presents the character at 10x model scale
-// (0.03 world = 3mm model): large enough that the iris CENTER beats the eye-white just in
+// World-space pull toward the camera. The scene runs at the asset's own metre scale, so
+// this is 3mm on the model: large enough that the iris CENTER beats the eye-white just in
 // front of it, small enough that the card's top padding — which sits deeper behind the
 // upper eye-white — loses and lets the white show, approximating the game's stencil crop
 // (the near-black upper eye was the card padding showing through, diagnosed 2026-09-01).
 // Calibration constant.
-const HGRP_EYE_DEPTH_OFFSET: f32 = 0.03;
+const HGRP_EYE_DEPTH_OFFSET: f32 = 0.003;
 
 @vertex
 fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {

@@ -6,12 +6,18 @@
  * values instead of eye-calibration. LOD material variants are skipped; materials present
  * in the GLB but absent here (common materials not exported per-character) are
  * default-filled by the engine.
+ *
+ * `glbMaterialNames` scopes the output to what the converted GLB actually references. A
+ * character's rip carries every material the game ships for it — Laevatian's is 356
+ * non-LOD entries, of which 290 are HGRP/Effect/VFX* — and the preset is statically
+ * imported by the web client, so an unscoped preset ships megabytes the renderer can
+ * never join to a mesh.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 
-export function buildPreset(charDir, texDir, charName) {
+export function buildPreset(charDir, texDir, charName, glbMaterialNames) {
   const matDir = path.join(charDir, 'Material');
   const materials = {};
 
@@ -19,6 +25,7 @@ export function buildPreset(charDir, texDir, charName) {
     if (!file.endsWith('.json')) continue;
     const name = path.basename(file, '.json');
     if (name.includes('_lod_')) continue;
+    if (glbMaterialNames && !glbMaterialNames.has(name)) continue;
 
     const data = JSON.parse(fs.readFileSync(path.join(matDir, file), 'utf8'));
     const props = data.m_SavedProperties ?? {};

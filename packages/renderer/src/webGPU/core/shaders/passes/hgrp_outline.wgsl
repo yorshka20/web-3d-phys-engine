@@ -25,9 +25,10 @@ struct OutlineVertexOutput {
 
 // View-space width per _OutlineWidth unit per unit view distance (presets: 0.5-0.65) and
 // world units pushed back per _OutlineOffsetZ unit (presets: 0.75 face / 0.01-0.02 hair,
-// cloth). v1 calibration constants.
+// cloth). v1 calibration constants. The width term cancels view distance so it is scale
+// invariant; the z push is in world units and tracks the scene's metre scale.
 const OUTLINE_WIDTH_SCALE: f32 = 0.006;
-const OUTLINE_OFFSET_Z_SCALE: f32 = 0.1;
+const OUTLINE_OFFSET_Z_SCALE: f32 = 0.01;
 
 @vertex
 fn vs_main(input: GLTFVertexInput) -> OutlineVertexOutput {

@@ -25,8 +25,8 @@ import { createEndfieldStage } from './stages/endfield';
 import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
 import { createHGRPStage, HGRP_PELICA_ASSET_ID } from './stages/hgrp';
-import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
 import { mountHGRPShadingPanel } from './ui/hgrpShadingPanel';
+import { mountEntityPanel } from './ui/mountEntityPanel.svelte';
 import { mountShadingPanel } from './ui/shadingPanel';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
@@ -74,7 +74,7 @@ const stage: Stage = resolveStage();
 const stageCameraConfig: Partial<Record<Stage, CameraConfig>> = {
   gltfModel: { target: [0, 0.5, 0], distance: 16, elevationDegrees: 18 },
   endfield: { target: [0, 10, 0], distance: 28, elevationDegrees: 8 },
-  hgrp: { target: [0, 7, 0], distance: 24, elevationDegrees: 8 },
+  hgrp: { target: [0, -0.2, 0], distance: 2.4, elevationDegrees: 8 },
 };
 
 async function main() {
@@ -194,7 +194,7 @@ function create3DCamera(world: World, config: CameraConfig = {}) {
     elevationDegrees = 10,
 
     // Camera properties
-    fov = 75,
+    fov = 90,
     aspectRatio = 16 / 9,
     near = 0.1,
     far = 1000,

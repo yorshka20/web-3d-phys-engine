@@ -84,11 +84,12 @@ function parseArgs(argv) {
     else if (argv[i] === '--out') args.out = argv[++i];
     else if (argv[i] === '--fps') args.fps = Number.parseFloat(argv[++i]);
     else if (argv[i] === '--list') args.list = true;
+    else if (argv[i] === '--auto') args.auto = true;
   }
   if (!args.src || !args.char) {
     console.error(
       'Usage: node scripts/hgrp/anim-convert.mjs --src <rip-root> --char <Char> ' +
-        '(--list | --clips <name>[,<name>...]) [--out <dir>] [--fps <n>]',
+        '(--list | --auto | --clips <name>[,<name>...]) [--out <dir>] [--fps <n>]',
     );
     process.exit(1);
   }
@@ -265,6 +266,35 @@ function bakeClip(doc, buffer, index, prefix, clip, fps) {
   return { channels, keys, frameCount, rigRoots, unmatched: [...unmatched] };
 }
 
+// A clip qualifies as skeletal if it drives more than a handful of distinct node paths.
+// Measured 2026-09-02 across two rips, the separation is total: real body clips carry
+// 704-815 curves over 323-352 paths, while camera tracks and event stubs carry exactly 2
+// curves over 1 unnamed path. Anything in between would be a fragment worth inspecting by
+// hand, so the threshold sits far from both ends rather than at 1.
+const MIN_ANIMATED_PATHS = 8;
+
+/**
+ * Clips to bake when no explicit list is given.
+ *
+ * Of a character's clips only a handful carry curve data at all — the rest are optimized
+ * "muscle" clips whose samples AssetRipper does not export (Pelica 5/1324, Laevatian
+ * 4/255). Those survivors still mix body animation with camera tracks, so the rig-coverage
+ * test above is what separates them; filtering on a `_cam` suffix would only work until a
+ * rip names something differently.
+ *
+ * Alphabetical order then puts a clip ahead of its own `_loop` variant, which is the
+ * stage's clip 0 = entrance / clip 1 = idle convention.
+ */
+async function selectClipsAutomatically(clipDir) {
+  const selected = [];
+  for (const file of findCurveClips(clipDir)) {
+    const clip = await parseAnimClip(path.join(clipDir, file));
+    const paths = new Set(clip.curves.map((curve) => curve.path));
+    if (paths.size >= MIN_ANIMATED_PATHS) selected.push(path.basename(file, '.anim'));
+  }
+  return selected.sort();
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   const clipDir = path.join(args.src, args.char, 'AnimationClip');
@@ -283,8 +313,16 @@ async function main() {
     }
     return;
   }
+  if (args.auto && args.clips.length === 0) {
+    args.clips = await selectClipsAutomatically(clipDir);
+    if (args.clips.length === 0) {
+      console.warn(`[anim-convert] --auto found no skeletal clips for ${args.char}, nothing to bake`);
+      return;
+    }
+    console.log(`[anim-convert] --auto selected: ${args.clips.join(', ')}`);
+  }
   if (args.clips.length === 0) {
-    console.error('[anim-convert] Pass --clips <name>[,...] or --list');
+    console.error('[anim-convert] Pass --clips <name>[,...], --auto or --list');
     process.exit(1);
   }
 

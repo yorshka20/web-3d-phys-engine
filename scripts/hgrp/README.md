@@ -16,23 +16,34 @@ asset processing is not an engine concern; the engine only ever reads the output
 ## Usage
 
 ```bash
-node scripts/hgrp/convert.mjs --src <rip-root> --chars Pelica[,Si,...]
-# optional: --out <dir>   (default: packages/web-client/assets/hgrp)
+# Mesh + textures + preset + animation clips, in one pass:
+node scripts/hgrp/convert.mjs --src <rip-root> --chars Pelica[,Laevatian,...]
+# optional: --out <dir>     (default: packages/web-client/assets/hgrp)
+#           --no-anim       (skip the clip bake)
 
-# Animation clips are a separate, opt-in step (clip choice is a judgement call):
+# Animation on its own — inspect what a rip actually carries, or override the selection:
 node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica --list
+node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica --auto
 node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica \
      --clips A_actor_pelica_gacha_ani,A_actor_pelica_gacha_ani_loop
 ```
 
+`--auto` (what convert.mjs runs) keeps every clip that actually drives the rig and orders
+them alphabetically, which puts an entrance clip ahead of its own `_loop`. The rig-coverage
+test is what separates a body clip from a camera track: measured across two rips, body clips
+carry 704-815 curves over 323-352 node paths while camera tracks and event stubs carry
+exactly 2 curves over 1 unnamed path.
+
 Re-running is safe: outputs are overwritten in place (anim-convert replaces the GLB's
-animations rather than stacking them, so it must be given every clip you want kept). Run
-anim-convert AFTER convert.mjs — it edits the GLB the latter produces.
+animations rather than stacking them, so an explicit `--clips` must list every clip you want
+kept). anim-convert edits the GLB convert.mjs produces, so it always runs after it.
 
 ## What the pipeline does, per character
 
-1. **`convert-fbx.py`** (run headless by the driver): imports the rigged prefab FBX found at
-   `<rip>/<Char>/Animator/P_actor_*/P_actor_*.fbx` (NPC and "(1)" duplicates are skipped),
+1. **`convert-fbx.py`** (run headless by the driver): imports the rigged prefab FBX found
+   under `<rip>/<Char>/Animator/` — `P_actor_*/P_actor_*.fbx` when the rip has one (Pelica),
+   otherwise `chr_<id>_<name>_postmodel/*.fbx` (Laevatian); NPC, "(1)" duplicates, `uimodel`,
+   `deco_*` and `Att_widget_*` are skipped,
    deletes `_lod1..9` / `_shadowProxy*` meshes (lod0 is the highest-detail level and the only
    one the engine consumes), and exports a GLB with tangents, skins, and morph targets enabled.
 2. **Texture copy + repair** (`convert.mjs`): copies every PNG from `<rip>/<Char>/Animator/`.

@@ -32,6 +32,7 @@ function parseArgs(argv) {
     if (argv[i] === '--src') args.src = argv[++i];
     else if (argv[i] === '--chars') args.chars = argv[++i].split(',');
     else if (argv[i] === '--out') args.out = argv[++i];
+    else if (argv[i] === '--no-anim') args.noAnim = true;
   }
   if (!args.src || args.chars.length === 0) {
     console.error('Usage: node scripts/hgrp/convert.mjs --src <rip-root> --chars Pelica[,...]');
@@ -52,14 +53,53 @@ function findActorFbx(charDir, charName) {
       }
     }
   }
-  // Prefer the plain P_actor_* prefab over "(1)" duplicates and NPC variants.
-  const ranked = candidates
-    .filter((f) => path.basename(f).toLowerCase().startsWith('p_actor_'))
-    .sort((a, b) => a.length - b.length);
-  if (ranked.length === 0) {
-    throw new Error(`No P_actor_*.fbx found under ${animatorDir} for ${charName}`);
+  // Two naming schemes appear across the rip: some characters ship a `P_actor_*` prefab
+  // (Pelica), others only the `chr_<id>_<name>_postmodel` mesh (Laevatian). Both carry the
+  // full body; the other Animator entries are decorations (deco_*), the UI bust (uimodel)
+  // and attachment widgets (Att_widget_*), which must never win. Shortest name first drops
+  // the "(1)" duplicates.
+  const byPreference = [
+    (f) => path.basename(f).toLowerCase().startsWith('p_actor_'),
+    (f) => /_postmodel\.fbx$/i.test(f) && !/^att_widget_/i.test(path.basename(f)),
+  ];
+  for (const accept of byPreference) {
+    const ranked = candidates.filter(accept).sort((a, b) => a.length - b.length);
+    if (ranked.length > 0) return ranked[0];
   }
-  return ranked[0];
+  throw new Error(
+    `No actor FBX (P_actor_*.fbx or *_postmodel.fbx) found under ${animatorDir} for ${charName}`,
+  );
+}
+
+// The prop a character carries (Laevatian's ice cream, `bingqilin_move_jnt` +
+// `yingtao_move_jnt`), rigged on its own 2-3 bone armature rather than the character's.
+// Present for 4 of the 25 ripped characters; absent is normal, not an error.
+function findWidgetFbx(charDir) {
+  const animatorDir = path.join(charDir, 'Animator');
+  for (const entry of fs.readdirSync(animatorDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !/^Att_widget_/i.test(entry.name)) continue;
+    for (const file of fs.readdirSync(path.join(animatorDir, entry.name))) {
+      if (file.toLowerCase().endsWith('.fbx')) {
+        return path.join(animatorDir, entry.name, file);
+      }
+    }
+  }
+  return undefined;
+}
+
+function runBlender(fbx, glbPath) {
+  const result = spawnSync(
+    blenderBin,
+    ['--background', '--python', path.join(repoRoot, 'scripts/hgrp/convert-fbx.py'), '--', fbx, glbPath],
+    { encoding: 'utf8' },
+  );
+  console.log(
+    (result.stdout || '')
+      .split('\n')
+      .filter((line) => line.startsWith('[convert]'))
+      .join('\n'),
+  );
+  return result.status === 0 && fs.existsSync(glbPath) ? undefined : result.stderr;
 }
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
@@ -102,8 +142,10 @@ async function embedBaseColor(glbPath, charDir, texDir) {
   const io = new NodeIO();
   const doc = await io.read(glbPath);
   const textureCache = new Map();
+  const materialNames = [];
   let assigned = 0;
   for (const material of doc.getRoot().listMaterials()) {
+    materialNames.push(material.getName());
     const matJsonPath = path.join(charDir, 'Material', `${material.getName()}.json`);
     if (!fs.existsSync(matJsonPath)) continue;
     const matJson = JSON.parse(fs.readFileSync(matJsonPath, 'utf8'));
@@ -124,7 +166,7 @@ async function embedBaseColor(glbPath, charDir, texDir) {
     assigned++;
   }
   await io.write(glbPath, doc);
-  return assigned;
+  return { assigned, materialNames };
 }
 
 async function verifyGlb(glbPath) {
@@ -160,7 +202,7 @@ async function verifyGlb(glbPath) {
   return problems;
 }
 
-const { src, chars, out } = parseArgs(process.argv);
+const { src, chars, out, noAnim } = parseArgs(process.argv);
 let failed = false;
 
 for (const charName of chars) {
@@ -173,15 +215,9 @@ for (const charName of chars) {
   console.log(`[convert] fbx: ${fbx}`);
   fs.mkdirSync(outDir, { recursive: true });
 
-  const result = spawnSync(
-    blenderBin,
-    ['--background', '--python', path.join(repoRoot, 'scripts/hgrp/convert-fbx.py'), '--', fbx, glbPath],
-    { encoding: 'utf8' },
-  );
-  const lines = (result.stdout || '').split('\n').filter((l) => l.startsWith('[convert]'));
-  console.log(lines.join('\n'));
-  if (result.status !== 0 || !fs.existsSync(glbPath)) {
-    console.error(`[convert] blender failed for ${charName}:\n${result.stderr}`);
+  const blenderError = runBlender(fbx, glbPath);
+  if (blenderError !== undefined) {
+    console.error(`[convert] blender failed for ${charName}:\n${blenderError}`);
     failed = true;
     continue;
   }
@@ -190,13 +226,60 @@ for (const charName of chars) {
   const { copied, converted } = copyTextures(charDir, texDir);
   console.log(`[convert] copied ${copied} textures (${converted} TGA-mislabeled, converted to PNG)`);
 
-  const assigned = await embedBaseColor(glbPath, charDir, texDir);
+  const { assigned, materialNames } = await embedBaseColor(glbPath, charDir, texDir);
   console.log(`[convert] embedded ${assigned} baseColor textures`);
 
-  const preset = buildPreset(charDir, texDir, charName.toLowerCase());
+  // The widget is a second GLB beside the character's, sharing its textures and preset:
+  // its materials come from the same rip Material/ directory and its textures were already
+  // copied above, so only the mesh needs converting.
+  const widgetFbx = findWidgetFbx(charDir);
+  const widgetMaterialNames = [];
+  if (widgetFbx) {
+    const widgetGlbPath = path.join(outDir, 'widget.glb');
+    console.log(`[convert] widget fbx: ${widgetFbx}`);
+    const widgetError = runBlender(widgetFbx, widgetGlbPath);
+    if (widgetError !== undefined) {
+      console.error(`[convert] blender failed for ${charName}'s widget:\n${widgetError}`);
+      failed = true;
+    } else {
+      const widget = await embedBaseColor(widgetGlbPath, charDir, texDir);
+      widgetMaterialNames.push(...widget.materialNames);
+      console.log(`[convert] widget: ${widget.materialNames.length} materials`);
+    }
+  }
+
+  const preset = buildPreset(
+    charDir,
+    texDir,
+    charName.toLowerCase(),
+    new Set([...materialNames, ...widgetMaterialNames]),
+  );
   const presetPath = path.join(outDir, 'preset.json');
   fs.writeFileSync(presetPath, JSON.stringify(preset, null, 2));
   console.log(`[preset] wrote ${Object.keys(preset.materials).length} materials -> ${presetPath}`);
+
+  // Baking clips is part of converting a character, not a separate errand: a character
+  // without its animation renders in bind pose. Clip choice is automatic (rig-coverage
+  // test in anim-convert); --no-anim skips it, and anim-convert can still be re-run by
+  // hand with an explicit --clips list.
+  if (!noAnim) {
+    const anim = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'scripts/hgrp/anim-convert.mjs'),
+        '--src', src,
+        '--char', charName,
+        '--out', out,
+        '--auto',
+      ],
+      { encoding: 'utf8' },
+    );
+    console.log((anim.stdout || '').split('\n').filter((l) => l.startsWith('[anim-convert]')).join('\n'));
+    if (anim.status !== 0) {
+      console.error(`[anim-convert] failed for ${charName}:\n${anim.stderr}`);
+      failed = true;
+    }
+  }
 
   const problems = await verifyGlb(glbPath);
   if (problems.length > 0) {

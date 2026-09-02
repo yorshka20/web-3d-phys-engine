@@ -246,7 +246,9 @@ Current state that is easy to misread as bugs or dead code — check here before
   (shader registry, ServiceTokens, priority constants are the single sources of truth).
 - **Reuse over reimplementation**: promote shared logic into the owning manager/module instead of
   writing a second copy; one entry point rather than parallel near-duplicate methods.
-- **Branches/commits**: conventional commits (`feat:`, `fix:`, `chore:`, ...); feature branches
+- **Branches/commits**: conventional commits (`feat:`, `fix:`, `chore:`, ...). **Commit
+  straight to `main` — do not open a feature branch on your own** (user convention,
+  2026-09-02). Branches are for work the user explicitly asks to isolate, and are then
   named `feature/module-name`.
 - **Abandoning committed work**: `git reset` to the last good commit and force-push — do not
   stack revert commits (user convention, 2026-08-31: “直接 reset 然后 push force，别反复

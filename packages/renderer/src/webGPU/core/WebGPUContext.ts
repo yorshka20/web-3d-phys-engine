@@ -51,7 +51,7 @@ export class WebGPUContext {
       await this.requestAdapter(options);
 
       // 2. request GPU device
-      await this.requestDevice(options.requiredFeatures);
+      await this.requestDevice(options);
 
       // 3. configure canvas context
       await this.configureCanvas();
@@ -89,20 +89,22 @@ export class WebGPUContext {
 
   /**
    * request GPU device
-   * @param requiredFeatures required features
+   * @param options context options carrying the caller's required features and limits
    * @returns GPU device
+   *
+   * A limit the adapter cannot meet makes requestDevice reject, naming the limit — that is
+   * the intended outcome. Dropping the caller's request instead would leave the renderer
+   * running on default limits while believing it had asked for more.
    */
-  private async requestDevice(
-    requiredFeatures?: GPUDeviceDescriptor['requiredFeatures'],
-  ): Promise<GPUDevice> {
+  private async requestDevice(options?: WebGPUContextOptions): Promise<GPUDevice> {
     if (!this.adapter) {
       throw new Error('No adapter available');
     }
 
     const deviceOptions: GPUDeviceDescriptor = {
       label: 'WebGPU Device',
-      requiredFeatures: requiredFeatures ? new Set(requiredFeatures) : undefined,
-      requiredLimits: {},
+      requiredFeatures: options?.requiredFeatures ? [...new Set(options.requiredFeatures)] : [],
+      requiredLimits: options?.requiredLimits ?? {},
     };
 
     const device = await this.adapter.requestDevice(deviceOptions);
