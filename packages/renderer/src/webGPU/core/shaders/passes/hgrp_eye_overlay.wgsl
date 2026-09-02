@@ -4,10 +4,8 @@
 // the projected position is pulled toward the camera by a small world-space offset: the
 // iris wins the depth test against the eye-white millimetres in front of it, but still
 // loses to the cheek/hair centimetres in front at grazing angles. Shading uses the TRUE
-// world position/normal — only the clip-space depth is biased.
-
-@group(2) @binding(5) var matcap_tex: texture_2d<f32>; // _MatcapTex
-@group(2) @binding(6) var shadow_lut: texture_2d<f32>; // _ShadowLutTex
+// world position/normal — only the clip-space depth is biased. Group-2 bindings come from
+// the Eye variant's generated fragment.
 
 // World-space pull toward the camera. The scene runs at the asset's own metre scale, so
 // this is 3mm on the model: large enough that the iris CENTER beats the eye-white just in

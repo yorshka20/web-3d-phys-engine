@@ -2,14 +2,8 @@
 // comes from the skin color-grading LUT (_ShadowLutTex) when _UseShadowLutTex is set, else
 // from the HSV adjustment. When _UseSDFLightmap is set (face), the ramp coordinate is the
 // SDF face-shadow factor instead of half-Lambert n.l, so the ramp's warm terminator lands
-// exactly on the SDF boundary. _SDFMask/highlight/emotion layer on later. Binding indices
-// must match the HGRP_TEXTURE_SLOTS_BY_VARIANT slot order in HGRPMaterialResources.ts.
-
-@group(2) @binding(5) var bump_map: texture_2d<f32>; // _BumpMap
-@group(2) @binding(6) var shadow_lut: texture_2d<f32>; // _ShadowLutTex
-@group(2) @binding(7) var sdf_lightmap: texture_2d<f32>; // _SDFLightmap
-@group(2) @binding(9) var highlight_map: texture_2d<f32>; // _HighlightMap (hl_M)
-@group(2) @binding(11) var emission_map: texture_2d<f32>; // _EmissionMap
+// exactly on the SDF boundary. _SDFMask/highlight/emotion layer on later. Group-2 bindings
+// come from the generated fragment for this variant (material/hgrpContract.ts slot tables).
 
 // SDF face shadow v1 (channel semantics still under calibration — see hgrp-shading.md):
 // R holds the light-yaw threshold field for one side; the other side samples mirrored UVs.
@@ -50,7 +44,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         hgrp_material.shadow_color_brightness,
         hgrp_material.shadow_color_saturation,
     );
-    let lut_shadow = hgrp_sample_shadow_lut(shadow_lut, ramp_sampler, base.rgb);
+    let lut_shadow = hgrp_sample_shadow_lut(shadow_lut_tex, ramp_sampler, base.rgb);
     let shadow_color = select(hsv_shadow, lut_shadow, hgrp_material.use_shadow_lut > 0.5);
 
     let sdf_coord = hgrp_sdf_shade_coord(input.uv0);

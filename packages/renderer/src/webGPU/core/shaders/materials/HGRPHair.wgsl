@@ -8,11 +8,8 @@
 // peak). Points whose normal is view-horizontal sample the crisp band; the crown drifts
 // into the soft right-half tail; downward-facing strands fall into the dark left half.
 // _AnisotropyValue is GUI-tunable so the band center can be verified live.
-// Binding indices must match the HGRP_TEXTURE_SLOTS_BY_VARIANT slot order in
-// HGRPMaterialResources.ts.
-
-@group(2) @binding(5) var spec_ramp_map: texture_2d<f32>; // _SpecRampMap
-@group(2) @binding(9) var line_map: texture_2d<f32>; // _LineMap
+// Group-2 bindings come from the generated fragment for this variant
+// (material/hgrpContract.ts slot tables).
 
 // Formula-unit normalization, same rationale as HGRP_RIM_FORMULA_SCALE: the official
 // _AnisotropyIntensity (3.0) belongs to the game's band formula (unknown); raw release

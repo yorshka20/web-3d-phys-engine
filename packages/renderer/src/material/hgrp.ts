@@ -21,13 +21,6 @@ export const HGRP_SHADER_ID_BY_VARIANT = {
   CharacterNPR_VFX: 'hgrp_vfx_shader',
 } as const satisfies Record<HGRPShaderVariant, string>;
 
-// The VFX variant carries its own parameter vocabulary (flow/disturb/mask layers) with no
-// overlap with the CharacterNPR family — not even _BaseMap — so it packs a separate uniform
-// struct rather than extending the shared one.
-export function isHGRPVfxVariant(variant: HGRPShaderVariant): boolean {
-  return variant === 'CharacterNPR_VFX';
-}
-
 export type HGRPShaderId = (typeof HGRP_SHADER_ID_BY_VARIANT)[HGRPShaderVariant];
 
 export function hgrpVariantForShaderId(shaderId: string): HGRPShaderVariant | undefined {
@@ -111,80 +104,8 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
   enabled: boolean;
 }
 
-// Calibration-tunable subset of the HGRP parameters: exactly what the render path consumes
-// (MaterialBinder's uniform packing, plus _EnableOutline which gates the outline draw list).
-// The shading GUI generates its widgets from these tables and mutates the live descriptors in
-// place — the binder re-packs the material uniform from the descriptor every frame, so edits
-// take effect without extra plumbing. Defaults mirror the binder's `??` fallbacks so a widget
-// shows the effective value when a preset omits the key.
-export interface HGRPTunableFloatDef {
-  key: string;
-  default: number;
-  min: number;
-  max: number;
-  step?: number;
-}
-
-export const HGRP_SHADING_SCHEMA_VERSION = 1;
-
-export const HGRP_TUNABLE_FLOATS: readonly HGRPTunableFloatDef[] = [
-  { key: '_UseDiffRampMap', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_UseShadowLutTex', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_UseBumpMap', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_UseSDFLightmap', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_UseSpecRampMap', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_UseMetallicGlossMap', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_UseEmission', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_EnableOutline', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_ShadowColorBrightness', default: 1, min: 0, max: 2, step: 0.01 },
-  { key: '_ShadowColorSaturation', default: 1, min: 0, max: 3, step: 0.01 },
-  { key: '_BumpScale', default: 1, min: 0, max: 3, step: 0.01 },
-  { key: '_ColorAdjustmentRimIntensity', default: 0, min: 0, max: 8, step: 0.05 },
-  { key: '_ColorAdjustmentRimWidth', default: 0.35, min: 0, max: 1, step: 0.01 },
-  { key: '_Smoothness', default: 0.5, min: 0, max: 1, step: 0.01 },
-  { key: '_Specular', default: 0.5, min: 0, max: 4, step: 0.05 },
-  { key: '_AnisotropyIntensity', default: 0, min: 0, max: 8, step: 0.05 },
-  { key: '_AnisotropyValue', default: 0.5, min: 0, max: 1, step: 0.01 },
-  { key: '_UseMatcap', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_FaceHighlightMap', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_ParallaxScale', default: 0, min: 0, max: 0.2, step: 0.001 },
-  { key: '_MatcapNormalScale', default: 1, min: 0, max: 2, step: 0.01 },
-  { key: '_EyeHighLight', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_EmissionBrightness', default: 1, min: 0, max: 40, step: 0.1 },
-  { key: '_OutlineWidth', default: 0, min: 0, max: 3, step: 0.01 },
-  { key: '_OutlineColorBrightness', default: 0.5, min: 0, max: 2, step: 0.01 },
-  { key: '_OutlineColorSaturation', default: 1, min: 0, max: 3, step: 0.01 },
-  { key: '_OutlineOffsetZ', default: 0, min: 0, max: 1, step: 0.01 },
-  { key: '_UseLineMap', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_DrawUnderBrow', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_HairBrowMaskThreshold', default: 0.5, min: 0, max: 1, step: 0.01 },
-  { key: '_LineAmount', default: 300, min: 0, max: 600, step: 1 },
-  { key: '_LineIntensity', default: 0, min: 0, max: 1, step: 0.01 },
-  { key: '_LineRange', default: 1, min: 0, max: 1, step: 0.01 },
-  { key: '_LineSaturation', default: 1, min: 0, max: 2, step: 0.01 },
-  { key: '_LineValue', default: 1, min: 0, max: 2, step: 0.01 },
-  { key: '_Pantyhose', default: 0, min: 0, max: 1, step: 1 },
-  { key: '_PantyhoseSpecularInt', default: 0, min: 0, max: 1, step: 0.01 },
-  { key: '_PantyhoseSpecularValue', default: 0, min: 0, max: 1, step: 0.01 },
-  { key: '_PantyhoseAnisotropyDirection', default: 0, min: -1, max: 1, step: 0.01 },
-];
-
-export interface HGRPTunableColorDef {
-  key: string;
-  default: [number, number, number, number];
-}
-
-// _EyeHighLightColor/_EyeScatteringColor are consumed too but stay preset-driven: they are
-// HDR (>1) and a color picker cannot express them.
-export const HGRP_TUNABLE_COLORS: readonly HGRPTunableColorDef[] = [
-  { key: '_BaseColor', default: [1, 1, 1, 1] },
-  { key: '_ColorAdjustmentRimColor', default: [1, 1, 1, 1] },
-  { key: '_EmissionColor', default: [0, 0, 0, 1] },
-  { key: '_MatcapColor', default: [1, 1, 1, 1] },
-  { key: '_PantyhoseColor', default: [0, 0, 0, 1] },
-  { key: '_SDFRimColor', default: [1, 1, 1, 1] },
-  { key: '_EyeTintColor', default: [1, 1, 1, 1] },
-];
+// Parameter vocabulary, uniform fields, texture slots and the calibration GUI schema are
+// declared once in ./hgrpContract.ts.
 
 export function hgrpTextureAssetId(character: string, filename: string): string {
   return `hgrp_${character}_${filename}`;

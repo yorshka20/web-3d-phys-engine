@@ -25,8 +25,6 @@ import pmxMorphComputeShader from './compute/PMXMorphCompute.wgsl';
 import constantsFragment from './core/constants.wgsl';
 import gltfSkinningFragment from './core/gltf_skinning.wgsl';
 import gltfTypesFragment from './core/gltf_types.wgsl';
-import hgrpTypesFragment from './core/hgrp_types.wgsl';
-import hgrpVfxTypesFragment from './core/hgrp_vfx_types.wgsl';
 import hgrpVertexFragment from './core/hgrp_vertex.wgsl';
 import uniformsFragment from './core/uniforms.wgsl';
 import vertexTypesFragment from './core/vertex_types.wgsl';
@@ -58,22 +56,24 @@ import shadowFragment from './passes/shadow.wgsl';
 import fireBindingsFragment from './bindings/fire_bindings.wgsl';
 import gltfBindingsFragment from './bindings/gltf_bindings.wgsl';
 import hgrpBindingsFragment from './bindings/hgrp_bindings.wgsl';
-import hgrpVfxBindingsFragment from './bindings/hgrp_vfx_bindings.wgsl';
 import pmxBindingsFragment from './bindings/pmx_bindings.wgsl';
 import pmxMorphComputeBindingsFragment from './bindings/pmx_morph_compute_bindings.wgsl';
 import simpleBindingsFragment from './bindings/simple_bindings.wgsl';
 import waterBindingsFragment from './bindings/water_bindings.wgsl';
 
-// Shader fragment registry - maps file paths to actual fragment content
-export const shaderFragmentRegistry = new Map([
+// Generated fragments (uniform structs + per-variant group-2 bindings of the HGRP contract)
+import { hgrpGeneratedShaderFragments } from '../HGRPMaterialLayout';
+
+// Shader fragment registry - maps file paths to actual fragment content. Static .wgsl files
+// are inlined by the Vite wgsl-loader; the HGRP material contract contributes generated
+// fragments (uniform structs + per-variant group-2 bindings) under generated/.
+export const shaderFragmentRegistry = new Map<string, string>([
   // Core fragments
   ['core/uniforms.wgsl', uniformsFragment],
   ['core/vertex_types.wgsl', vertexTypesFragment],
   ['core/constants.wgsl', constantsFragment],
   ['core/gltf_types.wgsl', gltfTypesFragment],
   ['core/gltf_skinning.wgsl', gltfSkinningFragment],
-  ['core/hgrp_types.wgsl', hgrpTypesFragment],
-  ['core/hgrp_vfx_types.wgsl', hgrpVfxTypesFragment],
   ['core/hgrp_vertex.wgsl', hgrpVertexFragment],
 
   // Math fragments
@@ -107,7 +107,6 @@ export const shaderFragmentRegistry = new Map([
   ['bindings/pmx_morph_compute_bindings.wgsl', pmxMorphComputeBindingsFragment],
   ['bindings/gltf_bindings.wgsl', gltfBindingsFragment],
   ['bindings/hgrp_bindings.wgsl', hgrpBindingsFragment],
-  ['bindings/hgrp_vfx_bindings.wgsl', hgrpVfxBindingsFragment],
 
   // Material shaders
   ['PMXMaterial.wgsl', pmxMaterialShader],
@@ -129,4 +128,6 @@ export const shaderFragmentRegistry = new Map([
 
   // Default shader for fallback
   ['Default.wgsl', defaultShader],
+
+  ...hgrpGeneratedShaderFragments(),
 ]);

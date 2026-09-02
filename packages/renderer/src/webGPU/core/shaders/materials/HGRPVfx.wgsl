@@ -9,7 +9,7 @@
 //                 offset; that mean is why the sample is biased by -0.5 rather than used raw.
 //   _BlendTex     128^2 sparse bright wisps on near-black — the visible ember pattern.
 //   _MaskTex      2048^2 almost entirely black with one narrow band — a UV-space stencil.
-// Binding indices must match HGRP_TEXTURE_SLOTS_BY_VARIANT in HGRPMaterialResources.ts.
+// Group-2 bindings come from the generated fragment for this variant (material/hgrpContract.ts).
 
 fn hgrp_vfx_layer(
     tex: texture_2d<f32>,

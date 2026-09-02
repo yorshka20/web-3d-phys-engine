@@ -3,9 +3,8 @@
 // where the _HairBrowMask (sw_M) exceeds _HairBrowMaskThreshold — the region the hair
 // permits the brow to show through. Stencil cannot be written per-fragment, so masking is
 // a discard. The vertex stage comes from the shared core/hgrp_vertex.wgsl include, which
-// guarantees depths identical to the opaque hair draw.
-
-@group(2) @binding(8) var hair_brow_mask: texture_2d<f32>; // _HairBrowMask (sw_M)
+// guarantees depths identical to the opaque hair draw; group-2 bindings come from the Hair
+// variant's generated fragment.
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {

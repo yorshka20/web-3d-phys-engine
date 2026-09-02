@@ -1,7 +1,7 @@
 // Shared Eye-variant fragment shading (brow + iris), used by the material shader
 // (materials/HGRPEye.wgsl) and the eye overlay shader (passes/hgrp_eye_overlay.wgsl).
-// References the common HGRP bindings plus `shadow_lut` and `matcap_tex` textures that
-// each including shader declares itself (module-scope declarations are order-independent).
+// References the common HGRP bindings plus the Eye variant's `shadow_lut_tex` and
+// `matcap_tex` textures, declared by the variant's generated group-2 fragment.
 
 // Matcap glint layer: the matcap texture (near-black with sparse glints, probed 2026-09-01)
 // is sampled by the view-space normal so the glints track the eye's orientation relative to
@@ -43,7 +43,7 @@ fn hgrp_shade_eye(
         hgrp_material.shadow_color_brightness,
         hgrp_material.shadow_color_saturation,
     );
-    let lut_shadow = hgrp_sample_shadow_lut(shadow_lut, ramp_sampler, tinted);
+    let lut_shadow = hgrp_sample_shadow_lut(shadow_lut_tex, ramp_sampler, tinted);
     let shadow_color = select(hsv_shadow, lut_shadow, hgrp_material.use_shadow_lut > 0.5);
 
     // Unlit iris: the in-game iris is uniformly luminous with no diffuse terminator

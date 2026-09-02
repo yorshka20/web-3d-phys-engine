@@ -1,4 +1,9 @@
 import { HGRP_SHADER_ID_BY_VARIANT, HGRPShaderVariant } from '@renderer/material/hgrp';
+import {
+  HGRP_MATERIAL_PARAMS_LAYOUT,
+  HGRP_VFX_PARAMS_LAYOUT,
+  hgrpGroup2BindingsFragment,
+} from '../HGRPMaterialLayout';
 import { shaderFragmentRegistry } from './registry';
 import {
   CheckerboardShaderModule,
@@ -372,7 +377,7 @@ const HGRP_FAMILY_INCLUDES = [
   'core/constants.wgsl',
   'core/uniforms.wgsl',
   'core/gltf_types.wgsl',
-  'core/hgrp_types.wgsl',
+  HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
   'core/gltf_skinning.wgsl',
   'math/color.wgsl',
   'bindings/hgrp_bindings.wgsl',
@@ -385,9 +390,9 @@ const HGRP_VFX_INCLUDES = [
   'core/constants.wgsl',
   'core/uniforms.wgsl',
   'core/gltf_types.wgsl',
-  'core/hgrp_vfx_types.wgsl',
+  HGRP_VFX_PARAMS_LAYOUT.fragmentPath,
   'core/gltf_skinning.wgsl',
-  'bindings/hgrp_vfx_bindings.wgsl',
+  'bindings/hgrp_bindings.wgsl',
   'core/hgrp_vertex.wgsl',
 ];
 
@@ -427,13 +432,11 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
     type: 'render' as const,
     fileName,
     sourceCode: shaderFragmentRegistry.get(fileName) || '',
-    includes:
-      variant === 'CharacterNPR_VFX'
-        ? HGRP_VFX_INCLUDES
-        : [
-            ...HGRP_FAMILY_INCLUDES,
-            ...(variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
-          ],
+    includes: [
+      ...(variant === 'CharacterNPR_VFX' ? HGRP_VFX_INCLUDES : HGRP_FAMILY_INCLUDES),
+      hgrpGroup2BindingsFragment(variant),
+      ...(variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
+    ],
     compilationOptions: {
       vertexFormat: ['full' as const],
     },
@@ -467,10 +470,11 @@ export function createHGRPEyeOverlayShaderModule(): ShaderModule {
       'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/gltf_types.wgsl',
-      'core/hgrp_types.wgsl',
+      HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
       'core/gltf_skinning.wgsl',
       'math/color.wgsl',
       'bindings/hgrp_bindings.wgsl',
+      hgrpGroup2BindingsFragment('CharacterNPR_Eye'),
       'lighting/hgrp_shadow_lut.wgsl',
       'lighting/hgrp_npr.wgsl',
       'lighting/hgrp_eye_shading.wgsl',
@@ -506,7 +510,7 @@ export function createHGRPOutlineShaderModule(): ShaderModule {
     includes: [
       'core/uniforms.wgsl',
       'core/gltf_types.wgsl',
-      'core/hgrp_types.wgsl',
+      HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
       'core/gltf_skinning.wgsl',
       'math/color.wgsl',
     ],
@@ -542,9 +546,10 @@ export function createHGRPHairStencilShaderModule(): ShaderModule {
       'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/gltf_types.wgsl',
-      'core/hgrp_types.wgsl',
+      HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
       'core/gltf_skinning.wgsl',
       'bindings/hgrp_bindings.wgsl',
+      hgrpGroup2BindingsFragment('CharacterNPR_Hair'),
       'core/hgrp_vertex.wgsl',
     ],
     compilationOptions: {
@@ -577,10 +582,11 @@ export function createHGRPBrowThroughShaderModule(): ShaderModule {
       'core/constants.wgsl',
       'core/uniforms.wgsl',
       'core/gltf_types.wgsl',
-      'core/hgrp_types.wgsl',
+      HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
       'core/gltf_skinning.wgsl',
       'math/color.wgsl',
       'bindings/hgrp_bindings.wgsl',
+      hgrpGroup2BindingsFragment('CharacterNPR_Eye'),
       'core/hgrp_vertex.wgsl',
       'lighting/hgrp_shadow_lut.wgsl',
       'lighting/hgrp_npr.wgsl',

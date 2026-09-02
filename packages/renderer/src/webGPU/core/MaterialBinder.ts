@@ -1,6 +1,6 @@
 import { GLTFMaterial } from '@renderer/assets/GltfModel';
 import { RenderData } from '@renderer/frame/types';
-import { HGRPMaterialDescriptor, isHGRPVfxVariant } from '@renderer/material/hgrp';
+import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
 import { WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { assetRegistry } from './AssetRegistry';
 import { BindGroupManager } from './BindGroupManager';
@@ -8,52 +8,20 @@ import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable } from './decorators/ResourceDecorators';
 import {
+  HGRP_MATERIAL_PARAMS_LAYOUT,
+  HGRP_SAMPLER_BINDINGS,
+  hgrpParamsLayoutForVariant,
+  hgrpTextureBindings,
+  packHGRPParams,
+} from './HGRPMaterialLayout';
+import {
   getOrCreateHGRPMaterialBindGroupLayout,
   getOrCreateHGRPOutlineBindGroupLayout,
-  HGRP_SAMPLER_BINDINGS,
-  HGRP_SRGB_TEXTURE_SLOTS,
-  hgrpTextureBindings,
 } from './HGRPMaterialResources';
 import { MaterialManager } from './MaterialManager';
 import { WebGPUResourceManager } from './ResourceManager';
 import { TextureManager } from './TextureManager';
 import { BufferType } from './types';
-
-// Field order must match HGRPVfxParams in shaders/core/hgrp_vfx_types.wgsl. The VFX variant
-// gets its own block rather than extra fields on HGRPMaterialParams: its vocabulary and the
-// CharacterNPR family's do not overlap, so one struct would carry both and mean neither.
-function packHGRPVfxParams(material: HGRPMaterialDescriptor): Float32Array {
-  const { floats, colors } = material;
-  const params = new Float32Array(56);
-  const vec4 = (key: string, offset: number, fallback: [number, number, number, number]) =>
-    params.set(colors[key] ?? fallback, offset);
-
-  vec4('_TintColor', 0, [1, 1, 1, 1]);
-  vec4('_BlendTint', 4, [1, 1, 1, 1]);
-  vec4('_MainTexUVSpeed', 8, [0, 0, 0, 0]);
-  vec4('_MainTexUVWeights', 12, [1, 0, 0, 0]);
-  vec4('_BlendTexUVSpeed', 16, [0, 0, 0, 0]);
-  vec4('_BlendTexUVWeights', 20, [1, 0, 0, 0]);
-  vec4('_MaskTexUVSpeed', 24, [0, 0, 0, 0]);
-  vec4('_MaskTexUVWeights', 28, [1, 0, 0, 0]);
-  vec4('_DisturbUVSpeed1', 32, [0, 0, 0, 0]);
-  vec4('_DisturbUVWeights1', 36, [1, 0, 0, 0]);
-  params[40] = floats._DisturbUIntensity1 ?? 0;
-  params[41] = floats._DisturbVIntensity1 ?? 0;
-  params[42] = floats._TintColorIntensity ?? 1;
-  params[43] = floats._TintColorAlpha ?? 1;
-  params[44] = floats._UseBlend ?? 0;
-  params[45] = floats._UseDisturb ?? 0;
-  params[46] = floats._UseMask ?? 0;
-  params[47] = floats._UseMainTexAsAlpha ?? 0;
-  params[48] = floats._UseMaskTexAsAlpha ?? 0;
-  params[49] = floats._MainTexUseDisturb ?? 0;
-  params[50] = floats._BlendTexUseDisturb ?? 0;
-  params[51] = floats._MaskTexUseDisturb ?? 0;
-  params[52] = floats._ExpIntensity ?? 0;
-  params[53] = floats._ExpThreshold ?? 0;
-  return params;
-}
 
 // Bind groups shared by every draw with the same materialKey. Slot semantics follow the
 // material family: regular = group2 textures + group3 material, glTF = group2 PBR material,
@@ -110,30 +78,29 @@ export class MaterialBinder {
 
   /**
    * Get or create the HGRP material bind group (group 2) and write its preset-driven params.
-   * The entry list derives from the variant slot tables in HGRPMaterialResources (the same
-   * source the layout is built from). Texture slots resolve through the same registry chain
-   * as glTF textures; ramps/LUTs bind a clamp sampler because they are lookup strips, not
-   * tiling images.
+   * Entries, uniform size and packing all derive from the material contract
+   * (HGRPMaterialLayout — the same source the pipeline layout and the generated WGSL come
+   * from). Texture slots resolve through the same registry chain as glTF textures; ramps/LUTs
+   * bind a clamp sampler because they are lookup strips, not tiling images.
    */
   private async ensureHGRPMaterialBindGroup(renderable: RenderData): Promise<GPUBindGroup> {
     const material = renderable.material as HGRPMaterialDescriptor;
     const layout = getOrCreateHGRPMaterialBindGroupLayout(this.bindGroupManager, material.variant);
     const materialId = renderable.materialKey;
 
-    const isVfx = isHGRPVfxVariant(material.variant);
+    const paramsLayout = hgrpParamsLayoutForVariant(material.variant);
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      // HGRPMaterialParams: 9x vec4 + 40 f32; HGRPVfxParams: 10x vec4 + vec2 + 14 f32
-      size: isVfx ? 224 : 304,
+      size: paramsLayout.byteSize,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
     const textureEntries: GPUBindGroupEntry[] = await Promise.all(
-      hgrpTextureBindings(material.variant).map(async ({ binding, slot }) => {
+      hgrpTextureBindings(material.variant).map(async ({ binding, slot, srgb }) => {
         const texture = await this.getGLTFTexture(
           material.textures[slot],
           'gltf_default_white',
-          HGRP_SRGB_TEXTURE_SLOTS.has(slot),
+          srgb,
         );
         return { binding, resource: texture.createView() };
       }),
@@ -156,87 +123,7 @@ export class MaterialBinder {
       label: materialId,
     });
 
-    if (isVfx) {
-      this.device.queue.writeBuffer(materialBuffer, 0, packHGRPVfxParams(material));
-      return bindGroup;
-    }
-
-    const params = new Float32Array(76);
-    // _HairBaseTintColor pre-multiplies the hair base color (identity in Pelica's preset;
-    // _HairAddTintColor's target region is unknown and stays unwired — see the param ledger)
-    const baseColor = material.colors._BaseColor ?? [1, 1, 1, 1];
-    const hairBaseTint = material.colors._HairBaseTintColor;
-    params.set(
-      hairBaseTint
-        ? [
-            baseColor[0] * hairBaseTint[0],
-            baseColor[1] * hairBaseTint[1],
-            baseColor[2] * hairBaseTint[2],
-            baseColor[3],
-          ]
-        : baseColor,
-      0,
-    );
-    // The skin family carries _SDFRimColor (warm pink) — its rim color, taking precedence
-    // over the generic white _ColorAdjustmentRimColor (v1 interpretation)
-    params.set(
-      material.colors._SDFRimColor ?? material.colors._ColorAdjustmentRimColor ?? [1, 1, 1, 1],
-      4,
-    );
-    params[8] = material.floats._UseDiffRampMap ?? 0;
-    // alpha_cutoff doubles as the clip switch: 0 disables the discard in the shader
-    params[9] = material.alphaMode === 'mask' ? material.alphaCutoff : 0;
-    params[10] = material.floats._ShadowColorBrightness ?? 1;
-    params[11] = material.floats._ShadowColorSaturation ?? 1;
-    params[12] = material.floats._UseShadowLutTex ?? 0;
-    params[13] = material.floats._UseBumpMap ?? 0;
-    params[14] = material.floats._BumpScale ?? 1;
-    params[15] = material.floats._UseSDFLightmap ?? 0;
-    // _SkinRimOff reduces the rim on skin by its scale factor; pre-composed here so the
-    // shader sees one effective intensity
-    const rimOffScale =
-      (material.floats._SkinRimOff ?? 0) > 0 ? (material.floats._SkinRimOffScale ?? 1) : 1;
-    params[16] =
-      (material.floats._ColorAdjustmentRimIntensity ?? 0) *
-      rimOffScale *
-      (material.floats._FaceRimOffScale ?? 1);
-    params[17] = material.floats._ColorAdjustmentRimWidth ?? 0.35;
-    params[18] = material.floats._UseSpecRampMap ?? 0;
-    params[19] = material.floats._Smoothness ?? 0.5;
-    params[20] = material.floats._Specular ?? 0.5;
-    params[21] = material.floats._AnisotropyIntensity ?? 0;
-    params[22] = material.floats._UseMatcap ?? 0;
-    params[23] = material.floats._MatcapNormalScale ?? 1;
-    params.set(material.colors._EmissionColor ?? [0, 0, 0, 1], 24);
-    params[28] = material.floats._UseEmission ?? 0;
-    params[29] = material.floats._EmissionBrightness ?? 1;
-    params[30] = material.floats._OutlineWidth ?? 0;
-    params[31] = material.floats._OutlineColorBrightness ?? 0.5;
-    params[32] = material.floats._OutlineColorSaturation ?? 1;
-    params[33] = material.floats._EyeHighLight ?? 0;
-    params[34] = material.floats._OutlineOffsetZ ?? 0;
-    params[35] = material.floats._UseLineMap ?? 0;
-    params.set(material.colors._MatcapColor ?? [1, 1, 1, 1], 36);
-    params.set(material.colors._EyeHighLightColor ?? [1, 1, 1, 1], 40);
-    params.set(material.colors._EyeScatteringColor ?? [1, 1, 1, 1], 44);
-    params[48] = material.floats._LineAmount ?? 300;
-    params[49] = material.floats._LineIntensity ?? 0;
-    params[50] = material.floats._LineRange ?? 1;
-    params[51] = material.floats._LineSaturation ?? 1;
-    params[52] = material.floats._LineValue ?? 1;
-    params[53] = material.floats._Pantyhose ?? 0;
-    params[54] = material.floats._PantyhoseSpecularInt ?? 0;
-    params[55] = material.floats._PantyhoseSpecularValue ?? 0;
-    params[56] = material.floats._PantyhoseAnisotropyDirection ?? 0;
-    params[57] = material.floats._AnisotropyValue ?? 0.5;
-    params[58] = material.floats._FaceHighlightMap ?? 0;
-    params[59] = material.floats._ParallaxScale ?? 0;
-    params.set(material.colors._PantyhoseColor ?? [0, 0, 0, 1], 60);
-    params.set(material.colors._HighlightMapVector ?? [0, 0, 0, 0], 64);
-    params.set(material.colors._EyeTintColor ?? [1, 1, 1, 1], 68);
-    params[72] = material.floats._UseMetallicGlossMap ?? 0;
-    params[73] = material.floats._HairBrowMaskThreshold ?? 0.5;
-    this.device.queue.writeBuffer(materialBuffer, 0, params);
+    this.device.queue.writeBuffer(materialBuffer, 0, packHGRPParams(paramsLayout, material));
 
     return bindGroup;
   }
@@ -253,7 +140,7 @@ export class MaterialBinder {
 
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 304,
+      size: HGRP_MATERIAL_PARAMS_LAYOUT.byteSize,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const baseMap = await this.getGLTFTexture(

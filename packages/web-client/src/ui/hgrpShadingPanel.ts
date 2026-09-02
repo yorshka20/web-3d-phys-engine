@@ -1,12 +1,14 @@
 import { GLTFModel } from '@renderer/assets/GltfModel';
 import {
-  HGRP_SHADING_SCHEMA_VERSION,
-  HGRP_TUNABLE_COLORS,
-  HGRP_TUNABLE_FLOATS,
   hgrpOptionalLayerFlag,
   HGRPCharacterFlags,
   HGRPMaterialDescriptor,
 } from '@renderer/material/hgrp';
+import {
+  HGRP_SHADING_SCHEMA_VERSION,
+  HGRP_TUNABLE_COLORS,
+  HGRP_TUNABLE_FLOATS,
+} from '@renderer/material/hgrpContract';
 import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
 import { bloomSettings } from '@renderer/webGPU/renderer/passes/BloomPass';
 import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';

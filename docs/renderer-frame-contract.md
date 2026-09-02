@@ -72,8 +72,10 @@ encode:  fully synchronous state-cached walk over opaque then transparent, one p
 
 Bind-slot semantics by material family (group 0 = time, group 1 = MVP, always):
 regular = group 2 textures + group 3 material; glTF = group 2 PBR material+textures;
-HGRP = group 2 material+textures+shared samplers (layout defined once in
-`HGRPMaterialResources.ts`, consumed by both PipelineManager and MaterialBinder);
+HGRP = group 2 material+textures+shared samplers (uniform fields and texture slots declared
+once in `material/hgrpContract.ts`; `HGRPMaterialLayout.ts` derives the byte layout, binding
+numbers and the generated WGSL fragments that PipelineManager, MaterialBinder and the shaders
+all consume);
 PMX = group 2 material + group 3 animation.
 
 Known deferred items: alpha MASK shader discard is unverified; PMX animation buffers are keyed

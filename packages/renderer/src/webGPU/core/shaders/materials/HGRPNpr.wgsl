@@ -1,12 +1,7 @@
 // HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV shadow
 // color, spec-ramp highlights on the metallic zones, and HDR emission (rolls off through
-// the tonemap shoulder). Binding indices must match the HGRP_TEXTURE_SLOTS_BY_VARIANT slot
-// order in HGRPMaterialResources.ts.
-
-@group(2) @binding(5) var bump_map: texture_2d<f32>; // _BumpMap
-@group(2) @binding(6) var spec_ramp_map: texture_2d<f32>; // _SpecRampMap
-@group(2) @binding(7) var metallic_gloss_map: texture_2d<f32>; // _MetallicGlossMap
-@group(2) @binding(8) var emission_map: texture_2d<f32>; // _EmissionMap
+// the tonemap shoulder). Group-2 bindings come from the generated fragment for this variant
+// (material/hgrpContract.ts slot tables).
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
