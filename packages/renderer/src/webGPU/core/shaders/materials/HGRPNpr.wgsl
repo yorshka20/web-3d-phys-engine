@@ -48,7 +48,9 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity * mg.y *
             mix(0.15, 1.0, sheen_zone));
 
-    let diffuse = core.lit * (1.0 - metal * 0.7);
+    // Metal keeps only a residual of its diffuse (sceneSettings.metalDiffuse); the fabric path
+    // keeps all of it.
+    let diffuse = core.lit * mix(1.0, scene_lighting.metal.x, metal);
 
     let emission = hgrp_emission(input.uv0);
 
@@ -92,8 +94,18 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let env_spec = hgrp_env(reflect(-view_dir, n)) *
         (sheen_zone * mg.y * scene_lighting.ambient.w);
 
+    // Metal zone (guess ledger E7, v5): no flat ambient — albedo x ambient on a bright-grey
+    // painted metal is what read as pale — and the environment only where a dark metal shows
+    // it, at grazing edges: a narrow fresnel on the GEOMETRIC normal (the normal map would
+    // fire it across every wrinkle), scaled by sceneSettings.metalEdge. Everything else the
+    // metal shows is its residual diffuse and the base-tinted RS highlight (spec v3).
+    let n_geom = normalize(input.world_normal);
+    let edge = pow(1.0 - clamp(dot(n_geom, view_dir), 0.0, 1.0), scene_lighting.metal.z);
+    let metal_edge = hgrp_env(reflect(-view_dir, n_geom)) * (edge * scene_lighting.metal.y);
+    let ambient = mix(hgrp_ambient(core.albedo), metal_edge, metal);
+
     return hgrp_debug_view(
-        vec4<f32>(color + vec3<f32>(sheen) + spec + emission + hgrp_ambient(core.albedo) + env_spec, core.alpha),
+        vec4<f32>(color + vec3<f32>(sheen) + spec + emission + ambient + env_spec, core.alpha),
         input.uv0,
     );
 }

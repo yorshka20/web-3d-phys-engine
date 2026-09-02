@@ -26,10 +26,13 @@ struct MVPUniforms {
 // the key light direction (toward the light, normalized; w = envGradient), the key light color
 // pre-multiplied by its intensity, and the ambient color pre-multiplied by its intensity
 // (w = envReflection, the opt-in metal environment-reflection strength).
+// metal: the hardware-zone look of the cloth shader (materials/HGRPNpr.wgsl) —
+// x = residual diffuse, y = grazing-edge reflection strength, z = edge fresnel power.
 struct SceneLighting {
     light_dir: vec4<f32>,
     light: vec4<f32>,
     ambient: vec4<f32>,
+    metal: vec4<f32>,
 }
 
 // Material debug view (renderer/sceneSettings.ts packHGRPDebugView): x = texture slot id

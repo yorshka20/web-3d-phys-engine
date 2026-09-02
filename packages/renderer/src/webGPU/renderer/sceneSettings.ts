@@ -35,6 +35,14 @@ export const sceneSettings = {
   // normal map reflects the surroundings from every direction (guess ledger A8).
   envReflection: 0,
   envGradient: 0.5,
+  // The metal look of the cloth hardware zone (_MetallicGlossMap.r = 1.0; materials/
+  // HGRPNpr.wgsl): a metal keeps this residual of its diffuse and no ambient at all (the
+  // pale look came from albedo x ambient on metal), and picks up the environment only at
+  // grazing edges — pow(1 - n.v, edgePower) on the geometric normal, scaled by metalEdge.
+  // Formula constants the rip does not carry (guess ledger E7).
+  metalDiffuse: 0.15,
+  metalEdge: 1.0,
+  metalEdgePower: 5,
 
   // Material debug view (generated/hgrp_debug_<permutation>.wgsl): show one texture slot of
   // every HGRP material instead of its shading, so what each map controls can be seen on the
@@ -71,12 +79,13 @@ export function isHGRPDebugViewOn(): boolean {
   return sceneSettings.debugView.slot in HGRP_TEXTURE_SLOTS;
 }
 
-// SceneLighting uniform block (core/uniforms.wgsl): three vec4s — the normalized light
+// SceneLighting uniform block (core/uniforms.wgsl): four vec4s — the normalized light
 // direction (w = envGradient), the key light color pre-multiplied by its intensity, the
-// ambient color pre-multiplied by its intensity (w = envReflection).
-export const SCENE_LIGHTING_BYTE_SIZE = 48;
+// ambient color pre-multiplied by its intensity (w = envReflection), and the metal look
+// (residual diffuse, edge reflection strength, edge power).
+export const SCENE_LIGHTING_BYTE_SIZE = 64;
 
-export function packSceneLighting(out: Float32Array = new Float32Array(12)): Float32Array {
+export function packSceneLighting(out: Float32Array = new Float32Array(16)): Float32Array {
   const [dx, dy, dz] = sceneSettings.lightDirection;
   const len = Math.hypot(dx, dy, dz) || 1;
   out[0] = dx / len;
@@ -89,5 +98,9 @@ export function packSceneLighting(out: Float32Array = new Float32Array(12)): Flo
   }
   out[7] = 0;
   out[11] = sceneSettings.envReflection;
+  out[12] = sceneSettings.metalDiffuse;
+  out[13] = sceneSettings.metalEdge;
+  out[14] = sceneSettings.metalEdgePower;
+  out[15] = 0;
   return out;
 }

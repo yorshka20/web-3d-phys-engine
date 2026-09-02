@@ -68,6 +68,10 @@ Known-broken test infrastructure (do not trust it, fix it before relying on it):
 4. `pnpm --filter @web-3d-phys-engine/web-client exec vite build` — catches resolution/bundling
    errors that typecheck cannot
 5. Rendering behavior can only be confirmed in the browser — ask the user to check.
+   **A shading / rendering change is not committed until the user has confirmed it in the
+   browser** (user rule, 2026-09-03: “没修好禁止提交”). Leave it in the working tree, hand over
+   the exact things to look at, commit after the OK. Contract/tooling changes that provably
+   leave the picture identical (tests, dump) may commit as before.
 
 ## High-Level Architecture
 

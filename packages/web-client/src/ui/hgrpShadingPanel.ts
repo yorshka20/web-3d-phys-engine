@@ -256,6 +256,12 @@ function mountPane(container: HTMLElement, assetIds: readonly string[]): () => v
   lighting.addBinding(sceneSettings, 'envReflection', { min: 0, max: 3, step: 0.01 });
   lighting.addBinding(sceneSettings, 'envGradient', { min: 0, max: 1, step: 0.01 });
 
+  // The metal look of the cloth hardware zone (_MetallicGlossMap.r = 1.0)
+  const metal = globalFolder.addFolder({ title: 'Metal (hardware zone)', expanded: true });
+  metal.addBinding(sceneSettings, 'metalDiffuse', { min: 0, max: 1, step: 0.01 });
+  metal.addBinding(sceneSettings, 'metalEdge', { min: 0, max: 4, step: 0.01 });
+  metal.addBinding(sceneSettings, 'metalEdgePower', { min: 1, max: 12, step: 0.1 });
+
   // Material debug view: show one texture slot of every HGRP material on the mesh instead of
   // its shading. Magenta = the material's permutation does not bind that slot.
   const debug = globalFolder.addFolder({ title: 'Debug view (textures)', expanded: true });
