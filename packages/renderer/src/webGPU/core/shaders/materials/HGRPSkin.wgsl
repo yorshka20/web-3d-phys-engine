@@ -14,7 +14,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.world_bitangent,
         input.uv0,
     );
-    let core = hgrp_shade_core(input.uv0, n, n, input.position);
+    let core = hgrp_shade_core(input.uv0, n, input.position);
     let highlight = hgrp_face_highlight(input.uv0);
     let emission = hgrp_emission(input.uv0);
 

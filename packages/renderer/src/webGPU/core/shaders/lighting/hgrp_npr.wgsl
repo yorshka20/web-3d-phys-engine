@@ -110,24 +110,17 @@ struct HGRPShade {
     alpha: f32,
 }
 
-// Base + shadow-blend + rim composition. `n_ramp` drives the shade coordinate (the ramp's
-// n.l); `n_rim` the screen-space rim. Cloth and hair pass the geometric normal as n_ramp: their
-// ramps are near-steps (cloth 0.2 -> 0.9 at x 0.6, hair black until 0.5), and a normal-mapped
-// n.l scatters neighbouring texels across the step into blotches, where the in-game diffuse
-// is continuous — the normal map shapes specular and rim there, not the terminator. Skin
-// keeps the mapped normal on its smooth ramp. The shadow color, the shade coordinate and the
-// ramp weight come from the permutation's hooks. The shade coordinate hook also returns the
-// SDF mask's cheek-tint weight (0 without the SDF subsystem): _SDFRimColor multiplies the
+// Base + shadow-blend + rim composition for a given (already normalized) shading normal — the
+// normal-mapped one where the material has a _BumpMap: the fabric and leather detail of the
+// coats lives in the ramp's n.l (verified by the user 2026-09-01, and again when a geometric
+// normal here flattened the leather, 2026-09-02). The shadow color, the shade coordinate and
+// the ramp weight come from the permutation's hooks. The shade coordinate hook also returns
+// the SDF mask's cheek-tint weight (0 without the SDF subsystem): _SDFRimColor multiplies the
 // shade blend where the coordinate crosses the terminator inside that zone — the anime
 // cheek-shadow tint, not a rim light.
-fn hgrp_shade_core(
-    uv0: vec2<f32>,
-    n_ramp: vec3<f32>,
-    n_rim: vec3<f32>,
-    frag_coord: vec4<f32>,
-) -> HGRPShade {
+fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>, frag_coord: vec4<f32>) -> HGRPShade {
     let base = hgrp_base_color(uv0);
-    let ndotl = dot(n_ramp, hgrp_light_dir());
+    let ndotl = dot(n, hgrp_light_dir());
 
     let shadow_color = hgrp_shadow_color(base.rgb);
     let shade = hgrp_shade_coord(uv0, ndotl);
@@ -140,7 +133,7 @@ fn hgrp_shade_core(
         shade.y * terminator * hgrp_material.sdf_rim_color.a,
     );
 
-    let rim = hgrp_rim(n_rim, frag_coord, ndotl);
+    let rim = hgrp_rim(n, frag_coord, ndotl);
 
     let lit = mix(shadow_color, base.rgb, w) * tint * scene_lighting.light.rgb;
     return HGRPShade(lit + rim, base.rgb, base.a);

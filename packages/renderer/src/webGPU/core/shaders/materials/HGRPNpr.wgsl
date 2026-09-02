@@ -1,5 +1,5 @@
-// HGRP/CharacterNPR (cloth / general): ramp shadow blend on the geometric normal with HSV
-// (or LUT) shadow color, spec-ramp highlights on the normal-mapped surface, HDR emission
+// HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV (or LUT)
+// shadow color, spec-ramp highlights on the normal-mapped surface, HDR emission
 // (rolls off through the tonemap shoulder), and the hemisphere ambient split the PBR way —
 // diffuse ambient on the non-metal albedo, ambient specular on the reflected direction
 // weighted by a Schlick fresnel with F0 = metallic (the quilted silver lining reads as satin
@@ -14,8 +14,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.world_bitangent,
         input.uv0,
     );
-    let n_geom = normalize(input.world_normal);
-    let core = hgrp_shade_core(input.uv0, n_geom, n, input.position);
+    let core = hgrp_shade_core(input.uv0, n, input.position);
 
     // Spec v3 (reference-screenshot driven): the RS stays a specular COLOR lookup (raw
     // addition whitewashes — v1 lesson). _MetallicGlossMap.r holds discrete METALLIC zones:
@@ -54,7 +53,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
     let f0 = vec3<f32>(mix(0.04, 1.0, metallic));
     let fresnel = f0 + (vec3<f32>(1.0) - f0) * (pow(1.0 - ndotv, 5.0) * gloss);
-    let ambient = hgrp_ambient(core.albedo, n_geom) * (1.0 - metallic) +
+    let ambient = hgrp_ambient(core.albedo, n) * (1.0 - metallic) +
         hgrp_hemisphere(reflect(-view_dir, n)) * fresnel * mg.y;
 
     let emission = hgrp_emission(input.uv0);
