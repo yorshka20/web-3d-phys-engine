@@ -3,7 +3,7 @@ import { HGRP_SUBSYSTEMS, HGRPSubsystemId } from './subsystems';
 import {
   HGRP_TEXTURE_SLOTS,
   HGRP_TEXTURE_SLOTS_BY_VARIANT,
-  HGRP_TEXTURE_SLOTS_COMMON,
+  HGRP_UNIMPLEMENTED_SLOTS,
 } from './textures';
 
 // Self-check of the contract tables. They must agree with each other, or a typo in one of
@@ -40,9 +40,23 @@ export function validateHGRPContract(): void {
     }
   }
   for (const [variant, slots] of Object.entries(HGRP_TEXTURE_SLOTS_BY_VARIANT)) {
-    for (const slot of [...HGRP_TEXTURE_SLOTS_COMMON, ...slots]) {
+    for (const slot of slots) {
       if (!(slot in HGRP_TEXTURE_SLOTS)) {
         throw new Error(`HGRP contract: variant ${variant} binds unregistered slot ${slot}`);
+      }
+    }
+    if (new Set(slots).size !== slots.length) {
+      throw new Error(`HGRP contract: variant ${variant} lists a slot twice`);
+    }
+  }
+  for (const [variant, pending] of Object.entries(HGRP_UNIMPLEMENTED_SLOTS)) {
+    const bound =
+      HGRP_TEXTURE_SLOTS_BY_VARIANT[variant as keyof typeof HGRP_TEXTURE_SLOTS_BY_VARIANT];
+    for (const slot of Object.keys(pending ?? {})) {
+      if (!bound.includes(slot)) {
+        throw new Error(
+          `HGRP contract: ${variant} lists ${slot} as unimplemented but does not bind it`,
+        );
       }
     }
   }

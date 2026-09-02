@@ -5,15 +5,16 @@ import type { HGRPShaderVariant } from './descriptor';
 // entries (MaterialBinder) and the generated WGSL declarations (wgsl.ts):
 //
 //   0             uniform block (HGRPMaterialParams or HGRPVfxParams, by variant)
-//   1..2          common textures (_BaseMap, _DiffRampMap)
-//   3             base_sampler (linear/repeat)
-//   4             ramp_sampler (linear/clamp — ramps and LUTs are lookup strips)
-//   5..           variant textures, in HGRP_TEXTURE_SLOTS_BY_VARIANT order
+//   1             base_sampler (linear/repeat)
+//   2             ramp_sampler (linear/clamp — ramps and LUTs are lookup strips)
+//   3..           the variant's textures, in HGRP_TEXTURE_SLOTS_BY_VARIANT order
 //
 // Samplers are shared across textures (two for the whole group): default WebGPU limits allow
-// 16 sampled textures AND 16 samplers per stage, and the skin variant alone carries 9
-// textures. A shader may declare fewer bindings than the layout carries — every slot a preset
-// can bind is wired here once and lit up in WGSL when a feature consumes it.
+// 16 sampled textures AND 16 samplers per stage. A variant binds the slots the game's shader of
+// that variant reads (what the ripped presets declare) — no more, and no less: a slot whose
+// shading is not implemented here yet stays bound and is listed in HGRP_UNIMPLEMENTED_SLOTS, so
+// the gap is visible instead of being deleted. The shader catalog test enforces both
+// directions.
 
 // Color slots are created as rgba8unorm-srgb so sampling decodes to linear; everything else
 // (normals, masks, ramp weights, LUTs) is data and stays raw. _DiffRampMap (per-channel blend
@@ -42,15 +43,22 @@ export const HGRP_TEXTURE_SLOTS: Readonly<Record<string, { srgb: boolean }>> = {
   _MaskTex: { srgb: false },
 };
 
-// Group-2 slots every variant binds (bindings 1..2), then the per-variant slots (5..), in
-// binding order. The lists reflect what the ripped presets actually bind; _OutlineMask is
-// excluded because the outline pass binds it in its own layout.
-export const HGRP_TEXTURE_SLOTS_COMMON: readonly string[] = ['_BaseMap', '_DiffRampMap'];
-
+// Slots each variant binds, in binding order (3..): the texture slots the ripped presets
+// declare for materials of that variant. _OutlineMask is excluded because the outline pass
+// binds it in its own layout.
 export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, readonly string[]>> =
   {
-    CharacterNPR: ['_BumpMap', '_SpecRampMap', '_MetallicGlossMap', '_EmissionMap'],
+    CharacterNPR: [
+      '_BaseMap',
+      '_DiffRampMap',
+      '_BumpMap',
+      '_SpecRampMap',
+      '_MetallicGlossMap',
+      '_EmissionMap',
+    ],
     CharacterNPR_Skin: [
+      '_BaseMap',
+      '_DiffRampMap',
       '_BumpMap',
       '_ShadowLutTex',
       '_SDFLightmap',
@@ -60,23 +68,48 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
       '_EmissionMap',
     ],
     CharacterNPR_Hair: [
+      '_BaseMap',
+      '_DiffRampMap',
       '_SpecRampMap',
       '_MetallicGlossMap',
       '_SplitNormalMap',
       '_HairBrowMask',
       '_LineMap',
     ],
-    CharacterNPR_Eye: ['_MatcapTex', '_ShadowLutTex'],
+    CharacterNPR_Eye: ['_BaseMap', '_DiffRampMap', '_MatcapTex', '_ShadowLutTex'],
     // Effect layers, each sampled with its own UV speed and channel weights: _MainTex is the
     // base pattern (absent on Laevatian's material -> the white default leaves it a no-op),
     // _BlendTex the emissive flow, _DisturbTex1 the noise that warps both, _MaskTex the
-    // UV-space stencil confining the effect to the mesh's UV island.
+    // UV-space stencil confining the effect to the mesh's UV island. No _BaseMap/_DiffRampMap:
+    // the effect shader has no base color and no ramp.
     CharacterNPR_VFX: ['_MainTex', '_BlendTex', '_DisturbTex1', '_MaskTex'],
   };
 
-export const HGRP_SAMPLER_BINDINGS = { base: 3, ramp: 4 } as const;
+// Bound slots whose shading this renderer does not implement yet, with what is missing. The
+// presets declare them and the game's shader reads them, so dropping the binding would hide a
+// gap in the reproduction rather than remove waste. Delete an entry in the same commit that
+// adds the WGSL sampling it — the shader catalog test fails if a listed slot is sampled, or if
+// an unlisted bound slot is not.
+export const HGRP_UNIMPLEMENTED_SLOTS: Partial<
+  Record<HGRPShaderVariant, Readonly<Record<string, string>>>
+> = {
+  CharacterNPR_Skin: {
+    _SDFMask:
+      'SDF face-shadow mask (cm_M): channel layout probed, its role needs an in-game A/B (param ledger group I)',
+    _EmotionMap:
+      'expression atlas: Stage G, needs the _EmotionIndex/_EmotionBlend drivers before it can be sampled',
+  },
+  CharacterNPR_Hair: {
+    _MetallicGlossMap:
+      'hair spec/gloss: the hair highlight model (RS band, v5.1) is frozen pending the band rework',
+    _SplitNormalMap:
+      'per-strand normal shift (_UseSpecBumpMap): no consumer until the hair highlight rework',
+  },
+};
 
-export const HGRP_VARIANT_TEXTURE_BINDING_START = 5;
+export const HGRP_SAMPLER_BINDINGS = { base: 1, ramp: 2 } as const;
+
+export const HGRP_TEXTURE_BINDING_START = 3;
 
 // WGSL identifier of a slot's texture binding: `_ShadowLutTex` -> `shadow_lut_tex`,
 // `_SDFLightmap` -> `sdf_lightmap`, `_DisturbTex1` -> `disturb_tex1`.
@@ -95,18 +128,12 @@ export interface HGRPTextureBinding {
   srgb: boolean;
 }
 
-// Ordered texture bindings for one variant: common slots first, then variant slots.
+// Ordered texture bindings for one variant.
 export function hgrpTextureBindings(variant: HGRPShaderVariant): HGRPTextureBinding[] {
-  const describe = (slot: string, binding: number): HGRPTextureBinding => ({
-    binding,
+  return HGRP_TEXTURE_SLOTS_BY_VARIANT[variant].map((slot, i) => ({
+    binding: HGRP_TEXTURE_BINDING_START + i,
     slot,
     wgslName: hgrpTextureWgslName(slot),
     srgb: HGRP_TEXTURE_SLOTS[slot].srgb,
-  });
-  return [
-    ...HGRP_TEXTURE_SLOTS_COMMON.map((slot, i) => describe(slot, 1 + i)),
-    ...HGRP_TEXTURE_SLOTS_BY_VARIANT[variant].map((slot, i) =>
-      describe(slot, HGRP_VARIANT_TEXTURE_BINDING_START + i),
-    ),
-  ];
+  }));
 }

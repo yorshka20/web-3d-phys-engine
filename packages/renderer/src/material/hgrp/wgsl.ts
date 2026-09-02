@@ -17,8 +17,8 @@ export function hgrpGroup2BindingsFragment(variant: HGRPShaderVariant): string {
 function group2BindingsWgsl(variant: HGRPShaderVariant): string {
   const layout = hgrpParamsLayoutForVariant(variant);
   const lines = [
-    `// Generated group-2 bindings for HGRP/${variant}: the uniform block, the variant's texture`,
-    '// slots and the two shared samplers. Edit the slot tables in material/hgrp/textures.ts, not',
+    `// Generated group-2 bindings for HGRP/${variant}: the uniform block, the two shared samplers`,
+    "// and the variant's texture slots. Edit the slot tables in material/hgrp/textures.ts, not",
     '// this text. Groups 0/1/3 come from bindings/hgrp_bindings.wgsl.',
     `@group(2) @binding(0) var<uniform> ${layout.uniformVar}: ${layout.structName};`,
   ];

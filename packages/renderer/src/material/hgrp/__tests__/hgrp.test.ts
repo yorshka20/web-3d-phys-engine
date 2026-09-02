@@ -177,11 +177,11 @@ describe('HGRP material contract', () => {
     expect(hgrpParamsLayoutForVariant('CharacterNPR_VFX').structName).toBe('HGRPVfxParams');
   });
 
-  it('derives texture binding numbers: common at 1..2, samplers at 3..4, variant from 5', () => {
+  it('derives texture binding numbers: samplers at 1..2, the variant slots from 3', () => {
     const skin = hgrpTextureBindings('CharacterNPR_Skin');
     expect(skin.map((b) => [b.binding, b.slot])).toEqual([
-      [1, '_BaseMap'],
-      [2, '_DiffRampMap'],
+      [3, '_BaseMap'],
+      [4, '_DiffRampMap'],
       [5, '_BumpMap'],
       [6, '_ShadowLutTex'],
       [7, '_SDFLightmap'],
@@ -190,7 +190,13 @@ describe('HGRP material contract', () => {
       [10, '_EmotionMap'],
       [11, '_EmissionMap'],
     ]);
-    expect(hgrpTextureBindings('CharacterNPR_Eye').map((b) => b.binding)).toEqual([1, 2, 5, 6]);
+    expect(hgrpTextureBindings('CharacterNPR_Eye').map((b) => b.binding)).toEqual([3, 4, 5, 6]);
+    expect(hgrpTextureBindings('CharacterNPR_VFX').map((b) => b.slot)).toEqual([
+      '_MainTex',
+      '_BlendTex',
+      '_DisturbTex1',
+      '_MaskTex',
+    ]);
     expect(skin.find((b) => b.slot === '_BaseMap')?.srgb).toBe(true);
     expect(skin.find((b) => b.slot === '_BumpMap')?.srgb).toBe(false);
   });
@@ -222,14 +228,16 @@ describe('HGRP material contract', () => {
 
     const eye = fragments.get(hgrpGroup2BindingsFragment('CharacterNPR_Eye'))!;
     expect(eye).toContain('@group(2) @binding(0) var<uniform> hgrp_material: HGRPMaterialParams;');
-    expect(eye).toContain('@group(2) @binding(3) var base_sampler: sampler;');
-    expect(eye).toContain('@group(2) @binding(4) var ramp_sampler: sampler;');
+    expect(eye).toContain('@group(2) @binding(1) var base_sampler: sampler;');
+    expect(eye).toContain('@group(2) @binding(2) var ramp_sampler: sampler;');
+    expect(eye).toContain('@group(2) @binding(3) var base_map: texture_2d<f32>;');
     expect(eye).toContain('@group(2) @binding(5) var matcap_tex: texture_2d<f32>;');
     expect(eye).toContain('@group(2) @binding(6) var shadow_lut_tex: texture_2d<f32>;');
 
     const vfx = fragments.get(hgrpGroup2BindingsFragment('CharacterNPR_VFX'))!;
     expect(vfx).toContain('@group(2) @binding(0) var<uniform> hgrp_vfx: HGRPVfxParams;');
-    expect(vfx).toContain('@group(2) @binding(8) var mask_tex: texture_2d<f32>;');
+    expect(vfx).toContain('@group(2) @binding(6) var mask_tex: texture_2d<f32>;');
+    expect(vfx).not.toContain('base_map');
   });
 
   it('exposes the same calibration GUI schema the panel used before (39 floats, 7 colors)', () => {
