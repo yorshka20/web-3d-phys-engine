@@ -33,16 +33,22 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let ndotl = clamp(dot(n, light), 0.0, 1.0);
 
     let mg = hgrp_metallic_gloss(input.uv0);
-    let metallic = mg.x;
+    // _MetallicGlossMap.r is a zone CODE, not an amount (debug view, 2026-09-03): 1.0 = the
+    // hardware — buckles, zips, shoulder plate; ~0.73 = the quilted satin lining; ~0.4 = a
+    // small inner-chest patch; 0 = fabric. Only the hardware is metal: it alone loses its
+    // diffuse and tints its highlight with the base color (the verified silver look). The
+    // lining keeps its diffuse and gets a satin sheen whose strength still follows R.
+    let metal = smoothstep(0.85, 0.95, mg.x);
+    let sheen_zone = mg.x;
     let gloss = clamp(hgrp_material.spec_smoothness * mg.z, 0.0, 1.0);
 
     let spec_color = hgrp_spec_ramp_color(ndoth, gloss);
     let shape = pow(ndoth, mix(8.0, 128.0, gloss));
-    let spec = spec_color * mix(vec3<f32>(1.0), core.lit, metallic) * scene_lighting.light.rgb *
+    let spec = spec_color * mix(vec3<f32>(1.0), core.lit, metal) * scene_lighting.light.rgb *
         (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity * mg.y *
-            mix(0.15, 1.0, metallic));
+            mix(0.15, 1.0, sheen_zone));
 
-    let diffuse = core.lit * (1.0 - metallic * 0.7);
+    let diffuse = core.lit * (1.0 - metal * 0.7);
 
     let emission = hgrp_emission(input.uv0);
 
@@ -84,7 +90,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // reads bright in-game because its normal map reflects the surroundings everywhere,
     // where a flat metal plate does not (guess ledger A8).
     let env_spec = hgrp_env(reflect(-view_dir, n)) *
-        (metallic * mg.y * scene_lighting.ambient.w);
+        (sheen_zone * mg.y * scene_lighting.ambient.w);
 
     return hgrp_debug_view(
         vec4<f32>(color + vec3<f32>(sheen) + spec + emission + hgrp_ambient(core.albedo) + env_spec, core.alpha),
