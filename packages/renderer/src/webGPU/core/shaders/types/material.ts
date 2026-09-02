@@ -1,5 +1,5 @@
-import { VertexFormat } from '@renderer/geometry';
-import { HGRPShaderId } from '@renderer/material/hgrp';
+import { VertexFormat } from '../../../../geometry';
+import { HGRPPermutationShaderId } from '../../../../material/hgrp';
 import { ShaderModule, ShaderParamDefinition } from './shader';
 
 /**
@@ -392,7 +392,7 @@ export interface GLTFMaterialShaderModule extends ShaderModule {
  * HGRP Material Shader Module Definition (one module per CharacterNPR variant)
  */
 export interface HGRPMaterialShaderModule extends ShaderModule {
-  id: HGRPShaderId;
+  id: HGRPPermutationShaderId;
   type: 'render';
   compilationOptions: {
     vertexFormat: VertexFormat[];

@@ -1,4 +1,9 @@
-import { HGRP_SAMPLER_BINDINGS, HGRPShaderVariant, hgrpTextureBindings } from '../../material/hgrp';
+import {
+  HGRP_SAMPLER_BINDINGS,
+  HGRPPermutation,
+  hgrpPermutationShaderId,
+  hgrpTextureBindings,
+} from '../../material/hgrp';
 import { BindGroupManager } from './BindGroupManager';
 
 /**
@@ -75,11 +80,14 @@ export function getOrCreateHGRPOutlineBindGroupLayout(
   });
 }
 
+// Group 2 of one HGRP permutation: the uniform block, the enabled subsystems' texture slots
+// (binding numbers are the variant table's, see material/hgrp/textures.ts) and the two shared
+// samplers. Cached by the permutation's shader id.
 export function getOrCreateHGRPMaterialBindGroupLayout(
   bindGroupManager: BindGroupManager,
-  variant: HGRPShaderVariant,
+  permutation: HGRPPermutation,
 ): GPUBindGroupLayout {
-  const layoutId = `hgrp_${variant}_MaterialBindGroupLayout`;
+  const layoutId = `hgrp_material_layout:${hgrpPermutationShaderId(permutation)}`;
 
   const existing = bindGroupManager.getBindGroupLayout(layoutId);
   if (existing) {
@@ -93,7 +101,7 @@ export function getOrCreateHGRPMaterialBindGroupLayout(
       visibility: GPUShaderStage.FRAGMENT,
       buffer: { type: 'uniform' },
     },
-    ...hgrpTextureBindings(variant).map((tex) => ({
+    ...hgrpTextureBindings(permutation).map((tex) => ({
       binding: tex.binding,
       visibility: GPUShaderStage.FRAGMENT,
       texture: { sampleType: 'float' as GPUTextureSampleType },

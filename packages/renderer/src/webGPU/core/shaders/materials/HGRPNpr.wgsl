@@ -1,19 +1,15 @@
-// HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV shadow
-// color, spec-ramp highlights on the metallic zones, and HDR emission (rolls off through
-// the tonemap shoulder). Group-2 bindings come from the generated fragment for this variant
-// (material/hgrpContract.ts slot tables).
+// HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV (or LUT)
+// shadow color, spec-ramp highlights on the metallic zones, and HDR emission (rolls off
+// through the tonemap shoulder). Group-2 bindings and the subsystem hooks come from the
+// permutation's generated fragments (material/hgrp).
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
-    let n = hgrp_perturb_normal(
+    let n = hgrp_shading_normal(
         input.world_normal,
         input.world_tangent,
         input.world_bitangent,
-        bump_map,
-        base_sampler,
         input.uv0,
-        hgrp_material.use_bump_map,
-        hgrp_material.bump_scale,
     );
     let core = hgrp_shade_core(input.uv0, n, input.position);
 
@@ -24,33 +20,26 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // modulating the RS row and the Blinn-Phong exponent — the leather/satin sheen on
     // non-metal parts, which v2's metallic-only mask killed. mix(0.15, 1, metallic) keeps
     // fabric sheen modest without a separate parameter (v3 assumption, GUI-calibrated via
-    // _Specular). Gated by _UseMetallicGlossMap.
+    // _Specular). Gated by _UseMetallicGlossMap / _UseSpecRampMap through the hooks.
     let view_dir = normalize(mvp.camera_pos - input.world_position);
     let light = normalize(MAIN_LIGHT_DIRECTION);
     let h = normalize(light + view_dir);
     let ndoth = clamp(dot(n, h), 0.0, 1.0);
     let ndotl = clamp(dot(n, light), 0.0, 1.0);
 
-    let mg = textureSample(metallic_gloss_map, base_sampler, input.uv0);
-    let use_mg = hgrp_material.use_metallic_gloss_map;
-    let metallic = mg.r * use_mg;
-    let gloss = clamp(hgrp_material.spec_smoothness * mix(1.0, mg.g, use_mg), 0.0, 1.0);
+    let mg = hgrp_metallic_gloss(input.uv0);
+    let metallic = mg.x;
+    let gloss = clamp(hgrp_material.spec_smoothness * mg.y, 0.0, 1.0);
 
-    let spec_color = textureSample(
-        spec_ramp_map,
-        ramp_sampler,
-        vec2<f32>(hgrp_ramp_inset(ndoth), hgrp_ramp_inset(1.0 - gloss)),
-    ).rgb;
+    let spec_color = hgrp_spec_ramp_color(ndoth, gloss);
     let shape = pow(ndoth, mix(8.0, 128.0, gloss));
     let spec = spec_color * mix(vec3<f32>(1.0), core.rgb, metallic) *
         (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity *
-            mix(0.15, 1.0, metallic) * hgrp_material.use_spec_ramp);
+            mix(0.15, 1.0, metallic));
 
     let diffuse = core.rgb * (1.0 - metallic * 0.7);
 
-    let emission = textureSample(emission_map, base_sampler, input.uv0).rgb *
-        hgrp_material.emission_color.rgb *
-        (hgrp_material.emission_brightness * hgrp_material.use_emission);
+    let emission = hgrp_emission(input.uv0);
 
     // Pantyhose v2 (_Pantyhose, tights on cloth_04). Grounded in the base texture (probed
     // 2026-09-01): the tights region's RGB is the pre-mixed warm skin-through tone and its

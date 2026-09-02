@@ -4,6 +4,7 @@ import {
   HGRP_TUNABLE_COLORS,
   HGRP_TUNABLE_FLOATS,
   hgrpOptionalLayerFlag,
+  hgrpRefreshPermutation,
   HGRPCharacterFlags,
   HGRPMaterialDescriptor,
 } from '@renderer/material/hgrp';
@@ -29,7 +30,10 @@ interface HGRPShadingState {
 // The GUI edits the LIVE material descriptors: the same objects flow by reference from the
 // loaded GLTFModel through RenderData into MaterialBinder, which re-packs the material
 // uniform from descriptor floats/colors every frame (and DrawListBuilder re-reads
-// _EnableOutline every frame) — so mutation is the whole update mechanism.
+// _EnableOutline every frame) — so mutation is the whole update mechanism. A static gate
+// (_UseBumpMap, _UseMatcap, ...) is the one exception: it selects the shader permutation, so
+// after a float edit the descriptor's permutation is re-resolved (hgrpRefreshPermutation) and
+// the material lands on another shader module and pipeline at its next draw.
 function collectHGRPMaterials(assetId: string): HGRPMaterialDescriptor[] {
   const descriptor = assetRegistry.getAssetDescriptor<'gltf'>(assetId);
   const model = descriptor?.rawData as GLTFModel | undefined;
@@ -96,6 +100,7 @@ function applyState(materials: HGRPMaterialDescriptor[], state: HGRPShadingState
       }
       material.floats[key] = value;
     }
+    hgrpRefreshPermutation(material);
     for (const [key, value] of Object.entries(override.colors ?? {})) {
       if (!colorKeys.has(key) || !Array.isArray(value) || value.length !== 4) {
         console.warn(`[hgrpShadingPanel] ${materialName}: color "${key}" dropped`);
@@ -270,6 +275,7 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
         })
         .on('change', (ev) => {
           material.floats[def.key] = ev.value as number;
+          hgrpRefreshPermutation(material);
         });
     }
     syncers.push(() => {

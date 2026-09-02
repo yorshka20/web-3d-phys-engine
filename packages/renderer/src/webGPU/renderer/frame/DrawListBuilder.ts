@@ -1,5 +1,5 @@
 import { FrameData, RenderData } from '../../../frame/types';
-import { HGRPMaterialDescriptor } from '../../../material/hgrp';
+import { HGRPMaterialDescriptor, hgrpPermutationEnables } from '../../../material/hgrp';
 import { AlphaMode, WebGPUMaterialDescriptor } from '../../../material/types';
 import { vec3 } from 'gl-matrix';
 import { generateSemanticCacheKey, generateSemanticPipelineKey } from '../../core/pipeline/types';
@@ -29,9 +29,10 @@ export interface DrawLists {
   // eyeLayer within the _PreZStencilRefOption show-through group; the brow (same group)
   // stays a regular opaque draw. The 36 group (cloth/hair) is a different system.
   eyeOverlay: DrawItem[];
-  // Brow-through compositing (see HGRPBrowCompositeStage): hair with _DrawUnderBrow stamps
-  // a sw_M-masked stencil mark, then the brow (also kept in opaque for its normal draw)
-  // re-draws where occluded through that mark.
+  // Brow-through compositing (see HGRPBrowCompositeStage): hair whose permutation enables
+  // browThrough (_DrawUnderBrow with its sw_M mask present) stamps a masked stencil mark,
+  // then the brow (also kept in opaque for its normal draw) re-draws where occluded through
+  // that mark.
   hairStencil: DrawItem[];
   browThrough: DrawItem[];
 }
@@ -114,10 +115,7 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
       if (hgrpMaterial && hgrpMaterial.floats._EnableOutline === 1) {
         outline.push({ renderable, pipelineKey: 'hgrp_outline', viewDepth: 0 });
       }
-      if (
-        hgrpMaterial?.variant === 'CharacterNPR_Hair' &&
-        hgrpMaterial.floats._DrawUnderBrow === 1
-      ) {
+      if (hgrpMaterial && hgrpPermutationEnables(hgrpMaterial.permutation, 'browThrough')) {
         hairStencil.push({ renderable, pipelineKey: 'hgrp_hair_stencil', viewDepth: 0 });
       }
       if (hgrpMaterial?.variant === 'CharacterNPR_Eye') {

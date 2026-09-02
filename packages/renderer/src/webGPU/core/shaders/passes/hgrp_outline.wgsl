@@ -7,8 +7,8 @@
 // front-face culling so only the silhouette band remains. Outline color = HSV-adjusted base
 // map (_OutlineColorBrightness/_OutlineColorSaturation), the same adjustment family as
 // shadows; cutout materials discard so no stroke shows behind alpha-clipped holes.
-// Structs come from includes (core/uniforms, core/gltf_types, core/hgrp_types, math/color);
-// group 0 (time) exists in the pipeline layout but is not used here.
+// Structs come from includes (core/uniforms, core/gltf_types, generated/hgrp_material_params,
+// math/color); group 0 (time) exists in the pipeline layout but is not used here.
 
 @group(1) @binding(0) var<uniform> mvp: MVPUniforms;
 @group(1) @binding(1) var<storage, read> joint_matrices: array<mat4x4<f32>>;

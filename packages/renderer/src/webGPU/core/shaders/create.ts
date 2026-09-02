@@ -1,9 +1,18 @@
 import {
   HGRP_MATERIAL_PARAMS_LAYOUT,
-  HGRP_SHADER_ID_BY_VARIANT,
-  HGRP_VFX_PARAMS_LAYOUT,
   hgrpGroup2BindingsFragment,
+  hgrpParamsLayoutForVariant,
+  hgrpPermutation,
+  hgrpPermutationForShaderId,
+  HGRPPermutation,
+  HGRPPermutationShaderId,
+  hgrpPermutationSuffix,
   HGRPShaderVariant,
+  hgrpSplitShaderId,
+  hgrpSubsystemIncludes,
+  HGRPSubsystemId,
+  hgrpVariantForShaderId,
+  isHGRPShaderId,
 } from '../../../material/hgrp';
 import { shaderFragmentRegistry } from './registry';
 import {
@@ -370,137 +379,200 @@ export function createDefaultShaderModule(): ShaderModule {
   };
 }
 
-// One module per CharacterNPR variant: shared vertex stage and shading core come from
-// includes; the per-variant file is where variant features (SDF / matcap / hair aniso / spec
-// ramp) land.
-// The CharacterNPR family shares one shading core; the VFX variant shares only the vertex
-// stage, bringing its own uniform block and bindings (no ramp, no rim, no _BaseMap).
-const HGRP_FAMILY_INCLUDES = [
-  'core/constants.wgsl',
-  'core/uniforms.wgsl',
-  'core/gltf_types.wgsl',
-  HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
-  'core/gltf_skinning.wgsl',
-  'math/color.wgsl',
-  'bindings/hgrp_bindings.wgsl',
-  'core/hgrp_vertex.wgsl',
-  'lighting/hgrp_shadow_lut.wgsl',
-  'lighting/hgrp_npr.wgsl',
-];
+// ---------------------------------------------------------------------------------------
+// HGRP: modules derived from a permutation id
+// ---------------------------------------------------------------------------------------
+//
+// An HGRP material's customShaderId names its permutation (material/hgrp/permutation.ts):
+// `hgrp_skin_shader+ramp+shadowLut+normal`. The pass shaders that shade a material through
+// its own group-2 bind group (eye overlay, brow-through, hair stencil) carry the same suffix.
+// None of these modules is listed in the catalog — createDerivedShaderModule builds one when
+// ShaderManager first meets its id, so exactly the permutations the scene uses get compiled.
+// The includes select, per static subsystem, its hook fragment or its generated off-stub, and
+// the generated group-2 fragment declares only the enabled subsystems' textures.
 
-const HGRP_VFX_INCLUDES = [
-  'core/constants.wgsl',
-  'core/uniforms.wgsl',
-  'core/gltf_types.wgsl',
-  HGRP_VFX_PARAMS_LAYOUT.fragmentPath,
-  'core/gltf_skinning.wgsl',
-  'bindings/hgrp_bindings.wgsl',
-  'core/hgrp_vertex.wgsl',
-];
+const HGRP_VARIANT_MAIN: Record<HGRPShaderVariant, { fileName: string; description: string }> = {
+  CharacterNPR: {
+    fileName: 'materials/HGRPNpr.wgsl',
+    description: 'HGRP CharacterNPR material shader (cloth / general)',
+  },
+  CharacterNPR_Skin: {
+    fileName: 'materials/HGRPSkin.wgsl',
+    description: 'HGRP CharacterNPR_Skin material shader (face + body)',
+  },
+  CharacterNPR_Hair: {
+    fileName: 'materials/HGRPHair.wgsl',
+    description: 'HGRP CharacterNPR_Hair material shader',
+  },
+  CharacterNPR_Eye: {
+    fileName: 'materials/HGRPEye.wgsl',
+    description: 'HGRP CharacterNPR_Eye material shader (brow + iris)',
+  },
+  CharacterNPR_VFX: {
+    fileName: 'materials/HGRPVfx.wgsl',
+    description: 'HGRP CharacterNPR_VFX material shader (character effect layers)',
+  },
+};
 
-export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
-  const variants: { variant: HGRPShaderVariant; fileName: string; description: string }[] = [
-    {
-      variant: 'CharacterNPR',
-      fileName: 'materials/HGRPNpr.wgsl',
-      description: 'HGRP CharacterNPR material shader (cloth / general)',
-    },
-    {
-      variant: 'CharacterNPR_Skin',
-      fileName: 'materials/HGRPSkin.wgsl',
-      description: 'HGRP CharacterNPR_Skin material shader (face + body)',
-    },
-    {
-      variant: 'CharacterNPR_Hair',
-      fileName: 'materials/HGRPHair.wgsl',
-      description: 'HGRP CharacterNPR_Hair material shader',
-    },
-    {
-      variant: 'CharacterNPR_Eye',
-      fileName: 'materials/HGRPEye.wgsl',
-      description: 'HGRP CharacterNPR_Eye material shader (brow + iris)',
-    },
-    {
-      variant: 'CharacterNPR_VFX',
-      fileName: 'materials/HGRPVfx.wgsl',
-      description: 'HGRP CharacterNPR_VFX material shader (character effect layers)',
-    },
-  ];
-
-  return variants.map(({ variant, fileName, description }) => ({
-    id: HGRP_SHADER_ID_BY_VARIANT[variant],
-    name: `HGRP ${variant} Shader`,
-    description,
-    type: 'render' as const,
-    fileName,
-    sourceCode: shaderFragmentRegistry.get(fileName) || '',
-    includes: [
-      ...(variant === 'CharacterNPR_VFX' ? HGRP_VFX_INCLUDES : HGRP_FAMILY_INCLUDES),
-      hgrpGroup2BindingsFragment(variant),
-      ...(variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
-    ],
-    compilationOptions: {
-      vertexFormat: ['full' as const],
-    },
-    runtimeParams: {},
-    renderState: {
-      blendMode: 'replace' as const,
-      depthTest: true,
-      depthWrite: true,
-      cullMode: 'back' as const,
-      frontFace: 'ccw' as const,
-      sampleCount: 1,
-    },
-    version: '1.0.0',
-    author: 'WebGPU 3D Physics Engine',
-    tags: ['hgrp', 'npr', 'character', variant],
-  }));
-}
-
-// The eye overlay shader draws the iris with a depth-biased projection (pass-private
-// pipeline in HGRPEyeOverlayStage); it shares the Eye variant's fragment shading but brings
-// its own vertex stage, so core/hgrp_vertex.wgsl is NOT included.
-export function createHGRPEyeOverlayShaderModule(): ShaderModule {
-  return {
+// Pass shaders built on a material permutation. `vertex`: include the shared vertex stage
+// (the eye overlay brings its own depth-biased one). `shading`: include the NPR core and the
+// subsystem hooks (the hair stencil only samples its mask).
+export const HGRP_PASS_SHADERS = {
+  eyeOverlay: {
     id: 'hgrp_eye_overlay_shader',
+    variant: 'CharacterNPR_Eye',
+    fileName: 'passes/hgrp_eye_overlay.wgsl',
     name: 'HGRP Eye Overlay Shader',
     description: 'HGRP iris overlay (Eye shading with camera-biased depth)',
+    vertex: false,
+    shading: true,
+    tags: ['hgrp', 'eye', 'npr'],
+  },
+  hairStencil: {
+    id: 'hgrp_hair_stencil_shader',
+    variant: 'CharacterNPR_Hair',
+    fileName: 'passes/hgrp_hair_stencil.wgsl',
+    name: 'HGRP Hair Stencil Shader',
+    description: 'HGRP hair stencil mark (sw_M-masked, brow-through compositing)',
+    vertex: true,
+    shading: false,
+    tags: ['hgrp', 'hair', 'stencil', 'npr'],
+  },
+  browThrough: {
+    id: 'hgrp_brow_through_shader',
+    variant: 'CharacterNPR_Eye',
+    fileName: 'passes/hgrp_brow_through.wgsl',
+    name: 'HGRP Brow Through Shader',
+    description: 'HGRP occluded-brow overlay (stencil-gated through the hair mark)',
+    vertex: true,
+    shading: true,
+    tags: ['hgrp', 'brow', 'stencil', 'npr'],
+  },
+} as const satisfies Record<
+  string,
+  {
+    id: string;
+    variant: HGRPShaderVariant;
+    fileName: string;
+    name: string;
+    description: string;
+    vertex: boolean;
+    shading: boolean;
+    tags: readonly string[];
+  }
+>;
+
+export type HGRPPassShader = keyof typeof HGRP_PASS_SHADERS;
+
+// Shader id of a pass shader specialized for one material's permutation.
+export function hgrpPassShaderId(pass: HGRPPassShader, permutation: HGRPPermutation): string {
+  const spec = HGRP_PASS_SHADERS[pass];
+  if (permutation.variant !== spec.variant) {
+    throw new Error(
+      `HGRP ${pass} pass shades ${spec.variant} materials, got ${permutation.variant}`,
+    );
+  }
+  return spec.id + hgrpPermutationSuffix(permutation.enabled);
+}
+
+// The CharacterNPR family shares one shading core; the VFX variant shares only the vertex
+// stage, bringing its own uniform block and bindings (no ramp, no rim, no _BaseMap).
+function hgrpNprFamilyIncludes(
+  permutation: HGRPPermutation,
+  options: { vertex: boolean; shading: boolean },
+): string[] {
+  return [
+    'core/constants.wgsl',
+    'core/uniforms.wgsl',
+    'core/gltf_types.wgsl',
+    hgrpParamsLayoutForVariant(permutation.variant).fragmentPath,
+    'core/gltf_skinning.wgsl',
+    'math/color.wgsl',
+    'bindings/hgrp_bindings.wgsl',
+    hgrpGroup2BindingsFragment(permutation),
+    ...(options.vertex ? ['core/hgrp_vertex.wgsl'] : []),
+    ...(options.shading
+      ? [
+          ...hgrpSubsystemIncludes(permutation),
+          'lighting/hgrp_npr.wgsl',
+          ...(permutation.variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
+        ]
+      : []),
+  ];
+}
+
+function hgrpVfxIncludes(permutation: HGRPPermutation): string[] {
+  return [
+    'core/constants.wgsl',
+    'core/uniforms.wgsl',
+    'core/gltf_types.wgsl',
+    hgrpParamsLayoutForVariant(permutation.variant).fragmentPath,
+    'core/gltf_skinning.wgsl',
+    'bindings/hgrp_bindings.wgsl',
+    hgrpGroup2BindingsFragment(permutation),
+    'core/hgrp_vertex.wgsl',
+  ];
+}
+
+const HGRP_RENDER_STATE = {
+  blendMode: 'replace',
+  depthTest: true,
+  depthWrite: true,
+  cullMode: 'back',
+  frontFace: 'ccw',
+  sampleCount: 1,
+} as const;
+
+function createHGRPMaterialShaderModule(shaderId: string): HGRPMaterialShaderModule {
+  const permutation = hgrpPermutationForShaderId(shaderId);
+  const main = HGRP_VARIANT_MAIN[permutation.variant];
+  return {
+    id: shaderId as HGRPPermutationShaderId,
+    name: `HGRP ${permutation.variant} Shader`,
+    description: main.description,
     type: 'render',
-    fileName: 'passes/hgrp_eye_overlay.wgsl',
-    sourceCode: shaderFragmentRegistry.get('passes/hgrp_eye_overlay.wgsl') || '',
-    includes: [
-      'core/constants.wgsl',
-      'core/uniforms.wgsl',
-      'core/gltf_types.wgsl',
-      HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
-      'core/gltf_skinning.wgsl',
-      'math/color.wgsl',
-      'bindings/hgrp_bindings.wgsl',
-      hgrpGroup2BindingsFragment('CharacterNPR_Eye'),
-      'lighting/hgrp_shadow_lut.wgsl',
-      'lighting/hgrp_npr.wgsl',
-      'lighting/hgrp_eye_shading.wgsl',
-    ],
-    compilationOptions: {
-      vertexFormat: ['full'],
-    },
+    fileName: main.fileName,
+    sourceCode: shaderFragmentRegistry.get(main.fileName) || '',
+    includes:
+      permutation.variant === 'CharacterNPR_VFX'
+        ? hgrpVfxIncludes(permutation)
+        : hgrpNprFamilyIncludes(permutation, { vertex: true, shading: true }),
+    compilationOptions: { vertexFormat: ['full'] },
     runtimeParams: {},
-    renderState: {
-      blendMode: 'replace',
-      depthTest: true,
-      depthWrite: false,
-      cullMode: 'back',
-      frontFace: 'ccw',
-      sampleCount: 1,
-    },
+    renderState: HGRP_RENDER_STATE,
     version: '1.0.0',
     author: 'WebGPU 3D Physics Engine',
-    tags: ['hgrp', 'eye', 'npr'],
+    tags: ['hgrp', 'npr', 'character', permutation.variant, ...permutation.enabled],
   };
 }
 
-// The outline shader is shared by every HGRP variant (its pipeline is pass-private —
-// front-face culling is not expressible in the semantic pipeline key).
+function createHGRPPassShaderModule(
+  pass: HGRPPassShader,
+  enabled: readonly HGRPSubsystemId[],
+): ShaderModule {
+  const spec = HGRP_PASS_SHADERS[pass];
+  const permutation = hgrpPermutation(spec.variant, enabled);
+  return {
+    id: hgrpPassShaderId(pass, permutation),
+    name: spec.name,
+    description: spec.description,
+    type: 'render',
+    fileName: spec.fileName,
+    sourceCode: shaderFragmentRegistry.get(spec.fileName) || '',
+    includes: hgrpNprFamilyIncludes(permutation, { vertex: spec.vertex, shading: spec.shading }),
+    compilationOptions: { vertexFormat: ['full'] },
+    runtimeParams: {},
+    // The pass stages own their pipelines and render state; this block is descriptive only.
+    renderState: HGRP_RENDER_STATE,
+    version: '1.0.0',
+    author: 'WebGPU 3D Physics Engine',
+    tags: [...spec.tags, ...enabled],
+  };
+}
+
+// The outline shader is shared by every HGRP variant and permutation (its pipeline is
+// pass-private — front-face culling is not expressible in the semantic pipeline key — and its
+// private group 2 reads the shared uniform block, so no subsystem shapes it).
 export function createHGRPOutlineShaderModule(): ShaderModule {
   return {
     id: 'hgrp_outline_shader',
@@ -534,82 +606,20 @@ export function createHGRPOutlineShaderModule(): ShaderModule {
   };
 }
 
-// Brow-through compositing pair: the hair stencil mark and the occluded-brow overlay
-// (pipelines are pass-private — stencil states are not expressible in the semantic key).
-export function createHGRPHairStencilShaderModule(): ShaderModule {
-  return {
-    id: 'hgrp_hair_stencil_shader',
-    name: 'HGRP Hair Stencil Shader',
-    description: 'HGRP hair stencil mark (sw_M-masked, brow-through compositing)',
-    type: 'render',
-    fileName: 'passes/hgrp_hair_stencil.wgsl',
-    sourceCode: shaderFragmentRegistry.get('passes/hgrp_hair_stencil.wgsl') || '',
-    includes: [
-      'core/constants.wgsl',
-      'core/uniforms.wgsl',
-      'core/gltf_types.wgsl',
-      HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
-      'core/gltf_skinning.wgsl',
-      'bindings/hgrp_bindings.wgsl',
-      hgrpGroup2BindingsFragment('CharacterNPR_Hair'),
-      'core/hgrp_vertex.wgsl',
-    ],
-    compilationOptions: {
-      vertexFormat: ['full'],
-    },
-    runtimeParams: {},
-    renderState: {
-      blendMode: 'replace',
-      depthTest: true,
-      depthWrite: false,
-      cullMode: 'back',
-      frontFace: 'ccw',
-      sampleCount: 1,
-    },
-    version: '1.0.0',
-    author: 'WebGPU 3D Physics Engine',
-    tags: ['hgrp', 'hair', 'stencil', 'npr'],
-  };
-}
-
-export function createHGRPBrowThroughShaderModule(): ShaderModule {
-  return {
-    id: 'hgrp_brow_through_shader',
-    name: 'HGRP Brow Through Shader',
-    description: 'HGRP occluded-brow overlay (stencil-gated through the hair mark)',
-    type: 'render',
-    fileName: 'passes/hgrp_brow_through.wgsl',
-    sourceCode: shaderFragmentRegistry.get('passes/hgrp_brow_through.wgsl') || '',
-    includes: [
-      'core/constants.wgsl',
-      'core/uniforms.wgsl',
-      'core/gltf_types.wgsl',
-      HGRP_MATERIAL_PARAMS_LAYOUT.fragmentPath,
-      'core/gltf_skinning.wgsl',
-      'math/color.wgsl',
-      'bindings/hgrp_bindings.wgsl',
-      hgrpGroup2BindingsFragment('CharacterNPR_Eye'),
-      'core/hgrp_vertex.wgsl',
-      'lighting/hgrp_shadow_lut.wgsl',
-      'lighting/hgrp_npr.wgsl',
-      'lighting/hgrp_eye_shading.wgsl',
-    ],
-    compilationOptions: {
-      vertexFormat: ['full'],
-    },
-    runtimeParams: {},
-    renderState: {
-      blendMode: 'alpha-blend',
-      depthTest: true,
-      depthWrite: false,
-      cullMode: 'back',
-      frontFace: 'ccw',
-      sampleCount: 1,
-    },
-    version: '1.0.0',
-    author: 'WebGPU 3D Physics Engine',
-    tags: ['hgrp', 'brow', 'stencil', 'npr'],
-  };
+// A module for an id the catalog does not list, or undefined if no family derives it. HGRP ids
+// carry their permutation; a malformed HGRP id throws (a typo must not become a silent miss).
+export function createDerivedShaderModule(id: string): ShaderModule | undefined {
+  if (!isHGRPShaderId(id)) {
+    return undefined;
+  }
+  const { base, enabled } = hgrpSplitShaderId(id);
+  if (hgrpVariantForShaderId(base)) {
+    return createHGRPMaterialShaderModule(id);
+  }
+  const pass = (Object.keys(HGRP_PASS_SHADERS) as HGRPPassShader[]).find(
+    (key) => HGRP_PASS_SHADERS[key].id === base,
+  );
+  return pass ? createHGRPPassShaderModule(pass, enabled) : undefined;
 }
 
 export function createGLTFMaterialShaderModule(): GLTFMaterialShaderModule {
@@ -644,10 +654,11 @@ export function createGLTFMaterialShaderModule(): GLTFMaterialShaderModule {
   };
 }
 
-// Every shader module the renderer knows about. Registering is this list; compilation happens
-// on first use (ShaderManager.ensureCompiled), so a module nothing draws is never compiled.
-// Adding a shader = one .wgsl file under shaders/ (auto-registered by the fragment registry
-// glob) + one factory entry here.
+// Every fixed shader module the renderer knows about. Registering is this list; compilation
+// happens on first use (ShaderManager.ensureCompiled), so a module nothing draws is never
+// compiled. Adding a shader = one .wgsl file under shaders/ (auto-registered by the fragment
+// registry glob) + one factory entry here. HGRP material and pass shaders are not listed: they
+// are derived per permutation (createDerivedShaderModule).
 export function createShaderModules(): ShaderModule[] {
   return [
     createDefaultShaderModule(),
@@ -660,10 +671,6 @@ export function createShaderModules(): ShaderModule[] {
     createWaterMaterialShaderModule(),
     createFireMaterialShaderModule(),
     createGLTFMaterialShaderModule(),
-    ...createHGRPMaterialShaderModules(),
     createHGRPOutlineShaderModule(),
-    createHGRPEyeOverlayShaderModule(),
-    createHGRPHairStencilShaderModule(),
-    createHGRPBrowThroughShaderModule(),
   ];
 }

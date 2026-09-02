@@ -1,8 +1,8 @@
 // Bindings shared by every HGRP variant shader: groups 0 (time), 1 (per-draw transform) and
 // 3 (per-frame globals). Group 2 — the material uniform block, texture slots and shared
-// samplers — is generated per variant from the material contract (material/hgrpContract.ts
-// via HGRPMaterialLayout.ts) and included alongside this fragment. A shader may leave
-// declared bindings unused (the VFX variant takes no rim, so it never reads scene_depth).
+// samplers — is generated per permutation from the material contract (material/hgrp/wgsl.ts)
+// and included alongside this fragment. A shader may leave declared bindings unused (the VFX
+// variant takes no rim, so it never reads scene_depth).
 
 // Group 0: Global uniforms (Time)
 @group(0) @binding(0) var<uniform> time_data: TimeUniforms;

@@ -32,28 +32,44 @@ const shaderModule: ShaderModule = {
 
 ### 3. Registry System
 
-All shader fragments are managed through `shaderFragmentRegistry` in `registry.ts`, which
-globs every `.wgsl` under this directory (`import.meta.glob`, inlined as strings by the Vite
+All shader fragments are managed through `registry.ts`: `shaderFragmentRegistry` globs every
+`.wgsl` under this directory (`import.meta.glob`, inlined as strings by the Vite
 `wgsl-loader`) and keys it by its path relative to `shaders/` — `core/uniforms.wgsl`,
-`materials/HGRPNpr.wgsl`. Dropping a file into the tree is its registration. A family may also
-contribute **generated** fragments under `generated/` — the HGRP material contract
-(`material/hgrp/`) emits its uniform structs and per-variant group-2 bindings
-(`material/hgrp/wgsl.ts`), so the WGSL declarations, the bind group layout and the CPU packer
-share one field table.
+`materials/HGRPNpr.wgsl`. Dropping a file into the tree is its registration. Lookups go through
+`resolveShaderFragment(path)`, which falls back to fragments a family **generates on demand**
+under `generated/` and memoizes them: the HGRP material contract (`material/hgrp/wgsl.ts`)
+emits its uniform structs, one group-2 binding block per shader permutation and one off-stub
+per static subsystem, so the WGSL declarations, the bind group layout and the CPU packer share
+one declaration table.
 
 Shader modules (a source file + includes + render state) are declared by factories in
 `create.ts` and listed once in `createShaderModules()`; `ShaderManager` registers that list and
 **compiles a module on first use** with the defines it declares. Nothing is compiled at startup.
+An id the catalog does not list is handed to `createDerivedShaderModule(id)`: HGRP material
+and pass shaders are derived from their permutation id (`hgrp_skin_shader+ramp+shadowLut`)
+the first time a pipeline asks for them, so only the permutations the scene resolves to exist.
 
 ```typescript
-import { shaderFragmentRegistry } from './registry';
+import { resolveShaderFragment, shaderFragmentRegistry } from './registry';
 
-// Get available fragments
+// Get available (materialized) fragments
 const fragments = Array.from(shaderFragmentRegistry.keys());
 
-// Get fragment content
-const uniformsContent = shaderFragmentRegistry.get('core/uniforms.wgsl');
+// Get fragment content — files and generated fragments alike
+const uniformsContent = resolveShaderFragment('core/uniforms.wgsl');
 ```
+
+### 4. Subsystem hooks (HGRP)
+
+The HGRP shading core (`lighting/hgrp_npr.wgsl`, `lighting/hgrp_eye_shading.wgsl`) calls one
+hook function per static subsystem — `hgrp_ramp_weight`, `hgrp_shadow_color`,
+`hgrp_shading_normal`, `hgrp_shade_coord`, `hgrp_spec_ramp_color`, `hgrp_metallic_gloss`,
+`hgrp_emission`, `hgrp_hair_lines`, `hgrp_face_highlight`, `hgrp_eye_matcap` — without
+knowing whether the subsystem is on. The permutation's include list supplies either the hook's
+fragment (`lighting/hgrp/<subsystem>.wgsl`, which samples the subsystem's texture) or a
+generated off-stub whose signature is copied from that fragment and whose body returns the
+neutral value declared in `material/hgrp/subsystems.ts`. No `#ifdef`, no `select(..., gate)`:
+a disabled subsystem's texture is not declared, not bound and never sampled.
 
 ## Directory Structure
 
@@ -72,7 +88,9 @@ shaders/
 ├── lighting/               # Lighting models
 │   ├── phong.wgsl         # Phong lighting
 │   ├── pbr.wgsl           # Physically-based rendering
-│   └── toon.wgsl          # Toon shading
+│   ├── toon.wgsl          # Toon shading
+│   ├── hgrp_npr.wgsl      # HGRP shading core (calls the subsystem hooks)
+│   └── hgrp/              # HGRP static subsystem hooks, one per subsystem (ramp, sdf, ...)
 ├── bindings/               # Binding group definitions
 │   ├── pmx_bindings.wgsl  # PMX model bindings
 │   ├── water_bindings.wgsl # Water material bindings
@@ -144,22 +162,13 @@ fn fs_main(input: FullVertexOutput) -> @location(0) vec4<f32> {
 }
 ```
 
-4. **Register the shader** in `registry.ts`:
+4. **Registration is automatic** — the file is picked up by the `registry.ts` glob under its
+   path relative to `shaders/` (`materials/MyShader.wgsl`).
 
-```typescript
-import myShader from './materials/MyShader.wgsl';
-
-// Add to shaderFragmentRegistry
-shaderFragmentRegistry.set('MyShader.wgsl', myShader);
-```
-
-5. **Wire it up** — a render/compute shader additionally needs, in order:
-   a module factory in `create.ts` (includes / defines / render state), a
-   `registerShaderModule(createMyShaderModule())` call in
-   `ShaderManager.registerShaderModules()`, and a `compileShaderModule('my_shader', ...)`
-   call in `ShaderManager.compileShaderModules()`. Missing any of the four places leaves
-   the shader unavailable at pipeline creation. (Converging these to a single declaration
-   point plus on-demand compilation is a recorded follow-up goal.)
+5. **Wire it up** — add the factory to the `createShaderModules()` catalog in `create.ts`.
+   `ShaderManager` registers the catalog and compiles the module the first time a pipeline
+   asks for `customShaderId: 'my_shader'`. (A family whose shaders are derived from an id,
+   like HGRP's permutations, instead teaches `createDerivedShaderModule` to build them.)
 
 ### Compiling Shaders
 
@@ -206,7 +215,8 @@ if (result.success) {
 
 - Cache compiled shaders when possible
 - Minimize the number of includes to reduce composition time
-- Use conditional compilation (#ifdef) for optional features
+- Select optional features by composing the include list (hook fragment vs off-stub, see
+  Subsystem hooks) rather than `#ifdef` — the preprocessor is a single non-nesting regex
 
 ## Testing
 

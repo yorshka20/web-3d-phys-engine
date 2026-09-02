@@ -1,12 +1,14 @@
 import { HGRP_PARAMS_STRUCTS } from './params';
-import { HGRPParam, HGRPVec4 } from './primitives';
+import { float, HGRPParam, HGRPVec4, TOGGLE } from './primitives';
 import { HGRP_SUBSYSTEMS } from './subsystems';
 
 // Calibration GUI schema, derived from the params that declare a `gui` range. The shading GUI
 // generates its widgets from these and mutates the live descriptors in place — the binder
-// re-packs the material uniform from the descriptor every frame, so edits take effect without
-// extra plumbing. A default is the value the binder packs when a preset omits the key, so a
-// widget shows what the shader is already seeing.
+// re-packs the material uniform from the descriptor every frame, so numeric edits take effect
+// without extra plumbing; a static gate additionally re-resolves the material's permutation
+// (descriptor.ts hgrpRefreshPermutation), which lands as a new shader module and pipeline. A
+// default is the value the binder packs when a preset omits the key, so a widget shows what the
+// shader is already seeing.
 
 export interface HGRPTunableFloatDef {
   key: string;
@@ -23,8 +25,9 @@ export interface HGRPTunableColorDef {
 
 export const HGRP_SHADING_SCHEMA_VERSION = 1;
 
-// Every param in GUI order: subsystem declaration order, then uniform fields in struct order,
-// then the subsystem's draw-list params. A key appears once even if several fields read it.
+// Every param in GUI order: subsystem declaration order; within a subsystem its static gate
+// (a toggle that is not a uniform field, shown only when a hook or the draw lists consume it),
+// then its uniform fields in struct order. A key appears once even if several fields read it.
 function paramsInGuiOrder(): HGRPParam[] {
   const seen = new Set<string>();
   const ordered: HGRPParam[] = [];
@@ -35,6 +38,9 @@ function paramsInGuiOrder(): HGRPParam[] {
     }
   };
   for (const subsystem of HGRP_SUBSYSTEMS) {
+    if (subsystem.gate && subsystem.tier === 'static' && (subsystem.wgsl || subsystem.drawList)) {
+      add(float(subsystem.gate, 0, TOGGLE));
+    }
     for (const struct of HGRP_PARAMS_STRUCTS) {
       for (const field of struct.fields) {
         if (field.subsystem === subsystem.id) {
@@ -42,7 +48,6 @@ function paramsInGuiOrder(): HGRPParam[] {
         }
       }
     }
-    subsystem.listParams?.forEach(add);
   }
   return ordered;
 }

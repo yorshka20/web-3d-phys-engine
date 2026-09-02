@@ -1,4 +1,6 @@
 import type { HGRPShaderVariant } from './descriptor';
+import type { HGRPPermutation } from './permutation';
+import { hgrpSlotOwner } from './subsystems';
 
 // Texture slots of the HGRP family and their group-2 binding numbers. The binding scheme,
 // shared by the bind group layout (webGPU/core/HGRPMaterialResources.ts), the bind group
@@ -7,14 +9,16 @@ import type { HGRPShaderVariant } from './descriptor';
 //   0             uniform block (HGRPMaterialParams or HGRPVfxParams, by variant)
 //   1             base_sampler (linear/repeat)
 //   2             ramp_sampler (linear/clamp — ramps and LUTs are lookup strips)
-//   3..           the variant's textures, in HGRP_TEXTURE_SLOTS_BY_VARIANT order
+//   3 + i         the variant's i-th slot in HGRP_TEXTURE_SLOTS_BY_VARIANT
 //
-// Samplers are shared across textures (two for the whole group): default WebGPU limits allow
-// 16 sampled textures AND 16 samplers per stage. A variant binds the slots the game's shader of
-// that variant reads (what the ripped presets declare) — no more, and no less: a slot whose
-// shading is not implemented here yet stays bound and is listed in HGRP_UNIMPLEMENTED_SLOTS, so
-// the gap is visible instead of being deleted. The shader catalog test enforces both
-// directions.
+// A permutation binds the subset of its variant's slots whose subsystem is enabled (an ungated
+// slot is always bound); a slot keeps its binding number whether or not its neighbours are
+// bound, so one variant's slot reads the same number in every capture. Samplers are shared
+// across textures (two for the whole group): default WebGPU limits allow 16 sampled textures
+// AND 16 samplers per stage. A variant lists the slots the game's shader of that variant reads
+// (what the ripped presets declare) — no more, and no less: a slot whose shading is not
+// implemented here yet stays listed and appears in HGRP_UNIMPLEMENTED_SLOTS, so the gap is
+// visible instead of being deleted. The shader catalog test enforces both directions.
 
 // Color slots are created as rgba8unorm-srgb so sampling decodes to linear; everything else
 // (normals, masks, ramp weights, LUTs) is data and stays raw. _DiffRampMap (per-channel blend
@@ -43,9 +47,9 @@ export const HGRP_TEXTURE_SLOTS: Readonly<Record<string, { srgb: boolean }>> = {
   _MaskTex: { srgb: false },
 };
 
-// Slots each variant binds, in binding order (3..): the texture slots the ripped presets
-// declare for materials of that variant. _OutlineMask is excluded because the outline pass
-// binds it in its own layout.
+// Slots each variant can bind, in binding order (3..): the texture slots the ripped presets
+// declare for materials of that variant. Append new slots at the end — the position is the
+// binding number. _OutlineMask is excluded because the outline pass binds it in its own layout.
 export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, readonly string[]>> =
   {
     CharacterNPR: [
@@ -55,6 +59,7 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
       '_SpecRampMap',
       '_MetallicGlossMap',
       '_EmissionMap',
+      '_ShadowLutTex',
     ],
     CharacterNPR_Skin: [
       '_BaseMap',
@@ -75,6 +80,7 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
       '_SplitNormalMap',
       '_HairBrowMask',
       '_LineMap',
+      '_BumpMap',
     ],
     CharacterNPR_Eye: ['_BaseMap', '_DiffRampMap', '_MatcapTex', '_ShadowLutTex'],
     // Effect layers, each sampled with its own UV speed and channel weights: _MainTex is the
@@ -85,11 +91,11 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
     CharacterNPR_VFX: ['_MainTex', '_BlendTex', '_DisturbTex1', '_MaskTex'],
   };
 
-// Bound slots whose shading this renderer does not implement yet, with what is missing. The
-// presets declare them and the game's shader reads them, so dropping the binding would hide a
-// gap in the reproduction rather than remove waste. Delete an entry in the same commit that
-// adds the WGSL sampling it — the shader catalog test fails if a listed slot is sampled, or if
-// an unlisted bound slot is not.
+// Listed slots whose shading this renderer does not implement yet, with what is missing. The
+// presets declare them and the game's shader reads them, so dropping the slot would hide a gap
+// in the reproduction rather than remove waste. Delete an entry in the same commit that adds
+// the WGSL sampling it — the shader catalog test fails if a listed slot is sampled, or if an
+// unlisted slot is bound without being sampled.
 export const HGRP_UNIMPLEMENTED_SLOTS: Partial<
   Record<HGRPShaderVariant, Readonly<Record<string, string>>>
 > = {
@@ -128,12 +134,20 @@ export interface HGRPTextureBinding {
   srgb: boolean;
 }
 
-// Ordered texture bindings for one variant.
-export function hgrpTextureBindings(variant: HGRPShaderVariant): HGRPTextureBinding[] {
+// Every slot of a variant's table with its binding number (the all-on permutation).
+export function hgrpAllTextureBindings(variant: HGRPShaderVariant): HGRPTextureBinding[] {
   return HGRP_TEXTURE_SLOTS_BY_VARIANT[variant].map((slot, i) => ({
     binding: HGRP_TEXTURE_BINDING_START + i,
     slot,
     wgslName: hgrpTextureWgslName(slot),
     srgb: HGRP_TEXTURE_SLOTS[slot].srgb,
   }));
+}
+
+// The slots a permutation binds: ungated slots plus those of its enabled subsystems.
+export function hgrpTextureBindings(permutation: HGRPPermutation): HGRPTextureBinding[] {
+  return hgrpAllTextureBindings(permutation.variant).filter((binding) => {
+    const owner = hgrpSlotOwner(binding.slot);
+    return owner.tier !== 'static' || permutation.enabled.includes(owner.id);
+  });
 }

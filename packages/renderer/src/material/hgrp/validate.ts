@@ -10,13 +10,9 @@ import {
 // them would surface only as a texture silently resolving to white or a gate no permutation
 // can read — so the check runs at module load (index.ts) and throws.
 
-function subsystemHasFields(id: HGRPSubsystemId): boolean {
-  return HGRP_PARAMS_STRUCTS.some((struct) => struct.fields.some((f) => f.subsystem === id));
-}
-
 export function validateHGRPContract(): void {
   const subsystemIds = new Set(HGRP_SUBSYSTEMS.map((subsystem) => subsystem.id));
-  const declaredKeys = new Set<string>();
+  const fieldParamKeys = new Set<string>();
   const claimedSlots = new Map<string, HGRPSubsystemId>();
 
   for (const subsystem of HGRP_SUBSYSTEMS) {
@@ -32,7 +28,6 @@ export function validateHGRPContract(): void {
       }
       claimedSlots.set(slot, subsystem.id);
     }
-    subsystem.listParams?.forEach((param) => declaredKeys.add(param.key));
   }
   for (const slot of Object.keys(HGRP_TEXTURE_SLOTS)) {
     if (!claimedSlots.has(slot)) {
@@ -68,7 +63,7 @@ export function validateHGRPContract(): void {
           `HGRP contract: field ${field.name} names unknown subsystem ${field.subsystem}`,
         );
       }
-      field.params.forEach((param) => declaredKeys.add(param.key));
+      field.params.forEach((param) => fieldParamKeys.add(param.key));
       if (field.pack) {
         continue;
       }
@@ -82,12 +77,34 @@ export function validateHGRPContract(): void {
     }
   }
 
-  // A subsystem with no fields yet (the dormant ones) may name a gate nobody declares.
+  // Gate tiers: a static gate is a compile-time decision and must not also be a uniform field
+  // (two copies of one switch); a numeric gate is read by the shader, so it must be one.
+  const hooks = new Set<string>();
   for (const subsystem of HGRP_SUBSYSTEMS) {
-    if (subsystem.gate && !declaredKeys.has(subsystem.gate) && subsystemHasFields(subsystem.id)) {
+    if ((subsystem.gate === undefined) !== (subsystem.tier === undefined)) {
+      throw new Error(`HGRP contract: subsystem ${subsystem.id} needs both a gate and a tier`);
+    }
+    if (subsystem.tier === 'static' && fieldParamKeys.has(subsystem.gate!)) {
       throw new Error(
-        `HGRP contract: gate ${subsystem.gate} of ${subsystem.id} is not a declared param`,
+        `HGRP contract: static gate ${subsystem.gate} of ${subsystem.id} is also a uniform field`,
       );
+    }
+    if (subsystem.tier === 'numeric' && !fieldParamKeys.has(subsystem.gate!)) {
+      throw new Error(
+        `HGRP contract: numeric gate ${subsystem.gate} of ${subsystem.id} is not a uniform field`,
+      );
+    }
+    if (subsystem.drawList && subsystem.tier !== 'static') {
+      throw new Error(`HGRP contract: only a static gate routes draw lists (${subsystem.id})`);
+    }
+    if (subsystem.wgsl) {
+      if (subsystem.tier !== 'static') {
+        throw new Error(`HGRP contract: only a static subsystem has a WGSL hook (${subsystem.id})`);
+      }
+      if (hooks.has(subsystem.wgsl.fn)) {
+        throw new Error(`HGRP contract: hook ${subsystem.wgsl.fn} declared twice`);
+      }
+      hooks.add(subsystem.wgsl.fn);
     }
   }
 }

@@ -1,4 +1,5 @@
 import { FrameData } from '../../../../frame/types';
+import { HGRPMaterialDescriptor } from '../../../../material/hgrp';
 import { BindGroupManager } from '../../../core/BindGroupManager';
 import { GeometryManager } from '../../../core/GeometryManager';
 import {
@@ -8,6 +9,7 @@ import {
 import { MaterialBinder } from '../../../core/MaterialBinder';
 import { MVPUniformManager } from '../../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../../core/pipeline/vertexLayouts';
+import { hgrpPassShaderId } from '../../../core/shaders/create';
 import { ShaderManager } from '../../../core/shaders/ShaderManager';
 import { DrawItem } from '../../frame/DrawListBuilder';
 
@@ -37,23 +39,22 @@ export interface HGRPEyeOverlayStageDeps {
  *
  * Fragment shading is the shared Eye-variant path with the regular variant bind groups;
  * only the vertex projection and depth-write state differ, which the semantic pipeline key
- * cannot express — so the pipeline is pass-private (same rule as HGRPOutlineStage).
+ * cannot express — so the pipelines are pass-private (same rule as HGRPOutlineStage), one
+ * per Eye permutation met (the shader and the group-2 layout follow the material's
+ * permutation, so an iris with a matcap and a brow with a LUT are two pipelines).
  */
 export class HGRPEyeOverlayStage {
-  private pipeline?: GPURenderPipeline;
+  private pipelines = new Map<string, GPURenderPipeline>();
   private frameBindings = new Map<string, GPUBindGroup | undefined>();
 
   constructor(private readonly deps: HGRPEyeOverlayStageDeps) {}
 
   async prepare(items: DrawItem[]): Promise<void> {
     this.frameBindings.clear();
-    if (items.length === 0) {
-      return;
-    }
-    this.ensurePipeline();
 
     for (const item of items) {
       const { renderable } = item;
+      item.pipeline = this.ensurePipeline(renderable.material as HGRPMaterialDescriptor);
       item.geometry = this.deps.geometryManager.createGeometryFromData(renderable.geometryId, {
         geometryData: renderable.geometryData,
       });
@@ -67,16 +68,17 @@ export class HGRPEyeOverlayStage {
   /**
    * Encode the overlay draws. Runs after the opaque/outline walks and before transparent
    * (the translucent eye-white shadow shell blends on top); the caller's encode-state cache
-   * is invalid afterwards.
+   * is invalid afterwards. Items arrive sorted by materialKey, so pipeline switches are
+   * bounded by the number of materials.
    */
   encode(renderPass: GPURenderPassEncoder, items: DrawItem[], frameData: FrameData): void {
-    if (items.length === 0 || !this.pipeline) {
+    if (items.length === 0) {
       return;
     }
 
-    renderPass.setPipeline(this.pipeline);
     renderPass.setBindGroup(3, this.deps.getFrameBindGroup());
 
+    let boundPipeline: GPURenderPipeline | undefined;
     let boundMaterialKey: string | undefined;
     let boundGeometryId: string | undefined;
     let boundUniformKey: string | undefined;
@@ -85,6 +87,10 @@ export class HGRPEyeOverlayStage {
       const { renderable } = item;
       const geometry = item.geometry!;
 
+      if (item.pipeline !== boundPipeline) {
+        renderPass.setPipeline(item.pipeline!);
+        boundPipeline = item.pipeline;
+      }
       if (renderable.materialKey !== boundMaterialKey) {
         const bindGroup = this.frameBindings.get(renderable.materialKey);
         if (bindGroup) {
@@ -107,15 +113,14 @@ export class HGRPEyeOverlayStage {
     }
   }
 
-  private ensurePipeline(): void {
-    if (this.pipeline) {
-      return;
+  private ensurePipeline(material: HGRPMaterialDescriptor): GPURenderPipeline {
+    const shaderId = hgrpPassShaderId('eyeOverlay', material.permutation);
+    const existing = this.pipelines.get(shaderId);
+    if (existing) {
+      return existing;
     }
 
-    const shaderModule = this.deps.shaderManager.getShaderModule('hgrp_eye_overlay_shader');
-    if (!shaderModule) {
-      throw new Error('HGRP eye overlay shader module not compiled');
-    }
+    const shaderModule = this.deps.shaderManager.getShaderModule(shaderId);
 
     const timeLayout = this.deps.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
     const mvpLayout = this.deps.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
@@ -124,14 +129,14 @@ export class HGRPEyeOverlayStage {
     }
     const eyeLayout = getOrCreateHGRPMaterialBindGroupLayout(
       this.deps.bindGroupManager,
-      'CharacterNPR_Eye',
+      material.permutation,
     );
     const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.deps.bindGroupManager);
 
-    this.pipeline = this.deps.device.createRenderPipeline({
-      label: 'hgrp_eye_overlay_pipeline',
+    const pipeline = this.deps.device.createRenderPipeline({
+      label: `hgrp_eye_overlay_pipeline:${shaderId}`,
       layout: this.deps.device.createPipelineLayout({
-        label: 'hgrp_eye_overlay_pipeline_layout',
+        label: `hgrp_eye_overlay_pipeline_layout:${shaderId}`,
         bindGroupLayouts: [timeLayout, mvpLayout, eyeLayout, frameLayout],
       }),
       vertex: {
@@ -153,5 +158,7 @@ export class HGRPEyeOverlayStage {
         depthCompare: 'less',
       },
     });
+    this.pipelines.set(shaderId, pipeline);
+    return pipeline;
   }
 }

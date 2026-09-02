@@ -1,7 +1,7 @@
 // HGRP/CharacterNPR_Eye (brow): ramp shadow blend; the brow uses the skin LUT
 // (_UseShadowLutTex). The iris renders through the eye overlay stage instead
 // (passes/hgrp_eye_overlay.wgsl — same shading, depth-biased projection). Group-2 bindings
-// come from the generated fragment for this variant (material/hgrpContract.ts slot tables).
+// and the subsystem hooks come from the permutation's generated fragments (material/hgrp).
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {

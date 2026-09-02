@@ -174,19 +174,31 @@ snake_case, `materials/` PascalCase, `passes/`, `compute/`); see `shaders/README
 **Adding a shader = one `.wgsl` file + one factory entry** (2026-09-02): `registry.ts` globs
 `shaders/**/*.wgsl` (`import.meta.glob`, inlined as strings by the Vite `wgsl-loader` plugin;
 keys are paths relative to `shaders/`, e.g. `materials/HGRPNpr.wgsl`), and `create.ts` holds
-one factory per shader plus the `createShaderModules()` catalog `ShaderManager` registers from.
+one factory per fixed shader plus the `createShaderModules()` catalog `ShaderManager` registers
+from. Ids the catalog does not list are **derived on demand** (`createDerivedShaderModule`).
 **Nothing is compiled at startup**: `ShaderManager` compiles a module the first time a pipeline
 or pass stage asks for it, with the defines the module itself declares — a shader no material
 in the scene uses is never compiled. Materials select shaders via `material.customShaderId`,
-which flows into the semantic pipeline key.
+which flows into the semantic pipeline key. Fragment lookups go through
+`resolveShaderFragment` (files first, then generated fragments), never the raw registry map.
 
-The HGRP family adds **generated fragments** (`generated/*.wgsl`, registered by `registry.ts`
-from `material/hgrp/wgsl.ts`): its uniform structs and per-variant `@group(2)` bindings are
-derived from the declaration tables in `packages/renderer/src/material/hgrp/` (one folder =
-descriptor, subsystems, texture slots, field tables, layout/packer, WGSL codegen, GUI schema,
+**HGRP shaders are permutations, not files** (2026-09-02): an HGRP material's
+`customShaderId` is `<variant base id>+<enabled static subsystems>`
+(`hgrp_skin_shader+ramp+shadowLut+normal`), resolved from the preset once at load
+(`material/hgrp/permutation.ts`). Each static subsystem (`subsystems.ts`: `tier: 'static'`)
+contributes its texture slots and one WGSL hook fragment (`shaders/lighting/hgrp/*.wgsl`)
+only when enabled; when off, a **generated off-stub** with the same signature stands in, so
+the shading core never branches on a gate and a disabled subsystem's texture is neither bound
+nor declared. Generated fragments (`generated/*.wgsl`: uniform structs, per-permutation
+`@group(2)` bindings, off-stubs) are produced by `material/hgrp/wgsl.ts` from the
+declaration tables in `packages/renderer/src/material/hgrp/` (one folder = descriptor,
+subsystems, permutation, texture slots, field tables, layout/packer, WGSL codegen, GUI schema,
 self-check), which also drive the CPU packer and the bind group layouts. Change the table,
-never a derived copy; `hgrp_outline.wgsl` is the one hand-written group-2 layout left. HGRP
-pass stages live in `webGPU/renderer/passes/hgrp/`.
+never a derived copy; `hgrp_outline.wgsl` is the one hand-written group-2 layout left. Pass
+shaders that shade through a material's bind group (eye overlay, brow-through, hair stencil)
+carry the material's permutation suffix and get one pipeline per permutation in their stage
+(`webGPU/renderer/passes/hgrp/`). Numeric gates (`_Pantyhose`, `_EyeHighLight`) stay uniform
+fields; the uniform struct itself is shared by every permutation of a variant.
 
 ### web-client
 

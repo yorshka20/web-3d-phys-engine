@@ -3,7 +3,7 @@
 // it forms a circular import and Injectable is undefined at decoration time.
 import { Inject, Injectable } from '../decorators/ResourceDecorators';
 import { ServiceTokens } from '../decorators/DIContainer';
-import { shaderFragmentRegistry } from './registry';
+import { resolveShaderFragment, shaderFragmentRegistry } from './registry';
 import {
   CompiledShader,
   ShaderCompilationResult,
@@ -223,8 +223,8 @@ export class ShaderCompiler {
       return this.includeCache.get(filePath)!;
     }
 
-    // Look up in fragment registry
-    const content = shaderFragmentRegistry.get(filePath);
+    // Look up in fragment registry (files and on-demand generated fragments)
+    const content = resolveShaderFragment(filePath);
 
     if (!content) {
       throw new Error(
@@ -372,7 +372,7 @@ export class ShaderCompiler {
    * Get fragment content for debugging
    */
   getFragmentContent(fragmentPath: string): string | null {
-    return shaderFragmentRegistry.get(fragmentPath) || null;
+    return resolveShaderFragment(fragmentPath) || null;
   }
 
   /**
@@ -382,14 +382,14 @@ export class ShaderCompiler {
     const missingFragments: string[] = [];
 
     // Check main source file
-    if (!shaderFragmentRegistry.has(module.fileName)) {
+    if (resolveShaderFragment(module.fileName) === undefined) {
       missingFragments.push(module.fileName);
     }
 
     // Check includes
     if (module.includes) {
       for (const include of module.includes) {
-        if (!shaderFragmentRegistry.has(include)) {
+        if (resolveShaderFragment(include) === undefined) {
           missingFragments.push(include);
         }
       }
@@ -414,14 +414,10 @@ export class ShaderCompiler {
     let estimatedSize = 0;
 
     // Estimate size by checking fragment lengths
-    if (shaderFragmentRegistry.has(module.fileName)) {
-      estimatedSize += shaderFragmentRegistry.get(module.fileName)!.length;
-    }
+    estimatedSize += resolveShaderFragment(module.fileName)?.length ?? 0;
 
     for (const include of includes) {
-      if (shaderFragmentRegistry.has(include)) {
-        estimatedSize += shaderFragmentRegistry.get(include)!.length;
-      }
+      estimatedSize += resolveShaderFragment(include)?.length ?? 0;
     }
 
     return {

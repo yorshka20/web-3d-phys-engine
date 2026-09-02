@@ -1,4 +1,11 @@
 import { AlphaMode, BaseMaterial } from '../types';
+import {
+  HGRP_SHADER_ID_BY_VARIANT,
+  HGRPDroppedSubsystem,
+  HGRPPermutation,
+  hgrpPermutationShaderId,
+  hgrpResolvePermutation,
+} from './permutation';
 
 // The HGRP (HypergryphRenderPipeline) material family reproduces the four CharacterNPR shader
 // variants from ripped Unity material data. Parameter and texture-slot names mirror the HGRP
@@ -11,29 +18,7 @@ export type HGRPShaderVariant =
   | 'CharacterNPR_Eye'
   | 'CharacterNPR_VFX';
 
-// One shader module per HGRP variant; the id is the semantic-pipeline-key discriminator and
-// the switch key for pipeline layout selection.
-export const HGRP_SHADER_ID_BY_VARIANT = {
-  CharacterNPR: 'hgrp_npr_shader',
-  CharacterNPR_Skin: 'hgrp_skin_shader',
-  CharacterNPR_Hair: 'hgrp_hair_shader',
-  CharacterNPR_Eye: 'hgrp_eye_shader',
-  CharacterNPR_VFX: 'hgrp_vfx_shader',
-} as const satisfies Record<HGRPShaderVariant, string>;
-
-export type HGRPShaderId = (typeof HGRP_SHADER_ID_BY_VARIANT)[HGRPShaderVariant];
-
-export function hgrpVariantForShaderId(shaderId: string): HGRPShaderVariant | undefined {
-  return (Object.keys(HGRP_SHADER_ID_BY_VARIANT) as HGRPShaderVariant[]).find(
-    (variant) => HGRP_SHADER_ID_BY_VARIANT[variant] === shaderId,
-  );
-}
-
-// The whole family shares the glTF-converted vertex layout; pipeline code gates the 26-float
-// vertex buffer layout on this predicate instead of enumerating variant shader ids.
-export function isHGRPShaderId(shaderId: string | undefined): boolean {
-  return !!shaderId && shaderId.startsWith('hgrp_');
-}
+// The shader id vocabulary (base id per variant, permutation suffix) lives in permutation.ts.
 
 // Shape of preset.json produced by scripts/hgrp/material-preset.mjs (schemaVersion 1).
 export interface HGRPPresetMaterial {
@@ -122,6 +107,10 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
   // Resolved once at load (hgrpEyeLayer); the draw lists and the shader read this role, never
   // a feature flag or a texture's presence, to tell the iris from the brow.
   eyeLayer?: HGRPEyeLayer;
+  // The static subsystems this material enables (permutation.ts). customShaderId is its
+  // serialization; both are written together by hgrpRefreshPermutation and nowhere else, so
+  // the draw lists, the binder and the pipeline key never disagree about what is on.
+  permutation: HGRPPermutation;
   // False keeps the material out of the draw lists entirely (see HGRPCharacterFlags). The
   // draw list reads this boolean and nothing else — it must never test a character or
   // material name to decide what to draw.
@@ -134,6 +123,32 @@ export function hgrpTextureAssetId(character: string, filename: string): string 
 
 export function hgrpMaterialKey(character: string, materialName: string): string {
   return `hgrp_${character}_${materialName}`;
+}
+
+// A gate on without its texture leaves the subsystem off (permutation.ts); said out loud, since
+// the alternative — shading with a placeholder texture — looks like a correct render.
+function warnDroppedSubsystems(materialName: string, dropped: HGRPDroppedSubsystem[]): void {
+  if (dropped.length === 0) {
+    return;
+  }
+  const detail = dropped
+    .map((entry) => `${entry.subsystem} (${entry.gate} on, no ${entry.missing.join('/')})`)
+    .join(', ');
+  console.warn(`[hgrp] ${materialName}: gates on without their textures, left off: ${detail}`);
+}
+
+// Re-resolve the permutation from the descriptor's current floats and textures. The load-time
+// factories call it once; the calibration GUI calls it after flipping a static gate, which
+// then resolves to another permutation — a new shader module and pipeline on first draw.
+export function hgrpRefreshPermutation(material: HGRPMaterialDescriptor): void {
+  const { permutation, dropped } = hgrpResolvePermutation(
+    material.variant,
+    material.floats,
+    material.textures,
+  );
+  material.permutation = permutation;
+  material.customShaderId = hgrpPermutationShaderId(permutation);
+  warnDroppedSubsystems(material.materialName, dropped);
 }
 
 export function createHGRPMaterialFromPreset(
@@ -183,7 +198,7 @@ export function createHGRPMaterialFromPreset(
         ? 'mask'
         : 'opaque';
 
-  return {
+  const material: HGRPMaterialDescriptor = {
     materialType: 'hgrp',
     customShaderId: HGRP_SHADER_ID_BY_VARIANT[variant],
     materialKey: hgrpMaterialKey(character, materialName),
@@ -197,8 +212,11 @@ export function createHGRPMaterialFromPreset(
     doubleSided: floats._Cull === 0,
     blendMode: hgrpBlendMode(floats),
     eyeLayer: hgrpEyeLayer(variant, floats),
+    permutation: { variant, enabled: [] },
     enabled: gateFlag === undefined || flags[gateFlag] === true,
   };
+  hgrpRefreshPermutation(material);
+  return material;
 }
 
 // glb materials with no preset entry: the shared eye-white/hair shadow overlay meshes, whose
@@ -209,7 +227,7 @@ export function createDefaultHGRPMaterial(
   character: string,
   materialName: string,
 ): HGRPMaterialDescriptor {
-  return {
+  const material: HGRPMaterialDescriptor = {
     materialType: 'hgrp',
     customShaderId: HGRP_SHADER_ID_BY_VARIANT.CharacterNPR,
     materialKey: hgrpMaterialKey(character, materialName),
@@ -228,6 +246,9 @@ export function createDefaultHGRPMaterial(
     alphaCutoff: 0.5,
     doubleSided: false,
     blendMode: 'straight',
+    permutation: { variant: 'CharacterNPR', enabled: [] },
     enabled: true,
   };
+  hgrpRefreshPermutation(material);
+  return material;
 }

@@ -115,7 +115,11 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   would wash the image).
 - `webGPU/core/MaterialBinder.ts` — `@Injectable` DI service resolving material-tier bind
   groups by `materialKey` (regular + glTF + HGRP families; PMX material bind groups come
-  pre-built from `PMXMaterialProcessor`).
+  pre-built from `PMXMaterialProcessor`). The HGRP material bind group's cache id is
+  `materialKey@customShaderId`: the group holds the slots of the material's shader
+  permutation, which the calibration GUI can re-resolve at run time; the material uniform
+  buffer stays keyed by `materialKey` alone (one struct per variant, shared by every
+  permutation and by the outline pass).
 - `WebGPURenderer` — device/context lifecycle, manager construction, frame loop
   (`beginFrame`/`renderTick`/`endFrame`), and pass sequencing: the dormant PMX morph compute
   pass (commented out), then `DepthPrepass → ForwardPass(HDR) → BloomPass → TonemapPass(LDR)

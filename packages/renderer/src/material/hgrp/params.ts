@@ -21,10 +21,11 @@ import {
 // HGRPMaterialParams — the CharacterNPR family (npr / skin / hair / eye)
 // ---------------------------------------------------------------------------------------
 
-// Field order is the uniform byte order. It is historical, not grouped by subsystem: the
-// per-permutation structs of the gating design will derive their own order, and until then
-// keeping this order lets the packed bytes be compared against the previous hand-written
-// packer byte for byte.
+// Field order is the uniform byte order. It is historical, not grouped by subsystem. The
+// struct is shared by every permutation of its variants — the pass shaders (outline, eye
+// overlay, brow-through, hair stencil) read the same buffer through one declaration — so a
+// static subsystem's gate is not a field here (permutation.ts) while its numeric parameters
+// stay, packed whether or not the subsystem is on.
 
 const BASE_COLOR = color('_BaseColor', WHITE, true);
 const HAIR_BASE_TINT = color('_HairBaseTintColor', WHITE);
@@ -92,7 +93,6 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       pack: packRimColor,
       comment: '_SDFRimColor when present (skin), else _ColorAdjustmentRimColor',
     },
-    f32('use_diff_ramp', 'ramp', float('_UseDiffRampMap', 0, TOGGLE)),
     {
       name: 'alpha_cutoff',
       type: 'f32',
@@ -111,10 +111,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'shadow',
       float('_ShadowColorSaturation', 1, { min: 0, max: 3, step: 0.01 }),
     ),
-    f32('use_shadow_lut', 'shadowLut', float('_UseShadowLutTex', 0, TOGGLE)),
-    f32('use_bump_map', 'normal', float('_UseBumpMap', 0, TOGGLE)),
     f32('bump_scale', 'normal', float('_BumpScale', 1, { min: 0, max: 3, step: 0.01 })),
-    f32('use_sdf_lightmap', 'sdf', float('_UseSDFLightmap', 0, TOGGLE)),
     {
       name: 'rim_intensity',
       type: 'f32',
@@ -128,7 +125,6 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'rim',
       float('_ColorAdjustmentRimWidth', 0.35, { min: 0, max: 1, step: 0.01 }),
     ),
-    f32('use_spec_ramp', 'spec', float('_UseSpecRampMap', 0, TOGGLE)),
     f32('spec_smoothness', 'spec', float('_Smoothness', 0.5, { min: 0, max: 1, step: 0.01 })),
     f32('spec_intensity', 'spec', float('_Specular', 0.5, { min: 0, max: 4, step: 0.05 })),
     f32(
@@ -137,14 +133,12 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_AnisotropyIntensity', 0, { min: 0, max: 8, step: 0.05 }),
       'hair strand highlight',
     ),
-    f32('use_matcap', 'eyeMatcap', float('_UseMatcap', 0, TOGGLE), 'eye glint layer'),
     f32(
       'matcap_normal_scale',
       'eyeMatcap',
       float('_MatcapNormalScale', 1, { min: 0, max: 2, step: 0.01 }),
     ),
     vec4('emission_color', 'emission', color('_EmissionColor', BLACK_OPAQUE, true)),
-    f32('use_emission', 'emission', float('_UseEmission', 0, TOGGLE)),
     f32(
       'emission_brightness',
       'emission',
@@ -174,7 +168,6 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_OutlineOffsetZ', 0, { min: 0, max: 1, step: 0.01 }),
       'pushes the hull away so inner lines recede',
     ),
-    f32('use_line_map', 'hairLines', float('_UseLineMap', 0, TOGGLE), 'hair strand lines'),
     vec4('matcap_color', 'eyeMatcap', color('_MatcapColor', WHITE, true)),
     vec4(
       'eye_highlight_color',
@@ -221,12 +214,6 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'hair RS band center (0.5 = the RS peak)',
     ),
     f32(
-      'use_face_highlight',
-      'skinHighlight',
-      float('_FaceHighlightMap', 0, TOGGLE),
-      'skin: hl_M nose-highlight layer',
-    ),
-    f32(
       'parallax_scale',
       'eyeParallax',
       float('_ParallaxScale', 0, { min: 0, max: 0.2, step: 0.001 }),
@@ -244,12 +231,6 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'eyeTint',
       color('_EyeTintColor', WHITE, true),
       "identity in Pelica's preset",
-    ),
-    f32(
-      'use_metallic_gloss_map',
-      'metallicGloss',
-      float('_UseMetallicGlossMap', 0, TOGGLE),
-      'cloth spec v3 gate',
     ),
     f32(
       'hair_brow_mask_threshold',

@@ -9,6 +9,7 @@ import {
 import { MaterialBinder } from '../../../core/MaterialBinder';
 import { MVPUniformManager } from '../../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../../core/pipeline/vertexLayouts';
+import { hgrpPassShaderId } from '../../../core/shaders/create';
 import { ShaderManager } from '../../../core/shaders/ShaderManager';
 import { DrawItem } from '../../frame/DrawListBuilder';
 
@@ -35,11 +36,13 @@ export interface HGRPBrowCompositeStageDeps {
  *    AND the stencil matches the mark, alpha-blended at a fixed opacity.
  *
  * Stencil states are not expressible in the semantic pipeline key, so both pipelines are
- * pass-private (same rule as the outline/eye stages). Renderer-private, constructor-wired.
+ * pass-private (same rule as the outline/eye stages), one per material permutation met: the
+ * shaders and group-2 layouts follow the hair's and the brow's permutations. Renderer-private,
+ * constructor-wired.
  */
 export class HGRPBrowCompositeStage {
-  private markPipeline?: GPURenderPipeline;
-  private throughPipeline?: GPURenderPipeline;
+  private markPipelines = new Map<string, GPURenderPipeline>();
+  private throughPipelines = new Map<string, GPURenderPipeline>();
   private frameBindings = new Map<string, GPUBindGroup | undefined>();
 
   constructor(private readonly deps: HGRPBrowCompositeStageDeps) {}
@@ -49,8 +52,15 @@ export class HGRPBrowCompositeStage {
     if (hairItems.length === 0 || browItems.length === 0) {
       return;
     }
-    this.ensurePipelines();
 
+    for (const item of hairItems) {
+      item.pipeline = this.ensureMarkPipeline(item.renderable.material as HGRPMaterialDescriptor);
+    }
+    for (const item of browItems) {
+      item.pipeline = this.ensureThroughPipeline(
+        item.renderable.material as HGRPMaterialDescriptor,
+      );
+    }
     for (const item of [...hairItems, ...browItems]) {
       const { renderable } = item;
       item.geometry = this.deps.geometryManager.createGeometryFromData(renderable.geometryId, {
@@ -74,23 +84,22 @@ export class HGRPBrowCompositeStage {
     browItems: DrawItem[],
     frameData: FrameData,
   ): void {
-    if (hairItems.length === 0 || browItems.length === 0 || !this.markPipeline) {
+    if (hairItems.length === 0 || browItems.length === 0) {
       return;
     }
 
     const stencilRef =
       (hairItems[0].renderable.material as HGRPMaterialDescriptor).floats._HairStencilRef ?? 36;
 
-    renderPass.setPipeline(this.markPipeline);
     renderPass.setStencilReference(stencilRef);
     this.walk(renderPass, hairItems, frameData);
 
-    renderPass.setPipeline(this.throughPipeline!);
     renderPass.setBindGroup(3, this.deps.getFrameBindGroup());
     this.walk(renderPass, browItems, frameData);
   }
 
   private walk(renderPass: GPURenderPassEncoder, items: DrawItem[], frameData: FrameData): void {
+    let boundPipeline: GPURenderPipeline | undefined;
     let boundMaterialKey: string | undefined;
     let boundGeometryId: string | undefined;
     let boundUniformKey: string | undefined;
@@ -99,6 +108,10 @@ export class HGRPBrowCompositeStage {
       const { renderable } = item;
       const geometry = item.geometry!;
 
+      if (item.pipeline !== boundPipeline) {
+        renderPass.setPipeline(item.pipeline!);
+        boundPipeline = item.pipeline;
+      }
       if (renderable.materialKey !== boundMaterialKey) {
         const bindGroup = this.frameBindings.get(renderable.materialKey);
         if (bindGroup) {
@@ -120,37 +133,34 @@ export class HGRPBrowCompositeStage {
     }
   }
 
-  private ensurePipelines(): void {
-    if (this.markPipeline) {
-      return;
-    }
-
-    const timeLayout = this.deps.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
-    const mvpLayout = this.deps.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
-    if (!timeLayout || !mvpLayout) {
+  private commonLayouts(): { time: GPUBindGroupLayout; mvp: GPUBindGroupLayout } {
+    const time = this.deps.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
+    const mvp = this.deps.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
+    if (!time || !mvp) {
       throw new Error('Time/MVP bind group layouts not found for the brow composite stage');
     }
-    const hairLayout = getOrCreateHGRPMaterialBindGroupLayout(
-      this.deps.bindGroupManager,
-      'CharacterNPR_Hair',
-    );
-    const eyeLayout = getOrCreateHGRPMaterialBindGroupLayout(
-      this.deps.bindGroupManager,
-      'CharacterNPR_Eye',
-    );
-    const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.deps.bindGroupManager);
+    return { time, mvp };
+  }
 
-    const markModule = this.deps.shaderManager.getShaderModule('hgrp_hair_stencil_shader');
-    const throughModule = this.deps.shaderManager.getShaderModule('hgrp_brow_through_shader');
-    if (!markModule || !throughModule) {
-      throw new Error('HGRP brow compositing shader modules not compiled');
+  private ensureMarkPipeline(hair: HGRPMaterialDescriptor): GPURenderPipeline {
+    const shaderId = hgrpPassShaderId('hairStencil', hair.permutation);
+    const existing = this.markPipelines.get(shaderId);
+    if (existing) {
+      return existing;
     }
 
-    this.markPipeline = this.deps.device.createRenderPipeline({
-      label: 'hgrp_hair_stencil_pipeline',
+    const { time, mvp } = this.commonLayouts();
+    const hairLayout = getOrCreateHGRPMaterialBindGroupLayout(
+      this.deps.bindGroupManager,
+      hair.permutation,
+    );
+    const markModule = this.deps.shaderManager.getShaderModule(shaderId);
+
+    const pipeline = this.deps.device.createRenderPipeline({
+      label: `hgrp_hair_stencil_pipeline:${shaderId}`,
       layout: this.deps.device.createPipelineLayout({
-        label: 'hgrp_hair_stencil_pipeline_layout',
-        bindGroupLayouts: [timeLayout, mvpLayout, hairLayout],
+        label: `hgrp_hair_stencil_pipeline_layout:${shaderId}`,
+        bindGroupLayouts: [time, mvp, hairLayout],
       }),
       vertex: {
         module: markModule,
@@ -174,12 +184,30 @@ export class HGRPBrowCompositeStage {
         stencilBack: { compare: 'always', passOp: 'replace' },
       },
     });
+    this.markPipelines.set(shaderId, pipeline);
+    return pipeline;
+  }
 
-    this.throughPipeline = this.deps.device.createRenderPipeline({
-      label: 'hgrp_brow_through_pipeline',
+  private ensureThroughPipeline(brow: HGRPMaterialDescriptor): GPURenderPipeline {
+    const shaderId = hgrpPassShaderId('browThrough', brow.permutation);
+    const existing = this.throughPipelines.get(shaderId);
+    if (existing) {
+      return existing;
+    }
+
+    const { time, mvp } = this.commonLayouts();
+    const eyeLayout = getOrCreateHGRPMaterialBindGroupLayout(
+      this.deps.bindGroupManager,
+      brow.permutation,
+    );
+    const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.deps.bindGroupManager);
+    const throughModule = this.deps.shaderManager.getShaderModule(shaderId);
+
+    const pipeline = this.deps.device.createRenderPipeline({
+      label: `hgrp_brow_through_pipeline:${shaderId}`,
       layout: this.deps.device.createPipelineLayout({
-        label: 'hgrp_brow_through_pipeline_layout',
-        bindGroupLayouts: [timeLayout, mvpLayout, eyeLayout, frameLayout],
+        label: `hgrp_brow_through_pipeline_layout:${shaderId}`,
+        bindGroupLayouts: [time, mvp, eyeLayout, frameLayout],
       }),
       vertex: {
         module: throughModule,
@@ -209,5 +237,7 @@ export class HGRPBrowCompositeStage {
         stencilBack: { compare: 'equal' },
       },
     });
+    this.throughPipelines.set(shaderId, pipeline);
+    return pipeline;
   }
 }

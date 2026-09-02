@@ -1,4 +1,4 @@
-import { hgrpVariantForShaderId, isHGRPShaderId } from '@renderer/material/hgrp';
+import { hgrpPermutationForShaderId, isHGRPShaderId } from '../../../material/hgrp';
 import { BindGroupManager } from '../BindGroupManager';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
 import {
@@ -361,8 +361,8 @@ export class PipelineManager {
   ): Promise<GPUPipelineLayout> {
     const bindGroupLayouts: GPUBindGroupLayout[] = [];
 
-    // HGRP Pipeline: TIME + MVP + per-variant HGRP_MATERIAL (four variant shader ids share
-    // one branch; the variant layout is resolved from the shader id)
+    // HGRP Pipeline: TIME + MVP + per-permutation HGRP_MATERIAL + FRAME (every HGRP shader
+    // id shares one branch; the group-2 layout is resolved from the id's permutation)
     if (isHGRPShaderId(gpuKey.customShaderId)) {
       await this.addHgrpBindGroups(bindGroupLayouts, gpuKey);
     } else {
@@ -489,12 +489,13 @@ export class PipelineManager {
       bindGroupLayouts.push(mvpLayout);
     }
 
-    // Group 2: HGRP material uniforms + textures + shared samplers, per variant
-    const variant = hgrpVariantForShaderId(gpuKey.customShaderId ?? '');
-    if (!variant) {
-      throw new Error(`Unknown HGRP shader id: ${gpuKey.customShaderId}`);
-    }
-    bindGroupLayouts.push(getOrCreateHGRPMaterialBindGroupLayout(this.bindGroupManager, variant));
+    // Group 2: HGRP material uniforms + the permutation's textures + shared samplers
+    bindGroupLayouts.push(
+      getOrCreateHGRPMaterialBindGroupLayout(
+        this.bindGroupManager,
+        hgrpPermutationForShaderId(gpuKey.customShaderId ?? ''),
+      ),
+    );
 
     // Group 3: per-frame globals (prepass depth for the screen-space rim)
     bindGroupLayouts.push(getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager));

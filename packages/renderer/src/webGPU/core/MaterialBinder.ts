@@ -78,15 +78,26 @@ export class MaterialBinder {
 
   /**
    * Get or create the HGRP material bind group (group 2) and write its preset-driven params.
-   * Entries, uniform size and packing all derive from the material contract
-   * (HGRPMaterialLayout — the same source the pipeline layout and the generated WGSL come
-   * from). Texture slots resolve through the same registry chain as glTF textures; ramps/LUTs
-   * bind a clamp sampler because they are lookup strips, not tiling images.
+   * Entries, uniform size and packing all derive from the material contract (material/hgrp —
+   * the same source the pipeline layout and the generated WGSL come from). The bind group
+   * holds the slots of the material's permutation, so its cache id carries the permutation's
+   * shader id: the calibration GUI can re-resolve a material to another permutation at run
+   * time, and the old bind group's layout would then no longer match the pipeline. The
+   * uniform buffer stays keyed by materialKey alone — the struct is shared by every
+   * permutation, and the outline pass reads the same buffer. Texture slots resolve through
+   * the same registry chain as glTF textures; ramps/LUTs bind a clamp sampler because they
+   * are lookup strips, not tiling images. The white fallback only ever fills an ungated slot
+   * (_BaseMap on the default-fill materials, the VFX layers): an enabled subsystem has every
+   * texture it samples by construction (hgrpResolvePermutation).
    */
   private async ensureHGRPMaterialBindGroup(renderable: RenderData): Promise<GPUBindGroup> {
     const material = renderable.material as HGRPMaterialDescriptor;
-    const layout = getOrCreateHGRPMaterialBindGroupLayout(this.bindGroupManager, material.variant);
+    const layout = getOrCreateHGRPMaterialBindGroupLayout(
+      this.bindGroupManager,
+      material.permutation,
+    );
     const materialId = renderable.materialKey;
+    const bindGroupId = `${materialId}@${material.customShaderId}`;
 
     const paramsLayout = hgrpParamsLayoutForVariant(material.variant);
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
@@ -96,7 +107,7 @@ export class MaterialBinder {
     });
 
     const textureEntries: GPUBindGroupEntry[] = await Promise.all(
-      hgrpTextureBindings(material.variant).map(async ({ binding, slot, srgb }) => {
+      hgrpTextureBindings(material.permutation).map(async ({ binding, slot, srgb }) => {
         const texture = await this.getGLTFTexture(
           material.textures[slot],
           'gltf_default_white',
@@ -106,7 +117,7 @@ export class MaterialBinder {
       }),
     );
 
-    const bindGroup = this.bindGroupManager.createBindGroup(materialId, {
+    const bindGroup = this.bindGroupManager.createBindGroup(bindGroupId, {
       layout,
       entries: [
         { binding: 0, resource: { buffer: materialBuffer } },
@@ -120,7 +131,7 @@ export class MaterialBinder {
           resource: this.textureManager.getSampler('clamp'),
         },
       ],
-      label: materialId,
+      label: bindGroupId,
     });
 
     this.device.queue.writeBuffer(materialBuffer, 0, packHGRPParams(paramsLayout, material));

@@ -2,7 +2,7 @@ import { VertexFormat } from '../../../geometry';
 import { Inject, Injectable } from '../decorators';
 import { ServiceTokens } from '../decorators/DIContainer';
 import { WebGPUResourceManager } from '../ResourceManager';
-import { createShaderModules } from './create';
+import { createDerivedShaderModule, createShaderModules } from './create';
 import { ShaderCompiler } from './ShaderCompiler';
 import {
   CompiledShader,
@@ -15,8 +15,9 @@ import {
 /**
  * WebGPU shader manager: holds the shader module catalog and compiles a module the first time
  * something asks for it (a pipeline, a pass stage). Nothing is compiled at startup, so a shader
- * no material or pass in the scene uses costs nothing — and the permutation shaders of the
- * gating design can be registered by the dozen without multiplying startup time.
+ * no material or pass in the scene uses costs nothing. Ids the catalog does not list are
+ * derived on demand (createDerivedShaderModule): the HGRP permutation shaders exist only for
+ * the permutations the loaded materials resolve to.
  */
 @Injectable(ServiceTokens.SHADER_MANAGER, {
   lifecycle: 'singleton',
@@ -55,17 +56,33 @@ export class ShaderManager {
   }
 
   /**
-   * Compile a registered module on first use with the defines it declares. Throws on an
-   * unknown id or a failed compile: a pipeline built on a missing shader must fail here, not
-   * fall back to some other module and render the wrong thing.
+   * The module for an id: registered by the catalog, or derived from the id on first request
+   * (and registered so later lookups are plain map hits). Undefined for an id nobody knows.
+   */
+  private resolveModule(id: string): ShaderModule | undefined {
+    const registered = this.shaderModules.get(id);
+    if (registered) {
+      return registered;
+    }
+    const derived = createDerivedShaderModule(id);
+    if (derived) {
+      this.registerShaderModule(derived);
+    }
+    return derived;
+  }
+
+  /**
+   * Compile a module on first use with the defines it declares. Throws on an unknown id or a
+   * failed compile: a pipeline built on a missing shader must fail here, not fall back to some
+   * other module and render the wrong thing.
    */
   private ensureCompiled(id: string): CompiledShader {
     const existing = this.compiledShaders.get(id);
     if (existing) {
       return existing;
     }
-    if (!this.shaderModules.has(id)) {
-      throw new Error(`Shader module '${id}' is not registered`);
+    if (!this.resolveModule(id)) {
+      throw new Error(`Shader module '${id}' is not registered and cannot be derived`);
     }
     const result = this.compileShaderModule(id);
     if (!result.success || !result.compiledShader) {
@@ -174,7 +191,7 @@ export class ShaderManager {
    * Compiled shader (module + composed source + defines) by id, compiled on first use.
    */
   getCompiledShader(id: string): CompiledShader | undefined {
-    return this.shaderModules.has(id) ? this.ensureCompiled(id) : undefined;
+    return this.resolveModule(id) ? this.ensureCompiled(id) : undefined;
   }
 
   /**
