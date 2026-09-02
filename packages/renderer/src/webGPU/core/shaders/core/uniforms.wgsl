@@ -22,6 +22,15 @@ struct MVPUniforms {
     camera_right: vec3<f32>,           // Camera right direction
 }
 
+// Per-frame scene lighting for the HGRP family (renderer/sceneSettings.ts packSceneLighting):
+// the key light direction (toward the light, normalized), the key light color pre-multiplied
+// by its intensity, and the ambient color pre-multiplied by its intensity.
+struct SceneLighting {
+    light_dir: vec4<f32>,
+    light: vec4<f32>,
+    ambient: vec4<f32>,
+}
+
 // Standard PBR material uniforms
 struct MaterialUniforms {
     albedo: vec4<f32>,

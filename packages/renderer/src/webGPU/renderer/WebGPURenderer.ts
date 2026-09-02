@@ -8,6 +8,7 @@ import { GeometryManager } from '../core/GeometryManager';
 import { GPUResourceCoordinator } from '../core/GPUResourceCoordinator';
 import { InstanceManager } from '../core/InstanceManager';
 import { getOrCreateHGRPFrameBindGroupLayout } from '../core/HGRPMaterialResources';
+import { packSceneLighting, SCENE_LIGHTING_BYTE_SIZE } from './sceneSettings';
 import { MaterialBinder } from '../core/MaterialBinder';
 import { MaterialManager } from '../core/MaterialManager';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
@@ -85,6 +86,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   // Per-frame HGRP globals (group 3): rebuilt when the prepass depth texture is recreated
   private hgrpFrameBindGroup?: GPUBindGroup;
   private hgrpFrameBindGroupTexture?: GPUTexture;
+  // SceneLighting uniform (group 3 binding 1), rewritten from sceneSettings every frame
+  private sceneLightingBuffer?: GPUBuffer;
+  private readonly sceneLightingData = new Float32Array(SCENE_LIGHTING_BYTE_SIZE / 4);
 
   // batch rendering
   private renderBatches!: Map<string, RenderBatch>;
@@ -757,6 +761,11 @@ export class WebGPURenderer implements IWebGPURenderer {
     // pass sequence: depth prepass (sampleable scene depth for screen-space effects),
     // forward shading into the HDR scene-color target, bloom chain over it, tonemap
     // composite+resolve to encoded LDR, FXAA to the swapchain
+    this.device.queue.writeBuffer(
+      this.getSceneLightingBuffer(),
+      0,
+      packSceneLighting(this.sceneLightingData),
+    );
     this.depthPrepass.execute(commandEncoder, frameData);
     await this.forwardPass.execute(commandEncoder, frameData);
     this.bloomPass.execute(commandEncoder);
@@ -777,11 +786,25 @@ export class WebGPURenderer implements IWebGPURenderer {
       this.hgrpFrameBindGroup = this.device.createBindGroup({
         label: 'hgrpFrameBindGroup',
         layout: getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager),
-        entries: [{ binding: 0, resource: this.prepassDepthTexture.createView() }],
+        entries: [
+          { binding: 0, resource: this.prepassDepthTexture.createView() },
+          { binding: 1, resource: { buffer: this.getSceneLightingBuffer() } },
+        ],
       });
       this.hgrpFrameBindGroupTexture = this.prepassDepthTexture;
     }
     return this.hgrpFrameBindGroup;
+  }
+
+  private getSceneLightingBuffer(): GPUBuffer {
+    if (!this.sceneLightingBuffer) {
+      this.sceneLightingBuffer = this.device.createBuffer({
+        label: 'hgrpSceneLighting',
+        size: SCENE_LIGHTING_BYTE_SIZE,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+    }
+    return this.sceneLightingBuffer;
   }
 
   private async computePass(

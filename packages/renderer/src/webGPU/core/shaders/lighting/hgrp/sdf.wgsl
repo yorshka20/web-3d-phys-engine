@@ -15,7 +15,7 @@
 fn hgrp_shade_coord(uv0: vec2<f32>, ndotl: f32) -> vec2<f32> {
     let head_forward = normalize((mvp.model_matrix * vec4<f32>(0.0, 0.0, 1.0, 0.0)).xyz);
     let head_right = normalize((mvp.model_matrix * vec4<f32>(1.0, 0.0, 0.0, 0.0)).xyz);
-    let light = normalize(MAIN_LIGHT_DIRECTION);
+    let light = hgrp_light_dir();
 
     let lx = dot(light, head_right);
     let lz = dot(light, head_forward);

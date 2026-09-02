@@ -1,7 +1,8 @@
 // Shared HGRP NPR shading core. References the common HGRP bindings (hgrp_material, base_map,
-// base_sampler, ramp_sampler — declared by the permutation's generated group-2 fragment), the
-// HSV helpers from math/color.wgsl, and the subsystem hooks (lighting/hgrp/*.wgsl, or their
-// generated off-stubs): hgrp_shadow_color, hgrp_shade_coord, hgrp_ramp_weight.
+// base_sampler, ramp_sampler — declared by the permutation's generated group-2 fragment;
+// scene_lighting from group 3), the HSV helpers from math/color.wgsl, and the subsystem hooks
+// (lighting/hgrp/*.wgsl, or their generated off-stubs): hgrp_shadow_color, hgrp_shade_coord,
+// hgrp_ramp_weight.
 //
 // Shading model derived from the ripped data (renderer-material-family.md, hgrp-pipeline.md):
 // the 256x1 DiffRamp holds per-channel blend weights between a shadow color and the base
@@ -11,6 +12,19 @@
 // (_UseShadowLutTex) or an HSV adjustment of the base color
 // (_ShadowColorBrightness/_ShadowColorSaturation) for everything else. The ramp coordinate
 // is half-Lambert n.l by default; the SDF subsystem substitutes its face-shadow factor.
+
+// Scene lighting (renderer/sceneSettings.ts): the one key light every n.l, SDF threshold and
+// half vector reads, and the flat ambient term — albedo x ambient, added by each variant on
+// top of the key-lit color. The ripped materials carry no scene light, so both are
+// calibration knobs; the ambient is what keeps metallic zones (silver fabric) from going
+// black where the key light does not reach.
+fn hgrp_light_dir() -> vec3<f32> {
+    return normalize(scene_lighting.light_dir.xyz);
+}
+
+fn hgrp_ambient(albedo: vec3<f32>) -> vec3<f32> {
+    return albedo * scene_lighting.ambient.rgb;
+}
 
 // HGRP diffuse ramps are 256x1 LUTs; sample half a texel away from the edges so clamp
 // addressing doesn't bleed the outermost texels.
@@ -77,14 +91,23 @@ fn hgrp_rim(n: vec3<f32>, frag_coord: vec4<f32>, ndotl: f32) -> vec3<f32> {
     return hgrp_material.rim_color.rgb * (edge * hgrp_material.rim_intensity * light_side);
 }
 
+// Result of the shading core: the key-lit color (shade blend x key light, plus rim) and the
+// albedo it was shaded from, so a variant can add the ambient term (hgrp_ambient) and, for
+// metal, decide separately what the key light and the ambient do to the diffuse.
+struct HGRPShade {
+    lit: vec3<f32>,
+    albedo: vec3<f32>,
+    alpha: f32,
+}
+
 // Base + shadow-blend + rim composition for a given (already normalized) shading normal. The
 // shadow color, the shade coordinate and the ramp weight come from the permutation's hooks.
 // The shade coordinate hook also returns the SDF mask's cheek-tint weight (0 without the SDF
 // subsystem): _SDFRimColor multiplies the shade blend where the coordinate crosses the
 // terminator inside that zone — the anime cheek-shadow tint, not a rim light.
-fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>, frag_coord: vec4<f32>) -> vec4<f32> {
+fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>, frag_coord: vec4<f32>) -> HGRPShade {
     let base = hgrp_base_color(uv0);
-    let ndotl = dot(n, normalize(MAIN_LIGHT_DIRECTION));
+    let ndotl = dot(n, hgrp_light_dir());
 
     let shadow_color = hgrp_shadow_color(base.rgb);
     let shade = hgrp_shade_coord(uv0, ndotl);
@@ -99,5 +122,6 @@ fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>, frag_coord: vec4<f32>) -> vec4<
 
     let rim = hgrp_rim(n, frag_coord, ndotl);
 
-    return vec4<f32>(mix(shadow_color, base.rgb, w) * tint + rim, base.a);
+    let lit = mix(shadow_color, base.rgb, w) * tint * scene_lighting.light.rgb;
+    return HGRPShade(lit + rim, base.rgb, base.a);
 }

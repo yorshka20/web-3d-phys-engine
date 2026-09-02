@@ -1,7 +1,9 @@
 // HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV (or LUT)
-// shadow color, spec-ramp highlights on the metallic zones, and HDR emission (rolls off
-// through the tonemap shoulder). Group-2 bindings and the subsystem hooks come from the
-// permutation's generated fragments (material/hgrp).
+// shadow color, spec-ramp highlights on the metallic zones, HDR emission (rolls off through
+// the tonemap shoulder) and the scene ambient on the unsuppressed albedo — a metal zone
+// keeps 30% diffuse under the key light but reflects the ambient at full albedo, so silver
+// fabric in shadow reads as grey instead of black. Group-2 bindings and the subsystem hooks
+// come from the permutation's generated fragments (material/hgrp).
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
@@ -25,7 +27,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // GUI-calibrated via _Specular). Gated by _UseMetallicGlossMap / _UseSpecRampMap through
     // the hooks.
     let view_dir = normalize(mvp.camera_pos - input.world_position);
-    let light = normalize(MAIN_LIGHT_DIRECTION);
+    let light = hgrp_light_dir();
     let h = normalize(light + view_dir);
     let ndoth = clamp(dot(n, h), 0.0, 1.0);
     let ndotl = clamp(dot(n, light), 0.0, 1.0);
@@ -36,11 +38,11 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
 
     let spec_color = hgrp_spec_ramp_color(ndoth, gloss);
     let shape = pow(ndoth, mix(8.0, 128.0, gloss));
-    let spec = spec_color * mix(vec3<f32>(1.0), core.rgb, metallic) *
+    let spec = spec_color * mix(vec3<f32>(1.0), core.lit, metallic) * scene_lighting.light.rgb *
         (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity * mg.y *
             mix(0.15, 1.0, metallic));
 
-    let diffuse = core.rgb * (1.0 - metallic * 0.7);
+    let diffuse = core.lit * (1.0 - metallic * 0.7);
 
     let emission = hgrp_emission(input.uv0);
 
@@ -61,7 +63,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         density * hgrp_material.pantyhose_color.a * hgrp_material.use_pantyhose,
     );
 
-    let sheer = clamp((1.0 - core.a) * 2.0, 0.0, 1.0);
+    let sheer = clamp((1.0 - core.alpha) * 2.0, 0.0, 1.0);
     let transmit = (ndotv * ndotv) * (0.4 + 0.6 * ndotl) * sheer *
         hgrp_material.pantyhose_specular_value;
     color += diffuse * (transmit * hgrp_material.use_pantyhose);
@@ -76,5 +78,8 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let sheen = pow(sin_th, 16.0) *
         (hgrp_material.pantyhose_specular_int * 1.5 * hgrp_material.use_pantyhose);
 
-    return vec4<f32>(color + vec3<f32>(sheen) + spec + emission, core.a);
+    return vec4<f32>(
+        color + vec3<f32>(sheen) + spec + emission + hgrp_ambient(core.albedo),
+        core.alpha,
+    );
 }

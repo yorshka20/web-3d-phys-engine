@@ -210,9 +210,42 @@ function mountPane(container: HTMLElement, assetIds: readonly string[]): () => v
       sceneSettings.clearColor = [ev.value.r, ev.value.g, ev.value.b];
     });
 
+  // Scene lighting: the key light the NPR shading reads and the flat ambient on top of it
+  // (uploaded per frame as the HGRP SceneLighting uniform). Calibration knobs, like exposure:
+  // the ripped materials carry no scene light.
+  const lighting = globalFolder.addFolder({ title: 'Lighting', expanded: true });
+  const [dx, dy, dz] = sceneSettings.lightDirection;
+  const lightingState = {
+    direction: { x: dx, y: dy, z: dz },
+    lightColor: rgb(sceneSettings.lightColor),
+    ambientColor: rgb(sceneSettings.ambientColor),
+  };
+  const axis = { min: -1, max: 1, step: 0.01 };
+  lighting
+    .addBinding(lightingState, 'direction', { x: axis, y: axis, z: axis })
+    .on('change', (ev) => {
+      sceneSettings.lightDirection = [ev.value.x, ev.value.y, ev.value.z];
+    });
+  lighting.addBinding(sceneSettings, 'lightIntensity', { min: 0, max: 3, step: 0.01 });
+  lighting
+    .addBinding(lightingState, 'lightColor', { color: { type: 'float' } })
+    .on('change', (ev) => {
+      sceneSettings.lightColor = [ev.value.r, ev.value.g, ev.value.b];
+    });
+  lighting.addBinding(sceneSettings, 'ambientIntensity', { min: 0, max: 2, step: 0.01 });
+  lighting
+    .addBinding(lightingState, 'ambientColor', { color: { type: 'float' } })
+    .on('change', (ev) => {
+      sceneSettings.ambientColor = [ev.value.r, ev.value.g, ev.value.b];
+    });
+
   assetIds.forEach((assetId, index) => addCharacterFolder(pane, assetId, index === 0));
 
   return () => pane.dispose();
+}
+
+function rgb(color: readonly [number, number, number]): { r: number; g: number; b: number } {
+  return { r: color[0], g: color[1], b: color[2] };
 }
 
 function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): void {

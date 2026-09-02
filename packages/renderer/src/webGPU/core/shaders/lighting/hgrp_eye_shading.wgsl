@@ -25,7 +25,7 @@ fn hgrp_shade_eye(
 
     let base = hgrp_base_color(uv);
     let tinted = base.rgb * hgrp_material.eye_tint_color.rgb;
-    let ndotl = dot(n, normalize(MAIN_LIGHT_DIRECTION));
+    let ndotl = dot(n, hgrp_light_dir());
 
     let shadow_color = hgrp_shadow_color(tinted);
 
@@ -42,7 +42,7 @@ fn hgrp_shade_eye(
     // deep blue and leaving bright regions untouched (identity color on the brow). The base
     // alpha is the catchlight mask (NOT opacity), scaled by the HDR _EyeHighLightColor and
     // rolled off through the tonemap curve.
-    var color = mix(shadow_color, tinted, w);
+    var color = mix(shadow_color, tinted, w) * scene_lighting.light.rgb + hgrp_ambient(tinted);
     let luma = clamp(dot(color, vec3<f32>(0.299, 0.587, 0.114)), 0.0, 1.0);
     color *= mix(hgrp_material.eye_scattering_color.rgb, vec3<f32>(1.0), luma);
     color += hgrp_eye_matcap(n);
