@@ -90,7 +90,14 @@ function findWidgetFbx(charDir) {
 function runBlender(fbx, glbPath) {
   const result = spawnSync(
     blenderBin,
-    ['--background', '--python', path.join(repoRoot, 'scripts/hgrp/convert-fbx.py'), '--', fbx, glbPath],
+    [
+      '--background',
+      '--python',
+      path.join(repoRoot, 'scripts/hgrp/convert-fbx.py'),
+      '--',
+      fbx,
+      glbPath,
+    ],
     { encoding: 'utf8' },
   );
   console.log(
@@ -185,7 +192,7 @@ async function verifyGlb(glbPath) {
   for (const mesh of meshes) {
     for (const prim of mesh.listPrimitives()) {
       morphTargets += prim.listTargets().length;
-      for (const attr of ['TEXCOORD_0', 'TANGENT', 'JOINTS_0', 'WEIGHTS_0']) {
+      for (const attr of ['TEXCOORD_0', 'TANGENT', 'JOINTS_0', 'WEIGHTS_0', 'COLOR_0']) {
         if (!prim.getAttribute(attr)) {
           problems.push(`${mesh.getName()}: missing ${attr}`);
         }
@@ -198,7 +205,12 @@ async function verifyGlb(glbPath) {
       ` joints=${skins[0]?.listJoints().length ?? 0}` +
       ` materials=${root.listMaterials().length} morphTargets=${morphTargets}`,
   );
-  console.log(`[verify] material names: ${root.listMaterials().map((m) => m.getName()).join(', ')}`);
+  console.log(
+    `[verify] material names: ${root
+      .listMaterials()
+      .map((m) => m.getName())
+      .join(', ')}`,
+  );
   return problems;
 }
 
@@ -224,7 +236,9 @@ for (const charName of chars) {
 
   const texDir = path.join(outDir, 'textures');
   const { copied, converted } = copyTextures(charDir, texDir);
-  console.log(`[convert] copied ${copied} textures (${converted} TGA-mislabeled, converted to PNG)`);
+  console.log(
+    `[convert] copied ${copied} textures (${converted} TGA-mislabeled, converted to PNG)`,
+  );
 
   const { assigned, materialNames } = await embedBaseColor(glbPath, charDir, texDir);
   console.log(`[convert] embedded ${assigned} baseColor textures`);
@@ -267,14 +281,22 @@ for (const charName of chars) {
       process.execPath,
       [
         path.join(repoRoot, 'scripts/hgrp/anim-convert.mjs'),
-        '--src', src,
-        '--char', charName,
-        '--out', out,
+        '--src',
+        src,
+        '--char',
+        charName,
+        '--out',
+        out,
         '--auto',
       ],
       { encoding: 'utf8' },
     );
-    console.log((anim.stdout || '').split('\n').filter((l) => l.startsWith('[anim-convert]')).join('\n'));
+    console.log(
+      (anim.stdout || '')
+        .split('\n')
+        .filter((l) => l.startsWith('[anim-convert]'))
+        .join('\n'),
+    );
     if (anim.status !== 0) {
       console.error(`[anim-convert] failed for ${charName}:\n${anim.stderr}`);
       failed = true;

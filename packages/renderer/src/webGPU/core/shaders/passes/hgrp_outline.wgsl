@@ -1,5 +1,8 @@
-// HGRP outline: depth-offset inverted hull. Vertices extrude along the view-space normal's
-// xy, scaled by view distance so the stroke keeps an approximately constant screen width
+// HGRP outline: depth-offset inverted hull. Vertices extrude along the view-space SMOOTH
+// normal's xy — the position-averaged normal the converter bakes into COLOR_0
+// (_OutlineAverageNormal), so the hull stays closed across hard edges and UV seams where the
+// shading normals are split; a mesh without the bake falls back to its shading normal —
+// scaled by view distance so the stroke keeps an approximately constant screen width
 // (extruding in view space lets the projection matrix handle aspect); _OutlineMask (ST)
 // scales the width per texel (white = full stroke, black = suppressed — probed 2026-09-01),
 // and _OutlineOffsetZ pushes the hull away from the camera so inner lines (nose, face
@@ -37,7 +40,10 @@ fn vs_main(input: GLTFVertexInput) -> OutlineVertexOutput {
     let skin = gltf_skin_matrix(input.joints_0, input.weights_0);
     let world_position = mvp.model_matrix * skin * vec4<f32>(input.position, 1.0);
     let view_pos = mvp.view_matrix * world_position;
-    let skinned_normal = (skin * vec4<f32>(input.normal, 0.0)).xyz;
+    let baked = input.color_0.xyz * 2.0 - vec3<f32>(1.0);
+    // The default vertex color (1,1,1,1) decodes to (1,1,1); a baked normal has unit length
+    let extrude_normal = select(input.normal, baked, abs(length(baked) - 1.0) < 0.1);
+    let skinned_normal = (skin * vec4<f32>(extrude_normal, 0.0)).xyz;
     let world_normal = normalize((mvp.normal_matrix * vec4<f32>(skinned_normal, 0.0)).xyz);
     let view_normal = (mvp.view_matrix * vec4<f32>(world_normal, 0.0)).xyz;
 

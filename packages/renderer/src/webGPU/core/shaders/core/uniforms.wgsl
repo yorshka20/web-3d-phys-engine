@@ -24,11 +24,13 @@ struct MVPUniforms {
 
 // Per-frame scene lighting for the HGRP family (renderer/sceneSettings.ts packSceneLighting):
 // the key light direction (toward the light, normalized), the key light color pre-multiplied
-// by its intensity, and the ambient color pre-multiplied by its intensity.
+// by its intensity, and the hemisphere ambient — sky (normals pointing up) and ground
+// (pointing down) colors, both pre-multiplied by the ambient intensity.
 struct SceneLighting {
     light_dir: vec4<f32>,
     light: vec4<f32>,
-    ambient: vec4<f32>,
+    ambient_sky: vec4<f32>,
+    ambient_ground: vec4<f32>,
 }
 
 // Standard PBR material uniforms

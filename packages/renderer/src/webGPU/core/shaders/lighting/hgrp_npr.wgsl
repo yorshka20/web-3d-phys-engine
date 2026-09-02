@@ -14,16 +14,26 @@
 // is half-Lambert n.l by default; the SDF subsystem substitutes its face-shadow factor.
 
 // Scene lighting (renderer/sceneSettings.ts): the one key light every n.l, SDF threshold and
-// half vector reads, and the flat ambient term — albedo x ambient, added by each variant on
-// top of the key-lit color. The ripped materials carry no scene light, so both are
-// calibration knobs; the ambient is what keeps metallic zones (silver fabric) from going
-// black where the key light does not reach.
+// half vector reads, and a hemisphere ambient (sky above, ground below — Unity's gradient
+// ambient, a stand-in for the game's spherical harmonics) that each variant adds on top of
+// the key-lit color: albedo x hemisphere(normal). The ripped materials carry no scene light,
+// so all of it is calibration knobs; the ambient is what keeps metallic zones (silver
+// fabric) from going black where the key light does not reach, and its up/down gradient is
+// what lets a normal-mapped quilt read under ambient alone.
 fn hgrp_light_dir() -> vec3<f32> {
     return normalize(scene_lighting.light_dir.xyz);
 }
 
-fn hgrp_ambient(albedo: vec3<f32>) -> vec3<f32> {
-    return albedo * scene_lighting.ambient.rgb;
+fn hgrp_hemisphere(direction: vec3<f32>) -> vec3<f32> {
+    return mix(
+        scene_lighting.ambient_ground.rgb,
+        scene_lighting.ambient_sky.rgb,
+        direction.y * 0.5 + 0.5,
+    );
+}
+
+fn hgrp_ambient(albedo: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    return albedo * hgrp_hemisphere(n);
 }
 
 // HGRP diffuse ramps are 256x1 LUTs; sample half a texel away from the edges so clamp
@@ -100,14 +110,24 @@ struct HGRPShade {
     alpha: f32,
 }
 
-// Base + shadow-blend + rim composition for a given (already normalized) shading normal. The
-// shadow color, the shade coordinate and the ramp weight come from the permutation's hooks.
-// The shade coordinate hook also returns the SDF mask's cheek-tint weight (0 without the SDF
-// subsystem): _SDFRimColor multiplies the shade blend where the coordinate crosses the
-// terminator inside that zone — the anime cheek-shadow tint, not a rim light.
-fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>, frag_coord: vec4<f32>) -> HGRPShade {
+// Base + shadow-blend + rim composition. `n_ramp` drives the shade coordinate (the ramp's
+// n.l); `n_rim` the screen-space rim. Cloth and hair pass the geometric normal as n_ramp: their
+// ramps are near-steps (cloth 0.2 -> 0.9 at x 0.6, hair black until 0.5), and a normal-mapped
+// n.l scatters neighbouring texels across the step into blotches, where the in-game diffuse
+// is continuous — the normal map shapes specular and rim there, not the terminator. Skin
+// keeps the mapped normal on its smooth ramp. The shadow color, the shade coordinate and the
+// ramp weight come from the permutation's hooks. The shade coordinate hook also returns the
+// SDF mask's cheek-tint weight (0 without the SDF subsystem): _SDFRimColor multiplies the
+// shade blend where the coordinate crosses the terminator inside that zone — the anime
+// cheek-shadow tint, not a rim light.
+fn hgrp_shade_core(
+    uv0: vec2<f32>,
+    n_ramp: vec3<f32>,
+    n_rim: vec3<f32>,
+    frag_coord: vec4<f32>,
+) -> HGRPShade {
     let base = hgrp_base_color(uv0);
-    let ndotl = dot(n, hgrp_light_dir());
+    let ndotl = dot(n_ramp, hgrp_light_dir());
 
     let shadow_color = hgrp_shadow_color(base.rgb);
     let shade = hgrp_shade_coord(uv0, ndotl);
@@ -120,7 +140,7 @@ fn hgrp_shade_core(uv0: vec2<f32>, n: vec3<f32>, frag_coord: vec4<f32>) -> HGRPS
         shade.y * terminator * hgrp_material.sdf_rim_color.a,
     );
 
-    let rim = hgrp_rim(n, frag_coord, ndotl);
+    let rim = hgrp_rim(n_rim, frag_coord, ndotl);
 
     let lit = mix(shadow_color, base.rgb, w) * tint * scene_lighting.light.rgb;
     return HGRPShade(lit + rim, base.rgb, base.a);

@@ -45,7 +45,12 @@ kept). anim-convert edits the GLB convert.mjs produces, so it always runs after 
    otherwise `chr_<id>_<name>_postmodel/*.fbx` (Laevatian); NPC, "(1)" duplicates, `uimodel`,
    `deco_*` and `Att_widget_*` are skipped,
    deletes `_lod1..9` / `_shadowProxy*` meshes (lod0 is the highest-detail level and the only
-   one the engine consumes), and exports a GLB with tangents, skins, and morph targets enabled.
+   one the engine consumes), bakes the **position-averaged normal** of every kept mesh into
+   `COLOR_0` (xyz * 0.5 + 0.5 — the `_OutlineAverageNormal` the HGRP inverted-hull outline
+   extrudes along, so the hull stays closed across hard edges and UV seams; only same-facing
+   normals are averaged so double-sided cards keep both sides), and exports a GLB with
+   tangents, skins, and morph targets enabled. The bake is written in glTF axes: the exporter
+   converts positions/normals Z-up → Y-up but leaves color attributes as they are.
 2. **Texture copy + repair** (`convert.mjs`): copies every PNG from `<rip>/<Char>/Animator/`.
    The rip mislabels TGA files as `.png` (browsers cannot decode TGA); anything without a PNG
    magic number is converted to real PNG via `sips`.
@@ -57,7 +62,7 @@ kept). anim-convert edits the GLB convert.mjs produces, so it always runs after 
    `preset.json` — the game's material ground truth with HGRP property names verbatim.
    `_lod_` material variants are skipped.
 5. **Verification gate** (`convert.mjs`): re-reads the GLB with gltf-transform and fails the
-   run if any primitive lacks `TEXCOORD_0`/`TANGENT`/`JOINTS_0`/`WEIGHTS_0`, or the skin has
+   run if any primitive lacks `TEXCOORD_0`/`TANGENT`/`JOINTS_0`/`WEIGHTS_0`/`COLOR_0`, or the skin has
    no inverse bind matrices. It also prints mesh/joint/morph/material counts for eyeballing.
 
 ## Animation clips (`anim-convert.mjs`)

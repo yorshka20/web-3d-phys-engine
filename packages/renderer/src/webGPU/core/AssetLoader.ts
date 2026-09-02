@@ -20,7 +20,7 @@ import {
   hgrpTextureAssetId,
 } from '@renderer/material/hgrp';
 import { AlphaMode } from '@renderer/material/types';
-import { Document, Material, Mesh, Node, Primitive, WebIO } from '@gltf-transform/core';
+import { Accessor, Document, Material, Mesh, Node, Primitive, WebIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { mat4 } from 'gl-matrix';
 import { Parser } from 'mmd-parser';
@@ -553,6 +553,20 @@ export class AssetLoader {
   /**
    * Convert a glTF primitive to our interleaved GeometryData (pos+normal+uv) format.
    */
+  private static readAccessorAsFloats(accessor: Accessor): Float32Array {
+    if (!accessor.getNormalized()) {
+      return new Float32Array(accessor.getArray() as ArrayLike<number>);
+    }
+    const size = accessor.getElementSize();
+    const out = new Float32Array(accessor.getCount() * size);
+    const element = new Array<number>(size).fill(0);
+    for (let i = 0; i < accessor.getCount(); i++) {
+      accessor.getElement(i, element);
+      out.set(element, i * size);
+    }
+    return out;
+  }
+
   private static convertGLTFPrimitiveToGeometry(primitive: Primitive): GLTFPrimitive {
     const position = primitive.getAttribute('POSITION');
     if (!position) {
@@ -573,7 +587,10 @@ export class AssetLoader {
     const normalArr = normal ? new Float32Array(normal.getArray() as ArrayLike<number>) : null;
     const uv0Arr = uv0 ? new Float32Array(uv0.getArray() as ArrayLike<number>) : null;
     const uv1Arr = uv1 ? new Float32Array(uv1.getArray() as ArrayLike<number>) : null;
-    const colorArr = color ? new Float32Array(color.getArray() as ArrayLike<number>) : null;
+    // COLOR_0 is commonly stored as normalized u8/u16 (Blender's exporter does); getArray()
+    // would hand back the raw integers, so read through getElement, which applies the
+    // normalization. The HGRP converter bakes the outline's smooth normal into this slot.
+    const colorArr = color ? AssetLoader.readAccessorAsFloats(color) : null;
     const jointsArr = joints ? new Uint32Array(joints.getArray() as ArrayLike<number>) : null;
     const weightsArr = weights ? new Float32Array(weights.getArray() as ArrayLike<number>) : null;
     const tangentArr = tangent ? new Float32Array(tangent.getArray() as ArrayLike<number>) : null;
