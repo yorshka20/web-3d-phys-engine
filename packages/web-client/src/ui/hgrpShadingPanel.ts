@@ -111,6 +111,28 @@ function applyState(materials: HGRPMaterialDescriptor[], state: HGRPShadingState
   }
 }
 
+// Every (material, key) whose applied value differs from the preset's, as "material.key: preset -> override".
+function describeOverrides(pristine: HGRPShadingState, applied: HGRPShadingState): string[] {
+  const lines: string[] = [];
+  for (const [materialName, before] of Object.entries(pristine.materials)) {
+    const after = applied.materials[materialName];
+    if (!after) continue;
+    for (const [key, value] of Object.entries(before.floats)) {
+      if (after.floats[key] !== value) {
+        lines.push(`${materialName}.${key}: ${value} -> ${after.floats[key]}`);
+      }
+    }
+    for (const [key, value] of Object.entries(before.colors)) {
+      if (after.colors[key].some((c, i) => c !== value[i])) {
+        lines.push(
+          `${materialName}.${key}: [${value.join(', ')}] -> [${after.colors[key].join(', ')}]`,
+        );
+      }
+    }
+  }
+  return lines;
+}
+
 function exportState(state: HGRPShadingState, assetId: string): void {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -202,17 +224,29 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
 
   const storageKey = `hgrp-shading-${assetId}`;
   const pristine = snapshotState(materials);
+  let overrides: string[] = [];
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       applyState(materials, JSON.parse(stored) as HGRPShadingState);
+      overrides = describeOverrides(pristine, snapshotState(materials));
     }
   } catch (error) {
     console.warn('[hgrpShadingPanel] Ignoring unreadable localStorage state:', error);
   }
+  // Saved overrides shape the render from the moment this tab opens, which is invisible in
+  // the picture itself and easy to mistake for the preset's own look — say so, and list
+  // exactly what departs from the preset, so a character is never judged against hidden
+  // hand-tuned values ("Reset to preset" drops them).
+  if (overrides.length > 0) {
+    console.warn(
+      `[hgrpShadingPanel] ${assetId}: ${overrides.length} saved override(s) applied over the preset:\n  ` +
+        overrides.join('\n  '),
+    );
+  }
 
   const character = pane.addFolder({
-    title: assetId.replace(/^hgrp_/, ''),
+    title: assetId.replace(/^hgrp_/, '') + (overrides.length > 0 ? ' · OVERRIDES' : ''),
     expanded,
   });
 
