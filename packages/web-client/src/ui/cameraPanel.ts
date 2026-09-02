@@ -1,4 +1,5 @@
 import { Camera3DComponent, CameraControlComponent, Entity, Transform3DComponent } from '@ecs';
+import type { BindingApi } from '@tweakpane/core';
 import { Pane } from 'tweakpane';
 import { draggable } from './draggable';
 
@@ -12,6 +13,10 @@ import { draggable } from './draggable';
  * the controller's config and state instead, plus the projection scalars (rebuilt into a
  * matrix every frame by WebGPURenderSystem, so writing the field is enough). Position stays
  * read-only: it is what those inputs produce.
+ *
+ * Config edits go through updateConfig with the LIVE orbit config spread underneath: the
+ * component replaces its nested config object on every update, so a copy taken at mount would
+ * both go stale and, spread back, revert whatever another widget changed since.
  */
 export function mountCameraPanel(camera: Entity): () => void {
   const control = camera.getComponent<CameraControlComponent>(CameraControlComponent.componentName);
@@ -33,7 +38,7 @@ export function mountCameraPanel(camera: Entity): () => void {
   // container, which still moves — it just also starts a drag from a widget.
   const drag = draggable(host, { handle: '.tp-rotv_b' });
 
-  const orbitConfig = control.getConfig().orbit;
+  const orbitConfig = control.getOrbitConfig();
   const target = {
     x: orbitConfig?.target[0] ?? 0,
     y: orbitConfig?.target[1] ?? 0,
@@ -48,8 +53,11 @@ export function mountCameraPanel(camera: Entity): () => void {
   };
 
   if (orbitConfig) {
-    const pushTarget = () =>
-      control.updateConfig({ orbit: { ...orbitConfig, target: [target.x, target.y, target.z] } });
+    type OrbitConfig = NonNullable<typeof orbitConfig>;
+    const pushOrbit = (updates: Partial<OrbitConfig>) =>
+      control.updateConfig({ orbit: { ...control.getOrbitConfig()!, ...updates } });
+
+    const pushTarget = () => pushOrbit({ target: [target.x, target.y, target.z] });
     const folder = pane.addFolder({ title: 'Orbit target', expanded: true });
     for (const axis of ['x', 'y', 'z'] as const) {
       folder.addBinding(target, axis, { step: 0.05 }).on('change', pushTarget);
@@ -60,13 +68,17 @@ export function mountCameraPanel(camera: Entity): () => void {
     view.azimuth = ((live?.azimuth ?? 0) * 180) / Math.PI;
     view.elevation = ((live?.elevation ?? 0) * 180) / Math.PI;
 
-    pane
-      .addBinding(view, 'distance', {
-        min: orbitConfig.minDistance,
-        max: orbitConfig.maxDistance,
-        step: 0.05,
-      })
-      .on('change', (ev) => ev.last && control.updateOrbitState({ distance: view.distance }));
+    // The distance slider spans [minDistance, maxDistance]; those are editable below, and a
+    // tweakpane binding takes its range at creation, so a limit change rebuilds the slider in
+    // place.
+    let distanceBinding: BindingApi | undefined;
+    const addDistance = (index: number) => {
+      const { minDistance, maxDistance } = control.getOrbitConfig()!;
+      distanceBinding = pane
+        .addBinding(view, 'distance', { min: minDistance, max: maxDistance, step: 0.05, index })
+        .on('change', (ev) => ev.last && control.updateOrbitState({ distance: view.distance }));
+    };
+    addDistance(pane.children.length);
     pane
       .addBinding(view, 'azimuth', { min: -180, max: 180, step: 0.5 })
       .on(
@@ -80,6 +92,42 @@ export function mountCameraPanel(camera: Entity): () => void {
         (ev) =>
           ev.last && control.updateOrbitState({ elevation: (view.elevation * Math.PI) / 180 }),
       );
+
+    // Control sensitivities and limits (main.ts create3DCamera seeds them; the orbit system
+    // reads the live config on every input event, so a push is enough). Zoom is exponential
+    // per wheel unit, rotation/pan are radians / units per pixel, moveSpeed is units per second
+    // before the sprint multiplier.
+    const controls = pane.addFolder({ title: 'Controls', expanded: false });
+    const tuning = { ...orbitConfig };
+    const bindControl = (
+      key: 'zoomSensitivity' | 'rotationSensitivity' | 'panSensitivity' | 'moveSpeed',
+      params: { min: number; max: number; step: number },
+    ) =>
+      controls
+        .addBinding(tuning, key, params)
+        .on('change', () => pushOrbit({ [key]: tuning[key] }));
+    bindControl('zoomSensitivity', { min: 0.0005, max: 0.02, step: 0.0005 });
+    bindControl('rotationSensitivity', { min: 0.001, max: 0.03, step: 0.001 });
+    bindControl('panSensitivity', { min: 0.001, max: 0.05, step: 0.001 });
+    bindControl('moveSpeed', { min: 0.5, max: 60, step: 0.5 });
+    for (const key of ['enableZoom', 'enableRotation', 'enablePan'] as const) {
+      controls.addBinding(tuning, key).on('change', () => pushOrbit({ [key]: tuning[key] }));
+    }
+    const rebuildDistance = () => {
+      const index = distanceBinding ? pane.children.indexOf(distanceBinding) : pane.children.length;
+      distanceBinding?.dispose();
+      addDistance(index);
+    };
+    controls
+      .addBinding(tuning, 'minDistance', { min: 0.05, max: 10, step: 0.05 })
+      .on('change', (ev) => {
+        pushOrbit({ minDistance: tuning.minDistance });
+        if (ev.last) rebuildDistance();
+      });
+    controls.addBinding(tuning, 'maxDistance', { min: 5, max: 500, step: 5 }).on('change', (ev) => {
+      pushOrbit({ maxDistance: tuning.maxDistance });
+      if (ev.last) rebuildDistance();
+    });
   }
 
   const projection = pane.addFolder({ title: 'Projection', expanded: false });
