@@ -110,6 +110,12 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   registration and semantic pipeline keys are material-shader concerns). Material pipelines
   consequently declare the scene-color format as their color target, not the swapchain
   format.
+- `webGPU/renderer/passes/TAAPass.ts` — temporal anti-aliasing over the encoded LDR output:
+  reprojects its ping-pong history through the forward depth buffer with the unjittered
+  view-projection matrices, clamps it to the current 3x3 neighbourhood (no velocity buffer
+  yet) and blends by `taaSettings.blend`; exports `taaJitterPixels` (Halton 2,3).
+- `webGPU/renderer/passes/BlitPass.ts` — presents an LDR texture when no swapchain-writing
+  stage closes the chain.
 - `webGPU/renderer/passes/FXAAPass.ts` — final anti-aliasing over the encoded LDR output,
   written to the swapchain's plain view (values are already sRGB-encoded; a second encode
   would wash the image).
@@ -123,5 +129,7 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
 - `WebGPURenderer` — device/context lifecycle, manager construction, frame loop
   (`beginFrame`/`renderTick`/`endFrame`), and pass sequencing: the dormant PMX morph compute
   pass (commented out), then `DepthPrepass → ForwardPass(HDR) → BloomPass → TonemapPass(LDR)
-  → FXAAPass(swapchain)`. Future passes join as sibling objects under `passes/` in this
+  → [TAAPass(history)] → FXAAPass(swapchain) | BlitPass(swapchain)` — the anti-aliasing tail
+  follows `sceneSettings.antiAliasing`; with TAA on, `MVPUniformManager.setProjectionJitter`
+  offsets every draw's projection by the frame's sub-pixel jitter before any geometry pass. Future passes join as sibling objects under `passes/` in this
   schedule.

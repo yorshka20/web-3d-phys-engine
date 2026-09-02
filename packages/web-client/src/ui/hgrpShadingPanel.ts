@@ -10,6 +10,7 @@ import {
 } from '@renderer/material/hgrp';
 import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
 import { bloomSettings } from '@renderer/webGPU/renderer/passes/BloomPass';
+import { taaSettings } from '@renderer/webGPU/renderer/passes/TAAPass';
 import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
 import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 import { Pane } from 'tweakpane';
@@ -197,6 +198,16 @@ function mountPane(container: HTMLElement, assetIds: readonly string[]): () => v
     max: 1,
     step: 0.01,
   });
+  // Post chain: grading after the tonemap curve and the anti-aliasing stages
+  const post = globalFolder.addFolder({ title: 'Post', expanded: true });
+  post.addBinding(tonemapSettings, 'contrast', { min: 0.5, max: 2, step: 0.01 });
+  post.addBinding(tonemapSettings, 'saturation', { min: 0, max: 2, step: 0.01 });
+  post.addBinding(tonemapSettings, 'temperature', { min: -1, max: 1, step: 0.01 });
+  post.addBinding(sceneSettings, 'antiAliasing', {
+    options: { off: 'off', fxaa: 'fxaa', taa: 'taa', 'taa+fxaa': 'taa+fxaa' },
+  });
+  post.addBinding(taaSettings, 'blend', { label: 'taaBlend', min: 0.02, max: 0.5, step: 0.01 });
+
   const backdrop = {
     clearColor: {
       r: sceneSettings.clearColor[0],

@@ -40,6 +40,13 @@ export class MVPUniformManager {
   private jointUploadFrames = new Map<string, number>();
   private identityJointBuffer?: GPUBuffer;
 
+  // Sub-pixel projection offset in NDC units for the frame being encoded (TAA jitter). Applied
+  // to every draw's projection here, so the prepass, the forward pass and the HGRP stages
+  // all see the same jittered camera; the camera data itself stays unjittered for the TAA
+  // reprojection.
+  private projectionJitter: [number, number] = [0, 0];
+  private readonly jitteredProjection = mat4.create();
+
   // Constants for uniform buffer layout
   private readonly MVP_BUFFER_SIZE = 384; // 96 floats × 4 bytes = 384 bytes
   private readonly FLOATS_PER_MATRIX = 16;
@@ -164,6 +171,24 @@ export class MVPUniformManager {
     return this.mvpBindGroups.get(cacheKey)!;
   }
 
+  setProjectionJitter(ndcX: number, ndcY: number): void {
+    this.projectionJitter[0] = ndcX;
+    this.projectionJitter[1] = ndcY;
+  }
+
+  // The camera projection with the frame's jitter folded in. Column-major: elements 8 and 9
+  // multiply view z into clip x/y, and clip w is -z, so adding d there shifts NDC by -d.
+  private projectionFor(camera: FrameData['scene']['camera']): Float32Array {
+    const [jx, jy] = this.projectionJitter;
+    if (jx === 0 && jy === 0) {
+      return camera.projectionMatrix;
+    }
+    mat4.copy(this.jitteredProjection, camera.projectionMatrix as unknown as mat4);
+    this.jitteredProjection[8] -= jx;
+    this.jitteredProjection[9] -= jy;
+    return this.jitteredProjection as unknown as Float32Array;
+  }
+
   /**
    * Update MVP uniform data for a renderable and return the bind group
    */
@@ -209,7 +234,7 @@ export class MVPUniformManager {
    */
   private calculateMVPUniformData(renderable: RenderData, frameData: FrameData): Float32Array {
     const camera = frameData.scene.camera;
-    const projectionMatrix = camera.projectionMatrix;
+    const projectionMatrix = this.projectionFor(camera);
     const viewMatrix = camera.viewMatrix;
     const modelMatrix = renderable.worldMatrix;
     const normalMatrix = renderable.normalMatrix;

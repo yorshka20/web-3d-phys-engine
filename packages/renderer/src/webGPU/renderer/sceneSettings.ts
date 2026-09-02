@@ -1,7 +1,14 @@
 // Global scene presentation controls, mutated by stages and the calibration GUI
 // (module-scoped singleton, same rule as tonemapSettings — pass-level state that belongs
 // to no material or entity).
+// Which anti-aliasing stages close the post chain (renderer renderTick): TAA accumulates
+// jittered frames into a history, FXAA is a single-frame edge filter; both together softens
+// most, none presents the tonemap output as is.
+export type AntiAliasingMode = 'off' | 'fxaa' | 'taa' | 'taa+fxaa';
+
 export const sceneSettings = {
+  antiAliasing: 'taa' as AntiAliasingMode,
+
   // Background of the HDR scene target, in LINEAR light — it runs through exposure x ACES
   // and the sRGB encode like every shaded pixel. Default black; showcase stages set a
   // bright studio grey so the character can be compared against in-game screenshots.

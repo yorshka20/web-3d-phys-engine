@@ -12,8 +12,10 @@
 struct TonemapSettings {
     exposure: f32,
     bloom_intensity: f32,
-    reserved1: f32,
-    reserved2: f32,
+    contrast: f32,
+    saturation: f32,
+    // x = temperature (-1 cool .. 1 warm)
+    grading: vec4<f32>,
 }
 @group(0) @binding(1) var<uniform> tonemap_settings: TonemapSettings;
 @group(0) @binding(2) var bloom_tex: texture_2d<f32>;
@@ -51,11 +53,22 @@ fn srgb_encode(x: vec3<f32>) -> vec3<f32> {
     return select(hi, lo, x <= vec3<f32>(0.0031308));
 }
 
+// Grading in the encoded domain (after the curve): saturation about luma, contrast about
+// mid grey, temperature as opposing red/blue gain. Identity at (1, 1, 0).
+fn grade(encoded: vec3<f32>) -> vec3<f32> {
+    let luma = dot(encoded, vec3<f32>(0.2126, 0.7152, 0.0722));
+    var c = mix(vec3<f32>(luma), encoded, tonemap_settings.saturation);
+    c = (c - vec3<f32>(0.5)) * tonemap_settings.contrast + vec3<f32>(0.5);
+    let temperature = tonemap_settings.grading.x;
+    c *= vec3<f32>(1.0 + temperature * 0.1, 1.0, 1.0 - temperature * 0.1);
+    return clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let hdr = textureLoad(scene_color, vec2<i32>(position.xy), 0).rgb;
     let uv = position.xy / vec2<f32>(textureDimensions(scene_color));
     let bloom = textureSample(bloom_tex, bloom_sampler, uv).rgb;
     let color = (hdr + bloom * tonemap_settings.bloom_intensity) * tonemap_settings.exposure;
-    return vec4<f32>(srgb_encode(aces_tonemap(color)), 1.0);
+    return vec4<f32>(grade(srgb_encode(aces_tonemap(color))), 1.0);
 }

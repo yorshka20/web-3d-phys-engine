@@ -18,6 +18,13 @@ export const tonemapSettings = {
   // normalized around 1.0, which may sit darker in linear space than the old
   // display-referred calibration — this is the knob that re-anchors mid-grey.
   exposure: 1.0,
+  // Grading after the curve, in the encoded (perceptual) domain: contrast about mid grey,
+  // saturation about luma, temperature as an opposing red/blue gain (negative = cooler).
+  // Identity by default; the in-game look reads cooler and higher-contrast than ours, and
+  // these are the knobs to find by how much before a grading LUT is worth baking.
+  contrast: 1.0,
+  saturation: 1.0,
+  temperature: 0.0,
 };
 
 /**
@@ -39,7 +46,7 @@ export class TonemapPass {
   private bindGroupBloomView?: GPUTextureView;
   private bloomSampler?: GPUSampler;
   private settingsBuffer?: GPUBuffer;
-  private readonly settingsData = new Float32Array(4);
+  private readonly settingsData = new Float32Array(8);
 
   constructor(private readonly deps: TonemapPassDeps) {}
 
@@ -49,6 +56,9 @@ export class TonemapPass {
 
     this.settingsData[0] = tonemapSettings.exposure;
     this.settingsData[1] = bloomSettings.intensity;
+    this.settingsData[2] = tonemapSettings.contrast;
+    this.settingsData[3] = tonemapSettings.saturation;
+    this.settingsData[4] = tonemapSettings.temperature;
     this.deps.device.queue.writeBuffer(this.settingsBuffer!, 0, this.settingsData);
 
     const renderPass = commandEncoder.beginRenderPass({

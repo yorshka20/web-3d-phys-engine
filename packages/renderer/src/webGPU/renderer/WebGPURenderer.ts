@@ -8,7 +8,7 @@ import { GeometryManager } from '../core/GeometryManager';
 import { GPUResourceCoordinator } from '../core/GPUResourceCoordinator';
 import { InstanceManager } from '../core/InstanceManager';
 import { getOrCreateHGRPFrameBindGroupLayout } from '../core/HGRPMaterialResources';
-import { packSceneLighting, SCENE_LIGHTING_BYTE_SIZE } from './sceneSettings';
+import { packSceneLighting, SCENE_LIGHTING_BYTE_SIZE, sceneSettings } from './sceneSettings';
 import { MaterialBinder } from '../core/MaterialBinder';
 import { MaterialManager } from '../core/MaterialManager';
 import { PipelineFactory } from '../core/pipeline/PipelineFactory';
@@ -19,6 +19,7 @@ import { ShaderManager } from '../core/shaders/ShaderManager';
 import { ShadingParamsManager } from '../core/ShadingParamsManager';
 import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
+import { BlitPass } from './passes/BlitPass';
 import { BloomPass } from './passes/BloomPass';
 import { DepthPrepass } from './passes/DepthPrepass';
 import { ForwardPass } from './passes/ForwardPass';
@@ -26,6 +27,7 @@ import { FXAAPass } from './passes/FXAAPass';
 import { HGRPBrowCompositeStage } from './passes/hgrp/HGRPBrowCompositeStage';
 import { HGRPEyeOverlayStage } from './passes/hgrp/HGRPEyeOverlayStage';
 import { HGRPOutlineStage } from './passes/hgrp/HGRPOutlineStage';
+import { TAAPass, taaJitterPixels } from './passes/TAAPass';
 import { TonemapPass } from './passes/TonemapPass';
 import {
   BindGroup,
@@ -82,7 +84,11 @@ export class WebGPURenderer implements IWebGPURenderer {
   private forwardPass!: ForwardPass;
   private bloomPass!: BloomPass;
   private tonemapPass!: TonemapPass;
+  private taaPass!: TAAPass;
   private fxaaPass!: FXAAPass;
+  private blitPass!: BlitPass;
+  // The LDR image the FXAA pass reads this frame: the tonemap output, or the TAA resolve
+  private fxaaSource!: GPUTexture;
   // Per-frame HGRP globals (group 3): rebuilt when the prepass depth texture is recreated
   private hgrpFrameBindGroup?: GPUBindGroup;
   private hgrpFrameBindGroupTexture?: GPUTexture;
@@ -306,10 +312,20 @@ export class WebGPURenderer implements IWebGPURenderer {
       getBloomView: () => this.bloomPass.getBloomView(),
       getOutputView: () => this.ldrTexture.createView(),
     });
+    this.taaPass = new TAAPass({
+      device: this.device,
+      getInputTexture: () => this.ldrTexture,
+      getDepthTexture: () => this.depthTexture,
+    });
     this.fxaaPass = new FXAAPass({
       device: this.device,
       outputFormat: this.context.getPreferredFormat(),
-      getInputTexture: () => this.ldrTexture,
+      getInputTexture: () => this.fxaaSource,
+      getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
+    });
+    this.blitPass = new BlitPass({
+      device: this.device,
+      outputFormat: this.context.getPreferredFormat(),
       getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
 
@@ -392,7 +408,8 @@ export class WebGPURenderer implements IWebGPURenderer {
         height: canvas.height,
       },
       format: this.context.getDepthStencilFormat(),
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      // TEXTURE_BINDING: the TAA pass reads the depth aspect for reprojection
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       label: 'Depth Texture',
     });
     console.log('[WebGPURenderer] Created depth texture');
@@ -760,7 +777,22 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     // pass sequence: depth prepass (sampleable scene depth for screen-space effects),
     // forward shading into the HDR scene-color target, bloom chain over it, tonemap
-    // composite+resolve to encoded LDR, FXAA to the swapchain
+    // composite+resolve to encoded LDR, then the anti-aliasing stages the scene settings
+    // select (TAA accumulating into its history, FXAA to the swapchain) or a plain blit
+    const aaMode = sceneSettings.antiAliasing;
+    const useTaa = aaMode === 'taa' || aaMode === 'taa+fxaa';
+    const useFxaa = aaMode === 'fxaa' || aaMode === 'taa+fxaa';
+
+    // TAA jitter: sub-pixel offsets in NDC, applied to every draw's projection this frame
+    const canvas = this.context.getContext().canvas;
+    const [jitterX, jitterY] = useTaa
+      ? taaJitterPixels(frameData.globalUniforms.frameCount)
+      : [0, 0];
+    this.mvpUniformManager.setProjectionJitter(
+      (2 * jitterX) / canvas.width,
+      (2 * jitterY) / canvas.height,
+    );
+
     this.device.queue.writeBuffer(
       this.getSceneLightingBuffer(),
       0,
@@ -770,7 +802,20 @@ export class WebGPURenderer implements IWebGPURenderer {
     await this.forwardPass.execute(commandEncoder, frameData);
     this.bloomPass.execute(commandEncoder);
     this.tonemapPass.execute(commandEncoder);
-    this.fxaaPass.execute(commandEncoder);
+
+    let presented: GPUTexture = this.ldrTexture;
+    if (useTaa) {
+      this.taaPass.execute(commandEncoder, frameData.scene.camera);
+      presented = this.taaPass.getOutputTexture();
+    } else {
+      this.taaPass.invalidateHistory();
+    }
+    if (useFxaa) {
+      this.fxaaSource = presented;
+      this.fxaaPass.execute(commandEncoder);
+    } else {
+      this.blitPass.execute(commandEncoder, presented);
+    }
 
     // submit command
     this.device.queue.submit([commandEncoder.finish()]);
