@@ -951,6 +951,26 @@ export class PipelineManager {
           writeMask: GPUColorWrite.ALL,
         },
       ];
+    } else if (gpuKey.blendState === 'alpha-blend-premultiplied') {
+      // Colour already scaled by coverage: no second multiply by src alpha
+      return [
+        {
+          format,
+          blend: {
+            color: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+          },
+          writeMask: GPUColorWrite.ALL,
+        },
+      ];
     } else if (gpuKey.blendState === 'alpha-to-coverage') {
       // Alpha to coverage
       return [

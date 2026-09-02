@@ -43,9 +43,7 @@ export function computeSpawnPosition(world: World): Vec3 {
   const camera = getActiveCamera(world);
   if (!camera) return [0, 1, 0];
 
-  const control = camera.getComponent<CameraControlComponent>(
-    CameraControlComponent.componentName,
-  );
+  const control = camera.getComponent<CameraControlComponent>(CameraControlComponent.componentName);
   const orbitTarget = control?.getOrbitConfig()?.target;
   if (orbitTarget) return [orbitTarget[0], orbitTarget[1], orbitTarget[2]];
 

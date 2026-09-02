@@ -16,6 +16,7 @@ import hgrpNprShader from './materials/HGRPNpr.wgsl';
 import hgrpSkinShader from './materials/HGRPSkin.wgsl';
 import hgrpHairShader from './materials/HGRPHair.wgsl';
 import hgrpEyeShader from './materials/HGRPEye.wgsl';
+import hgrpVfxShader from './materials/HGRPVfx.wgsl';
 
 // Compute shaders
 import pmxMorphComputeShader from './compute/PMXMorphCompute.wgsl';
@@ -25,6 +26,7 @@ import constantsFragment from './core/constants.wgsl';
 import gltfSkinningFragment from './core/gltf_skinning.wgsl';
 import gltfTypesFragment from './core/gltf_types.wgsl';
 import hgrpTypesFragment from './core/hgrp_types.wgsl';
+import hgrpVfxTypesFragment from './core/hgrp_vfx_types.wgsl';
 import hgrpVertexFragment from './core/hgrp_vertex.wgsl';
 import uniformsFragment from './core/uniforms.wgsl';
 import vertexTypesFragment from './core/vertex_types.wgsl';
@@ -56,6 +58,7 @@ import shadowFragment from './passes/shadow.wgsl';
 import fireBindingsFragment from './bindings/fire_bindings.wgsl';
 import gltfBindingsFragment from './bindings/gltf_bindings.wgsl';
 import hgrpBindingsFragment from './bindings/hgrp_bindings.wgsl';
+import hgrpVfxBindingsFragment from './bindings/hgrp_vfx_bindings.wgsl';
 import pmxBindingsFragment from './bindings/pmx_bindings.wgsl';
 import pmxMorphComputeBindingsFragment from './bindings/pmx_morph_compute_bindings.wgsl';
 import simpleBindingsFragment from './bindings/simple_bindings.wgsl';
@@ -70,6 +73,7 @@ export const shaderFragmentRegistry = new Map([
   ['core/gltf_types.wgsl', gltfTypesFragment],
   ['core/gltf_skinning.wgsl', gltfSkinningFragment],
   ['core/hgrp_types.wgsl', hgrpTypesFragment],
+  ['core/hgrp_vfx_types.wgsl', hgrpVfxTypesFragment],
   ['core/hgrp_vertex.wgsl', hgrpVertexFragment],
 
   // Math fragments
@@ -103,6 +107,7 @@ export const shaderFragmentRegistry = new Map([
   ['bindings/pmx_morph_compute_bindings.wgsl', pmxMorphComputeBindingsFragment],
   ['bindings/gltf_bindings.wgsl', gltfBindingsFragment],
   ['bindings/hgrp_bindings.wgsl', hgrpBindingsFragment],
+  ['bindings/hgrp_vfx_bindings.wgsl', hgrpVfxBindingsFragment],
 
   // Material shaders
   ['PMXMaterial.wgsl', pmxMaterialShader],
@@ -117,6 +122,7 @@ export const shaderFragmentRegistry = new Map([
   ['HGRPSkin.wgsl', hgrpSkinShader],
   ['HGRPHair.wgsl', hgrpHairShader],
   ['HGRPEye.wgsl', hgrpEyeShader],
+  ['HGRPVfx.wgsl', hgrpVfxShader],
 
   // Compute shaders
   ['PMXMorphCompute.wgsl', pmxMorphComputeShader],

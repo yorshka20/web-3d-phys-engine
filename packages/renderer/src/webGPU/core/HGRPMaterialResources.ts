@@ -31,6 +31,8 @@ export const HGRP_SRGB_TEXTURE_SLOTS: ReadonlySet<string> = new Set([
   '_EmissionMap',
   '_MatcapTex',
   '_EmotionMap',
+  '_MainTex',
+  '_BlendTex',
 ]);
 
 export const HGRP_SAMPLER_BINDINGS = { base: 3, ramp: 4 } as const;
@@ -58,6 +60,11 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Record<HGRPShaderVariant, readonly s
     '_LineMap',
   ],
   CharacterNPR_Eye: ['_MatcapTex', '_ShadowLutTex'],
+  // Effect layers, each sampled with its own UV speed/rotation/channel weights:
+  // _MainTex is the base pattern (absent on Laevatian's material -> the white default
+  // leaves it a no-op), _BlendTex the emissive flow, _DisturbTex1 the noise that warps
+  // both, _MaskTex the UV-space stencil confining the effect to the mesh's UV island.
+  CharacterNPR_VFX: ['_MainTex', '_BlendTex', '_DisturbTex1', '_MaskTex'],
 };
 
 // Ordered texture bindings for one variant: common slots first, then variant slots.

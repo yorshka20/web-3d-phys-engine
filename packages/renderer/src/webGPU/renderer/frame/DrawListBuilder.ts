@@ -92,6 +92,11 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
         ? (renderable.material as HGRPMaterialDescriptor)
         : undefined;
 
+    // Optional material layers a character has not unlocked (HGRPCharacterFlags)
+    if (hgrpMaterial?.enabled === false) {
+      continue;
+    }
+
     if (
       hgrpMaterial?.variant === 'CharacterNPR_Eye' &&
       hgrpMaterial.floats._PreZStencilRefOption !== undefined &&

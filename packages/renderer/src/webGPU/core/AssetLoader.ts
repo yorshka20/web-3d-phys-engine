@@ -14,6 +14,7 @@ import {
 import { PMXModel } from '@renderer/assets/PMXModel';
 import {
   createDefaultHGRPMaterial,
+  HGRPCharacterFlags,
   createHGRPMaterialFromPreset,
   HGRPPreset,
   hgrpTextureAssetId,
@@ -353,9 +354,10 @@ export class AssetLoader {
     assetId: string;
     preset: HGRPPreset;
     textureUrls: Record<string, string>; // texture filename -> served URL
+    flags?: HGRPCharacterFlags;
     priority?: 'low' | 'normal' | 'high';
   }): Promise<void> {
-    const { url, assetId, preset, textureUrls, priority = 'normal' } = config;
+    const { url, assetId, preset, textureUrls, flags = {}, priority = 'normal' } = config;
     const character = preset.character;
 
     const filenames = new Set<string>();
@@ -389,7 +391,7 @@ export class AssetLoader {
         );
         return createDefaultHGRPMaterial(character, materialName);
       }
-      return createHGRPMaterialFromPreset(character, materialName, presetMaterial);
+      return createHGRPMaterialFromPreset(character, materialName, presetMaterial, flags);
     });
   }
 

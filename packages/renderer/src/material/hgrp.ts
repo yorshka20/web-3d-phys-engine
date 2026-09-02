@@ -8,7 +8,8 @@ export type HGRPShaderVariant =
   | 'CharacterNPR'
   | 'CharacterNPR_Skin'
   | 'CharacterNPR_Hair'
-  | 'CharacterNPR_Eye';
+  | 'CharacterNPR_Eye'
+  | 'CharacterNPR_VFX';
 
 // One shader module per HGRP variant; the id is the semantic-pipeline-key discriminator and
 // the switch key for pipeline layout selection.
@@ -17,7 +18,15 @@ export const HGRP_SHADER_ID_BY_VARIANT = {
   CharacterNPR_Skin: 'hgrp_skin_shader',
   CharacterNPR_Hair: 'hgrp_hair_shader',
   CharacterNPR_Eye: 'hgrp_eye_shader',
+  CharacterNPR_VFX: 'hgrp_vfx_shader',
 } as const satisfies Record<HGRPShaderVariant, string>;
+
+// The VFX variant carries its own parameter vocabulary (flow/disturb/mask layers) with no
+// overlap with the CharacterNPR family — not even _BaseMap — so it packs a separate uniform
+// struct rather than extending the shared one.
+export function isHGRPVfxVariant(variant: HGRPShaderVariant): boolean {
+  return variant === 'CharacterNPR_VFX';
+}
 
 export type HGRPShaderId = (typeof HGRP_SHADER_ID_BY_VARIANT)[HGRPShaderVariant];
 
@@ -42,10 +51,34 @@ export interface HGRPPresetMaterial {
   colors: Record<string, number[]>; // rgba tuples
 }
 
+// Per-character switches that decide whether an optional material layer is drawn at all.
+// They belong to the character, not the scene: two characters in one frame can differ.
+export interface HGRPCharacterFlags {
+  // The game only renders the CharacterNPR_VFX layer once a character's max potential is
+  // unlocked, so its materials load disabled unless this is set.
+  maxPotential?: boolean;
+}
+
 export interface HGRPPreset {
   schemaVersion: number;
   character: string;
   materials: Record<string, HGRPPresetMaterial>;
+}
+
+// Unity BlendMode enum values that survive in the preset: 1 = One, 5 = SrcAlpha,
+// 10 = OneMinusSrcAlpha. The engine's generic 'blend' alphaMode means straight alpha
+// (SrcAlpha/OneMinusSrcAlpha); the effect shaders ask for One/OneMinusSrcAlpha, i.e.
+// premultiplied, which darkens by an extra factor of alpha if rendered as straight.
+export type HGRPBlendMode = 'straight' | 'premultiplied';
+
+const UNITY_BLEND_ONE = 1;
+const UNITY_BLEND_ONE_MINUS_SRC_ALPHA = 10;
+
+export function hgrpBlendMode(floats: Record<string, number>): HGRPBlendMode {
+  return floats._SrcBlend === UNITY_BLEND_ONE &&
+    floats._DstBlend === UNITY_BLEND_ONE_MINUS_SRC_ALPHA
+    ? 'premultiplied'
+    : 'straight';
 }
 
 export interface HGRPMaterialDescriptor extends BaseMaterial {
@@ -59,6 +92,11 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
   alphaMode: AlphaMode;
   alphaCutoff: number;
   doubleSided: boolean;
+  blendMode: HGRPBlendMode;
+  // False keeps the material out of the draw lists entirely (see HGRPCharacterFlags). The
+  // draw list reads this boolean and nothing else — it must never test a character or
+  // material name to decide what to draw.
+  enabled: boolean;
 }
 
 // Calibration-tunable subset of the HGRP parameters: exactly what the render path consumes
@@ -148,6 +186,7 @@ export function createHGRPMaterialFromPreset(
   character: string,
   materialName: string,
   preset: HGRPPresetMaterial,
+  flags: HGRPCharacterFlags = {},
 ): HGRPMaterialDescriptor {
   const floats = preset.floats;
 
@@ -201,6 +240,8 @@ export function createHGRPMaterialFromPreset(
     alphaMode,
     alphaCutoff: floats._AlphaClipThreshold ?? 0.5,
     doubleSided: floats._Cull === 0,
+    blendMode: hgrpBlendMode(floats),
+    enabled: variant === 'CharacterNPR_VFX' ? flags.maxPotential === true : true,
   };
 }
 
@@ -230,5 +271,7 @@ export function createDefaultHGRPMaterial(
     alphaMode: 'blend',
     alphaCutoff: 0.5,
     doubleSided: false,
+    blendMode: 'straight',
+    enabled: true,
   };
 }

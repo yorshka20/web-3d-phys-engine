@@ -1,6 +1,6 @@
 import { GLTFMaterial } from '@renderer/assets/GltfModel';
 import { RenderData } from '@renderer/frame/types';
-import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
+import { HGRPMaterialDescriptor, isHGRPVfxVariant } from '@renderer/material/hgrp';
 import { WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { assetRegistry } from './AssetRegistry';
 import { BindGroupManager } from './BindGroupManager';
@@ -18,6 +18,42 @@ import { MaterialManager } from './MaterialManager';
 import { WebGPUResourceManager } from './ResourceManager';
 import { TextureManager } from './TextureManager';
 import { BufferType } from './types';
+
+// Field order must match HGRPVfxParams in shaders/core/hgrp_vfx_types.wgsl. The VFX variant
+// gets its own block rather than extra fields on HGRPMaterialParams: its vocabulary and the
+// CharacterNPR family's do not overlap, so one struct would carry both and mean neither.
+function packHGRPVfxParams(material: HGRPMaterialDescriptor): Float32Array {
+  const { floats, colors } = material;
+  const params = new Float32Array(56);
+  const vec4 = (key: string, offset: number, fallback: [number, number, number, number]) =>
+    params.set(colors[key] ?? fallback, offset);
+
+  vec4('_TintColor', 0, [1, 1, 1, 1]);
+  vec4('_BlendTint', 4, [1, 1, 1, 1]);
+  vec4('_MainTexUVSpeed', 8, [0, 0, 0, 0]);
+  vec4('_MainTexUVWeights', 12, [1, 0, 0, 0]);
+  vec4('_BlendTexUVSpeed', 16, [0, 0, 0, 0]);
+  vec4('_BlendTexUVWeights', 20, [1, 0, 0, 0]);
+  vec4('_MaskTexUVSpeed', 24, [0, 0, 0, 0]);
+  vec4('_MaskTexUVWeights', 28, [1, 0, 0, 0]);
+  vec4('_DisturbUVSpeed1', 32, [0, 0, 0, 0]);
+  vec4('_DisturbUVWeights1', 36, [1, 0, 0, 0]);
+  params[40] = floats._DisturbUIntensity1 ?? 0;
+  params[41] = floats._DisturbVIntensity1 ?? 0;
+  params[42] = floats._TintColorIntensity ?? 1;
+  params[43] = floats._TintColorAlpha ?? 1;
+  params[44] = floats._UseBlend ?? 0;
+  params[45] = floats._UseDisturb ?? 0;
+  params[46] = floats._UseMask ?? 0;
+  params[47] = floats._UseMainTexAsAlpha ?? 0;
+  params[48] = floats._UseMaskTexAsAlpha ?? 0;
+  params[49] = floats._MainTexUseDisturb ?? 0;
+  params[50] = floats._BlendTexUseDisturb ?? 0;
+  params[51] = floats._MaskTexUseDisturb ?? 0;
+  params[52] = floats._ExpIntensity ?? 0;
+  params[53] = floats._ExpThreshold ?? 0;
+  return params;
+}
 
 // Bind groups shared by every draw with the same materialKey. Slot semantics follow the
 // material family: regular = group2 textures + group3 material, glTF = group2 PBR material,
@@ -84,9 +120,11 @@ export class MaterialBinder {
     const layout = getOrCreateHGRPMaterialBindGroupLayout(this.bindGroupManager, material.variant);
     const materialId = renderable.materialKey;
 
+    const isVfx = isHGRPVfxVariant(material.variant);
     const materialBuffer = this.bufferManager.createCustomBuffer(`${materialId}_material_buffer`, {
       type: BufferType.UNIFORM,
-      size: 304, // HGRPMaterialParams: 9x vec4 + 40 f32
+      // HGRPMaterialParams: 9x vec4 + 40 f32; HGRPVfxParams: 10x vec4 + vec2 + 14 f32
+      size: isVfx ? 224 : 304,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -117,6 +155,11 @@ export class MaterialBinder {
       ],
       label: materialId,
     });
+
+    if (isVfx) {
+      this.device.queue.writeBuffer(materialBuffer, 0, packHGRPVfxParams(material));
+      return bindGroup;
+    }
 
     const params = new Float32Array(76);
     // _HairBaseTintColor pre-multiplies the hair base color (identity in Pelica's preset;

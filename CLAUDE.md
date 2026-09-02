@@ -240,6 +240,9 @@ Current state that is easy to misread as bugs or dead code — check here before
 - **Formatting**: Prettier + ESLint (root scripts). Comments in **English**.
 - **Never delete existing comments** when editing code (from `.cursorrules`), and do not break
   code unrelated to the task.
+- **Drive-by fixes are welcome** (user convention, 2026-09-02): a lint/format autofix or a
+  small obvious bug found in a file you were not sent to change may ride along in the same
+  commit — say what you swept up. Do not revert such fixes to keep a diff "scoped".
 - **Pooling discipline**: pooled classes implement `reset()`/`recreate()` and are registered in
   `pool/constants.ts` lists.
 - **Derive, don't hardcode**: don't add a second copy of a list the module can supply

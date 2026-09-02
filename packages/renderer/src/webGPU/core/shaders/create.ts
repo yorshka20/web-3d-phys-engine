@@ -366,6 +366,31 @@ export function createDefaultShaderModule(): ShaderModule {
 // One module per CharacterNPR variant: shared vertex stage and shading core come from
 // includes; the per-variant file is where variant features (SDF / matcap / hair aniso / spec
 // ramp) land.
+// The CharacterNPR family shares one shading core; the VFX variant shares only the vertex
+// stage, bringing its own uniform block and bindings (no ramp, no rim, no _BaseMap).
+const HGRP_FAMILY_INCLUDES = [
+  'core/constants.wgsl',
+  'core/uniforms.wgsl',
+  'core/gltf_types.wgsl',
+  'core/hgrp_types.wgsl',
+  'core/gltf_skinning.wgsl',
+  'math/color.wgsl',
+  'bindings/hgrp_bindings.wgsl',
+  'core/hgrp_vertex.wgsl',
+  'lighting/hgrp_shadow_lut.wgsl',
+  'lighting/hgrp_npr.wgsl',
+];
+
+const HGRP_VFX_INCLUDES = [
+  'core/constants.wgsl',
+  'core/uniforms.wgsl',
+  'core/gltf_types.wgsl',
+  'core/hgrp_vfx_types.wgsl',
+  'core/gltf_skinning.wgsl',
+  'bindings/hgrp_vfx_bindings.wgsl',
+  'core/hgrp_vertex.wgsl',
+];
+
 export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
   const variants: { variant: HGRPShaderVariant; fileName: string; description: string }[] = [
     {
@@ -388,6 +413,11 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
       fileName: 'HGRPEye.wgsl',
       description: 'HGRP CharacterNPR_Eye material shader (brow + iris)',
     },
+    {
+      variant: 'CharacterNPR_VFX',
+      fileName: 'HGRPVfx.wgsl',
+      description: 'HGRP CharacterNPR_VFX material shader (character effect layers)',
+    },
   ];
 
   return variants.map(({ variant, fileName, description }) => ({
@@ -397,19 +427,13 @@ export function createHGRPMaterialShaderModules(): HGRPMaterialShaderModule[] {
     type: 'render' as const,
     fileName,
     sourceCode: shaderFragmentRegistry.get(fileName) || '',
-    includes: [
-      'core/constants.wgsl',
-      'core/uniforms.wgsl',
-      'core/gltf_types.wgsl',
-      'core/hgrp_types.wgsl',
-      'core/gltf_skinning.wgsl',
-      'math/color.wgsl',
-      'bindings/hgrp_bindings.wgsl',
-      'core/hgrp_vertex.wgsl',
-      'lighting/hgrp_shadow_lut.wgsl',
-      'lighting/hgrp_npr.wgsl',
-      ...(variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
-    ],
+    includes:
+      variant === 'CharacterNPR_VFX'
+        ? HGRP_VFX_INCLUDES
+        : [
+            ...HGRP_FAMILY_INCLUDES,
+            ...(variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
+          ],
     compilationOptions: {
       vertexFormat: ['full' as const],
     },

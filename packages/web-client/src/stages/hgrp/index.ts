@@ -7,7 +7,7 @@ import {
 import { World } from '@ecs/core/ecs/World';
 import { AssetLoader, assetRegistry } from '@renderer';
 import { GLTFModel } from '@renderer/assets/GltfModel';
-import { HGRPPreset } from '@renderer/material/hgrp';
+import { HGRPCharacterFlags, HGRPPreset } from '@renderer/material/hgrp';
 import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 import { rgba } from '@ecs/utils/color';
 
@@ -37,6 +37,16 @@ interface HGRPModelSource {
   modelUrl: string;
   preset: HGRPPreset;
   textureUrls: Record<string, string>;
+  flags?: HGRPCharacterFlags;
+}
+
+// Optional material layers are per character, so the switch travels with the load call.
+// `?maxpotential=1` turns on every character's CharacterNPR_VFX layer for look comparison,
+// the same way `?clip=` picks an animation.
+function characterFlags(): HGRPCharacterFlags {
+  return {
+    maxPotential: new URLSearchParams(window.location.search).get('maxpotential') === '1',
+  };
 }
 
 const MODELS: HGRPModelSource[] = [
@@ -133,6 +143,7 @@ export async function createHGRPStage(world: World) {
       assetId: character.assetId,
       preset: character.preset,
       textureUrls: character.textureUrls,
+      flags: character.flags ?? characterFlags(),
     });
   }
 

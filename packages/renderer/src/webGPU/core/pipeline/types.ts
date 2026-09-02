@@ -83,6 +83,10 @@ export interface SemanticPipelineKey {
   // Blend materials that still write depth (_TransparentDepthWrite — the game's transparent
   // cloth/hair self-occludes; only meaningful when alphaMode is 'blend')
   transparentDepthWrite: boolean;
+  // Blend materials whose colour is already scaled by coverage (HGRP's effect shaders ask
+  // for One/OneMinusSrcAlpha). Rendering those as straight alpha darkens them by a second
+  // factor of alpha; only meaningful when alphaMode is 'blend'.
+  premultipliedAlpha: boolean;
 
   // Vertex format (affects shader compilation)
   vertexFormat: VertexFormat; // simple=position, full=position+normal+uv, colored=position+color
@@ -106,7 +110,7 @@ export interface SemanticPipelineKey {
  */
 export interface GpuPipelineKey {
   // Direct WebGPU state mapping
-  blendState: 'replace' | 'alpha-blend' | 'alpha-to-coverage';
+  blendState: 'replace' | 'alpha-blend' | 'alpha-blend-premultiplied' | 'alpha-to-coverage';
   cullMode: 'none' | 'front' | 'back';
   topology: 'triangle-list' | 'line-list';
   depthWrite: boolean;
@@ -270,6 +274,9 @@ export function generateSemanticPipelineKey(
       ('floats' in material
         ? (material as { floats: Record<string, number> }).floats._TransparentDepthWrite === 1
         : false),
+    premultipliedAlpha:
+      material.alphaMode === 'blend' &&
+      (material as { blendMode?: string }).blendMode === 'premultiplied',
     hasTextures: hasAnyTexture(material),
     primitiveType: determinePrimitiveType(geometry, options),
     vertexFormat: geometry.vertexFormat,
@@ -288,6 +295,7 @@ export function generateSemanticCacheKey(key: SemanticPipelineKey): string {
     key.alphaMode,
     key.doubleSided,
     key.transparentDepthWrite,
+    key.premultipliedAlpha,
     key.vertexFormat,
     key.hasTextures,
     key.primitiveType,
@@ -406,9 +414,9 @@ function determinePrimitiveType(
  */
 function determineBlendState(
   semanticKey: SemanticPipelineKey,
-): 'replace' | 'alpha-blend' | 'alpha-to-coverage' {
+): 'replace' | 'alpha-blend' | 'alpha-blend-premultiplied' | 'alpha-to-coverage' {
   if (semanticKey.alphaMode === 'blend') {
-    return 'alpha-blend';
+    return semanticKey.premultipliedAlpha ? 'alpha-blend-premultiplied' : 'alpha-blend';
   } else if (semanticKey.alphaMode === 'mask') {
     return 'alpha-to-coverage';
   }

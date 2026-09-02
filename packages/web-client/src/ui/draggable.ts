@@ -1,9 +1,9 @@
 // Svelte action to make an element draggable (by its header or whole element)
 // Usage: <div use:draggable /> or <div use:draggable={{handle: '.header'}} />
 export function draggable(node: HTMLElement, params: { handle?: string } = {}) {
-  let pos = { x: 0, y: 0 };
+  const pos = { x: 0, y: 0 };
   let dragging = false;
-  let offset = { x: 0, y: 0 };
+  const offset = { x: 0, y: 0 };
   let handleEl: HTMLElement | null = null;
 
   // Find the handle element if specified
