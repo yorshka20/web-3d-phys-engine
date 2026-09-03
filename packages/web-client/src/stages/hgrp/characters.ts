@@ -6,7 +6,6 @@ import {
   WebGPU3DRenderComponent,
   World,
 } from '@ecs';
-import { rgba } from '@ecs/utils/color';
 import { AssetLoader, assetRegistry } from '@renderer';
 import { GLTFModel } from '@renderer/assets/GltfModel';
 import { HGRPCharacterFlags, HGRPPreset } from '@renderer/material/hgrp';
@@ -246,23 +245,9 @@ function createCharacterEntity(world: World, character: HGRPStageCharacter): Ent
     }),
   );
 
-  // Nothing reads these scalars: an HGRP primitive is drawn from the material joined onto it
-  // at load time, and a primitive with no document material now takes the glTF spec default
-  // (GLTF_DEFAULT_MATERIAL). What the component still carries is the routing pair
-  // materialType/customShaderId, which the semantic pipeline key reads.
+  // No material: an HGRP primitive is drawn from the material joined onto it at load time.
   entity.addComponent(
-    world.createComponent(WebGPU3DRenderComponent, {
-      visible: character.visible,
-      material: {
-        albedo: rgba('#ffffff'),
-        metallic: 0,
-        roughness: 0.5,
-        emissive: rgba('#000000'),
-        emissiveIntensity: 0,
-        customShaderId: 'gltf_material_shader',
-        materialType: 'gltf' as const,
-      },
-    }),
+    world.createComponent(WebGPU3DRenderComponent, { visible: character.visible }),
   );
 
   world.addEntity(entity);

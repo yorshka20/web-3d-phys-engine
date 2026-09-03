@@ -15,6 +15,9 @@
   },
   "rules": {
     "no-unused-vars": "off",
+    // Off as it was under ESLint: 78 pre-existing findings would bury the signal. Worth
+    // turning to "warn" once they are cleared — it is what catches an import left behind
+    // when the code using it goes away.
     "typescript/no-unused-vars": "off",
     "typescript/no-explicit-any": "warn",
     "typescript/ban-ts-comment": "warn",

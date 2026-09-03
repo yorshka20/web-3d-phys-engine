@@ -1,9 +1,8 @@
 import { GLTFMaterial } from '@renderer/assets/GltfModel';
 import { GeometryData } from '@renderer/geometry/GeometryFactory';
 import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
-import { WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { PMXMaterialRouting, WebGPUMaterialDescriptor } from '@renderer/material/types';
 import { Inject, Injectable, ServiceTokens } from '../decorators';
-import { PMXMaterialCacheData } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
 import { ShaderManager } from '../shaders/ShaderManager';
 import { WebGPUContext } from '../WebGPUContext';
@@ -39,10 +38,12 @@ export interface PredefinedComputePipelineConfig {
   options: Partial<ComputePipelineCreationOptions>;
 }
 
-// union type support regular materials and PMX materials
+// The material families, discriminated by `materialType`. PMX travels as routing only — its
+// GPU-side material is built by PMXMaterialProcessor from the asset id and material index the
+// renderable carries, so it never belongs in this union.
 export type MaterialDescriptor =
   | WebGPUMaterialDescriptor
-  | PMXMaterialCacheData
+  | PMXMaterialRouting
   | GLTFMaterial
   | HGRPMaterialDescriptor;
 
@@ -362,28 +363,24 @@ export class PipelineFactory {
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
-    // Check if this is a PMX material
     if (material.materialType === 'pmx') {
-      return this.createPMXPipeline(material as PMXMaterialCacheData, geometry, customOptions);
+      return this.createPMXPipeline(material, geometry, customOptions);
     }
-
-    // Regular material handling
-    const regularMaterial = material as WebGPUMaterialDescriptor;
 
     // Add alpha mask handling if needed
     const options =
-      regularMaterial.alphaMode === 'mask'
+      material.alphaMode === 'mask'
         ? {
             ...customOptions,
             shaderDefines: {
               ALPHA_MASK: true,
-              ALPHA_CUTOFF: regularMaterial.alphaCutoff || 0.5,
+              ALPHA_CUTOFF: material.alphaCutoff || 0.5,
               ...customOptions?.shaderDefines,
             },
           }
         : customOptions;
 
-    const semanticKey = generateSemanticPipelineKey(regularMaterial, geometry, options);
+    const semanticKey = generateSemanticPipelineKey(material, geometry, options);
     return this.pipelineManager.getPipeline(semanticKey);
   }
 
@@ -598,28 +595,15 @@ export class PipelineFactory {
    * Create a pipeline specifically for PMX materials using CustomShader pattern
    */
   async createPMXPipeline(
-    material: PMXMaterialCacheData,
+    material: PMXMaterialRouting,
     geometry: GeometryData,
     customOptions?: Partial<PipelineCreationOptions>,
   ): Promise<GPURenderPipeline> {
-    // Create a compatible material descriptor for semantic key generation
-    const materialDescriptor: WebGPUMaterialDescriptor = {
-      albedo: { r: 255, g: 255, b: 255, a: 1 },
-      metallic: 0,
-      roughness: 0.5,
-      emissive: { r: 0, g: 0, b: 0, a: 1 },
-      emissiveIntensity: 0,
-      alphaMode: material.renderOrder === 'transparent' ? 'blend' : 'opaque',
-      doubleSided: false,
-      customShaderId: 'pmx_material_shader',
-      materialType: 'pmx',
-    };
-
     const options: PipelineCreationOptions = {
       vertexFormat: geometry.vertexFormat as 'simple' | 'full',
       cullMode: 'back',
       frontFace: 'ccw',
-      blendEnabled: material.renderOrder === 'transparent',
+      blendEnabled: material.alphaMode === 'blend',
       shaderDefines: {
         PMX_MATERIAL: true,
         MULTI_TEXTURE: true,
@@ -629,8 +613,7 @@ export class PipelineFactory {
       ...customOptions,
     };
 
-    // Generate semantic key for PMX materials
-    const semanticKey = generateSemanticPipelineKey(materialDescriptor, geometry, options);
+    const semanticKey = generateSemanticPipelineKey(material, geometry, options);
 
     // Use the PMX-specific shader module through pipeline manager
     return this.pipelineManager.getPipeline(semanticKey);

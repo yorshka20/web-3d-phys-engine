@@ -1,5 +1,5 @@
 import { GeometryData, VertexFormat } from '@renderer/geometry/GeometryFactory';
-import { AlphaMode, WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { AlphaMode, MaterialPipelineFacts } from '../../../material/types';
 import { mat4, vec3 } from 'gl-matrix';
 import { GeometryCacheItem } from '../types';
 
@@ -261,7 +261,7 @@ export interface ComputePipelineCreationOptions {
  * High-level semantic characteristics for ECS system
  */
 export function generateSemanticPipelineKey(
-  material: WebGPUMaterialDescriptor,
+  material: MaterialPipelineFacts,
   geometry: GeometryData,
   options: Partial<PipelineCreationOptions> = {},
 ): SemanticPipelineKey {
@@ -341,7 +341,7 @@ export function convertToGpuPipelineKey(semanticKey: SemanticPipelineKey): GpuPi
 /**
  * Check if material has any textures
  */
-function hasAnyTexture(material: WebGPUMaterialDescriptor): boolean {
+function hasAnyTexture(material: MaterialPipelineFacts): boolean {
   return !!(
     material.albedoTexture ||
     material.normalTexture ||
@@ -353,7 +353,7 @@ function hasAnyTexture(material: WebGPUMaterialDescriptor): boolean {
 /**
  * Determine render purpose from material properties
  */
-export function determineRenderPurpose(material: WebGPUMaterialDescriptor): RenderPurpose {
+export function determineRenderPurpose(material: MaterialPipelineFacts): RenderPurpose {
   if (material.alphaMode === 'blend') {
     return 'transparent';
   } else if (material.alphaMode === 'mask') {
@@ -367,7 +367,7 @@ export function determineRenderPurpose(material: WebGPUMaterialDescriptor): Rend
  * Determine render pass from material and options
  */
 function determineRenderPass(
-  material: WebGPUMaterialDescriptor,
+  material: MaterialPipelineFacts,
   options: Partial<PipelineCreationOptions> = {},
 ): 'opaque' | 'transparent' | 'wireframe' | 'shadow' {
   // Check for wireframe mode

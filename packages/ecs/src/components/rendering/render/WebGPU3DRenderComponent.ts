@@ -17,6 +17,21 @@ import { WebGPU3DRenderProperties } from './types';
  * - Support performance optimization features (LOD, culling, instancing)
  * - Track resource update requirements
  */
+// An entity whose geometry carries its own materials (glTF, HGRP, PMX) never reads this
+// component's material, so it has no business inventing one. The default stands in for the
+// regular family alone, and is also what reset() restores.
+function defaultRegularMaterial(): WebGPUMaterialDescriptor {
+  return {
+    albedo: rgba('#ffffff'),
+    metallic: 0,
+    roughness: 0.5,
+    emissive: rgba('#000000'),
+    emissiveIntensity: 0,
+    doubleSided: false,
+    materialType: 'normal',
+  };
+}
+
 export class WebGPU3DRenderComponent extends Component {
   static componentName = 'WebGPU3DRender';
 
@@ -61,7 +76,7 @@ export class WebGPU3DRenderComponent extends Component {
   constructor(properties: WebGPU3DRenderProperties) {
     super('WebGPU3DRender');
 
-    this.material = properties.material;
+    this.material = properties.material ?? defaultRegularMaterial();
     this.visible = properties.visible ?? true;
     this.castShadow = properties.castShadow ?? true;
     this.receiveShadow = properties.receiveShadow ?? true;
@@ -520,15 +535,7 @@ export class WebGPU3DRenderComponent extends Component {
 
     this.customUniforms = {};
 
-    this.material = {
-      albedo: rgba('#ffffff'),
-      metallic: 0,
-      roughness: 0.5,
-      emissive: rgba('#000000'),
-      emissiveIntensity: 0,
-      doubleSided: false,
-      materialType: 'normal',
-    };
+    this.material = defaultRegularMaterial();
 
     this.needsResourceUpdate = true;
     this.needsPipelineUpdate = true;

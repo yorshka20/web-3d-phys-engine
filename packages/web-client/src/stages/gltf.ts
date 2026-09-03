@@ -1,7 +1,6 @@
 import { Mesh3DComponent, Transform3DComponent, WebGPU3DRenderComponent } from '@ecs';
 import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
-import { rgba } from '@ecs/utils/color';
 
 // Khronos sample models are fetched at runtime, not imported at build time, so builds and CI
 // never depend on the gltf-samples checkout. The base URL comes from web-client/.env (pinned
@@ -127,23 +126,9 @@ export async function createGLTFStage(world: World) {
       }),
     );
 
-    // The gltf shader path renders each primitive's own glTF material, so the scalar factors
-    // here are unreadable rather than merely unused: the glTF binder packs baseColorFactor /
-    // metallicFactor / roughnessFactor, which this descriptor does not have. Only the routing
-    // pair materialType/customShaderId is read, by the semantic pipeline key.
-    entity.addComponent(
-      world.createComponent(WebGPU3DRenderComponent, {
-        material: {
-          albedo: rgba('#ffffff'),
-          metallic: 0,
-          roughness: 0.5,
-          emissive: rgba('#000000'),
-          emissiveIntensity: 0,
-          customShaderId: 'gltf_material_shader',
-          materialType: 'gltf' as const,
-        },
-      }),
-    );
+    // No material: each primitive is drawn from its own glTF document material, which the
+    // loader guarantees (GLTF_DEFAULT_MATERIAL fills in for a primitive that references none).
+    entity.addComponent(world.createComponent(WebGPU3DRenderComponent, {}));
 
     world.addEntity(entity);
   });

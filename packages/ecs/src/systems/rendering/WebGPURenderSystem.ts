@@ -18,6 +18,7 @@ import { GLTFModel } from '@renderer/assets/GltfModel';
 import { PMXModel } from '@renderer/assets/PMXModel';
 import { CameraData, FrameData, RenderData } from '@renderer/frame/types';
 import { GeometryData, GeometryFactory } from '@renderer/geometry/GeometryFactory';
+import { pmxMaterialRouting } from '@renderer/material/types';
 import { createWebGPURenderer } from '@renderer/webGPU';
 import { IWebGPURenderer } from '@renderer/webGPU/renderer/types/IWebGPURenderer';
 import { GlobalUniforms, RenderStats, ViewportData } from '@renderer/webGPU/types';
@@ -493,7 +494,11 @@ export class WebGPURenderSystem extends System {
         uniformKey: `pmx_${entity.id}`,
         worldMatrix: new Float32Array(worldMatrix),
         normalMatrix,
-        material: renderComponent.getMaterial(),
+        // The PMX family is decided by PMXMeshComponent, not by the render component's
+        // material: that one describes the regular family and nothing on this path reads it.
+        // alphaMode stays 'opaque' because per-material transparency is only known once
+        // PMXMaterialProcessor has read the asset, which happens after extract.
+        material: pmxMaterialRouting(),
         materialKey: `pmx_${pmxMeshComponent.assetId}_mat_${materialIndex}`,
         materialUniforms: renderComponent.getUniforms() || {},
         renderOrder: renderComponent.getLayer() || 0,

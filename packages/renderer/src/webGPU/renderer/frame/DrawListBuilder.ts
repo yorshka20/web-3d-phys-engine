@@ -1,6 +1,5 @@
 import { FrameData, RenderData } from '../../../frame/types';
 import { HGRPMaterialDescriptor, hgrpPermutationEnables } from '../../../material/hgrp';
-import { AlphaMode, WebGPUMaterialDescriptor } from '../../../material/types';
 import { vec3 } from 'gl-matrix';
 import { generateSemanticCacheKey, generateSemanticPipelineKey } from '../../core/pipeline/types';
 import { GeometryCacheItem } from '../../core/types';
@@ -209,7 +208,7 @@ function route(renderable: RenderData, lists: DrawLists, viewMatrix: Float32Arra
     return;
   }
 
-  const isBlend = (renderable.material as { alphaMode?: AlphaMode }).alphaMode === 'blend';
+  const isBlend = renderable.material.alphaMode === 'blend';
 
   // `_EnableOutline` alone decides whether a material outlines at all; which of the two hull
   // lists it joins is a separate question about depth availability, not about outlining.
@@ -220,10 +219,7 @@ function route(renderable: RenderData, lists: DrawLists, viewMatrix: Float32Arra
     );
   }
 
-  const semanticKey = generateSemanticPipelineKey(
-    renderable.material as WebGPUMaterialDescriptor,
-    renderable.geometryData,
-  );
+  const semanticKey = generateSemanticPipelineKey(renderable.material, renderable.geometryData);
   const item: DrawItem = {
     renderable,
     pipelineKey: generateSemanticCacheKey(semanticKey),

@@ -4,7 +4,8 @@ import { WebGPUMaterialDescriptor } from '@renderer/material/types';
  * WebGPU-specific rendering properties
  */
 export interface WebGPU3DRenderProperties {
-  material: WebGPUMaterialDescriptor;
+  // Optional: only the regular family reads it. See defaultRegularMaterial in the component.
+  material?: WebGPUMaterialDescriptor;
   visible?: boolean;
   castShadow?: boolean;
   receiveShadow?: boolean;

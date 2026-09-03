@@ -2,7 +2,6 @@ import { PMXMeshComponent, Transform3DComponent, Vec3, WebGPU3DRenderComponent }
 import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
 import { pmxAssetRegistry } from '@renderer/webGPU/core/PMXAssetRegistry';
-import { rgba } from '@ecs/utils/color';
 import { endministratorDescriptor } from './zzz/descriptors/endministrator';
 import { nahidaDescriptor } from './zzz/descriptors/nahida';
 import { perlicaDescriptor } from './zzz/descriptors/perlica';
@@ -58,19 +57,7 @@ function createPMXEntity(world: World, pmxModel: PMXModel) {
       rotation: pmxModel.rotation,
     }),
   );
-  entity.addComponent(
-    world.createComponent(WebGPU3DRenderComponent, {
-      material: {
-        albedo: rgba('#000000'),
-        metallic: 0,
-        roughness: 0.5,
-        emissive: rgba('#000000'),
-        emissiveIntensity: 0,
-        customShaderId: 'pmx_material_shader',
-        materialType: 'pmx' as const,
-      },
-    }),
-  );
+  entity.addComponent(world.createComponent(WebGPU3DRenderComponent, {}));
 
   world.addEntity(entity);
   return entity;

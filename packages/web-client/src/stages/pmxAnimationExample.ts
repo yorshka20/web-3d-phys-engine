@@ -20,7 +20,6 @@ import { World } from '@ecs/core/ecs/World';
 import { PMXAnimationController } from '@ecs/systems/animation/PMXAnimationController';
 import { AssetLoader } from '@renderer';
 import { pmxAssetRegistry } from '@renderer/webGPU/core/PMXAssetRegistry';
-import { rgba } from '@ecs/utils/color';
 import { alenDescriptor } from './zzz/descriptors/alen';
 import { burniceDescriptor } from './zzz/descriptors/burnice';
 import { perlicaDescriptor } from './zzz/descriptors/perlica';
@@ -98,19 +97,7 @@ function createPMXEntity(world: World, pmxModel: { name: string; position: Vec3;
       rotation: pmxModel.rotation,
     }),
   );
-  entity.addComponent(
-    world.createComponent(WebGPU3DRenderComponent, {
-      material: {
-        albedo: rgba('#ffffff'),
-        metallic: 0,
-        roughness: 0.5,
-        emissive: rgba('#000000'),
-        emissiveIntensity: 0,
-        customShaderId: 'pmx_material_shader',
-        materialType: 'pmx' as const,
-      },
-    }),
-  );
+  entity.addComponent(world.createComponent(WebGPU3DRenderComponent, {}));
 
   world.addEntity(entity);
   return entity;
