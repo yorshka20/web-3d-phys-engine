@@ -1,4 +1,4 @@
-import { GeometryData, VertexFormat } from '@renderer/geometry/GeometryFactory';
+import { GeometryData, VertexFormat } from '../../geometry/GeometryFactory';
 import {
   GLTFAnimation,
   GLTFAnimationSampler,
@@ -7,19 +7,20 @@ import {
   GLTFMeshInstance,
   GLTFModel,
   GLTFNode,
+  GLTF_DEFAULT_MATERIAL,
   GLTFPrimitive,
   GLTFPrimitiveMaterial,
   GLTFSkin,
-} from '@renderer/assets/GltfModel';
-import { PMXModel } from '@renderer/assets/PMXModel';
+} from '../../assets/GltfModel';
+import { PMXModel } from '../../assets/PMXModel';
 import {
   createDefaultHGRPMaterial,
   HGRPCharacterFlags,
   createHGRPMaterialFromPreset,
   HGRPPreset,
   hgrpTextureAssetId,
-} from '@renderer/material/hgrp';
-import { AlphaMode } from '@renderer/material/types';
+} from '../../material/hgrp';
+import { AlphaMode } from '../../material/types';
 import { Accessor, Document, Material, Mesh, Node, Primitive, WebIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { mat4 } from 'gl-matrix';
@@ -292,19 +293,21 @@ export class AssetLoader {
         if (meshIndex === undefined) {
           const primitives: GLTFPrimitive[] = [];
           for (const primitive of mesh.listPrimitives()) {
-            const cpuPrim = this.convertGLTFPrimitiveToGeometry(primitive);
+            const geometry = this.convertGLTFPrimitiveToGeometry(primitive);
             // Extract material and load textures
             const mat = primitive.getMaterial();
+            let material: GLTFPrimitiveMaterial = GLTF_DEFAULT_MATERIAL;
             if (mat) {
-              let material = materials.get(mat);
-              if (!material) {
+              const converted = materials.get(mat);
+              if (converted) {
+                material = converted;
+              } else {
                 material = await resolveMaterial(mat, materials.size);
                 materials.set(mat, material);
               }
-              cpuPrim.material = material;
             }
 
-            primitives.push(cpuPrim);
+            primitives.push({ geometry, material });
           }
           meshIndex = meshes.length;
           meshes.push({ primitives });
@@ -570,7 +573,7 @@ export class AssetLoader {
     return out;
   }
 
-  private static convertGLTFPrimitiveToGeometry(primitive: Primitive): GLTFPrimitive {
+  private static convertGLTFPrimitiveToGeometry(primitive: Primitive): GeometryData {
     const position = primitive.getAttribute('POSITION');
     if (!position) {
       throw new Error('GLTF primitive missing POSITION attribute');
@@ -772,7 +775,7 @@ export class AssetLoader {
       vertexAttributes,
     };
 
-    return { geometry };
+    return geometry;
   }
 
   /**

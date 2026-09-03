@@ -357,10 +357,8 @@ export class WebGPURenderSystem extends System {
           uniformKey,
           worldMatrix: new Float32Array(worldMatrix),
           normalMatrix,
-          material: primitive.material ?? renderComponent.getMaterial(),
-          // A primitive without a material falls back to the entity's component material,
-          // whose identity is then per-entity, not per-asset.
-          materialKey: primitive.material?.materialKey ?? `gltf_mat_fallback_${entity.id}`,
+          material: primitive.material,
+          materialKey: primitive.material.materialKey,
           materialUniforms: renderComponent.getUniforms() || {},
           renderOrder: renderComponent.getLayer() || 0,
           castShadow: renderComponent.getCastShadow() ?? true,

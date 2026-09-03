@@ -127,9 +127,10 @@ export async function createGLTFStage(world: World) {
       }),
     );
 
-    // The gltf shader path renders each primitive's own glTF material; the scalar factors here
-    // are inert placeholders — this component only routes materialType/customShaderId into the
-    // semantic pipeline key.
+    // The gltf shader path renders each primitive's own glTF material, so the scalar factors
+    // here are unreadable rather than merely unused: the glTF binder packs baseColorFactor /
+    // metallicFactor / roughnessFactor, which this descriptor does not have. Only the routing
+    // pair materialType/customShaderId is read, by the semantic pipeline key.
     entity.addComponent(
       world.createComponent(WebGPU3DRenderComponent, {
         material: {

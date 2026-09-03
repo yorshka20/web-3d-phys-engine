@@ -246,8 +246,10 @@ function createCharacterEntity(world: World, character: HGRPStageCharacter): Ent
     }),
   );
 
-  // Component material is only the fallback for primitives without a document material;
-  // every HGRP primitive carries a material joined at load time.
+  // Nothing reads these scalars: an HGRP primitive is drawn from the material joined onto it
+  // at load time, and a primitive with no document material now takes the glTF spec default
+  // (GLTF_DEFAULT_MATERIAL). What the component still carries is the routing pair
+  // materialType/customShaderId, which the semantic pipeline key reads.
   entity.addComponent(
     world.createComponent(WebGPU3DRenderComponent, {
       visible: character.visible,

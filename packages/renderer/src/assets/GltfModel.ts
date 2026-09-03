@@ -10,12 +10,32 @@ export type GLTFPrimitiveMaterial = GLTFMaterial | HGRPMaterialDescriptor;
 // Minimal CPU-side representation for GLTF
 export interface GLTFPrimitive {
   geometry: GeometryData; // interleaved vertices [pos, normal, uv]
-  material?: GLTFPrimitiveMaterial;
+  material: GLTFPrimitiveMaterial;
 }
 
 export interface GLTFMesh {
   primitives: GLTFPrimitive[];
 }
+// A glTF primitive may legally reference no material (glTF 2.0 §3.7.2.1), in which case the
+// spec's default material applies. It is resolved here, once, rather than at every draw:
+// materialKey is what every GPU-resource cache is keyed by, so the absence has to become one
+// shared identity — a per-entity stand-in would allocate an identical bind group per entity.
+// The factors are the spec defaults; note metallic and roughness are 1, not the 0/0.5 a
+// hand-written placeholder tends to carry.
+export const GLTF_DEFAULT_MATERIAL: GLTFMaterial = {
+  baseColorFactor: [1, 1, 1, 1],
+  metallicFactor: 1,
+  roughnessFactor: 1,
+  emissiveFactor: [0, 0, 0],
+  alphaMode: 'opaque',
+  alphaCutoff: 0.5,
+  doubleSided: false,
+  normalScale: 1,
+  occlusionStrength: 1,
+  materialType: 'gltf',
+  customShaderId: 'gltf_material_shader',
+  materialKey: 'gltf_default_material',
+};
 
 // One scene node that references a mesh, flattened at load time with its world transform
 // baked in. Several instances may share one meshIndex (glTF mesh reuse across nodes), so
