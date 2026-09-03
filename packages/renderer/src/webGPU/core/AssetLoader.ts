@@ -34,6 +34,15 @@ import {
 } from './AssetRegistry';
 import { pmxAssetRegistry } from './PMXAssetRegistry';
 
+// Decode images as authored: no alpha premultiplication — a data texture's RGB must survive
+// its alpha (the SDF mask is alpha 0 over most of the face, the surface map's alpha is its
+// smoothness, the iris base alpha is a highlight mask) — and no color-space conversion, since
+// the sRGB texture formats do the decoding for color textures.
+const IMAGE_DECODE_OPTIONS: ImageBitmapOptions = {
+  premultiplyAlpha: 'none',
+  colorSpaceConversion: 'none',
+};
+
 /**
  * Asset Loader - Centralized asset loading for the game engine
  * Only responsible for file loading and CPU data storage
@@ -462,7 +471,7 @@ export class AssetLoader {
    */
   private static async loadTextureFromBlob(blob: Blob, assetId: string): Promise<void> {
     try {
-      const imageBitmap = await createImageBitmap(blob);
+      const imageBitmap = await createImageBitmap(blob, IMAGE_DECODE_OPTIONS);
 
       const metadata: AssetMetadata = {
         type: 'texture',

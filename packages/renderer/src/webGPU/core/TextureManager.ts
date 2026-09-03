@@ -222,8 +222,12 @@ async function loadImageBitmap(url: string): Promise<ImageBitmap> {
   const response = await fetch(url);
   const blob = await response.blob();
 
-  // create ImageBitmap (can be decoded in worker thread)
-  const imageBitmap = await createImageBitmap(blob);
+  // create ImageBitmap (can be decoded in worker thread); as authored — no premultiplication,
+  // no color-space conversion (AssetLoader decodes the same way)
+  const imageBitmap = await createImageBitmap(blob, {
+    premultiplyAlpha: 'none',
+    colorSpaceConversion: 'none',
+  });
 
   return imageBitmap;
 }
