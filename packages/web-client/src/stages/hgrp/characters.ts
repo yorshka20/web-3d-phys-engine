@@ -65,7 +65,7 @@ export const hgrpStage = {
   // Uniform scale of the whole layout; 1 = the assets' metre scale. Larger values make the
   // characters fill the camera's orbit range, which is what the detail-inspection sessions
   // need. `?scale=` seeds it, the Stage tab edits it live.
-  globalScale: 1,
+  globalScale: 4,
   // Ground plane height (main.ts createPlane); the characters' feet sit here.
   groundY: -1,
   characters: [] as HGRPStageCharacter[],
@@ -161,7 +161,7 @@ export function resetHGRPStage(): void {
 export function hgrpScaleFromUrl(): number {
   const raw = new URLSearchParams(window.location.search).get('scale');
   const parsed = raw === null ? NaN : Number.parseFloat(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : hgrpStage.globalScale;
 }
 
 // Optional material layers are per character, so the switch travels with the load call.
