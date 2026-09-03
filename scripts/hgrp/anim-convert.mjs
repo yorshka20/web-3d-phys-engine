@@ -316,7 +316,9 @@ async function main() {
   if (args.auto && args.clips.length === 0) {
     args.clips = await selectClipsAutomatically(clipDir);
     if (args.clips.length === 0) {
-      console.warn(`[anim-convert] --auto found no skeletal clips for ${args.char}, nothing to bake`);
+      console.warn(
+        `[anim-convert] --auto found no skeletal clips for ${args.char}, nothing to bake`,
+      );
       return;
     }
     console.log(`[anim-convert] --auto selected: ${args.clips.join(', ')}`);

@@ -21,9 +21,10 @@ git submodule update --init
 pnpm typecheck
 
 # Linting and formatting
-pnpm lint          # eslint over packages/*/src
+pnpm lint          # oxlint over the repo (.oxlintrc.json)
 pnpm lint:fix
-pnpm format        # prettier
+pnpm format        # oxfmt over packages/*/src + scripts (.oxfmtrc.json)
+pnpm format:check
 
 # Build (root tsc + vite build of web-client)
 pnpm build
@@ -184,6 +185,19 @@ fragment paths, spliced by `ShaderCompiler` at runtime. All WGSL lives under
 `packages/renderer/src/webGPU/core/shaders/` (`core/`, `math/`, `lighting/`, `bindings/`
 snake_case, `materials/` PascalCase, `passes/`, `compute/`); see `shaders/README.md`.
 
+**A shader's parameters are declared, not plumbed** (2026-09-03): a module's `runtimeParams`
+table (`create.ts`, typed per shader in `shaders/types/material.ts`) is the single source for
+three derived things — the WGSL `struct ShaderParams` and its `@group(3) @binding(1)`
+declaration that `ShaderCompiler` splices in, the CPU packer, and the buffer `MaterialBinder`
+writes. A material overrides a subset through `material.shaderParams`; unset fields take the
+declared default. Nothing per-shader is written by hand: declare the param, read
+`shader_params.<name>` in WGSL. Binding 1 of the standard material group exists for every
+regular material (a shader that declares nothing points at a shared empty buffer), and the
+group's entries live in exactly one place, `core/standardMaterialLayout.ts`. The buffer is
+rewritten once per materialKey per frame, so editing a material's params shows up on the next
+frame — unlike `MaterialUniforms` (binding 0), which `MaterialManager` writes only when it
+first creates the bind group.
+
 **Adding a shader = one `.wgsl` file + one factory entry** (2026-09-02): `registry.ts` globs
 `shaders/**/*.wgsl` (`import.meta.glob`, inlined as strings by the Vite `wgsl-loader` plugin;
 keys are paths relative to `shaders/`, e.g. `materials/HGRPNpr.wgsl`), and `create.ts` holds
@@ -290,7 +304,8 @@ Current state that is easy to misread as bugs or dead code — check here before
   imports are being converted as files are touched.
 - **Native decorators only** (TC39 stage 3). Never turn `experimentalDecorators` back on; new
   renderer services follow the `@Injectable`/`@Inject` + `ServiceTokens` pattern.
-- **Formatting**: Prettier + ESLint (root scripts). Comments in **English**.
+- **Formatting**: oxfmt + oxlint (root scripts) — see `docs/toolchain.md` for what replaced
+  ESLint/Prettier and how the rule set was chosen. Comments in **English**.
 - **Never delete existing comments** when editing code (from `.cursorrules`), and do not break
   code unrelated to the task.
 - **Drive-by fixes are welcome** (user convention, 2026-09-02): a lint/format autofix or a

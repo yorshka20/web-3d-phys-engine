@@ -1,4 +1,4 @@
-import chroma from 'chroma-js'
+import chroma from 'chroma-js';
 
 /**
  * Convert HSL color to RGB

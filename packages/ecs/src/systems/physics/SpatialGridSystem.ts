@@ -20,7 +20,6 @@ export class SpatialGridSystem extends System {
    */
   private readonly UPDATE_INTERVAL = 100; // Update every 100ms (roughly 10fps)
 
-
   private spatialComponent: SpatialGridComponent | null = null;
 
   constructor() {
@@ -78,7 +77,6 @@ export class SpatialGridSystem extends System {
       }
       this.spatialComponent.insert(entity.id, position, entity.type, size);
     }
-
   }
 
   destroy(): void {

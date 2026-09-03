@@ -37,8 +37,9 @@ export interface SplineDescriptor extends BaseShapeDescriptor {
 }
 
 // Parametric curve descriptor with type safety
-export interface ParametricDescriptor<T extends ParametricCurveName = ParametricCurveName>
-  extends BaseShapeDescriptor {
+export interface ParametricDescriptor<
+  T extends ParametricCurveName = ParametricCurveName,
+> extends BaseShapeDescriptor {
   type: 'parametric';
   equationName: T; // Registered equation name
   parameters: GetParametricParams<T>;

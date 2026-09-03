@@ -326,6 +326,5 @@ export class ExactCollisionSystem extends System {
         physicsB.setVelocity([velB[0] + impulseX, velB[1] + impulseY]);
       }
     }
-
   }
 }

@@ -2,7 +2,11 @@ import { Component } from '@ecs/core/ecs/Component';
 import { Vec3 } from '@ecs/types/types';
 import { AssetDescriptor, assetRegistry, AssetType } from '@renderer';
 import { GeometryData, GeometryFactory } from '@renderer/geometry/GeometryFactory';
-import { AnyMesh3DShapeDescriptor, GeometryPrimitiveOptions, Vertex3D } from '@renderer/geometry/types';
+import {
+  AnyMesh3DShapeDescriptor,
+  GeometryPrimitiveOptions,
+  Vertex3D,
+} from '@renderer/geometry/types';
 
 interface Mesh3DProps {
   descriptor: AnyMesh3DShapeDescriptor;

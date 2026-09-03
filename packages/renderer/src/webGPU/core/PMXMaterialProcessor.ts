@@ -633,10 +633,8 @@ export class PMXMaterialProcessor {
 
     // 11. sphereMode: f32 - 4 bytes (based on envFlag setting)
     let sphereMode = 0.0;
-    if (material.envFlag === 1)
-      sphereMode = 1.0; // multiply blending
-    else if (material.envFlag === 2)
-      sphereMode = 2.0; // add blending
+    if (material.envFlag === 1) sphereMode = 1.0; // multiply blending
+    else if (material.envFlag === 2) sphereMode = 2.0; // add blending
     else if (material.envFlag === 3) sphereMode = 3.0; // subtract blending
     uniformData[offset++] = sphereMode;
 

@@ -1,3 +1,7 @@
+// Repeated rates are meaningful here (WEAPON and GLOBAL_PULL share one): this is a table of
+// named drop rates, not a discriminant, so the reverse mapping a numeric enum generates is
+// never used.
+// oxlint-disable typescript/no-duplicate-enum-values
 export enum ItemDropRate {
   EXPERIENCE = 1,
   LASER_BURST = 0.5,

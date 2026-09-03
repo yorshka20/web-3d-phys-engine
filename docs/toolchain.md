@@ -92,3 +92,31 @@ History: the reference used to work only by accident — `typeRoots` listed
 TS loaded `dist/` as a pseudo-package). CLI tsc passed; IDE language servers did not replicate
 the quirk. The `typeRoots` override was removed entirely — the default (`@types` folders up the
 tree) plus the explicit reference is the documented setup.
+
+## Linting and formatting: oxlint + oxfmt (2026-09)
+
+ESLint 8 + Prettier were replaced by [oxlint](https://oxc.rs) (`.oxlintrc.json`) and oxfmt
+(`.oxfmtrc.json`). `@typescript-eslint/*`, `eslint-config-prettier`, `eslint-plugin-prettier`
+and `prettier` are gone from the root devDependencies, and `.eslintrc.json` / `.prettierrc` /
+`.prettierignore` with them.
+
+The ESLint script had also been broken: `eslint "packages/*/src" --ext ts,tsx` exited with
+"No files matching the pattern" under ESLint 8, so nothing was actually linted from the root.
+
+**Formatting is unchanged in practice.** `oxfmt --migrate=prettier` carried the settings over
+(`.prettierrc`'s `endOfLine: auto` has no oxfmt equivalent and was dropped); reformatting all
+of `packages/*/src` touched 9 files, all of them places Prettier had never been run.
+
+**Rule set.** Only oxlint's `correctness` category is an error, which is about the strictness
+`eslint:recommended` + `@typescript-eslint/recommended` had. The stricter categories and the
+unicorn plugin flag idioms this codebase uses on purpose — sequential `await` in the asset
+loaders, Unity's `_BaseMap` field names, in-place sorts — so they stay off rather than being
+suppressed file by file. Two rules are disabled with the reason in the config: `import/default`
+(Vite resolves `?worker` / `?url` through a plugin, so no static resolver can see the default
+export) and, at the top of `constants/itemDropRate.ts`, `typescript/no-duplicate-enum-values`.
+
+**Scope.** `pnpm lint` runs over the repo; `pnpm format` takes explicit directories
+(`packages/*/src` + `scripts`) rather than a glob. oxfmt's `*` matches across path separators,
+so a glob like `"*.{ts,mts}"` reaches into subdirectories — and a bare `oxfmt` would reformat
+every tracked `.json` and `.gltf` in the tree. Markdown is excluded in `.oxfmtrc.json`: oxfmt
+formats the code blocks inside it, and the prose here is hand-wrapped.

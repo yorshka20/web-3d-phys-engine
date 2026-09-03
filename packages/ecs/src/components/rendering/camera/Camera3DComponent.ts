@@ -26,7 +26,6 @@ export interface Camera3DProps {
   up?: Vec3; // Up vector for 3D camera
 }
 
-
 export class Camera3DComponent extends Component {
   static componentName = 'Camera';
 

@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // `correctness` alone matches the strictness the ESLint setup this replaced had
+  // (eslint:recommended + @typescript-eslint/recommended). The stricter categories and the
+  // unicorn plugin flag idioms this codebase uses deliberately — sequential awaits in asset
+  // loaders, Unity's `_BaseMap` field names, in-place sorts.
+  "plugins": ["typescript", "oxc", "import"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true,
+    "node": true
+  },
+  "rules": {
+    "no-unused-vars": "off",
+    "typescript/no-unused-vars": "off",
+    "typescript/no-explicit-any": "warn",
+    "typescript/ban-ts-comment": "warn",
+    "no-prototype-builtins": "off",
+    // Vite's `?worker` / `?url` suffixes are resolved by a plugin, so no static resolver can
+    // see their default export.
+    "import/default": "off"
+  },
+  "ignorePatterns": ["dist", "node_modules", "documents", "packages/gltf-samples"]
+}

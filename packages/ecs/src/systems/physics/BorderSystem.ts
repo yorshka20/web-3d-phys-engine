@@ -26,7 +26,6 @@ export class BorderSystem extends System {
 
   constructor(private friction: number = 1) {
     super('BorderSystem', SystemPriorities.BORDER, 'logic');
-    this.friction = friction;
 
     this.workerPoolManager = WorkerPoolManager.getInstance();
   }

@@ -18,7 +18,6 @@ import { CollisionSystem } from '../physics/collision';
 export class DamageSystem extends System {
   private collisionSystem: CollisionSystem | null = null;
 
-
   constructor() {
     super('DamageSystem', SystemPriorities.DAMAGE, 'logic');
     // this.debug = true;
@@ -444,6 +443,5 @@ export class DamageSystem extends System {
     for (const entity of entitiesToRemove) {
       this.world.removeEntity(entity);
     }
-
   }
 }

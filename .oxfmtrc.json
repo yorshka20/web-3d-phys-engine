@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "arrowParens": "always",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "pnpm-lock.yaml",
+    "documents",
+    "node_modules",
+    "dist",
+    "packages/gltf-samples",
+    ".claude-workbook",
+    ".claude-learnings",
+    "**/*.md"
+  ]
+}
