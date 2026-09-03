@@ -24,6 +24,9 @@ import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
 import { createHGRPStage } from './stages/hgrp';
 import { mountCameraPanel } from './ui/cameraPanel';
+import { registerDebugTab } from './ui/debugPanel';
+import { createEntityTab } from './ui/entityTab';
+import { createSpawnTab } from './ui/spawnTab';
 // import { createEndfieldStage } from './stages/endfield';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
@@ -88,7 +91,7 @@ async function main() {
   world.addSystem(new WebGPURenderSystem(rootElement));
 
   const camera = create3DCamera(world, stageCameraConfig[stage]);
-  cretePlane(world);
+  createPlane(world);
   createCoordinate(world);
 
   switch (stage) {
@@ -115,6 +118,11 @@ async function main() {
     default:
       break;
   }
+
+  // Registered after the stage so its own tabs keep the rail's first slot; the entity list
+  // reads the world at mount time, so registration order does not affect what it shows.
+  registerDebugTab(createEntityTab(world));
+  registerDebugTab(createSpawnTab(world));
 
   // Initialize the game
   await game.initialize();
@@ -283,14 +291,14 @@ function create3DCamera(world: World, config: CameraConfig = {}) {
   return camera;
 }
 
-function cretePlane(world: World) {
+function createPlane(world: World) {
   const plane = world.createEntity('object');
   plane.setLabel('plane');
   plane.addComponent(
     world.createComponent(Mesh3DComponent, {
       descriptor: {
         type: 'plane',
-        params: { sx: 30, sy: 40, nx: 30, ny: 40, direction: 'y' },
+        params: { sx: 400, sy: 400, nx: 1, ny: 1, direction: 'y' },
       },
     }),
   );
@@ -304,6 +312,7 @@ function cretePlane(world: World) {
         emissive: rgba('#000000'),
         emissiveIntensity: 0,
         customShaderId: 'checkerboard_shader',
+        shaderParams: { cellSize: 4 },
         materialType: 'normal' as const,
       },
     }),
