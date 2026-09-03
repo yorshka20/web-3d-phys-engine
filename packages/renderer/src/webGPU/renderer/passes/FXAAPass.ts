@@ -1,9 +1,8 @@
 import fxaaShader from '../../core/shaders/passes/fxaa.wgsl';
+import { Inject, ServiceTokens } from '../../core/decorators';
+import { WebGPUContext } from '../../core/WebGPUContext';
 
-export interface FXAAPassDeps {
-  device: GPUDevice;
-  outputFormat: GPUTextureFormat;
-  // Encoded LDR tonemap output (recreated on resize); swapchain view changes per frame
+export interface FXAATargets {
   getInputTexture(): GPUTexture;
   getOutputView(): GPUTextureView;
 }
@@ -23,7 +22,14 @@ export class FXAAPass {
   private bindGroupInput?: GPUTexture;
   private sampler?: GPUSampler;
 
-  constructor(private readonly deps: FXAAPassDeps) {}
+  @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
+  @Inject(ServiceTokens.WEBGPU_CONTEXT) private accessor context!: WebGPUContext;
+
+  /**
+   * The LDR input is recreated on resize and the swapchain view changes every frame, so both
+   * arrive as closures. The output format comes from the context, which owns it.
+   */
+  constructor(private readonly targets: FXAATargets) {}
 
   execute(commandEncoder: GPUCommandEncoder): void {
     const pipeline = this.ensurePipeline();
@@ -33,7 +39,7 @@ export class FXAAPass {
       label: 'fxaa_pass',
       colorAttachments: [
         {
-          view: this.deps.getOutputView(),
+          view: this.targets.getOutputView(),
           loadOp: 'clear',
           storeOp: 'store',
           clearValue: [0, 0, 0, 1],
@@ -52,18 +58,18 @@ export class FXAAPass {
       return this.pipeline;
     }
 
-    const shaderModule = this.deps.device.createShaderModule({
+    const shaderModule = this.device.createShaderModule({
       label: 'fxaa_shader',
       code: fxaaShader,
     });
-    this.sampler = this.deps.device.createSampler({
+    this.sampler = this.device.createSampler({
       label: 'fxaa_sampler',
       magFilter: 'linear',
       minFilter: 'linear',
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
-    this.bindGroupLayout = this.deps.device.createBindGroupLayout({
+    this.bindGroupLayout = this.device.createBindGroupLayout({
       label: 'fxaa_bind_group_layout',
       entries: [
         { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
@@ -71,9 +77,9 @@ export class FXAAPass {
       ],
     });
 
-    this.pipeline = this.deps.device.createRenderPipeline({
+    this.pipeline = this.device.createRenderPipeline({
       label: 'fxaa_pipeline',
-      layout: this.deps.device.createPipelineLayout({
+      layout: this.device.createPipelineLayout({
         label: 'fxaa_pipeline_layout',
         bindGroupLayouts: [this.bindGroupLayout],
       }),
@@ -81,7 +87,7 @@ export class FXAAPass {
       fragment: {
         module: shaderModule,
         entryPoint: 'fs_main',
-        targets: [{ format: this.deps.outputFormat }],
+        targets: [{ format: this.context.getPreferredFormat() }],
       },
       primitive: { topology: 'triangle-list' },
     });
@@ -90,12 +96,12 @@ export class FXAAPass {
   }
 
   private ensureBindGroup(): GPUBindGroup {
-    const input = this.deps.getInputTexture();
+    const input = this.targets.getInputTexture();
     if (this.bindGroup && this.bindGroupInput === input) {
       return this.bindGroup;
     }
 
-    this.bindGroup = this.deps.device.createBindGroup({
+    this.bindGroup = this.device.createBindGroup({
       label: 'fxaa_bind_group',
       layout: this.bindGroupLayout!,
       entries: [

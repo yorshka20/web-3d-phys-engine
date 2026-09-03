@@ -3,7 +3,7 @@ import { RectArea } from '../../types/base';
 import { MVPUniformManager, TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { BindGroupManager } from '../core/BindGroupManager';
 import { BufferManager } from '../core/BufferManager';
-import { DIContainer, Inject, ServiceTokens } from '../core/decorators';
+import { DIContainer, Inject, ServiceTokens, validateDependencies } from '../core/decorators';
 import { provideRendererServices } from '../core/services';
 import { GeometryManager } from '../core/GeometryManager';
 import { GPUResourceCoordinator } from '../core/GPUResourceCoordinator';
@@ -171,6 +171,11 @@ export class WebGPURenderer implements IWebGPURenderer {
 
     const renderer = new WebGPURenderer(rootElement, name, canvas, context);
 
+    // After construction, not during provideRendererServices: an @Inject declaration is
+    // recorded when its owner is constructed, and the passes are constructed by the
+    // constructor — validating any earlier would silently skip every one of them.
+    validateDependencies();
+
     // Managers that load their own GPU assets. They are already constructed and registered;
     // this is initialization of the services, not of the renderer's fields.
     await renderer.textureManager.initialize();
@@ -317,87 +322,45 @@ export class WebGPURenderer implements IWebGPURenderer {
    * directly and keep them `readonly`.
    */
   private createPasses(): FramePasses {
-    // Renderer-private pass objects (constructor-wired, not DI services)
-    const outlineStage = new HGRPOutlineStage({
-      device: this.device,
-      shaderManager: this.shaderManager,
-      bindGroupManager: this.bindGroupManager,
-      materialBinder: this.materialBinder,
-      mvpUniformManager: this.mvpUniformManager,
-      geometryManager: this.geometryManager,
-      sceneColorFormat: this.context.getSceneColorFormat(),
-      depthStencilFormat: this.context.getDepthStencilFormat(),
-    });
+    // Every service these passes use they now inject themselves; what is passed in is what a
+    // container cannot provide — the render targets this renderer owns and recreates, reached
+    // through closures so a resize is invisible to the pass.
+    const outlineStage = new HGRPOutlineStage();
     const eyeOverlayStage = new HGRPEyeOverlayStage({
-      device: this.device,
-      shaderManager: this.shaderManager,
-      bindGroupManager: this.bindGroupManager,
-      materialBinder: this.materialBinder,
-      mvpUniformManager: this.mvpUniformManager,
-      geometryManager: this.geometryManager,
-      sceneColorFormat: this.context.getSceneColorFormat(),
-      depthStencilFormat: this.context.getDepthStencilFormat(),
       getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });
     const browCompositeStage = new HGRPBrowCompositeStage({
-      device: this.device,
-      shaderManager: this.shaderManager,
-      bindGroupManager: this.bindGroupManager,
-      materialBinder: this.materialBinder,
-      mvpUniformManager: this.mvpUniformManager,
-      geometryManager: this.geometryManager,
-      sceneColorFormat: this.context.getSceneColorFormat(),
-      depthStencilFormat: this.context.getDepthStencilFormat(),
       getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });
-    const forwardPass = new ForwardPass({
-      pipelineFactory: this.pipelineFactory,
-      geometryManager: this.geometryManager,
-      mvpUniformManager: this.mvpUniformManager,
-      materialBinder: this.materialBinder,
-      pmxMaterialProcessor: this.pmxMaterialProcessor,
-      pmxAnimationBufferManager: this.pmxAnimationBufferManager,
-      resourceManager: this.resourceManager,
-      outlineStage,
-      eyeOverlayStage,
-      browCompositeStage,
-      getColorView: () => this.sizedTextures.sceneColor.createView(),
-      getDepthView: () => this.sizedTextures.depth.createView(),
-      getHGRPFrameBindGroup: () => this.getHGRPFrameBindGroup(),
-    });
+
+    const forwardPass = new ForwardPass(
+      { outlineStage, eyeOverlayStage, browCompositeStage },
+      {
+        getColorView: () => this.sizedTextures.sceneColor.createView(),
+        getDepthView: () => this.sizedTextures.depth.createView(),
+        getHGRPFrameBindGroup: () => this.getHGRPFrameBindGroup(),
+      },
+    );
     const depthPrepass = new DepthPrepass({
-      device: this.device,
-      bindGroupManager: this.bindGroupManager,
-      mvpUniformManager: this.mvpUniformManager,
-      geometryManager: this.geometryManager,
-      depthFormat: this.context.getPrepassDepthFormat(),
       getDepthView: () => this.sizedTextures.prepassDepth.createView(),
     });
     const bloomPass = new BloomPass({
-      device: this.device,
       getInputTexture: () => this.sizedTextures.sceneColor,
     });
-    const tonemapPass = new TonemapPass({
-      device: this.device,
-      outputFormat: 'rgba8unorm',
+    const tonemapPass = new TonemapPass('rgba8unorm', {
       getInputTexture: () => this.sizedTextures.sceneColor,
       getBloomView: () => bloomPass.getBloomView(),
       getOutputView: () => this.sizedTextures.ldr.createView(),
     });
     const taaPass = new TAAPass({
-      device: this.device,
       getInputTexture: () => this.sizedTextures.ldr,
       getDepthTexture: () => this.sizedTextures.depth,
     });
     const fxaaPass = new FXAAPass({
-      device: this.device,
-      outputFormat: this.context.getPreferredFormat(),
       getInputTexture: () => this.fxaaSource,
       getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
     const blitPass = new BlitPass({
-      device: this.device,
-      outputFormat: this.context.getPreferredFormat(),
       getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
 

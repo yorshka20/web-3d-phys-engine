@@ -1,4 +1,6 @@
 import { FrameData } from '@renderer/frame/types';
+import { Inject, ServiceTokens } from '../../core/decorators';
+import { WebGPUContext } from '../../core/WebGPUContext';
 import { HGRPMaterialDescriptor } from '@renderer/material/hgrp';
 import gltfSkinningShader from '../../core/shaders/core/gltf_skinning.wgsl';
 import depthPrepassShader from '../../core/shaders/passes/depth_prepass.wgsl';
@@ -7,13 +9,8 @@ import { GeometryManager } from '../../core/GeometryManager';
 import { MVPUniformManager } from '../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../core/pipeline/vertexLayouts';
 
-export interface DepthPrepassDeps {
-  device: GPUDevice;
-  bindGroupManager: BindGroupManager;
-  mvpUniformManager: MVPUniformManager;
-  geometryManager: GeometryManager;
-  depthFormat: GPUTextureFormat;
-  // Recreated on resize, injected as a closure like the ForwardPass attachments
+/** The prepass depth texture is recreated on resize, so its view arrives as a closure. */
+export interface DepthPrepassTargets {
   getDepthView(): GPUTextureView;
 }
 
@@ -36,7 +33,13 @@ export interface DepthPrepassDeps {
 export class DepthPrepass {
   private pipeline?: GPURenderPipeline;
 
-  constructor(private readonly deps: DepthPrepassDeps) {}
+  @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
+  @Inject(ServiceTokens.WEBGPU_CONTEXT) private accessor context!: WebGPUContext;
+  @Inject(ServiceTokens.BIND_GROUP_MANAGER) private accessor bindGroupManager!: BindGroupManager;
+  @Inject(ServiceTokens.MVP_UNIFORM_MANAGER) private accessor mvpUniformManager!: MVPUniformManager;
+  @Inject(ServiceTokens.GEOMETRY_MANAGER) private accessor geometryManager!: GeometryManager;
+
+  constructor(private readonly targets: DepthPrepassTargets) {}
 
   execute(commandEncoder: GPUCommandEncoder, frameData: FrameData): void {
     const items = frameData.renderables.filter(
@@ -51,7 +54,7 @@ export class DepthPrepass {
       label: 'depth_prepass',
       colorAttachments: [],
       depthStencilAttachment: {
-        view: this.deps.getDepthView(),
+        view: this.targets.getDepthView(),
         depthClearValue: 1.0,
         depthLoadOp: 'clear',
         depthStoreOp: 'store',
@@ -64,11 +67,11 @@ export class DepthPrepass {
       let boundGeometryId: string | undefined;
       let boundUniformKey: string | undefined;
       for (const renderable of items) {
-        const geometry = this.deps.geometryManager.createGeometryFromData(renderable.geometryId, {
+        const geometry = this.geometryManager.createGeometryFromData(renderable.geometryId, {
           geometryData: renderable.geometryData,
         });
         if (renderable.uniformKey !== boundUniformKey) {
-          const mvpBindGroup = this.deps.mvpUniformManager.updateMVPUniforms(renderable, frameData);
+          const mvpBindGroup = this.mvpUniformManager.updateMVPUniforms(renderable, frameData);
           renderPass.setBindGroup(0, mvpBindGroup);
           boundUniformKey = renderable.uniformKey;
         }
@@ -89,21 +92,21 @@ export class DepthPrepass {
       return this.pipeline;
     }
 
-    const mvpLayout = this.deps.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
+    const mvpLayout = this.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
     if (!mvpLayout) {
       throw new Error('MVP bind group layout not found for the depth prepass pipeline');
     }
 
-    const shaderModule = this.deps.device.createShaderModule({
+    const shaderModule = this.device.createShaderModule({
       label: 'depth_prepass_shader',
       // Standalone pass source, so the shared skinning fragment is spliced in here rather
       // than through the material-shader include machinery
       code: `${gltfSkinningShader}\n${depthPrepassShader}`,
     });
 
-    this.pipeline = this.deps.device.createRenderPipeline({
+    this.pipeline = this.device.createRenderPipeline({
       label: 'depth_prepass_pipeline',
-      layout: this.deps.device.createPipelineLayout({
+      layout: this.device.createPipelineLayout({
         label: 'depth_prepass_pipeline_layout',
         bindGroupLayouts: [mvpLayout],
       }),
@@ -116,7 +119,7 @@ export class DepthPrepass {
       // (skirts, hair cards) leave complete depth.
       primitive: { topology: 'triangle-list', cullMode: 'none', frontFace: 'ccw' },
       depthStencil: {
-        format: this.deps.depthFormat,
+        format: this.context.getPrepassDepthFormat(),
         depthWriteEnabled: true,
         depthCompare: 'less',
       },

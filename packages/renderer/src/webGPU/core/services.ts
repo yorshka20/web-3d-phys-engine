@@ -10,7 +10,7 @@
 // that leaves a decorator undefined at decoration time under Vite SSR (see CLAUDE.md).
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
-import { globalContainer, ServiceTokens, validateDependencies } from './decorators/DIContainer';
+import { globalContainer, ServiceTokens } from './decorators/DIContainer';
 import { GeometryManager } from './GeometryManager';
 import { GPUResourceCoordinator } from './GPUResourceCoordinator';
 import { MaterialBinder } from './MaterialBinder';
@@ -59,9 +59,6 @@ export function provideRendererServices(device: GPUDevice, context: WebGPUContex
   // The two the container cannot build: they come from the async WebGPU setup.
   globalContainer.provideValue(ServiceTokens.WEBGPU_DEVICE, device);
   globalContainer.provideValue(ServiceTokens.WEBGPU_CONTEXT, context);
-
-  // Every @Inject declaration has a provider, or this says which one does not.
-  validateDependencies();
 
   return globalContainer;
 }

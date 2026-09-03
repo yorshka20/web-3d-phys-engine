@@ -1,12 +1,9 @@
 import tonemapShader from '../../core/shaders/passes/tonemap.wgsl';
+import { Inject, ServiceTokens } from '../../core/decorators';
 import { isHGRPDebugViewOn } from '../sceneSettings';
 import { bloomSettings } from './BloomPass';
 
-export interface TonemapPassDeps {
-  device: GPUDevice;
-  outputFormat: GPUTextureFormat;
-  // The HDR scene-color texture is recreated only on resize; the output view and bloom
-  // view can change per frame — all injected as closures like ForwardPass attachments.
+export interface TonemapTargets {
   getInputTexture(): GPUTexture;
   getBloomView(): GPUTextureView;
   getOutputView(): GPUTextureView;
@@ -49,7 +46,17 @@ export class TonemapPass {
   private settingsBuffer?: GPUBuffer;
   private readonly settingsData = new Float32Array(8);
 
-  constructor(private readonly deps: TonemapPassDeps) {}
+  @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
+
+  /**
+   * `outputFormat` is the renderer's choice of LDR target format, not something the context
+   * dictates, so it stays an argument. The three views are closures: the scene-color texture
+   * is recreated on resize, and the bloom and output views can change per frame.
+   */
+  constructor(
+    private readonly outputFormat: GPUTextureFormat,
+    private readonly targets: TonemapTargets,
+  ) {}
 
   execute(commandEncoder: GPUCommandEncoder): void {
     const pipeline = this.ensurePipeline();
@@ -61,13 +68,13 @@ export class TonemapPass {
     this.settingsData[3] = tonemapSettings.saturation;
     this.settingsData[4] = tonemapSettings.temperature;
     this.settingsData[5] = isHGRPDebugViewOn() ? 1 : 0;
-    this.deps.device.queue.writeBuffer(this.settingsBuffer!, 0, this.settingsData);
+    this.device.queue.writeBuffer(this.settingsBuffer!, 0, this.settingsData);
 
     const renderPass = commandEncoder.beginRenderPass({
       label: 'tonemap_pass',
       colorAttachments: [
         {
-          view: this.deps.getOutputView(),
+          view: this.targets.getOutputView(),
           loadOp: 'clear',
           storeOp: 'store',
           clearValue: [0, 0, 0, 1],
@@ -86,12 +93,12 @@ export class TonemapPass {
       return this.pipeline;
     }
 
-    const shaderModule = this.deps.device.createShaderModule({
+    const shaderModule = this.device.createShaderModule({
       label: 'tonemap_shader',
       code: tonemapShader,
     });
 
-    this.bloomSampler = this.deps.device.createSampler({
+    this.bloomSampler = this.device.createSampler({
       label: 'tonemap_bloom_sampler',
       magFilter: 'linear',
       minFilter: 'linear',
@@ -99,7 +106,7 @@ export class TonemapPass {
       addressModeV: 'clamp-to-edge',
     });
 
-    this.bindGroupLayout = this.deps.device.createBindGroupLayout({
+    this.bindGroupLayout = this.device.createBindGroupLayout({
       label: 'tonemap_bind_group_layout',
       entries: [
         {
@@ -126,9 +133,9 @@ export class TonemapPass {
       ],
     });
 
-    this.pipeline = this.deps.device.createRenderPipeline({
+    this.pipeline = this.device.createRenderPipeline({
       label: 'tonemap_pipeline',
-      layout: this.deps.device.createPipelineLayout({
+      layout: this.device.createPipelineLayout({
         label: 'tonemap_pipeline_layout',
         bindGroupLayouts: [this.bindGroupLayout],
       }),
@@ -136,7 +143,7 @@ export class TonemapPass {
       fragment: {
         module: shaderModule,
         entryPoint: 'fs_main',
-        targets: [{ format: this.deps.outputFormat }],
+        targets: [{ format: this.outputFormat }],
       },
       primitive: { topology: 'triangle-list' },
     });
@@ -145,21 +152,21 @@ export class TonemapPass {
   }
 
   private ensureBindGroup(): GPUBindGroup {
-    const input = this.deps.getInputTexture();
-    const bloomView = this.deps.getBloomView();
+    const input = this.targets.getInputTexture();
+    const bloomView = this.targets.getBloomView();
     if (this.bindGroup && this.bindGroupInput === input && this.bindGroupBloomView === bloomView) {
       return this.bindGroup;
     }
 
     if (!this.settingsBuffer) {
-      this.settingsBuffer = this.deps.device.createBuffer({
+      this.settingsBuffer = this.device.createBuffer({
         label: 'tonemap_settings',
         size: this.settingsData.byteLength,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
     }
 
-    this.bindGroup = this.deps.device.createBindGroup({
+    this.bindGroup = this.device.createBindGroup({
       label: 'tonemap_bind_group',
       layout: this.bindGroupLayout!,
       entries: [

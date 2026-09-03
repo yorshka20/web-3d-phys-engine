@@ -11,20 +11,10 @@ import { MVPUniformManager } from '../../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../../core/pipeline/vertexLayouts';
 import { hgrpPassShaderId } from '../../../core/shaders/create';
 import { ShaderManager } from '../../../core/shaders/ShaderManager';
+import { Inject, ServiceTokens } from '../../../core/decorators';
+import { WebGPUContext } from '../../../core/WebGPUContext';
 import { DrawItem } from '../../frame/DrawListBuilder';
-
-export interface HGRPEyeOverlayStageDeps {
-  device: GPUDevice;
-  shaderManager: ShaderManager;
-  bindGroupManager: BindGroupManager;
-  materialBinder: MaterialBinder;
-  mvpUniformManager: MVPUniformManager;
-  geometryManager: GeometryManager;
-  sceneColorFormat: GPUTextureFormat;
-  depthStencilFormat: GPUTextureFormat;
-  // HGRP group 3 (per-frame globals: prepass depth for the screen-space rim)
-  getFrameBindGroup(): GPUBindGroup;
-}
+import { HGRPFrameGlobals } from './types';
 
 /**
  * HGRP Eye Overlay Stage
@@ -47,7 +37,15 @@ export class HGRPEyeOverlayStage {
   private pipelines = new Map<string, GPURenderPipeline>();
   private frameBindings = new Map<string, GPUBindGroup | undefined>();
 
-  constructor(private readonly deps: HGRPEyeOverlayStageDeps) {}
+  @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
+  @Inject(ServiceTokens.WEBGPU_CONTEXT) private accessor context!: WebGPUContext;
+  @Inject(ServiceTokens.SHADER_MANAGER) private accessor shaderManager!: ShaderManager;
+  @Inject(ServiceTokens.BIND_GROUP_MANAGER) private accessor bindGroupManager!: BindGroupManager;
+  @Inject(ServiceTokens.MATERIAL_BINDER) private accessor materialBinder!: MaterialBinder;
+  @Inject(ServiceTokens.MVP_UNIFORM_MANAGER) private accessor mvpUniformManager!: MVPUniformManager;
+  @Inject(ServiceTokens.GEOMETRY_MANAGER) private accessor geometryManager!: GeometryManager;
+
+  constructor(private readonly globals: HGRPFrameGlobals) {}
 
   async prepare(items: DrawItem[]): Promise<void> {
     this.frameBindings.clear();
@@ -55,11 +53,11 @@ export class HGRPEyeOverlayStage {
     for (const item of items) {
       const { renderable } = item;
       item.pipeline = this.ensurePipeline(renderable.material as HGRPMaterialDescriptor);
-      item.geometry = this.deps.geometryManager.createGeometryFromData(renderable.geometryId, {
+      item.geometry = this.geometryManager.createGeometryFromData(renderable.geometryId, {
         geometryData: renderable.geometryData,
       });
       if (!this.frameBindings.has(renderable.materialKey)) {
-        const bindings = await this.deps.materialBinder.ensureMaterialBindings(renderable);
+        const bindings = await this.materialBinder.ensureMaterialBindings(renderable);
         this.frameBindings.set(renderable.materialKey, bindings.group2);
       }
     }
@@ -76,7 +74,7 @@ export class HGRPEyeOverlayStage {
       return;
     }
 
-    renderPass.setBindGroup(3, this.deps.getFrameBindGroup());
+    renderPass.setBindGroup(3, this.globals.getFrameBindGroup());
 
     let boundPipeline: GPURenderPipeline | undefined;
     let boundMaterialKey: string | undefined;
@@ -104,7 +102,7 @@ export class HGRPEyeOverlayStage {
         boundGeometryId = renderable.geometryId;
       }
       if (renderable.uniformKey !== boundUniformKey) {
-        const mvpBindGroup = this.deps.mvpUniformManager.updateMVPUniforms(renderable, frameData);
+        const mvpBindGroup = this.mvpUniformManager.updateMVPUniforms(renderable, frameData);
         renderPass.setBindGroup(1, mvpBindGroup);
         boundUniformKey = renderable.uniformKey;
       }
@@ -120,22 +118,22 @@ export class HGRPEyeOverlayStage {
       return existing;
     }
 
-    const shaderModule = this.deps.shaderManager.getShaderModule(shaderId);
+    const shaderModule = this.shaderManager.getShaderModule(shaderId);
 
-    const timeLayout = this.deps.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
-    const mvpLayout = this.deps.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
+    const timeLayout = this.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
+    const mvpLayout = this.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
     if (!timeLayout || !mvpLayout) {
       throw new Error('Time/MVP bind group layouts not found for the eye overlay pipeline');
     }
     const eyeLayout = getOrCreateHGRPMaterialBindGroupLayout(
-      this.deps.bindGroupManager,
+      this.bindGroupManager,
       material.permutation,
     );
-    const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.deps.bindGroupManager);
+    const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager);
 
-    const pipeline = this.deps.device.createRenderPipeline({
+    const pipeline = this.device.createRenderPipeline({
       label: `hgrp_eye_overlay_pipeline:${shaderId}`,
-      layout: this.deps.device.createPipelineLayout({
+      layout: this.device.createPipelineLayout({
         label: `hgrp_eye_overlay_pipeline_layout:${shaderId}`,
         bindGroupLayouts: [timeLayout, mvpLayout, eyeLayout, frameLayout],
       }),
@@ -147,11 +145,11 @@ export class HGRPEyeOverlayStage {
       fragment: {
         module: shaderModule,
         entryPoint: 'fs_main',
-        targets: [{ format: this.deps.sceneColorFormat }],
+        targets: [{ format: this.context.getSceneColorFormat() }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
       depthStencil: {
-        format: this.deps.depthStencilFormat,
+        format: this.context.getDepthStencilFormat(),
         // Depth-tested against the real scene; the biased projection provides the gating.
         // No depth write: the biased depths must not pollute the buffer.
         depthWriteEnabled: false,

@@ -11,19 +11,10 @@ import { MVPUniformManager } from '../../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../../core/pipeline/vertexLayouts';
 import { hgrpPassShaderId } from '../../../core/shaders/create';
 import { ShaderManager } from '../../../core/shaders/ShaderManager';
+import { Inject, ServiceTokens } from '../../../core/decorators';
+import { WebGPUContext } from '../../../core/WebGPUContext';
 import { DrawItem } from '../../frame/DrawListBuilder';
-
-export interface HGRPBrowCompositeStageDeps {
-  device: GPUDevice;
-  shaderManager: ShaderManager;
-  bindGroupManager: BindGroupManager;
-  materialBinder: MaterialBinder;
-  mvpUniformManager: MVPUniformManager;
-  geometryManager: GeometryManager;
-  sceneColorFormat: GPUTextureFormat;
-  depthStencilFormat: GPUTextureFormat;
-  getFrameBindGroup(): GPUBindGroup;
-}
+import { HGRPFrameGlobals } from './types';
 
 /**
  * HGRP Brow Composite Stage (brow shows through the bangs)
@@ -45,7 +36,15 @@ export class HGRPBrowCompositeStage {
   private throughPipelines = new Map<string, GPURenderPipeline>();
   private frameBindings = new Map<string, GPUBindGroup | undefined>();
 
-  constructor(private readonly deps: HGRPBrowCompositeStageDeps) {}
+  @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
+  @Inject(ServiceTokens.WEBGPU_CONTEXT) private accessor context!: WebGPUContext;
+  @Inject(ServiceTokens.SHADER_MANAGER) private accessor shaderManager!: ShaderManager;
+  @Inject(ServiceTokens.BIND_GROUP_MANAGER) private accessor bindGroupManager!: BindGroupManager;
+  @Inject(ServiceTokens.MATERIAL_BINDER) private accessor materialBinder!: MaterialBinder;
+  @Inject(ServiceTokens.MVP_UNIFORM_MANAGER) private accessor mvpUniformManager!: MVPUniformManager;
+  @Inject(ServiceTokens.GEOMETRY_MANAGER) private accessor geometryManager!: GeometryManager;
+
+  constructor(private readonly globals: HGRPFrameGlobals) {}
 
   async prepare(hairItems: DrawItem[], browItems: DrawItem[]): Promise<void> {
     this.frameBindings.clear();
@@ -63,11 +62,11 @@ export class HGRPBrowCompositeStage {
     }
     for (const item of [...hairItems, ...browItems]) {
       const { renderable } = item;
-      item.geometry = this.deps.geometryManager.createGeometryFromData(renderable.geometryId, {
+      item.geometry = this.geometryManager.createGeometryFromData(renderable.geometryId, {
         geometryData: renderable.geometryData,
       });
       if (!this.frameBindings.has(renderable.materialKey)) {
-        const bindings = await this.deps.materialBinder.ensureMaterialBindings(renderable);
+        const bindings = await this.materialBinder.ensureMaterialBindings(renderable);
         this.frameBindings.set(renderable.materialKey, bindings.group2);
       }
     }
@@ -94,7 +93,7 @@ export class HGRPBrowCompositeStage {
     renderPass.setStencilReference(stencilRef);
     this.walk(renderPass, hairItems, frameData);
 
-    renderPass.setBindGroup(3, this.deps.getFrameBindGroup());
+    renderPass.setBindGroup(3, this.globals.getFrameBindGroup());
     this.walk(renderPass, browItems, frameData);
   }
 
@@ -120,7 +119,7 @@ export class HGRPBrowCompositeStage {
         boundMaterialKey = renderable.materialKey;
       }
       if (renderable.uniformKey !== boundUniformKey) {
-        const mvpBindGroup = this.deps.mvpUniformManager.updateMVPUniforms(renderable, frameData);
+        const mvpBindGroup = this.mvpUniformManager.updateMVPUniforms(renderable, frameData);
         renderPass.setBindGroup(1, mvpBindGroup);
         boundUniformKey = renderable.uniformKey;
       }
@@ -134,8 +133,8 @@ export class HGRPBrowCompositeStage {
   }
 
   private commonLayouts(): { time: GPUBindGroupLayout; mvp: GPUBindGroupLayout } {
-    const time = this.deps.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
-    const mvp = this.deps.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
+    const time = this.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
+    const mvp = this.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
     if (!time || !mvp) {
       throw new Error('Time/MVP bind group layouts not found for the brow composite stage');
     }
@@ -151,14 +150,14 @@ export class HGRPBrowCompositeStage {
 
     const { time, mvp } = this.commonLayouts();
     const hairLayout = getOrCreateHGRPMaterialBindGroupLayout(
-      this.deps.bindGroupManager,
+      this.bindGroupManager,
       hair.permutation,
     );
-    const markModule = this.deps.shaderManager.getShaderModule(shaderId);
+    const markModule = this.shaderManager.getShaderModule(shaderId);
 
-    const pipeline = this.deps.device.createRenderPipeline({
+    const pipeline = this.device.createRenderPipeline({
       label: `hgrp_hair_stencil_pipeline:${shaderId}`,
-      layout: this.deps.device.createPipelineLayout({
+      layout: this.device.createPipelineLayout({
         label: `hgrp_hair_stencil_pipeline_layout:${shaderId}`,
         bindGroupLayouts: [time, mvp, hairLayout],
       }),
@@ -171,11 +170,11 @@ export class HGRPBrowCompositeStage {
         module: markModule,
         entryPoint: 'fs_main',
         // Stencil-only draw: the color target exists to match the pass, writes masked off
-        targets: [{ format: this.deps.sceneColorFormat, writeMask: 0 }],
+        targets: [{ format: this.context.getSceneColorFormat(), writeMask: 0 }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
       depthStencil: {
-        format: this.deps.depthStencilFormat,
+        format: this.context.getDepthStencilFormat(),
         depthWriteEnabled: false,
         // Equal to the hair's own opaque depth (identical vertex math via the shared
         // hgrp_vertex include); less-equal absorbs precision noise
@@ -197,15 +196,15 @@ export class HGRPBrowCompositeStage {
 
     const { time, mvp } = this.commonLayouts();
     const eyeLayout = getOrCreateHGRPMaterialBindGroupLayout(
-      this.deps.bindGroupManager,
+      this.bindGroupManager,
       brow.permutation,
     );
-    const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.deps.bindGroupManager);
-    const throughModule = this.deps.shaderManager.getShaderModule(shaderId);
+    const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager);
+    const throughModule = this.shaderManager.getShaderModule(shaderId);
 
-    const pipeline = this.deps.device.createRenderPipeline({
+    const pipeline = this.device.createRenderPipeline({
       label: `hgrp_brow_through_pipeline:${shaderId}`,
-      layout: this.deps.device.createPipelineLayout({
+      layout: this.device.createPipelineLayout({
         label: `hgrp_brow_through_pipeline_layout:${shaderId}`,
         bindGroupLayouts: [time, mvp, eyeLayout, frameLayout],
       }),
@@ -219,7 +218,7 @@ export class HGRPBrowCompositeStage {
         entryPoint: 'fs_main',
         targets: [
           {
-            format: this.deps.sceneColorFormat,
+            format: this.context.getSceneColorFormat(),
             blend: {
               color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
               alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
@@ -229,7 +228,7 @@ export class HGRPBrowCompositeStage {
       },
       primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
       depthStencil: {
-        format: this.deps.depthStencilFormat,
+        format: this.context.getDepthStencilFormat(),
         depthWriteEnabled: false,
         // Only where the brow is OCCLUDED and the hair mark matches
         depthCompare: 'greater',

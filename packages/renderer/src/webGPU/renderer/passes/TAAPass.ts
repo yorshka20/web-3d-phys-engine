@@ -1,12 +1,12 @@
 import { mat4 } from 'gl-matrix';
+import { Inject, ServiceTokens } from '../../core/decorators';
 import { CameraData } from '../../../frame/types';
 import taaShader from '../../core/shaders/passes/taa.wgsl';
 
-export interface TAAPassDeps {
-  device: GPUDevice;
-  // Encoded LDR output of the tonemap pass (this frame, rendered with the projection jitter)
+export interface TAATargets {
+  /** Encoded LDR output of the tonemap pass (this frame, rendered with the projection jitter) */
   getInputTexture(): GPUTexture;
-  // The forward pass depth attachment (depth-stencil); sampled through a depth-only view
+  /** The forward pass depth attachment (depth-stencil); sampled through a depth-only view */
   getDepthTexture(): GPUTexture;
 }
 
@@ -70,7 +70,13 @@ export class TAAPass {
   private readonly prevViewProj = mat4.create();
   private readonly invViewProj = mat4.create();
 
-  constructor(private readonly deps: TAAPassDeps) {}
+  @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
+
+  /**
+   * Both targets are renderer-owned and recreated on resize: the tonemap's LDR output for this
+   * frame, and the forward pass depth attachment it reprojects through.
+   */
+  constructor(private readonly targets: TAATargets) {}
 
   /** The resolve written this frame — the image to present (or to hand to FXAA). */
   getOutputTexture(): GPUTexture {
@@ -95,7 +101,7 @@ export class TAAPass {
     this.paramsData.set(this.invViewProj, 16);
     this.paramsData[32] = taaSettings.blend;
     this.paramsData[33] = this.historyValid ? 0 : 1;
-    this.deps.device.queue.writeBuffer(this.paramsBuffer!, 0, this.paramsData);
+    this.device.queue.writeBuffer(this.paramsBuffer!, 0, this.paramsData);
 
     const renderPass = commandEncoder.beginRenderPass({
       label: 'taa_pass',
@@ -120,13 +126,13 @@ export class TAAPass {
   // History textures follow the input's size; a new input texture (resize) rebuilds them
   // and invalidates the history.
   private ensureResources(): void {
-    const input = this.deps.getInputTexture();
+    const input = this.targets.getInputTexture();
     if (this.history && this.historySource === input) {
       return;
     }
     this.history?.forEach((texture) => texture.destroy());
     const make = (index: number) =>
-      this.deps.device.createTexture({
+      this.device.createTexture({
         label: `taa_history_${index}`,
         size: { width: input.width, height: input.height },
         format: HISTORY_FORMAT,
@@ -143,23 +149,23 @@ export class TAAPass {
     if (this.pipeline) {
       return this.pipeline;
     }
-    const shaderModule = this.deps.device.createShaderModule({
+    const shaderModule = this.device.createShaderModule({
       label: 'taa_shader',
       code: taaShader,
     });
-    this.sampler = this.deps.device.createSampler({
+    this.sampler = this.device.createSampler({
       label: 'taa_history_sampler',
       magFilter: 'linear',
       minFilter: 'linear',
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
-    this.paramsBuffer = this.deps.device.createBuffer({
+    this.paramsBuffer = this.device.createBuffer({
       label: 'taa_params',
       size: this.paramsData.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    this.bindGroupLayout = this.deps.device.createBindGroupLayout({
+    this.bindGroupLayout = this.device.createBindGroupLayout({
       label: 'taa_bind_group_layout',
       entries: [
         {
@@ -173,9 +179,9 @@ export class TAAPass {
         { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       ],
     });
-    this.pipeline = this.deps.device.createRenderPipeline({
+    this.pipeline = this.device.createRenderPipeline({
       label: 'taa_pipeline',
-      layout: this.deps.device.createPipelineLayout({
+      layout: this.device.createPipelineLayout({
         label: 'taa_pipeline_layout',
         bindGroupLayouts: [this.bindGroupLayout],
       }),
@@ -193,8 +199,8 @@ export class TAAPass {
   // One bind group per history parity (reads the other history texture); rebuilt when the
   // input or depth texture is recreated.
   private ensureBindGroup(current: number, previous: number): GPUBindGroup {
-    const input = this.deps.getInputTexture();
-    const depth = this.deps.getDepthTexture();
+    const input = this.targets.getInputTexture();
+    const depth = this.targets.getDepthTexture();
     if (this.bindGroupInput !== input || this.bindGroupDepth !== depth) {
       this.bindGroups[0] = undefined;
       this.bindGroups[1] = undefined;
@@ -205,7 +211,7 @@ export class TAAPass {
     if (cached) {
       return cached;
     }
-    const bindGroup = this.deps.device.createBindGroup({
+    const bindGroup = this.device.createBindGroup({
       label: `taa_bind_group_${current}`,
       layout: this.bindGroupLayout!,
       entries: [

@@ -1,4 +1,5 @@
 import { PMXModel } from '../../../assets/PMXModel';
+import { Inject, ServiceTokens } from '../../core/decorators';
 import { FrameData, RenderData } from '../../../frame/types';
 import { GeometryManager } from '../../core/GeometryManager';
 import { MaterialBinder, MaterialBindings } from '../../core/MaterialBinder';
@@ -29,23 +30,23 @@ interface EncodeStateCache {
   uniformKey?: string;
 }
 
-export interface ForwardPassDeps {
-  pipelineFactory: PipelineFactory;
-  geometryManager: GeometryManager;
-  mvpUniformManager: MVPUniformManager;
-  materialBinder: MaterialBinder;
-  pmxMaterialProcessor: PMXMaterialProcessor;
-  pmxAnimationBufferManager: PMXAnimationBufferManager;
-  resourceManager: WebGPUResourceManager;
+/**
+ * The render targets and per-frame globals the pass reads. Closures rather than values: the
+ * swapchain texture changes every frame, the depth texture is recreated on resize, and the
+ * HGRP group-3 bind group is rebuilt with the prepass depth texture. None of that is
+ * expressible as a service — it is state this renderer owns and replaces.
+ */
+export interface ForwardPassTargets {
+  getColorView(): GPUTextureView;
+  getDepthView(): GPUTextureView;
+  getHGRPFrameBindGroup(): GPUBindGroup;
+}
+
+/** The draw stages the forward pass encodes between its own walks. Renderer-private, not services. */
+export interface ForwardPassStages {
   outlineStage: HGRPOutlineStage;
   eyeOverlayStage: HGRPEyeOverlayStage;
   browCompositeStage: HGRPBrowCompositeStage;
-  // Attachment views are provided as closures because the swapchain texture changes every
-  // frame and the depth texture is recreated on resize.
-  getColorView(): GPUTextureView;
-  getDepthView(): GPUTextureView;
-  // HGRP group 3 (per-frame globals: prepass depth for the screen-space rim)
-  getHGRPFrameBindGroup(): GPUBindGroup;
 }
 
 /**
@@ -61,7 +62,20 @@ export interface ForwardPassDeps {
  * Identity keys and ordering contract: docs/renderer-frame-contract.md.
  */
 export class ForwardPass {
-  constructor(private readonly deps: ForwardPassDeps) {}
+  @Inject(ServiceTokens.PIPELINE_FACTORY) private accessor pipelineFactory!: PipelineFactory;
+  @Inject(ServiceTokens.GEOMETRY_MANAGER) private accessor geometryManager!: GeometryManager;
+  @Inject(ServiceTokens.MVP_UNIFORM_MANAGER) private accessor mvpUniformManager!: MVPUniformManager;
+  @Inject(ServiceTokens.MATERIAL_BINDER) private accessor materialBinder!: MaterialBinder;
+  @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
+  private accessor pmxMaterialProcessor!: PMXMaterialProcessor;
+  @Inject(ServiceTokens.PMX_ANIMATION_BUFFER_MANAGER)
+  private accessor pmxAnimationBufferManager!: PMXAnimationBufferManager;
+  @Inject(ServiceTokens.RESOURCE_MANAGER) private accessor resourceManager!: WebGPUResourceManager;
+
+  constructor(
+    private readonly stages: ForwardPassStages,
+    private readonly targets: ForwardPassTargets,
+  ) {}
 
   async execute(commandEncoder: GPUCommandEncoder, frameData: FrameData): Promise<void> {
     // Prepare phase (async): build the ordered draw lists and resolve every GPU resource up
@@ -85,22 +99,22 @@ export class ForwardPass {
     await this.prepare(transparent, frame);
     // One prepare over both hull lists: the stage's per-frame bind groups are keyed by
     // materialKey and cleared on entry, so preparing them separately would drop the first set.
-    await this.deps.outlineStage.prepare([...outline, ...transparentOutline]);
-    await this.deps.eyeOverlayStage.prepare(eyeOverlay);
-    await this.deps.browCompositeStage.prepare(hairStencil, browThrough);
+    await this.stages.outlineStage.prepare([...outline, ...transparentOutline]);
+    await this.stages.eyeOverlayStage.prepare(eyeOverlay);
+    await this.stages.browCompositeStage.prepare(hairStencil, browThrough);
 
     const renderPass = commandEncoder.beginRenderPass({
       label: 'main_render_pass',
       colorAttachments: [
         {
-          view: this.deps.getColorView(),
+          view: this.targets.getColorView(),
           clearValue: [...sceneSettings.clearColor, 1],
           loadOp: 'clear',
           storeOp: 'store',
         },
       ],
       depthStencilAttachment: {
-        view: this.deps.getDepthView(),
+        view: this.targets.getDepthView(),
         depthClearValue: 1.0,
         depthLoadOp: 'clear',
         depthStoreOp: 'store',
@@ -118,13 +132,13 @@ export class ForwardPass {
     // over the iris. The stages bind their own pipeline/groups, so the transparent walk
     // starts from a fresh state cache.
     this.encode(renderPass, opaque, frameData, frame, {});
-    this.deps.outlineStage.encode(renderPass, outline, frameData);
-    this.deps.eyeOverlayStage.encode(renderPass, eyeOverlay, frameData);
-    this.deps.browCompositeStage.encode(renderPass, hairStencil, browThrough, frameData);
+    this.stages.outlineStage.encode(renderPass, outline, frameData);
+    this.stages.eyeOverlayStage.encode(renderPass, eyeOverlay, frameData);
+    this.stages.browCompositeStage.encode(renderPass, hairStencil, browThrough, frameData);
     this.encode(renderPass, transparent, frameData, frame, {});
     // A blend material's hull comes last: it needs that material's own depth in the buffer
     // to be rejected outside the silhouette ring (see DrawLists.transparentOutline).
-    this.deps.outlineStage.encode(renderPass, transparentOutline, frameData);
+    this.stages.outlineStage.encode(renderPass, transparentOutline, frameData);
 
     renderPass.end();
   }
@@ -135,7 +149,7 @@ export class ForwardPass {
    */
   private setFrameBindGroups(renderPass: GPURenderPassEncoder): void {
     // Group 0: Time bind group (always required)
-    const timeBindGroup = this.deps.resourceManager.getBindGroupResource('timeBindGroup');
+    const timeBindGroup = this.resourceManager.getBindGroupResource('timeBindGroup');
     if (!timeBindGroup) {
       throw new Error('Time bind group not found');
     }
@@ -161,7 +175,7 @@ export class ForwardPass {
       // bind groups below).
       let pipeline = frame.pipelines.get(item.pipelineKey);
       if (!pipeline) {
-        pipeline = await this.deps.pipelineFactory.createAutoPipeline(
+        pipeline = await this.pipelineFactory.createAutoPipeline(
           renderable.material,
           renderable.geometryData,
         );
@@ -186,7 +200,7 @@ export class ForwardPass {
           if (!assetDescriptor) {
             throw new Error('PMX asset not found');
           }
-          const pmxMaterial = await this.deps.pmxMaterialProcessor.createPMXMaterial(
+          const pmxMaterial = await this.pmxMaterialProcessor.createPMXMaterial(
             renderable.materialKey,
             { assetDescriptor, materialIndex },
           );
@@ -196,18 +210,18 @@ export class ForwardPass {
           });
         }
       } else {
-        item.geometry = this.deps.geometryManager.createGeometryFromData(
+        item.geometry = this.geometryManager.createGeometryFromData(
           renderable.geometryId || 'render_geometry',
           { geometryData: renderable.geometryData },
         );
 
         if (!frame.materials.has(renderable.materialKey)) {
-          const bindings = await this.deps.materialBinder.ensureMaterialBindings(renderable);
+          const bindings = await this.materialBinder.ensureMaterialBindings(renderable);
           // Group 3 of HGRP pipelines is pass-level state (per-frame globals: prepass
           // depth), so the pass completes the binding plan here — the encode walk below
           // binds whatever prepare resolved, with no per-family knowledge.
           if (renderable.material.materialType === 'hgrp') {
-            bindings.group3 = this.deps.getHGRPFrameBindGroup();
+            bindings.group3 = this.targets.getHGRPFrameBindGroup();
           }
           frame.materials.set(renderable.materialKey, bindings);
         }
@@ -253,7 +267,7 @@ export class ForwardPass {
 
       // uniformKey contract: equal key ⇒ identical matrices, so write and bind skip together
       if (renderable.uniformKey !== cache.uniformKey) {
-        const mvpBindGroup = this.deps.mvpUniformManager.updateMVPUniforms(renderable, frameData);
+        const mvpBindGroup = this.mvpUniformManager.updateMVPUniforms(renderable, frameData);
         renderPass.setBindGroup(1, mvpBindGroup);
         cache.uniformKey = renderable.uniformKey;
       }
@@ -292,11 +306,7 @@ export class ForwardPass {
     }
 
     // Create geometry for this specific material
-    const geometry = this.deps.geometryManager.createPMXGeometry(
-      geometryId,
-      pmxModel,
-      materialIndex,
-    );
+    const geometry = this.geometryManager.createPMXGeometry(geometryId, pmxModel, materialIndex);
 
     if (!geometry) {
       throw new Error('Failed to create PMX geometry for material');
@@ -328,7 +338,7 @@ export class ForwardPass {
     const morphCount = renderable.morphCount || pmxModel.morphs?.length || 0;
 
     // Get or create animation buffers
-    const animationBuffers = this.deps.pmxAnimationBufferManager.getOrCreateAnimationBuffers(
+    const animationBuffers = this.pmxAnimationBufferManager.getOrCreateAnimationBuffers(
       renderable.pmxAssetId,
       boneCount,
       vertexCount,
@@ -350,10 +360,10 @@ export class ForwardPass {
 
     // Update buffers
     if (boneMatrices) {
-      this.deps.pmxAnimationBufferManager.updateBoneMatrices(pmxAssetId, boneMatrices);
+      this.pmxAnimationBufferManager.updateBoneMatrices(pmxAssetId, boneMatrices);
     }
     if (morphWeights) {
-      this.deps.pmxAnimationBufferManager.updateMorphWeights(pmxAssetId, morphCount, morphWeights);
+      this.pmxAnimationBufferManager.updateMorphWeights(pmxAssetId, morphCount, morphWeights);
     }
 
     // Only update morph data if it's provided (it's static and large)

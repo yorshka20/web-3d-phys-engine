@@ -1,10 +1,5 @@
 import bloomShader from '../../core/shaders/passes/bloom.wgsl';
-
-export interface BloomPassDeps {
-  device: GPUDevice;
-  // HDR scene-color texture (recreated on resize; the mip chain follows its size)
-  getInputTexture(): GPUTexture;
-}
+import { Inject, ServiceTokens } from '../../core/decorators';
 
 // Global bloom controls, mutated by the calibration GUI (module singleton, same rule as
 // tonemapSettings). Threshold is HDR luminance in linear light — the official HDR values
@@ -16,6 +11,11 @@ export const bloomSettings = {
 
 const BLOOM_MIP_LEVELS = 5;
 const BLOOM_FORMAT: GPUTextureFormat = 'rgba16float';
+
+/** The HDR scene-color texture is recreated on resize; the mip chain follows its size. */
+export interface BloomTargets {
+  getInputTexture(): GPUTexture;
+}
 
 /**
  * Bloom Pass
@@ -45,7 +45,9 @@ export class BloomPass {
   private prefilterBindGroup?: GPUBindGroup;
   private mipBindGroups: GPUBindGroup[] = [];
 
-  constructor(private readonly deps: BloomPassDeps) {}
+  @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
+
+  constructor(private readonly targets: BloomTargets) {}
 
   /** The accumulated bloom (mip 0 view), for the tonemap composite. */
   getBloomView(): GPUTextureView {
@@ -58,7 +60,7 @@ export class BloomPass {
     const { prefilter, downsample, upsample } = this.pipelines!;
 
     this.paramsData[0] = bloomSettings.threshold;
-    this.deps.device.queue.writeBuffer(this.paramsBuffer!, 0, this.paramsData);
+    this.device.queue.writeBuffer(this.paramsBuffer!, 0, this.paramsData);
 
     const runStep = (
       pipeline: GPURenderPipeline,
@@ -87,14 +89,14 @@ export class BloomPass {
   }
 
   private ensureResources(): void {
-    const input = this.deps.getInputTexture();
+    const input = this.targets.getInputTexture();
     if (this.chainTexture && this.chainSource === input) {
       return;
     }
     this.ensurePipelines();
 
     this.chainTexture?.destroy();
-    this.chainTexture = this.deps.device.createTexture({
+    this.chainTexture = this.device.createTexture({
       label: 'bloom_chain',
       size: {
         width: Math.max(1, input.width >> 1),
@@ -112,7 +114,7 @@ export class BloomPass {
     }
 
     const makeBindGroup = (srcView: GPUTextureView) =>
-      this.deps.device.createBindGroup({
+      this.device.createBindGroup({
         label: 'bloom_bind_group',
         layout: this.bindGroupLayout!,
         entries: [
@@ -130,7 +132,7 @@ export class BloomPass {
       return;
     }
 
-    const device = this.deps.device;
+    const device = this.device;
     const shaderModule = device.createShaderModule({
       label: 'bloom_shader',
       code: bloomShader,
