@@ -331,7 +331,9 @@ export class WebGPURenderer implements IWebGPURenderer {
     // Every service these passes use they now inject themselves; what is passed in is what a
     // container cannot provide — the render targets this renderer owns and recreates, reached
     // through closures so a resize is invisible to the pass.
-    const outlineStage = new HGRPOutlineStage();
+    const outlineStage = new HGRPOutlineStage({
+      getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
+    });
     const eyeOverlayStage = new HGRPEyeOverlayStage({
       getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });

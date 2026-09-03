@@ -496,6 +496,7 @@ function hgrpNprFamilyIncludes(
     ...(options.shading
       ? [
           ...hgrpSubsystemIncludes(permutation),
+          'lighting/hgrp_lighting.wgsl',
           'lighting/hgrp_npr.wgsl',
           ...(permutation.variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
           'core/hgrp_debug.wgsl',
@@ -583,7 +584,7 @@ export function createHGRPOutlineShaderModule(): ShaderModule {
   return {
     id: 'hgrp_outline_shader',
     name: 'HGRP Outline Shader',
-    description: 'HGRP inverted-hull outline (extruded along normals, HSV-adjusted base color)',
+    description: 'HGRP inverted-hull outline (world-constant width, lit base color)',
     type: 'render',
     fileName: 'passes/hgrp_outline.wgsl',
     sourceCode: shaderFragmentRegistry.get('passes/hgrp_outline.wgsl') || '',
@@ -594,6 +595,7 @@ export function createHGRPOutlineShaderModule(): ShaderModule {
       'core/gltf_skinning.wgsl',
       'core/hgrp_transform.wgsl',
       'math/color.wgsl',
+      'lighting/hgrp_lighting.wgsl',
     ],
     compilationOptions: {
       vertexFormat: ['full'],

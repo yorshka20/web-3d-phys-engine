@@ -31,7 +31,9 @@ export function getOrCreateHGRPFrameBindGroupLayout(
     entries: [
       {
         binding: 0,
-        visibility: GPUShaderStage.FRAGMENT,
+        // Vertex-visible as well: the outline's vertex stage reads the framebuffer size off
+        // this texture for the stroke width's half-pixel floor.
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
         texture: { sampleType: 'depth' },
       },
       {

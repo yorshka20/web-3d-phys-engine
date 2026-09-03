@@ -1,7 +1,11 @@
 import { FrameData } from '../../../../frame/types';
 import { BindGroupManager } from '../../../core/BindGroupManager';
 import { GeometryManager } from '../../../core/GeometryManager';
-import { getOrCreateHGRPOutlineBindGroupLayout } from '../../../core/HGRPMaterialResources';
+import {
+  getOrCreateHGRPFrameBindGroupLayout,
+  getOrCreateHGRPOutlineBindGroupLayout,
+} from '../../../core/HGRPMaterialResources';
+import type { HGRPFrameGlobals } from './types';
 import { MaterialBinder } from '../../../core/MaterialBinder';
 import { MVPUniformManager } from '../../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../../core/pipeline/vertexLayouts';
@@ -71,6 +75,10 @@ export class HGRPOutlineStage {
   private pipelines = new Map<GPUCompareFunction, GPURenderPipeline>();
   private frameBindings = new Map<string, GPUBindGroup>();
 
+  // The frame group carries the prepass depth (its size is the half-pixel floor of the stroke
+  // width) and the scene lighting the stroke color is lit with.
+  constructor(private readonly globals: HGRPFrameGlobals) {}
+
   async prepare(items: DrawItem[]): Promise<void> {
     this.frameBindings.clear();
     if (items.length === 0) {
@@ -110,6 +118,7 @@ export class HGRPOutlineStage {
     let boundMaterialKey: string | undefined;
     let boundGeometryId: string | undefined;
     let boundUniformKey: string | undefined;
+    renderPass.setBindGroup(3, this.globals.getFrameBindGroup());
 
     for (const item of items) {
       const { renderable } = item;
@@ -157,12 +166,13 @@ export class HGRPOutlineStage {
       throw new Error('Time/MVP bind group layouts not found for the outline pipeline');
     }
     const outlineLayout = getOrCreateHGRPOutlineBindGroupLayout(this.bindGroupManager);
+    const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager);
 
     const pipeline = this.device.createRenderPipeline({
       label: `hgrp_outline_pipeline_${depthCompare}`,
       layout: this.device.createPipelineLayout({
         label: 'hgrp_outline_pipeline_layout',
-        bindGroupLayouts: [timeLayout, mvpLayout, outlineLayout],
+        bindGroupLayouts: [timeLayout, mvpLayout, outlineLayout, frameLayout],
       }),
       vertex: {
         module: shaderModule,

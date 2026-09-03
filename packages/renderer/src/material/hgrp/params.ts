@@ -118,7 +118,12 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_EmissionBrightness', 1, { min: 0, max: 40, step: 0.1 }),
       'HDR-scaled (8-30 in presets); the tonemap shoulder absorbs it',
     ),
-    f32('outline_width', 'outline', float('_OutlineWidth', 0, { min: 0, max: 3, step: 0.01 })),
+    f32(
+      'outline_width',
+      'outline',
+      float('_OutlineWidth', 0, { min: 0, max: 3, step: 0.01 }),
+      'stroke width, about 2 mm per unit in world space with a half-pixel floor',
+    ),
     f32(
       'outline_color_brightness',
       'outline',
@@ -139,7 +144,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'outline_offset_z',
       'outline',
       float('_OutlineOffsetZ', 0, { min: 0, max: 1, step: 0.01 }),
-      'pushes the hull away so inner lines recede',
+      'pushes the hull 0.1 m per unit down the view ray (depth only) so inner lines recede',
     ),
     vec4('matcap_color', 'eyeMatcap', color('_MatcapColor', WHITE, true)),
     vec4(
