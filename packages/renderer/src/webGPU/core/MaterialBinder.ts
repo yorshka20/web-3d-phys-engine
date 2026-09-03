@@ -13,7 +13,7 @@ import { assetRegistry } from './AssetRegistry';
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
-import { Inject, Injectable } from './decorators/ResourceDecorators';
+import { Inject, Injectable } from './decorators/inject';
 import {
   getOrCreateHGRPMaterialBindGroupLayout,
   getOrCreateHGRPOutlineBindGroupLayout,

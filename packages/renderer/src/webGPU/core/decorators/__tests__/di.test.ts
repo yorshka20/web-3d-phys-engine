@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 // Inside webGPU/core, decorators come from the module, not the barrel: the barrel's own
 // imports would leave the decorator undefined at decoration time under Vite SSR (CLAUDE.md).
-import { Inject, SmartResource } from '../ResourceDecorators';
+import { Inject } from '../inject';
+import { SmartResource } from '../smartResource';
 import { ResourceType } from '../../types/constant';
 import { DIContainer, globalContainer, validateDependencies } from '../DIContainer';
 import type { Token } from '../DIContainer';

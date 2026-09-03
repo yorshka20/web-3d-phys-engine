@@ -496,9 +496,9 @@ Non-obvious specifics that are easy to get wrong:
   keys valid when renaming.
 - `.wgsl` imports are inlined strings (wgsl-loader); `.gltf` imports are inlined **unless**
   imported with `?url` (sample models are `?url` + fetched at runtime).
-- **Inside `renderer/webGPU/core`, import decorators from `decorators/ResourceDecorators`, not
-  the `decorators` barrel** when the barrel imports your module: the barrel cycle leaves the
-  decorator undefined at decoration time under Vite SSR (vitest), even though Rollup's chunk
-  ordering hides it in the browser build. This is also why the service wiring table lives in
-  `core/services.ts` and not in the barrel — putting it there would make every manager part of
-  the cycle.
+- **Inside `renderer/webGPU/core`, import decorators from the specific module**
+  (`decorators/inject`, `decorators/smartResource`, ...), **not the `decorators` barrel**, when
+  the barrel imports your module: the barrel cycle leaves the decorator undefined at decoration
+  time under Vite SSR (vitest), even though Rollup's chunk ordering hides it in the browser
+  build. This is also why the service wiring table lives in `core/services.ts` and not in the
+  barrel — putting it there would make every manager part of the cycle.

@@ -3,7 +3,7 @@ import { mat4 } from 'gl-matrix';
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
-import { Inject, Injectable } from './decorators/ResourceDecorators';
+import { Inject, Injectable } from './decorators/inject';
 import { BufferType } from './types';
 
 /**

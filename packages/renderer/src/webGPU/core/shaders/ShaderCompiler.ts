@@ -1,7 +1,7 @@
 // Import from the defining module, not the '../decorators' barrel: the barrel
 // imports this file (initContainer registers ShaderCompiler), so going through
 // it forms a circular import and ResourceHost is undefined at decoration time.
-import { Inject, Injectable } from '../decorators/ResourceDecorators';
+import { Inject, Injectable } from '../decorators/inject';
 import { ServiceTokens } from '../decorators/DIContainer';
 import { resolveShaderFragment, shaderFragmentRegistry } from './registry';
 import {

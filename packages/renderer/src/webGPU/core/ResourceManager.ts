@@ -1,5 +1,5 @@
 import { ServiceTokens } from './decorators/DIContainer';
-import { Injectable } from './decorators/ResourceDecorators';
+import { Injectable } from './decorators/inject';
 import { ResourceState, ResourceType } from './types/constant';
 import { ResourceDescriptor } from './types/descriptor';
 import {

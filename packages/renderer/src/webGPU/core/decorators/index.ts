@@ -1,49 +1,41 @@
 /**
- * WebGPU Resource Management Decorators
+ * Decorators and the DI container, re-exported.
  *
- * This module provides TypeScript 5.0 decorators for automatic resource management
- * in WebGPU applications. The decorators handle resource registration, caching,
- * pooling, lifecycle management, and performance monitoring.
+ * The modules behind this barrel:
  *
- * @example Basic Usage
+ * - `DIContainer` — tokens, the container, and the record of what every @Inject declared
+ * - `inject`      — @Injectable (this class provides a token) and @Inject (this field needs one)
+ * - `resourceStore` — per-host resource bookkeeping the resource decorators share
+ * - `smartResource` — @SmartResource (cache/pool a creation method) and @ResourceFactory
+ * - `monitorPerformance` — @MonitorPerformance and its readout
+ *
  * ```typescript
- * @Injectable()
- * class MyBufferManager {
- *   constructor(private device: GPUDevice) {}
+ * @Injectable(ServiceTokens.BUFFER_MANAGER)
+ * class BufferManager {
+ *   @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
  *
- *   @AutoRegisterResource(ResourceType.BUFFER)
- *   createBuffer(data: ArrayBuffer, label: string): GPUBuffer {
- *     return this.device.createBuffer({...});
+ *   @SmartResource(ResourceType.BUFFER, { cache: true })
+ *   createBuffer(label: string, size: number): GPUBuffer {
+ *     return this.device.createBuffer({ size, ... });
  *   }
  * }
  * ```
  *
- * @example Smart Resource Management
- * ```typescript
- * @Injectable()
- * class SmartManager {
- *   @SmartResource(ResourceType.BUFFER, { cache: true, lifecycle: 'persistent' })
- *   createCachedBuffer(size: number, label: string): GPUBuffer {
- *     return this.device.createBuffer({...});
- *   }
- * }
- * ```
+ * Inside webGPU/core, import from the specific module rather than this barrel — see the
+ * barrel-cycle note in CLAUDE.md.
  */
 
-import './ResourceDecorators';
-
 // Core decorators
+export { Inject, Injectable } from './inject';
+export { MonitorPerformance, performanceStats, type PerformanceStats } from './monitorPerformance';
 export {
-  Inject,
-  Injectable,
-  MonitorPerformance,
-  performanceStats,
   ResourceFactory,
   SmartResource,
-} from './ResourceDecorators';
-
-// Enhanced type definitions
-export * from './types';
+  type ResourceFactoryOptions,
+  type ResourceLifecycle,
+  type SmartResourceOptions,
+} from './smartResource';
+export { type ResourceEntry, type ResourceRegistryHost } from './resourceStore';
 
 // Dependency injection
 export {

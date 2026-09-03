@@ -1,5 +1,5 @@
 import { ServiceTokens } from './decorators/DIContainer';
-import {} from './decorators/ResourceDecorators';
+
 import { WebGPUContextOptions } from './types';
 
 // GPUSupportedLimits exposes every limit as a getter on its prototype, so Object.entries /

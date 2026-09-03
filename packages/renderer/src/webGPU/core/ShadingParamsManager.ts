@@ -1,6 +1,6 @@
 import { BufferManager } from './BufferManager';
 import { ServiceTokens } from './decorators/DIContainer';
-import { Inject, Injectable } from './decorators/ResourceDecorators';
+import { Inject, Injectable } from './decorators/inject';
 import { BufferType } from './types';
 
 export interface ShadingParamDef {
