@@ -91,9 +91,11 @@ interface Material {
 import { IWebGPURenderer, Scene, Camera } from '@renderer/types';
 
 class MyWebGPURenderer extends IWebGPURenderer {
-  // Implement all abstract methods
-  async init(canvas: HTMLCanvasElement): Promise<void> {
-    // Initialize WebGPU device and context
+  // Async setup belongs in a static factory, not an init() method: a constructor cannot
+  // await, so a separate init() would leave the object observably half-built and force every
+  // field to be declared with a definite-assignment assertion.
+  static async create(canvas: HTMLCanvasElement): Promise<MyWebGPURenderer> {
+    // request the adapter/device, then hand everything to a private constructor
   }
 
   render(deltaTime: number, context: RenderContext): void {
@@ -104,8 +106,7 @@ class MyWebGPURenderer extends IWebGPURenderer {
 }
 
 // Usage
-const renderer = new MyWebGPURenderer();
-await renderer.init(canvas);
+const renderer = await MyWebGPURenderer.create(canvas);
 ```
 
 ### ECS Integration

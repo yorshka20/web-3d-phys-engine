@@ -46,6 +46,29 @@ import {
   RenderPipeline,
 } from './types/IWebGPURenderer';
 
+/** The frame's pass chain, in execution order. */
+interface FramePasses {
+  depthPrepass: DepthPrepass;
+  forwardPass: ForwardPass;
+  bloomPass: BloomPass;
+  tonemapPass: TonemapPass;
+  taaPass: TAAPass;
+  fxaaPass: FXAAPass;
+  blitPass: BlitPass;
+}
+
+/** The render targets whose size follows the canvas; recreated as a set on resize. */
+interface SizedTextures {
+  depth: GPUTexture;
+  /** Sampleable depth written by the depth prepass, read by screen-space effects (HGRP rim) */
+  prepassDepth: GPUTexture;
+  /** Encoded LDR tonemap output, consumed by the FXAA pass */
+  ldr: GPUTexture;
+  /** HDR scene-color target: the forward pass renders here, the tonemap pass resolves it to
+   *  the swapchain (format authority: WebGPUContext.getSceneColorFormat) */
+  sceneColor: GPUTexture;
+}
+
 /**
  * WebGPU Renderer
  *
@@ -56,45 +79,43 @@ import {
  * - Management of render pipelines and shaders
  */
 export class WebGPURenderer implements IWebGPURenderer {
-  private initialized = false;
-
-  private canvas!: HTMLCanvasElement;
-  private context!: WebGPUContext;
+  private readonly canvas: HTMLCanvasElement;
+  private readonly context: WebGPUContext;
   private aspectRatio = 1;
 
-  private viewport!: RectArea;
+  private readonly viewport: RectArea;
   private frameCount = 0;
 
-  private diContainer!: DIContainer;
+  private readonly diContainer: DIContainer;
 
   // resource managers
-  private bufferManager!: BufferManager;
-  private shaderManager!: ShaderManager;
-  private textureManager!: TextureManager;
-  private resourceManager!: WebGPUResourceManager;
-  private gpuResourceCoordinator!: GPUResourceCoordinator;
-  private timeManager!: TimeManager;
-  private mvpUniformManager!: MVPUniformManager;
-  private geometryManager!: GeometryManager;
-  private materialManager!: MaterialManager;
-  private pipelineManager!: PipelineManager;
-  private bindGroupManager!: BindGroupManager;
-  private pipelineFactory!: PipelineFactory;
-  private pmxMaterialProcessor!: PMXMaterialProcessor;
-  private pmxAnimationBufferManager!: PMXAnimationBufferManager;
-  private shadingParamsManager!: ShadingParamsManager;
-  private materialBinder!: MaterialBinder;
+  private readonly bufferManager: BufferManager;
+  private readonly shaderManager: ShaderManager;
+  private readonly textureManager: TextureManager;
+  private readonly resourceManager: WebGPUResourceManager;
+  private readonly gpuResourceCoordinator: GPUResourceCoordinator;
+  private readonly timeManager: TimeManager;
+  private readonly mvpUniformManager: MVPUniformManager;
+  private readonly geometryManager: GeometryManager;
+  private readonly materialManager: MaterialManager;
+  private readonly pipelineManager: PipelineManager;
+  private readonly bindGroupManager: BindGroupManager;
+  private readonly pipelineFactory: PipelineFactory;
+  private readonly pmxMaterialProcessor: PMXMaterialProcessor;
+  private readonly pmxAnimationBufferManager: PMXAnimationBufferManager;
+  private readonly shadingParamsManager: ShadingParamsManager;
+  private readonly materialBinder: MaterialBinder;
 
   // frame orchestration (renderer-private, constructor-wired)
-  private depthPrepass!: DepthPrepass;
-  private forwardPass!: ForwardPass;
-  private bloomPass!: BloomPass;
-  private tonemapPass!: TonemapPass;
-  private taaPass!: TAAPass;
-  private fxaaPass!: FXAAPass;
-  private blitPass!: BlitPass;
+  private readonly depthPrepass: DepthPrepass;
+  private readonly forwardPass: ForwardPass;
+  private readonly bloomPass: BloomPass;
+  private readonly tonemapPass: TonemapPass;
+  private readonly taaPass: TAAPass;
+  private readonly fxaaPass: FXAAPass;
+  private readonly blitPass: BlitPass;
   // The LDR image the FXAA pass reads this frame: the tonemap output, or the TAA resolve
-  private fxaaSource!: GPUTexture;
+  private fxaaSource: GPUTexture;
   // Per-frame HGRP globals (group 3): rebuilt when the prepass depth texture is recreated
   private hgrpFrameBindGroup?: GPUBindGroup;
   private hgrpFrameBindGroupTexture?: GPUTexture;
@@ -106,36 +127,110 @@ export class WebGPURenderer implements IWebGPURenderer {
   private readonly debugViewData = new Float32Array(HGRP_DEBUG_VIEW_BYTE_SIZE / 4);
 
   // batch rendering
-  private renderBatches!: Map<string, RenderBatch>;
-  private instanceManager!: InstanceManager;
+  private readonly renderBatches: Map<string, RenderBatch>;
+  private readonly instanceManager: InstanceManager;
 
-  // depth buffer
-  private depthTexture!: GPUTexture;
-
-  // Sampleable depth written by the depth prepass, read by screen-space effects (HGRP rim)
-  private prepassDepthTexture!: GPUTexture;
-
-  // Encoded LDR tonemap output, consumed by the FXAA pass
-  private ldrTexture!: GPUTexture;
-
-  // HDR scene-color target: the forward pass renders here, the tonemap pass resolves it to
-  // the swapchain (format authority: WebGPUContext.getSceneColorFormat)
-  private sceneColorTexture!: GPUTexture;
+  // The render targets whose size follows the canvas. They are grouped because they share one
+  // lifetime: every one of them is recreated together on resize, and nothing recreates one
+  // alone — a fact the type now carries instead of four comments saying "same lifetime rules".
+  private sizedTextures: SizedTextures;
 
   private get device(): GPUDevice {
     return this.context.getDevice();
   }
 
-  constructor(
+  /**
+   * Build a fully initialized renderer.
+   *
+   * The async work — requesting the adapter/device and letting the managers load their own
+   * assets — happens here, around a synchronous constructor that assigns every field. That is
+   * the whole reason this factory exists: a constructor cannot await, so the previous
+   * `new` + `await init(canvas)` shape left the object half-built between the two calls and
+   * every field had to be declared with a definite-assignment assertion. Here there is no
+   * observable half-built state and the fields are simply `readonly`.
+   */
+  static async create(
+    rootElement: HTMLElement,
+    name: string,
+    canvas: HTMLCanvasElement,
+  ): Promise<WebGPURenderer> {
+    const context = new WebGPUContext();
+    await context.initialize(canvas, {
+      powerPreference: 'high-performance',
+      requiredFeatures: ['timestamp-query'],
+      requiredLimits: {
+        maxStorageBufferBindingSize: 1024 * 1024 * 64, // 64MB
+        maxComputeWorkgroupStorageSize: 32768,
+      },
+    });
+
+    const renderer = new WebGPURenderer(rootElement, name, canvas, context);
+
+    // Managers that load their own GPU assets. They are already constructed and registered;
+    // this is initialization of the services, not of the renderer's fields.
+    await renderer.textureManager.initialize();
+    await renderer.shaderManager.initialize();
+    await renderer.mvpUniformManager.initialize();
+    await renderer.pmxMaterialProcessor.initialize();
+    await renderer.pmxAnimationBufferManager.initialize();
+
+    console.log('Initialized WebGPU managers with DI container');
+    return renderer;
+  }
+
+  private constructor(
     protected rootElement: HTMLElement,
     private name: string,
+    canvas: HTMLCanvasElement,
+    context: WebGPUContext,
   ) {
     const width = rootElement.clientWidth;
     const height = rootElement.clientHeight;
     const dpr = this.getDPR();
     this.viewport = [0, 0, width * dpr, height * dpr];
     this.aspectRatio = width / height;
-    // this.updateContextConfig({ width, height, dpr });
+    this.canvas = canvas;
+    this.context = context;
+
+    // Pass the already initialized context so every service shares one device instance
+    this.diContainer = initContainer(context.getDevice(), context);
+
+    // Order matters only in that each service must exist before anything resolves it; the
+    // @Inject fields resolve lazily, which is what lets GeometryManager and
+    // GPUResourceCoordinator depend on each other.
+    this.resourceManager = new WebGPUResourceManager();
+    this.gpuResourceCoordinator = new GPUResourceCoordinator();
+    this.bufferManager = new BufferManager();
+    this.shaderManager = new ShaderManager();
+    this.textureManager = new TextureManager();
+    this.timeManager = new TimeManager();
+    this.mvpUniformManager = new MVPUniformManager();
+    this.materialManager = new MaterialManager();
+    this.geometryManager = new GeometryManager();
+    this.pipelineManager = new PipelineManager();
+    this.bindGroupManager = new BindGroupManager();
+    this.pipelineFactory = new PipelineFactory();
+    this.shadingParamsManager = new ShadingParamsManager();
+    this.pmxMaterialProcessor = new PMXMaterialProcessor();
+    this.pmxAnimationBufferManager = new PMXAnimationBufferManager();
+    this.materialBinder = new MaterialBinder();
+
+    this.renderBatches = new Map<string, RenderBatch>();
+    this.instanceManager = new InstanceManager();
+
+    this.ensureEssentialResources();
+    this.sizedTextures = this.createSizedTextures();
+    // Seeded so the FXAA input is a real texture before the first frame rebinds it
+    this.fxaaSource = this.sizedTextures.ldr;
+
+    const passes = this.createPasses();
+    this.depthPrepass = passes.depthPrepass;
+    this.forwardPass = passes.forwardPass;
+    this.bloomPass = passes.bloomPass;
+    this.tonemapPass = passes.tonemapPass;
+    this.taaPass = passes.taaPass;
+    this.fxaaPass = passes.fxaaPass;
+    this.blitPass = passes.blitPass;
   }
 
   destroy(): void {
@@ -222,38 +317,16 @@ export class WebGPURenderer implements IWebGPURenderer {
     };
   }
 
-  async init(canvas: HTMLCanvasElement): Promise<void> {
-    if (this.initialized) {
-      throw new Error('Renderer already initialized');
-    }
-
-    this.canvas = canvas;
-
-    // init webgpu
-    await this.initializeWebGPU();
-
-    // init resource managers using DI container
-    // Pass the already initialized context to ensure single device instance
-    this.diContainer = initContainer(this.device, this.context);
-
-    // Create services using new operator - they will be auto-registered
-    this.resourceManager = new WebGPUResourceManager();
-    this.gpuResourceCoordinator = new GPUResourceCoordinator();
-    this.bufferManager = new BufferManager();
-    this.shaderManager = new ShaderManager();
-    this.textureManager = new TextureManager();
-    this.timeManager = new TimeManager();
-    this.mvpUniformManager = new MVPUniformManager();
-    this.materialManager = new MaterialManager();
-    this.geometryManager = new GeometryManager();
-    this.pipelineManager = new PipelineManager();
-    this.bindGroupManager = new BindGroupManager();
-    this.pipelineFactory = new PipelineFactory();
-    this.shadingParamsManager = new ShadingParamsManager();
-    this.pmxMaterialProcessor = new PMXMaterialProcessor();
-    this.pmxAnimationBufferManager = new PMXAnimationBufferManager();
-    this.materialBinder = new MaterialBinder();
-
+  /**
+   * Construct the frame's pass objects. Renderer-private orchestration wired here rather
+   * than resolved from the container: the attachment getters below close over render
+   * targets this object owns and recreates on resize, which is not something a service
+   * registry can express.
+   *
+   * Pure, like createSizedTextures: it returns the passes so the constructor can assign them
+   * directly and keep them `readonly`.
+   */
+  private createPasses(): FramePasses {
     // Renderer-private pass objects (constructor-wired, not DI services)
     const outlineStage = new HGRPOutlineStage({
       device: this.device,
@@ -287,7 +360,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       depthStencilFormat: this.context.getDepthStencilFormat(),
       getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });
-    this.forwardPass = new ForwardPass({
+    const forwardPass = new ForwardPass({
       pipelineFactory: this.pipelineFactory,
       geometryManager: this.geometryManager,
       mvpUniformManager: this.mvpUniformManager,
@@ -298,70 +371,113 @@ export class WebGPURenderer implements IWebGPURenderer {
       outlineStage,
       eyeOverlayStage,
       browCompositeStage,
-      getColorView: () => this.sceneColorTexture.createView(),
-      getDepthView: () => this.depthTexture.createView(),
+      getColorView: () => this.sizedTextures.sceneColor.createView(),
+      getDepthView: () => this.sizedTextures.depth.createView(),
       getHGRPFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });
-    this.depthPrepass = new DepthPrepass({
+    const depthPrepass = new DepthPrepass({
       device: this.device,
       bindGroupManager: this.bindGroupManager,
       mvpUniformManager: this.mvpUniformManager,
       geometryManager: this.geometryManager,
       depthFormat: this.context.getPrepassDepthFormat(),
-      getDepthView: () => this.prepassDepthTexture.createView(),
+      getDepthView: () => this.sizedTextures.prepassDepth.createView(),
     });
-    this.bloomPass = new BloomPass({
+    const bloomPass = new BloomPass({
       device: this.device,
-      getInputTexture: () => this.sceneColorTexture,
+      getInputTexture: () => this.sizedTextures.sceneColor,
     });
-    this.tonemapPass = new TonemapPass({
+    const tonemapPass = new TonemapPass({
       device: this.device,
       outputFormat: 'rgba8unorm',
-      getInputTexture: () => this.sceneColorTexture,
-      getBloomView: () => this.bloomPass.getBloomView(),
-      getOutputView: () => this.ldrTexture.createView(),
+      getInputTexture: () => this.sizedTextures.sceneColor,
+      getBloomView: () => bloomPass.getBloomView(),
+      getOutputView: () => this.sizedTextures.ldr.createView(),
     });
-    this.taaPass = new TAAPass({
+    const taaPass = new TAAPass({
       device: this.device,
-      getInputTexture: () => this.ldrTexture,
-      getDepthTexture: () => this.depthTexture,
+      getInputTexture: () => this.sizedTextures.ldr,
+      getDepthTexture: () => this.sizedTextures.depth,
     });
-    this.fxaaPass = new FXAAPass({
+    const fxaaPass = new FXAAPass({
       device: this.device,
       outputFormat: this.context.getPreferredFormat(),
       getInputTexture: () => this.fxaaSource,
       getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
-    this.blitPass = new BlitPass({
+    const blitPass = new BlitPass({
       device: this.device,
       outputFormat: this.context.getPreferredFormat(),
       getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
 
-    // Ensure essential resources are created for PipelineManager
-    this.ensureEssentialResources();
-
-    await this.textureManager.initialize();
-    await this.shaderManager.initialize();
-    await this.mvpUniformManager.initialize();
-    await this.pmxMaterialProcessor.initialize();
-    await this.pmxAnimationBufferManager.initialize();
-
-    console.log('Initialized WebGPU managers with DI container');
-
-    this.initialized = true;
+    return {
+      depthPrepass,
+      forwardPass,
+      bloomPass,
+      tonemapPass,
+      taaPass,
+      fxaaPass,
+      blitPass,
+    };
   }
 
-  private async initializeWebGPU(): Promise<void> {
-    this.context = new WebGPUContext();
-    await this.context.initialize(this.canvas, {
-      powerPreference: 'high-performance',
-      requiredFeatures: ['timestamp-query'],
-      requiredLimits: {
-        maxStorageBufferBindingSize: 1024 * 1024 * 64, // 64MB
-        maxComputeWorkgroupStorageSize: 32768,
+  /**
+   * Create the canvas-sized render targets. Pure: it allocates and returns, so the caller
+   * decides when they are installed — which is what lets the constructor assign them
+   * directly (no definite-assignment assertion) while onResize just reassigns.
+   */
+  private createSizedTextures(): SizedTextures {
+    const canvas = this.context.getContext().canvas;
+    const depth = this.device.createTexture({
+      size: {
+        width: canvas.width,
+        height: canvas.height,
       },
+      format: this.context.getDepthStencilFormat(),
+      // TEXTURE_BINDING: the TAA pass reads the depth aspect for reprojection
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      label: 'Depth Texture',
     });
+    console.log('[WebGPURenderer] Created depth texture');
+
+    // create the prepass depth texture (sampleable; same lifetime rules as the depth texture)
+    const prepassDepth = this.device.createTexture({
+      size: {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      format: this.context.getPrepassDepthFormat(),
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      label: 'Prepass Depth Texture',
+    });
+    console.log('[WebGPURenderer] Created prepass depth texture');
+
+    // create the encoded-LDR tonemap target consumed by FXAA (same lifetime rules)
+    const ldr = this.device.createTexture({
+      size: {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      label: 'LDR Texture',
+    });
+    console.log('[WebGPURenderer] Created LDR texture');
+
+    // create HDR scene-color target (same lifetime rules as the depth texture)
+    const sceneColor = this.device.createTexture({
+      size: {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      format: this.context.getSceneColorFormat(),
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      label: 'Scene Color Texture',
+    });
+    console.log('[WebGPURenderer] Created HDR scene color texture');
+
+    return { depth, prepassDepth, ldr, sceneColor };
   }
 
   /**
@@ -408,56 +524,6 @@ export class WebGPURenderer implements IWebGPURenderer {
       label: 'MaterialBindGroup Layout',
     });
     console.log('[WebGPURenderer] Created material bind group layout for PipelineManager');
-
-    // create depth texture
-    const canvas = this.context.getContext().canvas;
-    this.depthTexture = this.device.createTexture({
-      size: {
-        width: canvas.width,
-        height: canvas.height,
-      },
-      format: this.context.getDepthStencilFormat(),
-      // TEXTURE_BINDING: the TAA pass reads the depth aspect for reprojection
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      label: 'Depth Texture',
-    });
-    console.log('[WebGPURenderer] Created depth texture');
-
-    // create the prepass depth texture (sampleable; same lifetime rules as the depth texture)
-    this.prepassDepthTexture = this.device.createTexture({
-      size: {
-        width: canvas.width,
-        height: canvas.height,
-      },
-      format: this.context.getPrepassDepthFormat(),
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      label: 'Prepass Depth Texture',
-    });
-    console.log('[WebGPURenderer] Created prepass depth texture');
-
-    // create the encoded-LDR tonemap target consumed by FXAA (same lifetime rules)
-    this.ldrTexture = this.device.createTexture({
-      size: {
-        width: canvas.width,
-        height: canvas.height,
-      },
-      format: 'rgba8unorm',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      label: 'LDR Texture',
-    });
-    console.log('[WebGPURenderer] Created LDR texture');
-
-    // create HDR scene-color target (same lifetime rules as the depth texture)
-    this.sceneColorTexture = this.device.createTexture({
-      size: {
-        width: canvas.width,
-        height: canvas.height,
-      },
-      format: this.context.getSceneColorFormat(),
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      label: 'Scene Color Texture',
-    });
-    console.log('[WebGPURenderer] Created HDR scene color texture');
 
     const texture = this.textureManager.createTexture('default_white_texture', {
       id: 'default_white_texture',
@@ -752,10 +818,6 @@ export class WebGPURenderer implements IWebGPURenderer {
    * Main render loop
    */
   async render(deltaTime: number, frameData: FrameData): Promise<void> {
-    if (!this.initialized) {
-      return;
-    }
-
     if (!frameData.scene.camera) {
       console.warn('No camera entity provided in render context');
       return;
@@ -817,7 +879,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.bloomPass.execute(commandEncoder);
     this.tonemapPass.execute(commandEncoder);
 
-    let presented: GPUTexture = this.ldrTexture;
+    let presented: GPUTexture = this.sizedTextures.ldr;
     if (useTaa) {
       this.taaPass.execute(commandEncoder, frameData.scene.camera);
       presented = this.taaPass.getOutputTexture();
@@ -841,17 +903,20 @@ export class WebGPURenderer implements IWebGPURenderer {
    * BindGroupManager, which would go stale then.
    */
   private getHGRPFrameBindGroup(): GPUBindGroup {
-    if (!this.hgrpFrameBindGroup || this.hgrpFrameBindGroupTexture !== this.prepassDepthTexture) {
+    if (
+      !this.hgrpFrameBindGroup ||
+      this.hgrpFrameBindGroupTexture !== this.sizedTextures.prepassDepth
+    ) {
       this.hgrpFrameBindGroup = this.device.createBindGroup({
         label: 'hgrpFrameBindGroup',
         layout: getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager),
         entries: [
-          { binding: 0, resource: this.prepassDepthTexture.createView() },
+          { binding: 0, resource: this.sizedTextures.prepassDepth.createView() },
           { binding: 1, resource: { buffer: this.getSceneLightingBuffer() } },
           { binding: 2, resource: { buffer: this.getDebugViewBuffer() } },
         ],
       });
-      this.hgrpFrameBindGroupTexture = this.prepassDepthTexture;
+      this.hgrpFrameBindGroupTexture = this.sizedTextures.prepassDepth;
     }
     return this.hgrpFrameBindGroup;
   }
@@ -1059,9 +1124,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   }
 
   onResize(): void {
-    // Recreate depth texture with new size
-    this.ensureEssentialResources();
-
+    // Every canvas-sized target is recreated as a set; the shared resources above are cached
+    // by id, so re-running them would be a no-op.
+    this.sizedTextures = this.createSizedTextures();
     this.pipelineManager.clearCache();
   }
 }

@@ -167,8 +167,9 @@ export interface IRenderBackend {
  * with low-level WebGPU backend operations
  */
 export abstract class IWebGPURenderer implements IRenderer, IRenderBackend {
-  // ===== Initialization =====
-  abstract init(canvas: HTMLCanvasElement): Promise<void>;
+  // ===== Lifecycle =====
+  // There is no init step: an implementation is fully built by its own factory before anyone
+  // can hold a reference to it (see WebGPURenderer.create).
   abstract destroy(): void;
   abstract onResize(): void;
   abstract updateContextConfig(config: ContextConfig): void;

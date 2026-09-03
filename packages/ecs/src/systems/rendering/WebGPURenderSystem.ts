@@ -72,13 +72,6 @@ export class WebGPURenderSystem extends System {
     markSceneSurface(this.canvas);
     this.rootElement.appendChild(this.canvas);
 
-    // Create webgpu renderer
-    const renderer = createWebGPURenderer(this.rootElement, 'webgpu-renderer');
-    this.setRenderer(renderer);
-
-    // @ts-expect-error - Adding renderer to window for debugging
-    window.renderer = renderer;
-
     // Initialize global uniforms and render stats
     this.globalUniforms = {
       time: 0,
@@ -106,7 +99,13 @@ export class WebGPURenderSystem extends System {
 
   async init(): Promise<void> {
     super.init();
-    await this.renderer.init(this.canvas);
+    // Building the renderer needs an adapter and a device, so it can only happen here, in the
+    // system's async init — the renderer has no half-built state to hand out earlier.
+    const renderer = await createWebGPURenderer(this.rootElement, 'webgpu-renderer', this.canvas);
+    this.setRenderer(renderer);
+
+    // @ts-expect-error - Adding renderer to window for debugging
+    window.renderer = renderer;
   }
 
   onDestroy(): void {
