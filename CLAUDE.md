@@ -74,6 +74,28 @@ Known-broken test infrastructure (do not trust it, fix it before relying on it):
    the exact things to look at, commit after the OK. Contract/tooling changes that provably
    leave the picture identical (tests, dump) may commit as before.
 
+## One Problem, One Commit — Never Commit an Attempt
+
+User rule, 2026-09-03 (“别一个问题四五个commit反复revert或者repeat”), after exactly that
+happened to a metal-shading fix: three commits for one bug that was still broken.
+
+- **A fix is committed once, after it works.** Not when it typechecks, not when the reasoning
+  looks right, not "so the work isn't lost". Until the user confirms, it lives in the working
+  tree.
+- **An attempt that turns out wrong is edited in place, not committed on top.** No follow-up
+  commit, no revert commit, no `fix the fix`. The history should show one commit per problem,
+  describing the fix that actually worked.
+- **If an attempt already got committed, `reset` back and force-push** — do not stack
+  corrections (see the git conventions below). Keep the changes in the working tree
+  (`git reset --mixed <last good>`) so the work survives for another pass.
+- **This applies to the workbook too.** Record the root cause and the fix that worked. Do NOT
+  narrate the failed attempts, the v5→v6→v7 archaeology, or "then I tried X and it was still
+  wrong" — that is noise in a file meant to be read later. A wrong turn earns a line only when
+  it leaves a *reusable* lesson (a measurement method, a tool that lies to you, a class of bug
+  worth a regression test); write the lesson, not the story.
+- **Shader/code comments likewise carry no attempt history.** See the comment-style section:
+  a comment says why the code is the way it is, never which versions preceded it.
+
 ## High-Level Architecture
 
 ### Monorepo layout and module resolution (read this first)
