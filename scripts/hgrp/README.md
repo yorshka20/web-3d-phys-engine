@@ -28,11 +28,22 @@ node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica \
      --clips A_actor_pelica_gacha_ani,A_actor_pelica_gacha_ani_loop
 ```
 
-`--auto` (what convert.mjs runs) keeps every clip that actually drives the rig and orders
-them alphabetically, which puts an entrance clip ahead of its own `_loop`. The rig-coverage
-test is what separates a body clip from a camera track: measured across two rips, body clips
-carry 704-815 curves over 323-352 node paths while camera tracks and event stubs carry
-exactly 2 curves over 1 unnamed path.
+`--auto` (what convert.mjs runs) keeps every clip that drives more than a handful of node
+paths and orders them alphabetically, which puts an entrance clip ahead of its own `_loop`.
+Measured across two rips, body clips carry 704-815 curves over 323-352 node paths while
+camera tracks and event stubs carry exactly 2 curves over 1 unnamed path.
+
+> **`--auto` is unsound, and the clip layer as a whole is being replaced** (2026-09-03).
+> It counts node paths without asking whether those paths belong to *this* character's rig,
+> so it happily bakes another creature's clip (Wulfgard's wolf-summon clips: 229 of 279
+> curves have no matching node). Three further gaps found the same day: `m_EulerCurves` is
+> never read (a clip storing rotations that way bakes with translation only), a clip is
+> allowed to drive nodes outside the skin — including the prefab root, which carries a
+> cutscene's world placement — and the rig-root axis correction assumes exactly one rig
+> root. **Always inspect a newly baked clip before trusting it**, or pass `--no-anim`: a GLB
+> with no animation composes its bind pose correctly. The replacement is a Unity batch
+> export (Unity owns its own clip semantics), which retires `anim-clip.mjs` and
+> `anim-convert.mjs` entirely.
 
 Re-running is safe: outputs are overwritten in place (anim-convert replaces the GLB's
 animations rather than stacking them, so an explicit `--clips` must list every clip you want

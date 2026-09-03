@@ -297,8 +297,13 @@ for (const charName of chars) {
         .filter((l) => l.startsWith('[anim-convert]'))
         .join('\n'),
     );
+    // anim-convert's diagnostics (curve paths with no glb node, above all) go to stderr;
+    // dropping them made a clip bound to the wrong rig look like a clean conversion.
+    if (anim.stderr) {
+      process.stderr.write(anim.stderr);
+    }
     if (anim.status !== 0) {
-      console.error(`[anim-convert] failed for ${charName}:\n${anim.stderr}`);
+      console.error(`[anim-convert] failed for ${charName}`);
       failed = true;
     }
   }
