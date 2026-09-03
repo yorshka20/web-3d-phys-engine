@@ -1,5 +1,26 @@
-import { debugTabs } from './debugTabs';
 import { draggable } from './draggable';
+
+// Tabs contributed to the single debug panel (toggled with P). A stage registers whatever
+// belongs to it — the PMX shading params, the HGRP calibration knobs — so nothing mounts for
+// content the running stage may not even have loaded.
+//
+// A tab mounts lazily into the container the panel hands it, the first time it is shown:
+// tweakpane builds a whole widget tree per material, which is wasted on a tab nobody opens.
+export interface DebugTab {
+  id: string;
+  label: string;
+  // `onVisibleFrame` registers a per-frame callback the panel drives only while this tab is
+  // the visible one — a tab must not hold a requestAnimationFrame loop of its own, or it keeps
+  // repainting widgets nobody is looking at.
+  mount: (container: HTMLElement, onVisibleFrame: (tick: () => void) => void) => () => void;
+}
+
+// Registering the first tab is what brings the panel into existence: the shell has no content
+// of its own, and whoever owns content (a stage) is the only one who knows it exists. Ordering
+// therefore cannot go wrong — there is no "registered too late to be picked up" window.
+export function registerDebugTab(tab: DebugTab): void {
+  (panel ??= createDebugPanel()).addTab(tab);
+}
 
 // The panel is a shell only — position, drag handle, tab rail and scrolling. Every tab's
 // content is a tweakpane Pane built by whoever registered it; nothing here hand-rolls a
@@ -104,19 +125,33 @@ const STYLE = `
 #debug-panel-hint:hover { background: rgba(0, 255, 136, 0.15); }
 `;
 
-export function mountDebugPanel(): () => void {
+interface TabEntry {
+  tab: DebugTab;
+  button: HTMLButtonElement;
+  host: HTMLElement;
+  ticks: (() => void)[];
+  dispose?: () => void;
+}
+
+interface DebugPanel {
+  addTab(tab: DebugTab): void;
+}
+
+let panel: DebugPanel | undefined;
+
+function createDebugPanel(): DebugPanel {
   const style = document.createElement('style');
   style.textContent = STYLE;
   document.head.appendChild(style);
 
-  const panel = document.createElement('div');
-  panel.id = 'debug-panel';
-  panel.hidden = true;
-  panel.innerHTML =
+  const panelElement = document.createElement('div');
+  panelElement.id = 'debug-panel';
+  panelElement.hidden = true;
+  panelElement.innerHTML =
     '<div class="dp-header"><span>Debug</span>' +
     '<button class="dp-close" aria-label="Close">×</button></div>' +
     '<div class="dp-main"><div class="dp-rail"></div><div class="dp-content"></div></div>';
-  document.body.appendChild(panel);
+  document.body.appendChild(panelElement);
 
   const hint = document.createElement('button');
   hint.id = 'debug-panel-hint';
@@ -124,67 +159,115 @@ export function mountDebugPanel(): () => void {
   hint.title = 'Press P to open the debug panel';
   document.body.appendChild(hint);
 
-  const rail = panel.querySelector('.dp-rail') as HTMLElement;
-  const content = panel.querySelector('.dp-content') as HTMLElement;
-  const drag = draggable(panel, { handle: '.dp-header' });
+  const rail = panelElement.querySelector('.dp-rail') as HTMLElement;
+  const content = panelElement.querySelector('.dp-content') as HTMLElement;
+  draggable(panelElement, { handle: '.dp-header' });
 
-  // Tabs build once and stay in the DOM, hidden when inactive: a tweakpane tree rebuilt on
-  // every switch would lose the folder state the user just arranged.
-  const disposers: (() => void)[] = [];
-  const buttons: HTMLButtonElement[] = [];
-  const panes: HTMLElement[] = [];
+  const entries: TabEntry[] = [];
+  let activeIndex = 0;
+  let visible = false;
+  let frame = 0;
 
-  debugTabs().forEach((tab, index) => {
+  // Exactly one tab's widget tree exists at a time, and only while the panel is open: a pane
+  // off screen is pure cost — a fully built HGRP character tab is ~18k DOM nodes and ~12k
+  // listeners. What the user arranged is remembered as data (lazyFolder's expansion map), so
+  // rebuilding restores the same view instead of a default one.
+  function ensureMounted(entry: TabEntry): void {
+    if (entry.dispose) {
+      return;
+    }
+    entry.dispose = entry.tab.mount(entry.host, (tick) => entry.ticks.push(tick));
+  }
+
+  function unmount(entry: TabEntry): void {
+    entry.dispose?.();
+    entry.dispose = undefined;
+    entry.ticks.length = 0;
+    entry.host.replaceChildren();
+  }
+
+  // One loop for the whole panel, running only for the tab actually on screen.
+  function drive(): void {
+    cancelAnimationFrame(frame);
+    frame = 0;
+    const entry = entries[activeIndex];
+    if (!visible || !entry || entry.ticks.length === 0) {
+      return;
+    }
+    frame = requestAnimationFrame(function tick() {
+      for (const run of entry.ticks) {
+        run();
+      }
+      frame = requestAnimationFrame(tick);
+    });
+  }
+
+  function select(index: number): void {
+    activeIndex = index;
+    entries.forEach((entry, i) => {
+      entry.button.classList.toggle('active', i === index);
+      entry.host.hidden = i !== index;
+      if (i !== index) {
+        unmount(entry);
+      }
+    });
+    if (visible && entries[index]) {
+      ensureMounted(entries[index]);
+    }
+    drive();
+  }
+
+  function setVisible(next: boolean): void {
+    visible = next;
+    panelElement.hidden = !next;
+    hint.hidden = next;
+    const entry = entries[activeIndex];
+    if (entry) {
+      if (next) {
+        ensureMounted(entry);
+      } else {
+        unmount(entry);
+      }
+    }
+    drive();
+  }
+
+  function addTab(tab: DebugTab): void {
+    const existing = entries.findIndex((entry) => entry.tab.id === tab.id);
+    if (existing >= 0) {
+      const entry = entries[existing];
+      unmount(entry);
+      entry.tab = tab;
+      entry.button.textContent = tab.label;
+      select(activeIndex);
+      return;
+    }
+
     const button = document.createElement('button');
     button.className = 'dp-tab';
     button.textContent = tab.label;
     rail.appendChild(button);
-    buttons.push(button);
 
-    const paneHost = document.createElement('div');
-    paneHost.className = 'dp-pane';
-    content.appendChild(paneHost);
-    panes.push(paneHost);
-    disposers.push(tab.mount(paneHost));
+    const host = document.createElement('div');
+    host.className = 'dp-pane';
+    content.appendChild(host);
 
-    button.addEventListener('click', () => select(index));
-  });
-
-  function select(index: number) {
-    buttons.forEach((button, i) => button.classList.toggle('active', i === index));
-    panes.forEach((pane, i) => (pane.hidden = i !== index));
+    const entry: TabEntry = { tab, button, host, ticks: [] };
+    entries.push(entry);
+    button.addEventListener('click', () => select(entries.indexOf(entry)));
+    select(activeIndex);
   }
-  if (buttons.length > 0) {
-    select(0);
-  }
-
-  const setVisible = (visible: boolean) => {
-    panel.hidden = !visible;
-    hint.hidden = visible;
-  };
-  setVisible(false);
 
   hint.addEventListener('click', () => setVisible(true));
-  (panel.querySelector('.dp-close') as HTMLElement).addEventListener('click', () =>
+  (panelElement.querySelector('.dp-close') as HTMLElement).addEventListener('click', () =>
     setVisible(false),
   );
-
-  function handleKey(e: KeyboardEvent) {
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.code !== 'KeyP') return;
     const target = e.target as HTMLElement | null;
     if (target && /INPUT|SELECT|TEXTAREA/.test(target.tagName)) return;
-    setVisible(panel.hidden);
-  }
-  window.addEventListener('keydown', handleKey);
+    setVisible(panelElement.hidden);
+  });
 
-  return () => {
-    window.removeEventListener('keydown', handleKey);
-    for (const dispose of disposers) {
-      dispose();
-    }
-    drag.destroy();
-    panel.remove();
-    hint.remove();
-    style.remove();
-  };
+  return { addTab };
 }

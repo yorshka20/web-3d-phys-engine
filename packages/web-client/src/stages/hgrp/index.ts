@@ -1,7 +1,7 @@
 import { World } from '@ecs/core/ecs/World';
 import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 
-import { registerDebugTab } from '../../ui/debugTabs';
+import { registerDebugTab } from '../../ui/debugPanel';
 import { createHGRPCharacterTab } from '../../ui/hgrpCharacterPanel';
 import { createHGRPStageTab } from '../../ui/hgrpStagePanel';
 import { hgrpStage, loadHGRPCharacter, relayoutHGRPStage, resetHGRPStage } from './characters';

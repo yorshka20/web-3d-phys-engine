@@ -1,16 +1,19 @@
 import { World } from '@ecs';
 import { Pane } from 'tweakpane';
 import { DEFAULT_SPAWN_CONFIG, SpawnableType, spawnEntity } from '../game/entityFactory';
-import { DebugTab } from './debugTabs';
+import type { DebugTab } from './debugPanel';
 
 const TYPES: SpawnableType[] = ['cube', 'sphere', 'cylinder', 'cone', 'torus', 'capsule'];
+
+// The panel disposes this tab's pane whenever it goes off screen, so what the user dialled in
+// lives here rather than in the widgets.
+const config = { ...DEFAULT_SPAWN_CONFIG };
 
 export function createSpawnTab(world: World): DebugTab {
   return {
     id: 'spawn',
     label: 'Create',
     mount: (container) => {
-      const config = { ...DEFAULT_SPAWN_CONFIG };
       const pane = new Pane({ container });
       pane.addBinding(config, 'type', {
         options: Object.fromEntries(TYPES.map((type) => [type, type])),

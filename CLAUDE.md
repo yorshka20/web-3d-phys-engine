@@ -221,6 +221,15 @@ create camera/plane/coordinate entities, load a stage from `src/stages/`, `game.
 (`ui/mountEntityPanel.svelte.ts`, `F` key toggles); the canvas itself is created imperatively by
 `WebGPURenderSystem`. State shared with Svelte from plain TS must live in `.svelte.ts` files.
 
+**`main.ts` mounts no tweakpane pane** (user convention, 2026-09-03) — the global camera panel is
+the one exception; every other pane is mounted by the stage that owns its content, via
+`registerDebugTab(...)`. **No widgets exist off screen**: the panel disposes a tab's pane when it
+is hidden or switched away, and folder contents are built on first expand (`ui/lazyFolder.ts`);
+register per-frame refreshes through the panel's `onVisibleFrame` callback instead of holding a
+`requestAnimationFrame`. A pane is therefore rebuilt often — anything that must survive
+(dialled-in values, a baseline snapshot) lives in module scope, never in the widgets. Mechanism
+and the measured costs behind these rules: learnings `architecture.md`.
+
 Vite specifics: inline `wgslLoader`/`gltfLoader` plugins inline `.wgsl`/`.gltf` as strings (also
 registered for workers); Khronos sample models are never imported — `stages/gltf.ts` builds URLs
 from `import.meta.env.VITE_GLTF_SAMPLES_BASE` (committed default in `web-client/.env`: the

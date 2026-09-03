@@ -5,7 +5,7 @@ import {
   ShadingParamsManager,
 } from '@renderer/webGPU/core/ShadingParamsManager';
 import { Pane } from 'tweakpane';
-import { DebugTab } from './debugTabs';
+import type { DebugTab } from './debugPanel';
 import preset from '../presets/pmx-shading.json';
 
 const STORAGE_KEY = 'pmx-shading-params';

@@ -18,7 +18,8 @@ import {
   onHGRPStageChange,
   resetHGRPPlacement,
 } from '../stages/hgrp/characters';
-import { DebugTab } from './debugTabs';
+import type { DebugTab } from './debugPanel';
+import { lazyFolder } from './lazyFolder';
 
 // Per-material calibration overrides for one HGRP character, keyed by material name.
 interface HGRPShadingState {
@@ -185,7 +186,7 @@ export function createHGRPCharacterTab(): DebugTab {
   };
 }
 
-function mountPane(container: HTMLElement): () => void {
+function mountPane(container: HTMLElement, onVisibleFrame: (tick: () => void) => void): () => void {
   const pane = new Pane({ container });
   const built = new Set<string>();
   const scrubs: (() => void)[] = [];
@@ -199,10 +200,7 @@ function mountPane(container: HTMLElement): () => void {
         continue;
       }
       built.add(character.assetId);
-      const scrub = addCharacterFolder(pane, character, built.size === 1);
-      if (scrub) {
-        scrubs.push(scrub);
-      }
+      addCharacterFolder(pane, character, built.size === 1, (scrub) => scrubs.push(scrub));
     }
   };
   sync();
@@ -211,35 +209,35 @@ function mountPane(container: HTMLElement): () => void {
   // Playback advances outside the panel, so the time scrub follows the clip. Only the scrub
   // binding repaints — a whole-pane refresh would repaint every material slider of every
   // character on stage, thousands of widgets once the roster fills up.
-  let frame = requestAnimationFrame(function tick() {
+  onVisibleFrame(() => {
     for (const refresh of scrubs) {
       refresh();
     }
-    frame = requestAnimationFrame(tick);
   });
 
   return () => {
-    cancelAnimationFrame(frame);
     unsubscribe();
     pane.dispose();
   };
 }
 
-// Returns a per-frame scrub repaint when the character has playable clips.
-function addCharacterFolder(
-  pane: Pane,
-  character: HGRPStageCharacter,
-  expanded: boolean,
-): (() => void) | undefined {
-  const materials = collectHGRPMaterials(character.assetId);
-  const storageKey = `hgrp-shading-${character.assetId}`;
+// The preset values the asset was loaded with, captured the first time the character is seen
+// and kept for the session. The panel mutates the live descriptors, so a snapshot taken on a
+// later mount would record the user's own edits as if they were the preset, and "Reset to
+// preset" would then reset to them.
+const presetBaselines = new Map<string, HGRPShadingState>();
+
+function presetBaseline(character: HGRPStageCharacter, materials: HGRPMaterialDescriptor[]) {
+  const cached = presetBaselines.get(character.assetId);
+  if (cached) {
+    return cached;
+  }
   const pristine = snapshotState(materials);
-  let overrides: string[] = [];
+  presetBaselines.set(character.assetId, pristine);
   try {
-    const stored = localStorage.getItem(storageKey);
+    const stored = localStorage.getItem(`hgrp-shading-${character.assetId}`);
     if (stored) {
       applyState(materials, JSON.parse(stored) as HGRPShadingState);
-      overrides = describeOverrides(pristine, snapshotState(materials));
     }
   } catch (error) {
     console.warn('[hgrpCharacterPanel] Ignoring unreadable localStorage state:', error);
@@ -248,53 +246,79 @@ function addCharacterFolder(
   // the picture itself and easy to mistake for the preset's own look — say so, and list
   // exactly what departs from the preset, so a character is never judged against hidden
   // hand-tuned values ("Reset to preset" drops them).
+  const overrides = describeOverrides(pristine, snapshotState(materials));
   if (overrides.length > 0) {
     console.warn(
       `[hgrpCharacterPanel] ${character.assetId}: ${overrides.length} saved override(s) applied over the preset:\n  ` +
         overrides.join('\n  '),
     );
   }
+  return pristine;
+}
 
-  const folder = pane.addFolder({
-    title: character.label + (overrides.length > 0 ? ' · OVERRIDES' : ''),
-    expanded,
-  });
-
-  addTransformWidgets(folder, character, pane);
-  const scrub = addAnimationWidgets(folder, character);
-  if (materials.length > 0) {
-    addMaterialWidgets(folder, character, materials, pristine, storageKey, pane);
-  } else {
+function addCharacterFolder(
+  pane: Pane,
+  character: HGRPStageCharacter,
+  expanded: boolean,
+  registerScrub: (scrub: () => void) => void,
+): void {
+  const materials = collectHGRPMaterials(character.assetId);
+  const storageKey = `hgrp-shading-${character.assetId}`;
+  const pristine = presetBaseline(character, materials);
+  const edited = describeOverrides(pristine, snapshotState(materials)).length > 0;
+  if (materials.length === 0) {
     console.warn(
       `[hgrpCharacterPanel] no HGRP materials on asset "${character.assetId}", section skipped`,
     );
   }
-  return scrub;
+
+  lazyFolder(
+    pane,
+    {
+      title: character.label + (edited ? ' · OVERRIDES' : ''),
+      key: `hgrp:${character.assetId}`,
+      expanded,
+    },
+    (folder) => {
+      addTransformWidgets(folder, character);
+      addAnimationWidgets(folder, character, registerScrub);
+      if (materials.length > 0) {
+        addMaterialWidgets(folder, character, materials, pristine, storageKey);
+      }
+    },
+  );
 }
 
-function addTransformWidgets(folder: FolderApi, character: HGRPStageCharacter, pane: Pane): void {
-  const transform = folder.addFolder({ title: 'Transform', expanded: false });
-  const apply = () => applyHGRPPlacement(character);
-  for (const axis of ['x', 'y', 'z'] as const) {
-    transform
-      .addBinding(character.offset, axis, { label: `offset ${axis}`, step: 0.05 })
-      .on('change', apply);
-  }
-  for (const axis of ['x', 'y', 'z'] as const) {
-    transform
-      .addBinding(character.rotation, axis, {
-        label: `rotate ${axis}`,
-        min: -180,
-        max: 180,
-        step: 1,
-      })
-      .on('change', apply);
-  }
-  transform.addBinding(character, 'scale', { min: 0.1, max: 10, step: 0.05 }).on('change', apply);
-  transform.addButton({ title: 'Reset placement' }).on('click', () => {
-    resetHGRPPlacement(character);
-    pane.refresh();
-  });
+function addTransformWidgets(folder: FolderApi, character: HGRPStageCharacter): void {
+  lazyFolder(
+    folder,
+    { title: 'Transform', key: `hgrp:${character.assetId}:transform` },
+    (transform) => {
+      const apply = () => applyHGRPPlacement(character);
+      for (const axis of ['x', 'y', 'z'] as const) {
+        transform
+          .addBinding(character.offset, axis, { label: `offset ${axis}`, step: 0.05 })
+          .on('change', apply);
+      }
+      for (const axis of ['x', 'y', 'z'] as const) {
+        transform
+          .addBinding(character.rotation, axis, {
+            label: `rotate ${axis}`,
+            min: -180,
+            max: 180,
+            step: 1,
+          })
+          .on('change', apply);
+      }
+      transform
+        .addBinding(character, 'scale', { min: 0.1, max: 10, step: 0.05 })
+        .on('change', apply);
+      transform.addButton({ title: 'Reset placement' }).on('click', () => {
+        resetHGRPPlacement(character);
+        transform.refresh();
+      });
+    },
+  );
 }
 
 // The clips a character can play come from its glTF document (converted Unity clips,
@@ -306,55 +330,65 @@ function animationClips(assetId: string): GLTFAnimation[] {
 
 // Playback widgets bind straight to the entity's SkeletonComponent, which
 // SkeletalAnimationSystem reads every frame, so writing the field is the whole update.
-// Returns the per-frame scrub repaint, or undefined when there is nothing to play.
+// The per-frame scrub repaint is handed to `registerScrub` when the folder is built, which
+// is not necessarily now — a folder the user left collapsed builds on its next expand.
 function addAnimationWidgets(
   folder: FolderApi,
   character: HGRPStageCharacter,
-): (() => void) | undefined {
+  registerScrub: (scrub: () => void) => void,
+): void {
   const skeleton = character.entity?.getComponent<SkeletonComponent>(
     SkeletonComponent.componentName,
   );
   const clips = animationClips(character.assetId);
   if (!skeleton || clips.length === 0) {
-    return undefined;
+    return;
   }
 
-  const animation = folder.addFolder({ title: 'Animation', expanded: true });
-  const options = Object.fromEntries(
-    clips.map((clip, index) => [`${index}: ${clip.name} (${clip.duration.toFixed(2)}s)`, index]),
+  lazyFolder(
+    folder,
+    { title: 'Animation', key: `hgrp:${character.assetId}:animation`, expanded: true },
+    (animation) => {
+      const options = Object.fromEntries(
+        clips.map((clip, index) => [
+          `${index}: ${clip.name} (${clip.duration.toFixed(2)}s)`,
+          index,
+        ]),
+      );
+      animation.addBinding(skeleton, 'clipIndex', { label: 'clip', options }).on('change', (ev) => {
+        if (ev.last) {
+          skeleton.time = 0;
+          rebuildScrub();
+        }
+      });
+      animation.addBinding(skeleton, 'playing');
+      animation.addBinding(skeleton, 'loop');
+      animation.addBinding(skeleton, 'speed', { min: -2, max: 3, step: 0.05 });
+
+      // The scrub slider spans the current clip; a clip change rebuilds it with the new
+      // duration (tweakpane bindings take their range at creation).
+      let scrub = addScrub();
+      function addScrub() {
+        const duration = clips[skeleton!.clipIndex]?.duration ?? 0;
+        return animation.addBinding(skeleton!, 'time', {
+          min: 0,
+          max: Math.max(duration, 0.001),
+          step: 0.001,
+        });
+      }
+      function rebuildScrub() {
+        scrub.dispose();
+        scrub = addScrub();
+      }
+      // A paused clip is the case where the user is dragging the scrub themselves; repainting
+      // it then would fight the drag.
+      registerScrub(() => {
+        if (skeleton.playing) {
+          scrub.refresh();
+        }
+      });
+    },
   );
-  animation.addBinding(skeleton, 'clipIndex', { label: 'clip', options }).on('change', (ev) => {
-    if (ev.last) {
-      skeleton.time = 0;
-      rebuildScrub();
-    }
-  });
-  animation.addBinding(skeleton, 'playing');
-  animation.addBinding(skeleton, 'loop');
-  animation.addBinding(skeleton, 'speed', { min: -2, max: 3, step: 0.05 });
-
-  // The scrub slider spans the current clip; a clip change rebuilds it with the new duration
-  // (tweakpane bindings take their range at creation).
-  let scrub = addScrub();
-  function addScrub() {
-    const duration = clips[skeleton!.clipIndex]?.duration ?? 0;
-    return animation.addBinding(skeleton!, 'time', {
-      min: 0,
-      max: Math.max(duration, 0.001),
-      step: 0.001,
-    });
-  }
-  function rebuildScrub() {
-    scrub.dispose();
-    scrub = addScrub();
-  }
-  // A paused clip is the case where the user is dragging the scrub themselves; repainting it
-  // then would fight the drag.
-  return () => {
-    if (skeleton.playing) {
-      scrub.refresh();
-    }
-  };
 }
 
 function addMaterialWidgets(
@@ -363,124 +397,129 @@ function addMaterialWidgets(
   materials: HGRPMaterialDescriptor[],
   pristine: HGRPShadingState,
   storageKey: string,
-  pane: Pane,
 ): void {
-  const section = folder.addFolder({ title: 'Materials', expanded: false });
-
-  // Optional layers this character actually has (HGRPCharacterFlags). The toggle flips the
-  // descriptors the draw list already reads every frame, so it takes effect immediately;
-  // it is session-only, since the load-time source of truth is the flag passed to
-  // loadHGRPCharacter. A character with no gated layer gets no dead switch.
-  const gated = new Map<keyof HGRPCharacterFlags, HGRPMaterialDescriptor[]>();
-  for (const material of materials) {
-    const flag = hgrpOptionalLayerFlag(material.variant);
-    if (!flag) continue;
-    const group = gated.get(flag) ?? [];
-    group.push(material);
-    gated.set(flag, group);
-  }
-  for (const [flag, layers] of gated) {
-    const state = { [flag]: layers.every((layer) => layer.enabled) } as Record<string, boolean>;
-    section.addBinding(state, flag).on('change', () => {
-      for (const layer of layers) {
-        layer.enabled = state[flag];
+  lazyFolder(
+    folder,
+    { title: 'Materials', key: `hgrp:${character.assetId}:materials` },
+    (section) => {
+      // Optional layers this character actually has (HGRPCharacterFlags). The toggle flips the
+      // descriptors the draw list already reads every frame, so it takes effect immediately;
+      // it is session-only, since the load-time source of truth is the flag passed to
+      // loadHGRPCharacter. A character with no gated layer gets no dead switch.
+      const gated = new Map<keyof HGRPCharacterFlags, HGRPMaterialDescriptor[]>();
+      for (const material of materials) {
+        const flag = hgrpOptionalLayerFlag(material.variant);
+        if (!flag) continue;
+        const group = gated.get(flag) ?? [];
+        group.push(material);
+        gated.set(flag, group);
       }
-    });
-  }
-
-  // Persistence is EXPLICIT ('Save overrides' button): live tweaks are session-only, so
-  // experiments never silently shadow the authoritative preset values across reloads.
-  const persist = () => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(snapshotState(materials)));
-    } catch (error) {
-      console.warn('[hgrpCharacterPanel] Failed to persist to localStorage:', error);
-    }
-  };
-
-  // Widget value objects mirror the descriptors; syncers pull descriptor -> widget after a
-  // bulk apply (import/reset), then one pane.refresh() repaints everything.
-  const syncers: (() => void)[] = [];
-
-  for (const material of materials) {
-    const floatDefs = HGRP_TUNABLE_FLOATS.filter((def) => def.key in material.floats);
-    const colorDefs = HGRP_TUNABLE_COLORS.filter((def) => def.key in material.colors);
-    if (floatDefs.length === 0 && colorDefs.length === 0) {
-      continue;
-    }
-
-    const materialFolder = section.addFolder({
-      title: `${material.materialName} · ${material.variant.replace('CharacterNPR', 'NPR')}`,
-      expanded: false,
-    });
-
-    const floatValues: Record<string, number> = {};
-    for (const def of floatDefs) {
-      floatValues[def.key] = material.floats[def.key] ?? def.default;
-      materialFolder
-        .addBinding(floatValues, def.key, {
-          label: def.key.slice(1),
-          min: def.min,
-          max: def.max,
-          step: def.step,
-        })
-        .on('change', (ev) => {
-          material.floats[def.key] = ev.value as number;
-          hgrpRefreshPermutation(material);
+      for (const [flag, layers] of gated) {
+        const state = { [flag]: layers.every((layer) => layer.enabled) } as Record<string, boolean>;
+        section.addBinding(state, flag).on('change', () => {
+          for (const layer of layers) {
+            layer.enabled = state[flag];
+          }
         });
-    }
-    syncers.push(() => {
-      for (const def of floatDefs) {
-        floatValues[def.key] = material.floats[def.key] ?? def.default;
       }
-    });
 
-    const colorValues: Record<string, { r: number; g: number; b: number; a: number }> = {};
-    for (const def of colorDefs) {
-      const current = material.colors[def.key] ?? def.default;
-      colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
-      materialFolder
-        .addBinding(colorValues, def.key, {
-          label: def.key.slice(1),
-          color: { type: 'float' },
-        })
-        .on('change', (ev) => {
-          const c = ev.value as { r: number; g: number; b: number; a: number };
-          material.colors[def.key] = [c.r, c.g, c.b, c.a];
+      // Persistence is EXPLICIT ('Save overrides' button): live tweaks are session-only, so
+      // experiments never silently shadow the authoritative preset values across reloads.
+      const persist = () => {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(snapshotState(materials)));
+        } catch (error) {
+          console.warn('[hgrpCharacterPanel] Failed to persist to localStorage:', error);
+        }
+      };
+
+      // Widget value objects mirror the descriptors; syncers pull descriptor -> widget after a
+      // bulk apply (import/reset), then one section.refresh() repaints everything. A material
+      // folder that was never expanded has neither widgets nor a syncer — it reads the
+      // descriptors when it is finally built, which is the same value a syncer would have put
+      // there.
+      const syncers: (() => void)[] = [];
+
+      for (const material of materials) {
+        const floatDefs = HGRP_TUNABLE_FLOATS.filter((def) => def.key in material.floats);
+        const colorDefs = HGRP_TUNABLE_COLORS.filter((def) => def.key in material.colors);
+        if (floatDefs.length === 0 && colorDefs.length === 0) {
+          continue;
+        }
+
+        const title = `${material.materialName} · ${material.variant.replace('CharacterNPR', 'NPR')}`;
+        const key = `hgrp:${character.assetId}:material:${material.materialName}`;
+        lazyFolder(section, { title, key }, (materialFolder) => {
+          const floatValues: Record<string, number> = {};
+          for (const def of floatDefs) {
+            floatValues[def.key] = material.floats[def.key] ?? def.default;
+            materialFolder
+              .addBinding(floatValues, def.key, {
+                label: def.key.slice(1),
+                min: def.min,
+                max: def.max,
+                step: def.step,
+              })
+              .on('change', (ev) => {
+                material.floats[def.key] = ev.value as number;
+                hgrpRefreshPermutation(material);
+              });
+          }
+          syncers.push(() => {
+            for (const def of floatDefs) {
+              floatValues[def.key] = material.floats[def.key] ?? def.default;
+            }
+          });
+
+          const colorValues: Record<string, { r: number; g: number; b: number; a: number }> = {};
+          for (const def of colorDefs) {
+            const current = material.colors[def.key] ?? def.default;
+            colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
+            materialFolder
+              .addBinding(colorValues, def.key, {
+                label: def.key.slice(1),
+                color: { type: 'float' },
+              })
+              .on('change', (ev) => {
+                const c = ev.value as { r: number; g: number; b: number; a: number };
+                material.colors[def.key] = [c.r, c.g, c.b, c.a];
+              });
+          }
+          syncers.push(() => {
+            for (const def of colorDefs) {
+              const current = material.colors[def.key] ?? def.default;
+              colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
+            }
+          });
         });
-    }
-    syncers.push(() => {
-      for (const def of colorDefs) {
-        const current = material.colors[def.key] ?? def.default;
-        colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
       }
-    });
-  }
 
-  const syncWidgets = () => {
-    for (const sync of syncers) {
-      sync();
-    }
-    pane.refresh();
-  };
+      const syncWidgets = () => {
+        for (const sync of syncers) {
+          sync();
+        }
+        section.refresh();
+      };
 
-  section.addButton({ title: 'Save overrides' }).on('click', () => persist());
-  section.addButton({ title: 'Export JSON' }).on('click', () => {
-    exportState(snapshotState(materials), character.assetId);
-  });
-  section.addButton({ title: 'Import JSON' }).on('click', () =>
-    importState((imported) => {
-      applyState(materials, imported);
-      syncWidgets();
-    }),
+      section.addButton({ title: 'Save overrides' }).on('click', () => persist());
+      section.addButton({ title: 'Export JSON' }).on('click', () => {
+        exportState(snapshotState(materials), character.assetId);
+      });
+      section.addButton({ title: 'Import JSON' }).on('click', () =>
+        importState((imported) => {
+          applyState(materials, imported);
+          syncWidgets();
+        }),
+      );
+      section.addButton({ title: 'Reset to preset' }).on('click', () => {
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {
+          // storage unavailable — reset still applies in-memory
+        }
+        applyState(materials, pristine);
+        syncWidgets();
+      });
+    },
   );
-  section.addButton({ title: 'Reset to preset' }).on('click', () => {
-    try {
-      localStorage.removeItem(storageKey);
-    } catch {
-      // storage unavailable — reset still applies in-memory
-    }
-    applyState(materials, pristine);
-    syncWidgets();
-  });
 }

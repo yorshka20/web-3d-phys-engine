@@ -10,7 +10,7 @@ import { perlicaDescriptor } from './zzz/descriptors/perlica';
 import endministratorModel from '../../assets/endministrator/endministrator.pmx?url';
 import nahidaModel from '../../assets/nahida/nahida.pmx?url';
 import perlicaModel from '../../assets/perlica/perlica.pmx?url';
-import { registerDebugTab } from '../ui/debugTabs';
+import { registerDebugTab } from '../ui/debugPanel';
 import { createPMXShadingTab } from '../ui/shadingPanel';
 
 export async function createPMXModelStage(world: World) {

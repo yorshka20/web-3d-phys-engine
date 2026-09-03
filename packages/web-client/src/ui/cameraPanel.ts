@@ -46,6 +46,10 @@ export function mountCameraPanel(camera: Entity): () => void {
   };
   const view = { distance: 0, azimuth: 0, elevation: 0 };
   const position = { value: '' };
+  // The readouts the orbit controller writes behind the panel's back; everything else only
+  // changes when the user moves the widget itself, so nothing else is worth repainting.
+  const liveBindings: BindingApi[] = [];
+  let distanceBinding: BindingApi | undefined;
 
   const readPosition = () => {
     const p = transform.getPosition();
@@ -71,7 +75,6 @@ export function mountCameraPanel(camera: Entity): () => void {
     // The distance slider spans [minDistance, maxDistance]; those are editable below, and a
     // tweakpane binding takes its range at creation, so a limit change rebuilds the slider in
     // place.
-    let distanceBinding: BindingApi | undefined;
     const addDistance = (index: number) => {
       const { minDistance, maxDistance } = control.getOrbitConfig()!;
       distanceBinding = pane
@@ -79,19 +82,23 @@ export function mountCameraPanel(camera: Entity): () => void {
         .on('change', (ev) => ev.last && control.updateOrbitState({ distance: view.distance }));
     };
     addDistance(pane.children.length);
-    pane
-      .addBinding(view, 'azimuth', { min: -180, max: 180, step: 0.5 })
-      .on(
-        'change',
-        (ev) => ev.last && control.updateOrbitState({ azimuth: (view.azimuth * Math.PI) / 180 }),
-      );
-    pane
-      .addBinding(view, 'elevation', { min: -89, max: 89, step: 0.5 })
-      .on(
-        'change',
-        (ev) =>
-          ev.last && control.updateOrbitState({ elevation: (view.elevation * Math.PI) / 180 }),
-      );
+    liveBindings.push(
+      pane
+        .addBinding(view, 'azimuth', { min: -180, max: 180, step: 0.5 })
+        .on(
+          'change',
+          (ev) => ev.last && control.updateOrbitState({ azimuth: (view.azimuth * Math.PI) / 180 }),
+        ),
+    );
+    liveBindings.push(
+      pane
+        .addBinding(view, 'elevation', { min: -89, max: 89, step: 0.5 })
+        .on(
+          'change',
+          (ev) =>
+            ev.last && control.updateOrbitState({ elevation: (view.elevation * Math.PI) / 180 }),
+        ),
+    );
 
     // Control sensitivities and limits (main.ts create3DCamera seeds them; the orbit system
     // reads the live config on every input event, so a push is enough). Zoom is exponential
@@ -136,20 +143,34 @@ export function mountCameraPanel(camera: Entity): () => void {
   projection.addBinding(cameraComp, 'far', { min: 10, max: 5000, step: 10 });
 
   position.value = readPosition();
-  pane.addBinding(position, 'value', { label: 'position', readonly: true });
+  liveBindings.push(pane.addBinding(position, 'value', { label: 'position', readonly: true }));
 
-  // Dragging in the viewport writes the same orbit state, so pull it back into the widgets
-  let frame = requestAnimationFrame(function sync() {
-    const live = control.getOrbitState();
-    if (live) {
-      view.distance = live.distance;
-      view.azimuth = (live.azimuth * 180) / Math.PI;
-      view.elevation = (live.elevation * 180) / Math.PI;
+  // Dragging in the viewport writes the same orbit state, so pull it back into the widgets —
+  // but only while the pane is expanded, since a collapsed pane displays none of it.
+  let frame = 0;
+  const drive = () => {
+    cancelAnimationFrame(frame);
+    frame = 0;
+    if (!pane.expanded) {
+      return;
     }
-    position.value = readPosition();
-    pane.refresh();
-    frame = requestAnimationFrame(sync);
-  });
+    frame = requestAnimationFrame(function sync() {
+      const live = control.getOrbitState();
+      if (live) {
+        view.distance = live.distance;
+        view.azimuth = (live.azimuth * 180) / Math.PI;
+        view.elevation = (live.elevation * 180) / Math.PI;
+      }
+      position.value = readPosition();
+      distanceBinding?.refresh();
+      for (const binding of liveBindings) {
+        binding.refresh();
+      }
+      frame = requestAnimationFrame(sync);
+    });
+  };
+  pane.on('fold', drive);
+  drive();
 
   return () => {
     cancelAnimationFrame(frame);

@@ -1,9 +1,12 @@
 import { Mesh3DComponent, Transform3DComponent, WebGPU3DRenderComponent, World } from '@ecs';
 import { GeometryInstanceDescriptor } from '@renderer';
 import { rgba } from '@ecs/utils/color';
+import { registerDebugTab } from '../ui/debugPanel';
+import { createSpawnTab } from '../ui/spawnTab';
 
 export function createGeometryStage(world: World) {
   createGeometryEntities(world);
+  registerDebugTab(createSpawnTab(world));
 }
 
 const defaultMaterial = {

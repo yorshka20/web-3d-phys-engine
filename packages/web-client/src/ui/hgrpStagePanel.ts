@@ -13,7 +13,7 @@ import {
   hgrpStage,
   setHGRPCharacterVisible,
 } from '../stages/hgrp/characters';
-import { DebugTab } from './debugTabs';
+import type { DebugTab } from './debugPanel';
 
 // The Stage tab: what the whole scene shares — who stands on it, how big the layout is, the
 // lighting and backdrop it is lit by, and the post chain it is graded through. Everything

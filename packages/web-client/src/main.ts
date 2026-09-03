@@ -2,7 +2,6 @@ import {
   ActiveCameraTag,
   Camera3DComponent,
   CameraControlComponent,
-  Entity,
   Input3DComponent,
   Input3DSystem,
   Mesh3DComponent,
@@ -25,9 +24,6 @@ import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
 import { createHGRPStage } from './stages/hgrp';
 import { mountCameraPanel } from './ui/cameraPanel';
-import { mountDebugPanel } from './ui/debugPanel';
-import { registerDebugTab } from './ui/debugTabs';
-import { createSpawnTab } from './ui/spawnTab';
 // import { createEndfieldStage } from './stages/endfield';
 // import { createPMXAnimationExample } from './stages/pmxAnimationExample';
 // import { createPMXModelStage } from './stages/pmxModel';
@@ -125,12 +121,6 @@ async function main() {
 
   // Camera parameters, editable (top-left)
   mountCameraPanel(camera);
-
-  // One debug panel (press P to toggle). Entity spawning is stage-independent so it is
-  // registered here; the calibration tabs come from whichever stage just loaded, so nothing
-  // mounts for content that is absent.
-  registerDebugTab(createSpawnTab(world));
-  mountDebugPanel();
 
   game.start();
 

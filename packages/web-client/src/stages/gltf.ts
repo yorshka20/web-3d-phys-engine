@@ -2,6 +2,8 @@ import { Mesh3DComponent, Transform3DComponent, WebGPU3DRenderComponent } from '
 import { World } from '@ecs/core/ecs/World';
 import { AssetLoader } from '@renderer';
 import { rgba } from '@ecs/utils/color';
+import { registerDebugTab } from '../ui/debugPanel';
+import { createSpawnTab } from '../ui/spawnTab';
 
 // Khronos sample models are fetched at runtime, not imported at build time, so builds and CI
 // never depend on the gltf-samples checkout. The base URL comes from web-client/.env (pinned
@@ -98,6 +100,8 @@ const placements = [
 ];
 
 export async function createGLTFStage(world: World) {
+  registerDebugTab(createSpawnTab(world));
+
   // Each unique asset loads once, however many placements reference it.
   const assetPaths = new Map(placements.map((p) => [p.assetId, p.path]));
   await AssetLoader.loadAssets(

@@ -29,7 +29,7 @@ import { perlicaDescriptor } from './zzz/descriptors/perlica';
 import alenModel from '../../assets/alen/艾莲.pmx?url';
 import burniceModel from '../../assets/burnice/柏妮思.pmx?url';
 import perlicaModel from '../../assets/perlica/perlica.pmx?url';
-import { registerDebugTab } from '../ui/debugTabs';
+import { registerDebugTab } from '../ui/debugPanel';
 import { createPMXShadingTab } from '../ui/shadingPanel';
 
 export async function createPMXAnimationExample(world: World) {
