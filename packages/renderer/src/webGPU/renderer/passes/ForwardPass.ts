@@ -67,8 +67,15 @@ export class ForwardPass {
     // Prepare phase (async): build the ordered draw lists and resolve every GPU resource up
     // front, so the encode phase below is fully synchronous — no await between beginRenderPass
     // and end.
-    const { opaque, transparent, outline, eyeOverlay, hairStencil, browThrough } =
-      buildDrawLists(frameData);
+    const {
+      opaque,
+      transparent,
+      outline,
+      transparentOutline,
+      eyeOverlay,
+      hairStencil,
+      browThrough,
+    } = buildDrawLists(frameData);
     const frame: FrameResources = {
       pipelines: new Map(),
       materials: new Map(),
@@ -76,7 +83,9 @@ export class ForwardPass {
     };
     await this.prepare(opaque, frame);
     await this.prepare(transparent, frame);
-    await this.deps.outlineStage.prepare(outline);
+    // One prepare over both hull lists: the stage's per-frame bind groups are keyed by
+    // materialKey and cleared on entry, so preparing them separately would drop the first set.
+    await this.deps.outlineStage.prepare([...outline, ...transparentOutline]);
     await this.deps.eyeOverlayStage.prepare(eyeOverlay);
     await this.deps.browCompositeStage.prepare(hairStencil, browThrough);
 
@@ -113,6 +122,9 @@ export class ForwardPass {
     this.deps.eyeOverlayStage.encode(renderPass, eyeOverlay, frameData);
     this.deps.browCompositeStage.encode(renderPass, hairStencil, browThrough, frameData);
     this.encode(renderPass, transparent, frameData, frame, {});
+    // A blend material's hull comes last: it needs that material's own depth in the buffer
+    // to be rejected outside the silhouette ring (see DrawLists.transparentOutline).
+    this.deps.outlineStage.encode(renderPass, transparentOutline, frameData);
 
     renderPass.end();
   }
