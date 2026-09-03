@@ -315,8 +315,9 @@ export class GeometryFactory {
       maxZ = Math.max(maxZ, z);
     }
 
-    // Convert cells to Uint16Array if needed
-    const indices = cells instanceof Uint16Array ? cells : new Uint16Array(cells);
+    // Widening Uint8Array is required (WebGPU has no 8-bit index format); a Uint32Array must be
+    // kept as-is, converting it to Uint16Array wraps every index above 65535 modulo 2^16.
+    const indices = cells instanceof Uint8Array ? new Uint16Array(cells) : cells;
 
     return {
       vertices,
