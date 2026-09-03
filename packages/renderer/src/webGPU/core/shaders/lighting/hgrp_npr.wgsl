@@ -34,6 +34,20 @@ fn hgrp_env(dir: vec3<f32>) -> vec3<f32> {
     return scene_lighting.ambient.rgb * mix(1.0 - gradient, 1.0 + gradient, dir.y * 0.5 + 0.5);
 }
 
+// Split-sum environment BRDF, Lazarov's analytic fit — the `F0 * AB.x + AB.y` the decompiled
+// HGRP shader composes its IBL specular from. Not interchangeable with a Schlick fresnel: AB.y
+// is the grazing term and peaks in the tenths, where Schlick reaches 1.0, so substituting it
+// saturates to white under any environment gain. `grazing` scales AB.y alone
+// (sceneSettings.metalEdge; 1 = the fit's own value).
+fn hgrp_env_brdf(f0: vec3<f32>, roughness: f32, ndotv: f32, grazing: f32) -> vec3<f32> {
+    let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
+    let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
+    let r = roughness * c0 + c1;
+    let a004 = min(r.x * r.x, exp2(-9.28 * ndotv)) * r.x + r.y;
+    let ab = vec2<f32>(-1.04, 1.04) * a004 + r.zw;
+    return f0 * ab.x + vec3<f32>(ab.y * grazing);
+}
+
 // HGRP diffuse ramps are 256x1 LUTs; sample half a texel away from the edges so clamp
 // addressing doesn't bleed the outermost texels.
 fn hgrp_ramp_inset(u: f32) -> f32 {

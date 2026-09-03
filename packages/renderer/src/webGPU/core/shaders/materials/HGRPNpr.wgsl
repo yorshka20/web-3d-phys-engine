@@ -1,9 +1,10 @@
 // HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV (or LUT)
 // shadow color, spec-ramp highlights on the metallic zones, HDR emission (rolls off through
-// the tonemap shoulder) and the scene ambient on the unsuppressed albedo — a metal zone
-// keeps 30% diffuse under the key light but reflects the ambient at full albedo, so silver
-// fabric in shadow reads as grey instead of black. Group-2 bindings and the subsystem hooks
-// come from the permutation's generated fragments (material/hgrp).
+// the tonemap shoulder) and the scene ambient on the albedo. A metal zone keeps only a
+// residual of its diffuse and instead reflects the environment in its own base color, which
+// is what makes the silver hardware read as metal rather than as a black hole. Group-2
+// bindings and the subsystem hooks come from the permutation's generated fragments
+// (material/hgrp).
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
@@ -94,15 +95,25 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let env_spec = hgrp_env(reflect(-view_dir, n)) *
         (sheen_zone * mg.y * scene_lighting.ambient.w);
 
-    // Metal zone (guess ledger E7, v5): no flat ambient — albedo x ambient on a bright-grey
-    // painted metal is what read as pale — and the environment only where a dark metal shows
-    // it, at grazing edges: a narrow fresnel on the GEOMETRIC normal (the normal map would
-    // fire it across every wrinkle), scaled by sceneSettings.metalEdge. Everything else the
-    // metal shows is its residual diffuse and the base-tinted RS highlight (spec v3).
+    // Metal zone (guess ledger E7). A metal has almost no diffuse; what it shows is the
+    // environment reflected in its own base color over its whole surface, F0 = albedo. The
+    // hardware zone is painted silver for exactly that — (148, 147, 150) sRGB where
+    // _MetallicGlossMap.r = 1, measured off _BaseMap — so suppressing the diffuse without
+    // adding the reflection leaves a plate facing the camera with nothing at all.
+    //
+    // hgrp_env_brdf is the split-sum environment BRDF the decompiled HGRP shader composes its
+    // IBL specular from; a Schlick fresnel is not a substitute for it (see that function).
+    // The reflection uses the GEOMETRIC normal: the normal map would fire it across every
+    // wrinkle of a flat plate. `metal_ndotv` is named apart from the pantyhose block's ndotv
+    // above because the two use different normals in one shared function scope.
     let n_geom = normalize(input.world_normal);
-    let edge = pow(1.0 - clamp(dot(n_geom, view_dir), 0.0, 1.0), scene_lighting.metal.z);
-    let metal_edge = hgrp_env(reflect(-view_dir, n_geom)) * (edge * scene_lighting.metal.y);
-    let ambient = mix(hgrp_ambient(core.albedo), metal_edge, metal);
+    let metal_ndotv = clamp(dot(n_geom, view_dir), 0.0, 1.0);
+    let metal_brdf = hgrp_env_brdf(core.albedo, 1.0 - gloss, metal_ndotv, scene_lighting.metal.y);
+    // hgrp_env carries the flat ambient's intensity; dividing it back out keeps metalEnv the
+    // environment's own radiance, so re-balancing the ambient does not re-calibrate the metal.
+    let env_radiance = scene_lighting.metal.w / max(scene_lighting.light.w, 1e-4);
+    let metal_env = hgrp_env(reflect(-view_dir, n_geom)) * metal_brdf * env_radiance;
+    let ambient = mix(hgrp_ambient(core.albedo), metal_env, metal);
 
     return hgrp_debug_view(
         vec4<f32>(color + vec3<f32>(sheen) + spec + emission + ambient + env_spec, core.alpha),

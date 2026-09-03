@@ -68,6 +68,31 @@ const REAL_PERMUTATIONS: HGRPPermutation[] = [
   { variant: 'CharacterNPR_VFX', enabled: [] },
 ];
 
+// WGSL forbids two declarations of one name in the SAME scope (a nested scope may shadow).
+// Worth checking here because a permutation's shader is spliced together from a material body
+// and the hook fragments of whichever subsystems are on, all sharing one function scope: a
+// name the material declares can collide with one a hook declares, and only in the
+// permutations where both are present — so checking one permutation proves nothing. A WGSL
+// parser alone does not catch it either; this is a scope check, not a syntax check.
+function findRedeclarations(source: string): string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  const scopes: Set<string>[] = [new Set()];
+  const clashes: string[] = [];
+  const token = /(\{)|(\})|\b(?:let|var|const)\s+([A-Za-z_]\w*)/g;
+  for (let m = token.exec(code); m !== null; m = token.exec(code)) {
+    if (m[1]) {
+      scopes.push(new Set());
+    } else if (m[2]) {
+      if (scopes.length > 1) scopes.pop();
+    } else {
+      const scope = scopes[scopes.length - 1];
+      if (scope.has(m[3])) clashes.push(m[3]);
+      scope.add(m[3]);
+    }
+  }
+  return clashes;
+}
+
 function derive(id: string): ShaderModule {
   const module = createDerivedShaderModule(id);
   expect(module, `no derived module for ${id}`).toBeDefined();
@@ -221,6 +246,19 @@ describe('HGRP derived shader modules', () => {
     expect(() => createDerivedShaderModule('hgrp_eye_shader+sdf')).toThrow(/does not apply/);
     expect(createDerivedShaderModule('gltf_material_shader')).toBeUndefined();
     expect(createDerivedShaderModule('hgrp_outline_shader')).toBeUndefined();
+  });
+
+  it('declares no name twice in one scope, for every permutation and every fixed module', () => {
+    const modules: ShaderModule[] = [
+      ...createShaderModules(),
+      ...VARIANTS.flatMap((variant) => [allOff(variant), allOn(variant)]).map((permutation) =>
+        derive(hgrpPermutationShaderId(permutation)),
+      ),
+      ...REAL_PERMUTATIONS.map((permutation) => derive(hgrpPermutationShaderId(permutation))),
+    ];
+    for (const module of modules) {
+      expect(findRedeclarations(compose(module)), `${module.id} redeclares`).toEqual([]);
+    }
   });
 
   it('gives a pass shader the suffix of the material it shades', () => {

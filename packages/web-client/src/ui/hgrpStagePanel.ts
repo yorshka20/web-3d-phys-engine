@@ -40,11 +40,14 @@ function mountPane(container: HTMLElement, world: World): () => void {
   addLightingWidgets(pane);
   addPostWidgets(pane);
 
-  // The metal look of the cloth hardware zone (_MetallicGlossMap.r = 1.0)
+  // The metal look of the cloth hardware zone (_MetallicGlossMap.r = 1.0). metalEnv is the
+  // radiance of the environment the metal reflects in its own base color, in the same units as
+  // the lighting above: 1 = as bright as full lighting. It is what decides whether the silver
+  // hardware reads as metal at all.
   const metal = pane.addFolder({ title: 'Metal (hardware zone)', expanded: false });
+  metal.addBinding(sceneSettings, 'metalEnv', { min: 0, max: 4, step: 0.01 });
   metal.addBinding(sceneSettings, 'metalDiffuse', { min: 0, max: 1, step: 0.01 });
   metal.addBinding(sceneSettings, 'metalEdge', { min: 0, max: 4, step: 0.01 });
-  metal.addBinding(sceneSettings, 'metalEdgePower', { min: 1, max: 12, step: 0.1 });
 
   // Material debug view: show one texture slot of every HGRP material on the mesh instead of
   // its shading. Magenta = the material's permutation does not bind that slot.

@@ -24,10 +24,12 @@ struct MVPUniforms {
 
 // Per-frame scene lighting for the HGRP family (renderer/sceneSettings.ts packSceneLighting):
 // the key light direction (toward the light, normalized; w = envGradient), the key light color
-// pre-multiplied by its intensity, and the ambient color pre-multiplied by its intensity
+// pre-multiplied by its intensity (w = ambientIntensity, so the metal term can undo the
+// ambient's pre-multiplication), and the ambient color pre-multiplied by its intensity
 // (w = envReflection, the opt-in metal environment-reflection strength).
 // metal: the hardware-zone look of the cloth shader (materials/HGRPNpr.wgsl) —
-// x = residual diffuse, y = grazing-edge reflection strength, z = edge fresnel power.
+// x = residual diffuse, y = scale on the environment BRDF's grazing term, z unused,
+// w = the reflected environment's radiance (see sceneSettings.metalEnv).
 struct SceneLighting {
     light_dir: vec4<f32>,
     light: vec4<f32>,

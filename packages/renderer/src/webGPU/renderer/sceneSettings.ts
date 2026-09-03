@@ -19,14 +19,18 @@ export const sceneSettings = {
   // The one directional key light the NPR shading reads (n.l, SDF threshold, spec half
   // vector, rim light side) and the flat ambient term added on top of it, uploaded once per
   // frame as the HGRP group-3 SceneLighting uniform. The ripped materials describe surfaces,
-  // not the scene: every value here is a calibration knob against in-game screenshots
-  // (guess ledger A1/A7). The 0.75 / 0.25 split keeps a fully lit surface at exactly its
-  // albedo while lifting the shadow side — without any ambient, metallic zones (silver
-  // fabric) went black wherever the key light did not reach.
+  // not the scene — the presets carry 294 keys across the six characters and not one of them
+  // is scene lighting — so the intensities here stay calibration knobs against in-game
+  // screenshots (guess ledger A1/A7). The 0.75 / 0.25 split keeps a fully lit surface at
+  // exactly its albedo while lifting the shadow side.
   lightDirection: [0.5, 1, 0.5] as [number, number, number], // toward the light, world space
   lightColor: [1, 1, 1] as [number, number, number],
   lightIntensity: 0.75,
-  ambientColor: [1, 1, 1] as [number, number, number],
+  // Not a placeholder: this is `_CharacterParams2` as bound in the decompiled character
+  // shader, one of the engine-side per-character globals no preset contains. Every one of the
+  // seven material families uses it the way an indirect-light color is used — `1 - c` early
+  // on, added as a floor to the shaded result, and multiplying the reflected environment.
+  ambientColor: [0.783019, 0.829308, 1.0] as [number, number, number],
   ambientIntensity: 0.25,
   // Opt-in environment reflection for the metallic zones of cloth (materials/HGRPNpr.wgsl):
   // the ambient color as a hemisphere with this much up/down contrast, looked up along the
@@ -36,13 +40,22 @@ export const sceneSettings = {
   envReflection: 0,
   envGradient: 0.5,
   // The metal look of the cloth hardware zone (_MetallicGlossMap.r = 1.0; materials/
-  // HGRPNpr.wgsl): a metal keeps this residual of its diffuse and no ambient at all (the
-  // pale look came from albedo x ambient on metal), and picks up the environment only at
-  // grazing edges — pow(1 - n.v, edgePower) on the geometric normal, scaled by metalEdge.
+  // HGRPNpr.wgsl). A metal has almost no diffuse (metalDiffuse is the residual) and shows the
+  // environment *reflected in its base color* over its whole surface — the hardware zone is
+  // painted silver, (148, 147, 150) sRGB / 0.337 linear, measured off _BaseMap where
+  // _MetallicGlossMap.r = 1. metalEnv is the RADIANCE of the environment the metal reflects,
+  // in the same "a fully lit surface sits at its albedo" units the light/ambient split above
+  // is normalized to — 1 means the environment is as bright as full lighting, and each
+  // material's appearance then follows from its own albedo and roughness instead of being
+  // fitted to one material's target. Checked over the metal zone of every material of all six
+  // characters (scripts/hgrp-metal-zone.mjs): at 1.0 they land at 98-168 sRGB after ACES,
+  // none saturating. Deliberately independent of ambientIntensity — hgrp_env is
+  // pre-multiplied by it and the shader divides that back out.
+  // metalEdge scales the environment BRDF's grazing term alone (1 = the fit's own value).
   // Formula constants the rip does not carry (guess ledger E7).
   metalDiffuse: 0.15,
+  metalEnv: 1.0,
   metalEdge: 1.0,
-  metalEdgePower: 5,
 
   // Material debug view (generated/hgrp_debug_<permutation>.wgsl): show one texture slot of
   // every HGRP material instead of its shading, so what each map controls can be seen on the
@@ -80,9 +93,10 @@ export function isHGRPDebugViewOn(): boolean {
 }
 
 // SceneLighting uniform block (core/uniforms.wgsl): four vec4s — the normalized light
-// direction (w = envGradient), the key light color pre-multiplied by its intensity, the
+// direction (w = envGradient), the key light color pre-multiplied by its intensity
+// (w = ambientIntensity, so the metal term can undo the ambient's pre-multiplication), the
 // ambient color pre-multiplied by its intensity (w = envReflection), and the metal look
-// (residual diffuse, edge reflection strength, edge power).
+// (residual diffuse, grazing-term scale, unused, environment reflection strength).
 export const SCENE_LIGHTING_BYTE_SIZE = 64;
 
 export function packSceneLighting(out: Float32Array = new Float32Array(16)): Float32Array {
@@ -96,11 +110,11 @@ export function packSceneLighting(out: Float32Array = new Float32Array(16)): Flo
     out[4 + i] = sceneSettings.lightColor[i] * sceneSettings.lightIntensity;
     out[8 + i] = sceneSettings.ambientColor[i] * sceneSettings.ambientIntensity;
   }
-  out[7] = 0;
+  out[7] = sceneSettings.ambientIntensity; // so the metal term can divide it back out
   out[11] = sceneSettings.envReflection;
   out[12] = sceneSettings.metalDiffuse;
   out[13] = sceneSettings.metalEdge;
-  out[14] = sceneSettings.metalEdgePower;
-  out[15] = 0;
+  out[14] = 0; // unused: the environment BRDF fit has no exponent to tune
+  out[15] = sceneSettings.metalEnv;
   return out;
 }
