@@ -458,10 +458,15 @@ opens `YYYY-MM-DD-2.md`, a third `-3`, and so on. Never append to a previous ses
 - **Learnings**: split by scope, add scopes as needed. Each scope file keeps at its top a Roadmap
   table (and a TOC once it exceeds ~600 lines / 20KB). Dated deltas, design details, and pitfalls
   go in the body.
-- **Roadmap format**: `| Status | Priority | Task | Link / Notes |` rows with
-  🔴 P0 / 🟡 P1 / 🟢 P2 / ⚪ P3 and ✅ DONE / 🚧 WIP / 📋 TODO / 💭 DESIGN. `/ROADMAP.md` lists
-  only currently-active items and points into scope files; completed items live only in scope
-  tables.
+- **Roadmap format** (user convention, 2026-09-03): `/ROADMAP.md` groups active items under a
+  `## <priority>` heading and gives each one a `### <status> · <title>` section — a paragraph
+  or a short bullet list saying what it is, what is missing and how to do it, then a final
+  `→` line pointing at the scope file that holds the detail. **Not a table**: status and
+  priority are one glyph each while the task text runs to a paragraph, which a table renders
+  unreadably. Priorities are 🔴 P0 / 🟡 P1 / 🟢 P2 / ⚪ P3, statuses
+  ✅ DONE / 🚧 WIP / 📋 TODO / 💭 DESIGN. `/ROADMAP.md` lists only currently-active items;
+  completed items live only in the scope files. A scope file's own roadmap table may stay
+  tabular while its rows stay short — once a row grows to a paragraph, split it the same way.
 
 ## Domain Notes
 
