@@ -102,8 +102,8 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
     f32(
       'aniso_intensity',
       'hairBand',
-      float('_AnisotropyIntensity', 0, { min: 0, max: 8, step: 0.05 }),
-      'hair strand highlight',
+      float('_AnisotropyIntensity', 1, { min: 0, max: 8, step: 0.05 }),
+      'primary Kajiya-Kay lobe strength (x 5 x F0)',
     ),
     f32(
       'matcap_normal_scale',
@@ -152,16 +152,32 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'line_amount',
       'hairLines',
       float('_LineAmount', 300, { min: 0, max: 600, step: 1 }),
-      'strand-line tiling driver (preset 300 = 1x)',
+      'square-wave strand pattern along u when _UseLineMap is off',
     ),
-    f32('line_intensity', 'hairLines', float('_LineIntensity', 0, { min: 0, max: 1, step: 0.01 })),
-    f32('line_range', 'hairLines', float('_LineRange', 1, { min: 0, max: 1, step: 0.01 })),
+    f32(
+      'line_intensity',
+      'hairLines',
+      float('_LineIntensity', 0, { min: 0, max: 1, step: 0.01 }),
+      'darkening of the strand lines',
+    ),
+    f32(
+      'line_range',
+      'hairLines',
+      float('_LineRange', 1, { min: 0, max: 1, step: 0.01 }),
+      'line lobe width: exponent int(200 (1 - range))',
+    ),
     f32(
       'line_saturation',
       'hairLines',
       float('_LineSaturation', 1, { min: 0, max: 2, step: 0.01 }),
+      'saturation of the darkened lines',
     ),
-    f32('line_value', 'hairLines', float('_LineValue', 1, { min: 0, max: 2, step: 0.01 })),
+    f32(
+      'line_value',
+      'hairLines',
+      float('_LineValue', 1, { min: 0, max: 2, step: 0.01 }),
+      'line lobe shift (2v - 1 along the specular normal)',
+    ),
     f32('use_pantyhose', 'pantyhose', float('_Pantyhose', 0, TOGGLE), 'cloth tights shading'),
     f32(
       'pantyhose_specular_int',
@@ -182,8 +198,8 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
     f32(
       'aniso_value',
       'hairBand',
-      float('_AnisotropyValue', 0.5, { min: 0, max: 1, step: 0.01 }),
-      'hair RS band center (0.5 = the RS peak)',
+      float('_AnisotropyValue', 0.35, { min: 0, max: 1, step: 0.01 }),
+      'primary lobe shift (2v - 1 along the specular normal)',
     ),
     f32(
       'parallax_scale',
@@ -222,7 +238,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'spec_bump_scale',
       'hairSplitNormal',
       float('_SpecBumpScale', 1, { min: 0, max: 3, step: 0.01 }),
-      'per-strand shift of the hair highlight normal (_SplitNormalMap.r)',
+      'xy scale of the hair specular normal (_SplitNormalMap.ba)',
     ),
     vec4(
       'sdf_rim_color',
@@ -256,8 +272,44 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       pack: (material) => material.objectFrameJoint ?? -1,
       comment:
         'HGRPMaterialDescriptor.objectFrameJoint: palette index of the joint whose frame is the ' +
-        "material's object space (the head for the face), -1 = the model frame",
+        "material's object space (the head for the face and hair), -1 = the model frame",
     },
+    f32(
+      'aniso_value2',
+      'hairBand',
+      float('_AnisotropyValue2', 0.4, { min: 0, max: 1, step: 0.01 }),
+      'secondary lobe shift (2v - 1 along the specular normal)',
+    ),
+    f32(
+      'aniso_range2',
+      'hairBand',
+      float('_AnisotropyRange2', 0, { min: -0.1, max: 1, step: 0.01 }),
+      'secondary lobe width: exponent int(200 (1 - range))',
+    ),
+    f32(
+      'aniso_edge_fade',
+      'hairBand',
+      float('_AnisotropyEdgeFade', 1, { min: 0, max: 8, step: 0.05 }),
+      'power of the horizontal object-space n.v that fades every lobe',
+    ),
+    f32(
+      'aniso_dir_x',
+      'hairBand',
+      float('_AnisotropyDirX', 0, { min: -1, max: 1, step: 0.01 }),
+      'x tilt of the object-space up the strands run along',
+    ),
+    vec4(
+      'aniso_color2',
+      'hairBand',
+      color('_AnisotropyColor2', BLACK_OPAQUE, true),
+      'secondary lobe color, scaled by the smoothness',
+    ),
+    vec4(
+      'line_map_st',
+      'hairLines',
+      color('_LineMap_ST', [1, 1, 0, 0]),
+      '_LineMap tiling (xy) and offset (zw); Unity default when the preset carries none',
+    ),
   ],
 };
 

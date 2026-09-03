@@ -1,5 +1,10 @@
 import type { HGRPShaderVariant } from './descriptor';
-import { HGRP_SUBSYSTEMS, HGRPSubsystem, HGRPSubsystemId } from './subsystems';
+import {
+  HGRP_SUBSYSTEMS,
+  HGRPSubsystem,
+  HGRPSubsystemId,
+  hgrpSubsystemTextures,
+} from './subsystems';
 import { HGRP_TEXTURE_SLOTS_BY_VARIANT } from './textures';
 
 // A PERMUTATION is a variant plus the static subsystems a material enables. It is resolved once
@@ -64,7 +69,7 @@ export function hgrpSubsystemAppliesTo(
     return false;
   }
   const slots = HGRP_TEXTURE_SLOTS_BY_VARIANT[variant];
-  return (subsystem.textures ?? []).every((slot) => slots.includes(slot));
+  return hgrpSubsystemTextures(subsystem, variant).every((slot) => slots.includes(slot));
 }
 
 export function hgrpApplicableSubsystems(variant: HGRPShaderVariant): HGRPSubsystem[] {
@@ -98,7 +103,9 @@ export function hgrpResolvePermutation(
     if (floats[subsystem.gate!] !== 1) {
       continue;
     }
-    const missing = (subsystem.textures ?? []).filter((slot) => textures[slot] === undefined);
+    const missing = hgrpSubsystemTextures(subsystem, variant).filter(
+      (slot) => textures[slot] === undefined,
+    );
     if (missing.length > 0) {
       dropped.push({ subsystem: subsystem.id, gate: subsystem.gate!, missing });
     } else {

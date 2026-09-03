@@ -1,3 +1,5 @@
+import type { HGRPShaderVariant } from './descriptor';
+
 // A SUBSYSTEM is one feature of the HGRP shading model: a master switch, the texture slots it
 // consumes, an optional WGSL hook and (through the field tables in params.ts, which tag every
 // field with a subsystem id) its numeric parameters. Pure data; permutation.ts resolves a
@@ -49,6 +51,16 @@ export interface HGRPSubsystemHook {
   off: string; // return expression of the off-stub; may use the hook's parameter names
 }
 
+// A variant on which the subsystem consumes other slots, through another hook include, than
+// on the rest of the family: the hair shader's _NORMALMAP reads _SplitNormalMap.rg where every
+// other variant reads _BumpMap. The hook keeps its name and signature, so one off-stub serves
+// every variant; a slot may then have several consumers on that variant (both hair normals
+// read _SplitNormalMap), and it is bound while any of them is on.
+export interface HGRPSubsystemVariantOverride {
+  textures: readonly string[];
+  include?: string;
+}
+
 export interface HGRPSubsystem {
   id: HGRPSubsystemId;
   // Master switch preset key; requires a tier.
@@ -57,6 +69,7 @@ export interface HGRPSubsystem {
   // Texture slots the subsystem consumes (the variant slot tables decide which variants bind
   // them; a static subsystem applies to a variant only when every slot is in its table).
   textures?: readonly string[];
+  variants?: Partial<Record<HGRPShaderVariant, HGRPSubsystemVariantOverride>>;
   wgsl?: HGRPSubsystemHook;
   // The gate routes draw lists (DrawListBuilder / a pass stage reads it) rather than, or as
   // well as, selecting shader code. A static gate gets a calibration toggle only when something
@@ -100,6 +113,14 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     gate: '_UseBumpMap',
     tier: 'static',
     textures: ['_BumpMap'],
+    // The hair shader's _NORMALMAP reads the diffuse half of _SplitNormalMap and never samples
+    // _BumpMap (hair variant b126).
+    variants: {
+      CharacterNPR_Hair: {
+        textures: ['_SplitNormalMap'],
+        include: 'lighting/hgrp/hair_diffuse_normal.wgsl',
+      },
+    },
     wgsl: {
       include: 'lighting/hgrp/normal.wgsl',
       fn: 'hgrp_shading_normal',
@@ -160,7 +181,11 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     gate: '_UseLineMap',
     tier: 'static',
     textures: ['_LineMap'],
-    wgsl: { include: 'lighting/hgrp/hair_lines.wgsl', fn: 'hgrp_hair_lines', off: 'shaded' },
+    wgsl: {
+      include: 'lighting/hgrp/hair_lines.wgsl',
+      fn: 'hgrp_hair_line_pattern',
+      off: 'ceil(clamp(fract(uv0.x * hgrp_material.line_amount) - 0.5, 0.0, 1.0))',
+    },
   },
   {
     id: 'hairSplitNormal',
@@ -222,11 +247,25 @@ export function hgrpSubsystem(id: HGRPSubsystemId): HGRPSubsystem {
   return subsystem;
 }
 
-// Owning subsystem of a texture slot (validate.ts guarantees exactly one).
-export function hgrpSlotOwner(slot: string): HGRPSubsystem {
-  const owner = HGRP_SUBSYSTEMS.find((subsystem) => subsystem.textures?.includes(slot));
-  if (!owner) {
-    throw new Error(`HGRP contract: slot ${slot} belongs to no subsystem`);
-  }
-  return owner;
+// The slots a subsystem consumes on a variant, and the hook include that samples them.
+export function hgrpSubsystemTextures(
+  subsystem: HGRPSubsystem,
+  variant: HGRPShaderVariant,
+): readonly string[] {
+  return subsystem.variants?.[variant]?.textures ?? subsystem.textures ?? [];
+}
+
+export function hgrpSubsystemInclude(
+  subsystem: HGRPSubsystem,
+  variant: HGRPShaderVariant,
+): string | undefined {
+  return subsystem.variants?.[variant]?.include ?? subsystem.wgsl?.include;
+}
+
+// The subsystems that consume a texture slot on a variant (validate.ts guarantees every
+// registered slot has a default owner; a variant override may add a second consumer).
+export function hgrpSlotOwners(slot: string, variant: HGRPShaderVariant): HGRPSubsystem[] {
+  return HGRP_SUBSYSTEMS.filter((subsystem) =>
+    hgrpSubsystemTextures(subsystem, variant).includes(slot),
+  );
 }

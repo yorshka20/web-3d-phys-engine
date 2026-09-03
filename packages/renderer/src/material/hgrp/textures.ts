@@ -1,6 +1,6 @@
 import type { HGRPShaderVariant } from './descriptor';
 import type { HGRPPermutation } from './permutation';
-import { hgrpSlotOwner } from './subsystems';
+import { hgrpSlotOwners } from './subsystems';
 
 // Texture slots of the HGRP family and their group-2 binding numbers. The binding scheme,
 // shared by the bind group layout (webGPU/core/HGRPMaterialResources.ts), the bind group
@@ -78,6 +78,8 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
       '_EmotionMap',
       '_EmissionMap',
     ],
+    // No _BumpMap: the hair shader's _NORMALMAP reads _SplitNormalMap.rg and never samples
+    // _BumpMap (hair variant b126), so the file a preset assigns to that key stays unbound.
     CharacterNPR_Hair: [
       '_BaseMap',
       '_DiffRampMap',
@@ -86,7 +88,6 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
       '_SplitNormalMap',
       '_HairBrowMask',
       '_LineMap',
-      '_BumpMap',
     ],
     CharacterNPR_Eye: ['_BaseMap', '_DiffRampMap', '_MatcapTex', '_ShadowLutTex'],
     // Effect layers, each sampled with its own UV speed and channel weights: _MainTex is the
@@ -156,10 +157,12 @@ export function hgrpAllTextureBindings(variant: HGRPShaderVariant): HGRPTextureB
   }));
 }
 
-// The slots a permutation binds: ungated slots plus those of its enabled subsystems.
+// The slots a permutation binds: ungated slots plus those a enabled subsystem consumes on the
+// variant.
 export function hgrpTextureBindings(permutation: HGRPPermutation): HGRPTextureBinding[] {
-  return hgrpAllTextureBindings(permutation.variant).filter((binding) => {
-    const owner = hgrpSlotOwner(binding.slot);
-    return owner.tier !== 'static' || permutation.enabled.includes(owner.id);
-  });
+  return hgrpAllTextureBindings(permutation.variant).filter((binding) =>
+    hgrpSlotOwners(binding.slot, permutation.variant).some(
+      (owner) => owner.tier !== 'static' || permutation.enabled.includes(owner.id),
+    ),
+  );
 }

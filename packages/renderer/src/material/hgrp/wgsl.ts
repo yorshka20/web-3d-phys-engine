@@ -5,7 +5,7 @@ import {
   hgrpPermutationForShaderId,
   hgrpPermutationShaderId,
 } from './permutation';
-import { hgrpSubsystem, HGRPSubsystem, HGRPSubsystemId } from './subsystems';
+import { hgrpSubsystem, HGRPSubsystem, HGRPSubsystemId, hgrpSubsystemInclude } from './subsystems';
 import { HGRP_SAMPLER_BINDINGS, hgrpDebugSlotId, hgrpTextureBindings } from './textures';
 
 // Generated WGSL fragments, resolved on demand by webGPU/core/shaders/registry.ts
@@ -78,7 +78,7 @@ export function hgrpSubsystemIncludes(permutation: HGRPPermutation): string[] {
       return [];
     }
     return permutation.enabled.includes(subsystem.id)
-      ? [subsystem.wgsl.include]
+      ? [hgrpSubsystemInclude(subsystem, permutation.variant)!]
       : [hgrpOffStubFragment(subsystem.id)];
   });
 }

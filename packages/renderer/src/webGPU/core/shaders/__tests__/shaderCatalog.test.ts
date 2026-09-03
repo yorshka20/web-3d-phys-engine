@@ -8,7 +8,8 @@ import {
   HGRPPermutation,
   hgrpPermutationShaderId,
   HGRPShaderVariant,
-  hgrpSlotOwner,
+  hgrpSlotOwners,
+  hgrpSubsystemInclude,
 } from '../../../../material/hgrp';
 import { createDerivedShaderModule, createShaderModules, hgrpPassShaderId } from '../create';
 import { resolveShaderFragment, shaderFragmentRegistry } from '../registry';
@@ -41,14 +42,6 @@ const REAL_PERMUTATIONS: HGRPPermutation[] = [
   { variant: 'CharacterNPR', enabled: ['normal', 'metallicGloss'] },
   {
     variant: 'CharacterNPR_Hair',
-    enabled: ['ramp', 'spec', 'metallicGloss', 'hairLines', 'hairSplitNormal', 'browThrough'],
-  },
-  {
-    variant: 'CharacterNPR_Hair',
-    enabled: ['ramp', 'spec', 'metallicGloss', 'hairLines', 'hairSplitNormal'],
-  },
-  {
-    variant: 'CharacterNPR_Hair',
     enabled: [
       'ramp',
       'normal',
@@ -58,6 +51,10 @@ const REAL_PERMUTATIONS: HGRPPermutation[] = [
       'hairSplitNormal',
       'browThrough',
     ],
+  },
+  {
+    variant: 'CharacterNPR_Hair',
+    enabled: ['ramp', 'normal', 'spec', 'metallicGloss', 'hairLines', 'hairSplitNormal'],
   },
   {
     variant: 'CharacterNPR_Skin',
@@ -204,7 +201,7 @@ describe('HGRP derived shader modules', () => {
     for (const variant of VARIANTS) {
       const source = compose(derive(hgrpPermutationShaderId(allOff(variant))));
       for (const binding of hgrpAllTextureBindings(variant)) {
-        if (hgrpSlotOwner(binding.slot).tier === 'static') {
+        if (hgrpSlotOwners(binding.slot, variant).some((owner) => owner.tier === 'static')) {
           expect(source, `${variant} all-off mentions ${binding.wgslName}`).not.toMatch(
             new RegExp(`\\b${binding.wgslName}\\b`),
           );
@@ -273,7 +270,12 @@ describe('HGRP derived shader modules', () => {
 // nothing) and the generated fragments (which declare every binding by name).
 function shadingSources(variant: HGRPShaderVariant): string {
   const hookIncludes = new Set(
-    HGRP_STATIC_SUBSYSTEMS.flatMap((s) => (s.wgsl ? [s.wgsl.include] : [])),
+    HGRP_STATIC_SUBSYSTEMS.flatMap((s) =>
+      VARIANTS.flatMap((v) => {
+        const include = hgrpSubsystemInclude(s, v);
+        return include ? [include] : [];
+      }),
+    ),
   );
   const permutation = allOn(variant);
   const modules = [derive(hgrpPermutationShaderId(permutation))];
@@ -302,13 +304,17 @@ describe('HGRP texture slots: consumed by the variant or declared unimplemented'
       const sources = shadingSources(variant);
       const unimplemented = HGRP_UNIMPLEMENTED_SLOTS[variant] ?? {};
       for (const { slot, wgslName } of hgrpAllTextureBindings(variant)) {
-        const owner = hgrpSlotOwner(slot);
         const direct = new RegExp(`\\b${wgslName}\\b`).test(sources);
-        const hook = owner.wgsl;
-        const viaHook =
-          !!hook &&
-          new RegExp(`\\b${hook.fn}\\s*\\(`).test(sources) &&
-          new RegExp(`\\b${wgslName}\\b`).test(resolveShaderFragment(hook.include) ?? '');
+        const viaHook = hgrpSlotOwners(slot, variant).some((owner) => {
+          const hook = owner.wgsl;
+          const include = hgrpSubsystemInclude(owner, variant);
+          return (
+            !!hook &&
+            !!include &&
+            new RegExp(`\\b${hook.fn}\\s*\\(`).test(sources) &&
+            new RegExp(`\\b${wgslName}\\b`).test(resolveShaderFragment(include) ?? '')
+          );
+        });
         const consumed = direct || viaHook;
         if (slot in unimplemented) {
           expect(
@@ -325,13 +331,16 @@ describe('HGRP texture slots: consumed by the variant or declared unimplemented'
     });
   }
 
-  it('every hook include defines its hook exactly once', () => {
+  it('every hook include, default or per variant, defines its hook exactly once', () => {
     for (const subsystem of HGRP_STATIC_SUBSYSTEMS) {
       if (!subsystem.wgsl) continue;
-      const source = resolveShaderFragment(subsystem.wgsl.include);
-      expect(source, subsystem.wgsl.include).toBeDefined();
-      const matches = source!.match(new RegExp(`fn\\s+${subsystem.wgsl.fn}\\s*\\(`, 'g')) ?? [];
-      expect(matches.length, `${subsystem.id}: ${subsystem.wgsl.fn}`).toBe(1);
+      const includes = new Set(VARIANTS.map((v) => hgrpSubsystemInclude(subsystem, v)!));
+      for (const include of includes) {
+        const source = resolveShaderFragment(include);
+        expect(source, include).toBeDefined();
+        const matches = source!.match(new RegExp(`fn\\s+${subsystem.wgsl.fn}\\s*\\(`, 'g')) ?? [];
+        expect(matches.length, `${subsystem.id}: ${subsystem.wgsl.fn} in ${include}`).toBe(1);
+      }
     }
   });
 });

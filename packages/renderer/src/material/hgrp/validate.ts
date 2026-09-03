@@ -34,6 +34,24 @@ export function validateHGRPContract(): void {
       throw new Error(`HGRP contract: slot ${slot} belongs to no subsystem`);
     }
   }
+  // A variant override may share a slot with another subsystem, but only a registered one
+  // that the variant binds, and only on a subsystem with a hook to read it through.
+  for (const subsystem of HGRP_SUBSYSTEMS) {
+    for (const [variant, override] of Object.entries(subsystem.variants ?? {})) {
+      const bound =
+        HGRP_TEXTURE_SLOTS_BY_VARIANT[variant as keyof typeof HGRP_TEXTURE_SLOTS_BY_VARIANT];
+      for (const slot of override.textures) {
+        if (!bound.includes(slot)) {
+          throw new Error(
+            `HGRP contract: ${subsystem.id} on ${variant} reads ${slot}, which the variant does not bind`,
+          );
+        }
+      }
+      if (override.include && !subsystem.wgsl) {
+        throw new Error(`HGRP contract: ${subsystem.id} has a variant include but no hook`);
+      }
+    }
+  }
   for (const [variant, slots] of Object.entries(HGRP_TEXTURE_SLOTS_BY_VARIANT)) {
     for (const slot of slots) {
       if (!(slot in HGRP_TEXTURE_SLOTS)) {

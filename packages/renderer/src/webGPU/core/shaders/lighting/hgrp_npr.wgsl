@@ -245,6 +245,14 @@ fn hgrp_base_color(uv0: vec2<f32>) -> vec4<f32> {
     return base;
 }
 
+// A two-channel tangent-space normal (the halves of the hair's _SplitNormalMap): z rebuilt from
+// xy before the scale is applied, as the decompiled shader does, then taken to world space.
+fn hgrp_split_normal(tbn: mat3x3<f32>, encoded: vec2<f32>, scale: f32) -> vec3<f32> {
+    let xy = encoded * 2.0 - 1.0;
+    let z = max(1e-8, sqrt(1.0 - clamp(dot(xy, xy), 0.0, 1.0)));
+    return normalize(tbn * vec3<f32>(xy * scale, z));
+}
+
 // Result of the shading core: the shaded color light(N) x col', the lighting multiplier
 // light(N) on its own, the albedo after the SDF tint (what F0 reads) and the alpha, the lit
 // weight w2 (the specular attenuation and the IBL read it) and the specular gate (the SDF

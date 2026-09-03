@@ -1,51 +1,37 @@
-// HGRP/CharacterNPR_Hair: shade blend under the NPR lighting multiplier, the _LineMap hairline
-// strands (lighting/hgrp/hair_lines.wgsl), and the RS band highlight.
-//
-// Band hypothesis v5 "angel ring" (2026-09-01, from the in-game reference screenshot: the
-// highlight is a broad soft horizontal band across the bangs that tracks the camera, not a
-// geometric dot(strand, h) lobe — v2-v4 all produced halos, see hgrp-shading.md): the RS x
-// coordinate is the VIEW-SPACE normal elevation centered on _AnisotropyValue (0.5 = the RS
-// peak). Points whose normal is view-horizontal sample the crisp band; the crown drifts
-// into the soft right-half tail; downward-facing strands fall into the dark left half.
-// _AnisotropyValue is GUI-tunable so the band center can be verified live.
-//
-// v6 (2026-09-02, texture forensics): the band reads its own normal — the geometric normal
-// tilted per strand by _SplitNormalMap (lighting/hgrp/hair_split_normal.wgsl), so the ring
-// breaks into strand-wise offsets — and _MetallicGlossMap gates it: its specular amount (G) is
-// the highlight region (on Pelica only the bangs cards, where the in-game band sits) and its
-// smoothness (A) picks the RS row together with _Smoothness. The Kajiya-Kay rewrite
-// (formulas §3) replaces the band.
-// Group-2 bindings and the subsystem hooks come from the permutation's generated fragments
-// (material/hgrp).
+// HGRP/CharacterNPR_Hair: shade blend under the NPR lighting multiplier through the diffuse
+// half of _SplitNormalMap, and the hair shader's Kajiya-Kay specular
+// (hgrp-decompiled-formulas.md §3): three lobes around a strand tangent shifted along the
+// specular normal — the primary band colored by the spec ramp, a secondary band in
+// _AnisotropyColor2 where the primary is weak, and a third lobe that gates the darkening and
+// desaturation of the strand lines. Every lobe fades with the horizontal n.v in object space.
+// The surface map's G is the specular scalar (Pelica's _Specular is 0 and its map lights only
+// the bangs cards — the in-game single band), its R selects the strand direction (0 = the
+// object-space up projected onto the strand plane, 1 = the mesh bitangent) and its A scales
+// the secondary lobe. Group-2 bindings and the subsystem hooks come from the permutation's
+// generated fragments (material/hgrp).
 
-// Formula-unit normalization, same rationale as HGRP_RIM_FORMULA_SCALE: the official
-// _AnisotropyIntensity (3.0) belongs to the game's band formula (unknown); raw release
-// whitewashed the whole band area under ACES.
-const HGRP_ANISO_FORMULA_SCALE: f32 = 0.1;
+// A Kajiya-Kay lobe: the sine of the angle between a strand tangent and the half vector,
+// raised to the lobe exponent, with the game's 1e-4 floor under the power.
+fn hgrp_kajiya(tdoth: f32, exponent: f32) -> f32 {
+    return pow(max(sqrt(max(1.0 - tdoth * tdoth, 0.0)), 1e-4), exponent);
+}
 
-// The band reads the specular normal (geometric normal + per-strand shift), never the
-// _BumpMap-perturbed shading normal: it is a broad camera-tracking sheen, and a normal map's
-// per-texel detail would only break it up. `light` is the core's light(N).
-fn hgrp_hair_band(
-    n_spec: vec3<f32>,
-    spec_mask: f32,
-    smoothness: f32,
-    light: vec3<f32>,
-) -> vec3<f32> {
-    let n_view = normalize((mvp.view_matrix * vec4<f32>(n_spec, 0.0)).xyz);
-    // Folded coordinate: only the crisp left half + peak of the RS is sampled — the signed
-    // form drifted every upward normal into the mid-bright right tail and lifted the whole
-    // hair (v5 first browser check).
-    let band = hgrp_spec_ramp_color(
-        hgrp_material.aniso_value - abs(n_view.y) * 0.5,
-        1.0 - hgrp_material.smoothness * smoothness,
-    );
-    return band * light * (hgrp_material.aniso_intensity * HGRP_ANISO_FORMULA_SCALE * spec_mask);
+// Lobe exponent from a range parameter: int(200 (1 - range)), truncated as the game does.
+fn hgrp_kajiya_exponent(range: f32) -> f32 {
+    return f32(i32(200.0 * max(1.0 - range, 0.0)));
 }
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
+    // Both normals come from _SplitNormalMap: rg through the normal-map subsystem's hair
+    // include, ba through the hair specular-normal subsystem.
     let n = hgrp_shading_normal(
+        input.world_normal,
+        input.world_tangent,
+        input.world_bitangent,
+        input.uv0,
+    );
+    let n_spec = hgrp_hair_spec_normal(
         input.world_normal,
         input.world_tangent,
         input.world_bitangent,
@@ -55,7 +41,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let surface = hgrp_metallic_gloss(input.uv0);
     // The hair shader's diffuse fraction is 0.96 whatever the surface map's R holds — its
     // metallic is folded to zero in the decompiled code (hair variant b126) and R selects the
-    // strand direction instead (formulas §3) — so the core sees no metallic here.
+    // strand direction below — so the core sees no metallic here.
     let core = hgrp_shade_core(
         input.uv0,
         n,
@@ -64,17 +50,70 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         vec4<f32>(0.0, surface.gba),
         view_dir,
     );
-    let lined = hgrp_hair_lines(core.lit, input.uv0);
 
-    let n_spec = hgrp_hair_spec_normal(
-        input.world_normal,
-        input.world_tangent,
-        input.world_bitangent,
-        input.uv0,
+    // Strand frame: the object-space up tilted by _AnisotropyDirX, projected onto the plane of
+    // the specular normal — or the mesh bitangent where the surface map's R says so.
+    let to_world = hgrp_object_to_world();
+    let to_object = transpose(to_world);
+    let strand_up = normalize(to_world * vec3<f32>(hgrp_material.aniso_dir_x, 1.0, 0.0));
+    let tangent = normalize(input.world_tangent);
+    let handedness = sign(dot(cross(normalize(input.world_normal), tangent), input.world_bitangent));
+    let strand = cross(n_spec, mix(cross(n_spec, strand_up), tangent, surface.r)) *
+        mix(1.0, handedness, surface.r);
+
+    // Stylized half vector: the object-space view direction lifted to the light's height,
+    // doubled and added to the light, then to the view vector.
+    let light = hgrp_light_dir();
+    let view_object = to_object * view_dir;
+    let lifted = to_world * vec3<f32>(view_object.x, light.y, view_object.z);
+    let h = normalize(normalize(light + 2.0 * lifted) + view_dir);
+
+    // Horizontal object-space n.v fade of every lobe: full facing the camera, gone edge-on.
+    let n_spec_object = to_object * n_spec;
+    let fade = pow(
+        clamp(dot(normalize(n_spec_object.xz), normalize(view_object.xz)), 0.0, 1.0),
+        hgrp_material.aniso_edge_fade,
     );
-    let band = hgrp_hair_band(n_spec, surface.g, surface.a, core.light);
+
+    let spec_scalar = surface.g;
+    let t1 = normalize(strand + n_spec * (2.0 * hgrp_material.aniso_value - 1.0));
+    let t1_dot_h = dot(t1, h);
+    let lobe1 = clamp(hgrp_kajiya(t1_dot_h, 200.0) * spec_scalar, 0.0, 1.0);
+    // The spec ramp reads the lobe itself along u and the squared fade along v, on the half
+    // facing the light only; the fade multiplies once more after the lookup.
+    let band = lobe1 * hgrp_spec_ramp_color(lobe1, select(0.0, fade * fade, t1_dot_h > 0.0)) *
+        fade;
+    let band_max = max(band.r, max(band.g, band.b));
+
+    let t2 = normalize(strand + n_spec * (2.0 * hgrp_material.aniso_value2 - 1.0));
+    let lobe2 = hgrp_kajiya(dot(t2, h), hgrp_kajiya_exponent(hgrp_material.aniso_range2)) * fade;
+    // F0 = 0.04 x the specular scalar: the folded metallic leaves no albedo in it
+    let f0 = vec3<f32>(0.04 * spec_scalar);
+    let spec = (band * f0 * (hgrp_material.aniso_intensity * 5.0) +
+        mix(lobe2 * hgrp_material.aniso_color2.rgb * surface.a, vec3<f32>(0.0), band_max)) *
+        (core.light * hgrp_shade_spec(core.w2));
+
+    // Strand lines: the third lobe gates a darkening of the line pattern where the primary
+    // band is weak, scaled by the specular scalar, then the darkened color desaturates toward
+    // _LineSaturation.
+    let pattern = hgrp_hair_line_pattern(input.uv0);
+    let line_term = mix(1.0 - hgrp_material.line_intensity, 1.0, pattern);
+    let t3 = normalize(strand + n_spec * (2.0 * hgrp_material.line_value - 1.0));
+    let lobe3 = clamp(
+        hgrp_kajiya(dot(t3, h), hgrp_kajiya_exponent(hgrp_material.line_range)),
+        0.0,
+        1.0,
+    );
+    let line_dark = mix(1.0, mix(1.0, mix(line_term, 1.0, band_max), lobe3), spec_scalar);
+    let shaded = core.lit * line_dark;
+    let diffuse = mix(
+        vec3<f32>(hgrp_luma(shaded)),
+        shaded,
+        mix(hgrp_material.line_saturation, 1.0, line_dark),
+    );
+
     return hgrp_debug_view(
-        vec4<f32>(hgrp_bright_saturation(lined + band), core.alpha),
+        vec4<f32>(hgrp_bright_saturation(diffuse + spec), core.alpha),
         input.uv0,
     );
 }

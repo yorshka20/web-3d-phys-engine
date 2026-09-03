@@ -66,7 +66,7 @@ const uniformsContent = resolveShaderFragment('core/uniforms.wgsl');
 The HGRP shading core (`lighting/hgrp_npr.wgsl`, `lighting/hgrp_eye_shading.wgsl`) calls one
 hook function per static subsystem — `hgrp_ramp`, `hgrp_shadow_color`,
 `hgrp_shading_normal`, `hgrp_shade_coord`, `hgrp_spec_ramp_color`, `hgrp_metallic_gloss`,
-`hgrp_emission`, `hgrp_hair_lines`, `hgrp_hair_spec_normal`, `hgrp_face_highlight`,
+`hgrp_emission`, `hgrp_hair_line_pattern`, `hgrp_hair_spec_normal`, `hgrp_face_highlight`,
 `hgrp_eye_matcap` — without
 knowing whether the subsystem is on. The permutation's include list supplies either the hook's
 fragment (`lighting/hgrp/<subsystem>.wgsl`, which samples the subsystem's texture) or a

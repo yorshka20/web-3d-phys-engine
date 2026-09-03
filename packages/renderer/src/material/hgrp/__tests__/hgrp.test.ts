@@ -89,6 +89,12 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   skin_rim_off_scale: 77,
   face_rim_off_scale: 78,
   object_frame_joint: 79,
+  aniso_value2: 80,
+  aniso_range2: 81,
+  aniso_edge_fade: 82,
+  aniso_dir_x: 83,
+  aniso_color2: 84,
+  line_map_st: 88,
 };
 
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
@@ -181,8 +187,8 @@ describe('HGRP material contract', () => {
     expect(() => validateHGRPContract()).not.toThrow();
   });
 
-  it('keeps the HGRPMaterialParams byte layout (320 bytes)', () => {
-    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(320);
+  it('keeps the HGRPMaterialParams byte layout (368 bytes)', () => {
+    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(368);
     const actual = Object.fromEntries(
       HGRP_MATERIAL_PARAMS_LAYOUT.fields.map((f) => [f.name, f.offset / 4]),
     );
@@ -284,7 +290,7 @@ describe('HGRP material contract', () => {
     expect(new Set(Object.values(names)).size).toBe(Object.keys(names).length);
   });
 
-  it('exposes the calibration GUI schema (42 floats, 6 colors)', () => {
+  it('exposes the calibration GUI schema (46 floats, 7 colors)', () => {
     expect(HGRP_TUNABLE_FLOATS.map((d) => d.key).sort()).toEqual(
       [
         '_UseDiffRampMap',
@@ -305,6 +311,10 @@ describe('HGRP material contract', () => {
         '_FaceRimOffScale',
         '_AnisotropyIntensity',
         '_AnisotropyValue',
+        '_AnisotropyValue2',
+        '_AnisotropyRange2',
+        '_AnisotropyEdgeFade',
+        '_AnisotropyDirX',
         '_UseMatcap',
         '_FaceHighlightMap',
         '_ParallaxScale',
@@ -334,6 +344,7 @@ describe('HGRP material contract', () => {
     expect(HGRP_TUNABLE_COLORS.map((d) => d.key).sort()).toEqual(
       [
         '_BaseColor',
+        '_AnisotropyColor2',
         '_EmissionColor',
         '_MatcapColor',
         '_PantyhoseColor',
@@ -386,7 +397,8 @@ describe('permutations', () => {
     );
     expect(permutation.enabled).toEqual(['ramp', 'hairLines']);
     expect(dropped).toEqual([
-      { subsystem: 'normal', gate: '_UseBumpMap', missing: ['_BumpMap'] },
+      // on hair the normal-map subsystem reads _SplitNormalMap, never _BumpMap
+      { subsystem: 'normal', gate: '_UseBumpMap', missing: ['_SplitNormalMap'] },
       { subsystem: 'browThrough', gate: '_DrawUnderBrow', missing: ['_HairBrowMask'] },
     ]);
   });
@@ -444,11 +456,11 @@ describe('permutations', () => {
     const hair = createHGRPMaterialFromPreset(
       'c',
       'hair',
-      preset('HGRP/CharacterNPR_Hair', { _UseBumpMap: 1 }, { _BaseMap: 'b' }),
+      preset('HGRP/CharacterNPR_Hair', { _UseLineMap: 1 }, { _BaseMap: 'b' }),
     );
     expect(hair.customShaderId).toBe('hgrp_hair_shader');
     expect(warn).toHaveBeenCalledWith(
-      expect.stringMatching(/hair: .*normal \(_UseBumpMap on, no _BumpMap\)/),
+      expect.stringMatching(/hair: .*hairLines \(_UseLineMap on, no _LineMap\)/),
     );
 
     const fill = createDefaultHGRPMaterial('c', 'shell');
@@ -578,9 +590,12 @@ describe('object frame', () => {
     );
     const body = createHGRPMaterialFromPreset('c', 'body', preset('HGRP/CharacterNPR_Skin', {}));
     const joints = ['Bip001_Pelvis', 'Bip001_Neck', 'Bip001_Head', 'head_up_jnt'];
+    const hair = createHGRPMaterialFromPreset('c', 'hair', preset('HGRP/CharacterNPR_Hair', {}));
     hgrpResolveObjectFrame(face, joints);
     hgrpResolveObjectFrame(body, joints);
+    hgrpResolveObjectFrame(hair, joints);
     expect(face.objectFrameJoint).toBe(2);
+    expect(hair.objectFrameJoint).toBe(2);
     expect(body.objectFrameJoint).toBeUndefined();
     expect(
       packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, face)[
@@ -639,11 +654,11 @@ describe('eye layer role', () => {
 describe('packHGRPParams', () => {
   it('packs defaults when a preset omits every key', () => {
     const packed = packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, material('CharacterNPR'));
-    expect(packed).toHaveLength(80);
+    expect(packed).toHaveLength(92);
     expect(Array.from(packed.subarray(0, 8))).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_width]).toBeCloseTo(0.35);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.line_amount]).toBe(300);
-    expect(packed[MATERIAL_PARAMS_F32_INDEX.aniso_value]).toBe(0.5);
+    expect(packed[MATERIAL_PARAMS_F32_INDEX.aniso_value]).toBeCloseTo(0.35);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.alpha_cutoff]).toBe(0);
   });
 
