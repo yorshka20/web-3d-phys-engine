@@ -4,6 +4,7 @@
 import { Inject, Injectable } from '../decorators/inject';
 import { ServiceTokens } from '../decorators/DIContainer';
 import { resolveShaderFragment, shaderFragmentRegistry } from './registry';
+import { shaderParamsLayout, shaderParamsWGSL } from './params';
 import {
   CompiledShader,
   ShaderCompilationResult,
@@ -176,6 +177,15 @@ export class ShaderCompiler {
             );
           }
         }
+      }
+
+      // The module's runtimeParams block, generated right before the main file so the shader
+      // can read `shader_params.<name>` without declaring the struct or its binding itself.
+      const paramsCode = shaderParamsWGSL(shaderParamsLayout(module.runtimeParams));
+      if (paramsCode) {
+        composedCode += `// === generated: ${module.id} runtimeParams ===\n`;
+        composedCode += paramsCode + '\n\n';
+        compositionLog.push('✓ Generated runtimeParams block');
       }
 
       // Load main shader file

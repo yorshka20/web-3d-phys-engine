@@ -280,7 +280,7 @@ export interface CheckerboardShaderModule extends ShaderModule {
     };
   };
   runtimeParams: {
-    checkerboardSize: ShaderParamDefinition;
+    cellSize: ShaderParamDefinition;
   };
   renderState: {
     blendMode: 'replace';

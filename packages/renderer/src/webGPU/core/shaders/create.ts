@@ -225,13 +225,13 @@ export function createCheckerboardShaderModule(): CheckerboardShaderModule {
       },
     },
     runtimeParams: {
-      checkerboardSize: {
+      cellSize: {
         type: 'f32' as const,
         defaultValue: 1.0,
-        description: 'Size of checkerboard pattern',
-        min: 0.0,
-        max: 1.0,
-        step: 0.01,
+        description: 'Checker cell size, in world units',
+        min: 0.05,
+        max: 50.0,
+        step: 0.05,
       },
     },
     renderState: {

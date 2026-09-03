@@ -1,7 +1,8 @@
-import { WebGPUMaterialDescriptor } from '@renderer/material/types';
+import { WebGPUMaterialDescriptor } from '../../material/types';
 import { Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
+import { SHADER_PARAMS_BINDING } from './shaders/params';
 import { TextureManager } from './TextureManager';
 import { ResourceType } from './types';
 
@@ -222,6 +223,7 @@ export class MaterialManager {
     materialId: string,
     material: WebGPUMaterialDescriptor,
     bindGroupLayout: GPUBindGroupLayout,
+    shaderParamsBuffer: GPUBuffer,
   ): GPUBindGroup {
     const bindGroupId = `material_${materialId}_bindgroup`;
 
@@ -263,6 +265,10 @@ export class MaterialManager {
         {
           binding: 0,
           resource: { buffer: uniformBuffer },
+        },
+        {
+          binding: SHADER_PARAMS_BINDING,
+          resource: { buffer: shaderParamsBuffer },
         },
       ],
       label: bindGroupId,

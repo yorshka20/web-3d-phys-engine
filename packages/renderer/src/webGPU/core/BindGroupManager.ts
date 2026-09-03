@@ -2,6 +2,10 @@ import { Inject, Injectable, SmartResource } from './decorators';
 import { ServiceTokens } from './decorators/DIContainer';
 import { WebGPUResourceManager } from './ResourceManager';
 import { BindGroupDescriptor, BindGroupLayoutDescriptor, BindGroupLayoutVisibility } from './types';
+import {
+  MATERIAL_BIND_GROUP_LAYOUT_ENTRIES,
+  MATERIAL_BIND_GROUP_LAYOUT_ID,
+} from './standardMaterialLayout';
 import { ResourceType } from './types/constant';
 
 /**
@@ -215,15 +219,9 @@ export class BindGroupManager {
 
     // Material uniforms layout
     layouts.set(
-      'materialBindGroupLayout',
-      this.createBindGroupLayout('materialBindGroupLayout', {
-        entries: [
-          {
-            binding: 0,
-            visibility: BindGroupLayoutVisibility.FRAGMENT,
-            buffer: { type: 'uniform' },
-          },
-        ],
+      MATERIAL_BIND_GROUP_LAYOUT_ID,
+      this.createBindGroupLayout(MATERIAL_BIND_GROUP_LAYOUT_ID, {
+        entries: MATERIAL_BIND_GROUP_LAYOUT_ENTRIES,
         label: 'Material Bind Group Layout',
       }),
     );

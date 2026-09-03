@@ -22,7 +22,13 @@ import { PipelineFactory } from '../core/pipeline/PipelineFactory';
 import { PipelineManager } from '../core/pipeline/PipelineManager';
 import { PMXAnimationBufferManager } from '../core/PMXAnimationBufferManager';
 import { PMXMaterialProcessor } from '../core/PMXMaterialProcessor';
+import { SHADER_PARAMS_BINDING } from '../core/shaders/params';
 import { ShaderManager } from '../core/shaders/ShaderManager';
+import {
+  createEmptyShaderParamsBuffer,
+  MATERIAL_BIND_GROUP_LAYOUT_ENTRIES,
+  MATERIAL_BIND_GROUP_LAYOUT_ID,
+} from '../core/standardMaterialLayout';
 import { ShadingParamsManager } from '../core/ShadingParamsManager';
 import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
@@ -464,16 +470,8 @@ export class WebGPURenderer implements IWebGPURenderer {
     // MVP bind group layout is now handled by MVPUniformManager
 
     // Ensure material bind group layout exists for texture support
-    this.bindGroupManager.createBindGroupLayout('materialBindGroupLayout', {
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-          buffer: {
-            type: 'uniform',
-          },
-        },
-      ],
+    this.bindGroupManager.createBindGroupLayout(MATERIAL_BIND_GROUP_LAYOUT_ID, {
+      entries: MATERIAL_BIND_GROUP_LAYOUT_ENTRIES,
       label: 'MaterialBindGroup Layout',
     });
     console.log('[WebGPURenderer] Created material bind group layout for PipelineManager');
@@ -518,10 +516,12 @@ export class WebGPURenderer implements IWebGPURenderer {
       size: 32,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    const emptyShaderParams = createEmptyShaderParamsBuffer(this.bufferManager);
 
     // Get the existing material bind group layout (created earlier)
-    const materialBindGroupLayout =
-      this.bindGroupManager.getBindGroupLayout('materialBindGroupLayout');
+    const materialBindGroupLayout = this.bindGroupManager.getBindGroupLayout(
+      MATERIAL_BIND_GROUP_LAYOUT_ID,
+    );
     if (!materialBindGroupLayout) {
       throw new Error('Material bind group layout not found');
     }
@@ -530,6 +530,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       layout: materialBindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: materialBuffer } }, // material buffer
+        { binding: SHADER_PARAMS_BINDING, resource: { buffer: emptyShaderParams } },
       ],
       label: 'materialBindGroup',
     });

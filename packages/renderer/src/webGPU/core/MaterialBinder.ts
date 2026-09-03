@@ -20,6 +20,9 @@ import {
 } from './HGRPMaterialResources';
 import { MaterialManager } from './MaterialManager';
 import { WebGPUResourceManager } from './ResourceManager';
+import { packShaderParams, shaderParamsLayout } from './shaders/params';
+import { ShaderManager } from './shaders/ShaderManager';
+import { createEmptyShaderParamsBuffer } from './standardMaterialLayout';
 import { TextureManager } from './TextureManager';
 import { BufferType } from './types';
 
@@ -57,6 +60,9 @@ export class MaterialBinder {
 
   @Inject(ServiceTokens.RESOURCE_MANAGER)
   private accessor resourceManager!: WebGPUResourceManager;
+
+  @Inject(ServiceTokens.SHADER_MANAGER)
+  private accessor shaderManager!: ShaderManager;
 
   /**
    * Resolve the material bind groups for a non-PMX renderable (once per materialKey per frame)
@@ -469,7 +475,38 @@ export class MaterialBinder {
         renderable.materialKey,
         regularMaterial,
         materialBindGroupLayout,
+        this.ensureShaderParamsBuffer(renderable.materialKey, regularMaterial),
       ) ?? null
     );
+  }
+
+  /**
+   * The params block of group 3, packed from the shader module's `runtimeParams` declaration
+   * with the material's `shaderParams` on top. Written on every resolve — once per materialKey
+   * per frame — so editing a material's params takes effect on the next frame; the buffer
+   * itself is cached by label, so nothing is reallocated.
+   */
+  private ensureShaderParamsBuffer(
+    materialKey: string,
+    material: WebGPUMaterialDescriptor,
+  ): GPUBuffer {
+    const declared = this.shaderManager.getRuntimeParams(material.customShaderId);
+    if (!declared) {
+      return createEmptyShaderParamsBuffer(this.bufferManager);
+    }
+
+    const layout = shaderParamsLayout(declared);
+    const buffer = this.bufferManager.createCustomBuffer(`${materialKey}_shader_params`, {
+      type: BufferType.UNIFORM,
+      size: layout.byteSize,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(
+      buffer,
+      0,
+      packShaderParams(layout, declared, material.shaderParams),
+    );
+
+    return buffer;
   }
 }

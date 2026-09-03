@@ -10,6 +10,7 @@ import {
   ShaderCompilationResult,
   ShaderDefine,
   ShaderModule,
+  ShaderParamDefinition,
 } from './types/shader';
 
 /**
@@ -102,6 +103,15 @@ export class ShaderManager {
    */
   getShaderModule(id: string): GPUShaderModule {
     return this.ensureCompiled(id).shaderModule;
+  }
+
+  /**
+   * The params a shader module declares, for the binder that packs a material's overrides over
+   * their defaults. Same resolution as compilation, so a derived module's declaration is found.
+   */
+  getRuntimeParams(id?: string): Record<string, ShaderParamDefinition> | undefined {
+    const params = this.resolveModule(id ?? 'default_shader')?.runtimeParams;
+    return params && Object.keys(params).length > 0 ? params : undefined;
   }
 
   /**
