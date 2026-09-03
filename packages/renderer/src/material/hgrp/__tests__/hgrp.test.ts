@@ -82,8 +82,7 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   highlight_vector: 60,
   eye_tint_color: 64,
   hair_brow_mask_threshold: 68,
-  is_iris: 69,
-  spec_bump_scale: 70,
+  spec_bump_scale: 69,
   sdf_rim_color: 72,
   metallic: 76,
   skin_rim_off_scale: 77,
@@ -290,7 +289,7 @@ describe('HGRP material contract', () => {
     expect(new Set(Object.values(names)).size).toBe(Object.keys(names).length);
   });
 
-  it('exposes the calibration GUI schema (46 floats, 7 colors)', () => {
+  it('exposes the calibration GUI schema (46 floats, 6 colors)', () => {
     expect(HGRP_TUNABLE_FLOATS.map((d) => d.key).sort()).toEqual(
       [
         '_UseDiffRampMap',
@@ -349,7 +348,6 @@ describe('HGRP material contract', () => {
         '_MatcapColor',
         '_PantyhoseColor',
         '_SDFRimColor',
-        '_EyeTintColor',
       ].sort(),
     );
     const lineAmount = HGRP_TUNABLE_FLOATS.find((d) => d.key === '_LineAmount')!;
@@ -642,12 +640,6 @@ describe('eye layer role', () => {
     expect(iris.eyeLayer).toBe('iris');
     expect(brow.eyeLayer).toBe('brow');
     expect(cloth.eyeLayer).toBeUndefined();
-    expect(
-      packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, iris)[MATERIAL_PARAMS_F32_INDEX.is_iris],
-    ).toBe(1);
-    expect(
-      packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, brow)[MATERIAL_PARAMS_F32_INDEX.is_iris],
-    ).toBe(0);
   });
 });
 

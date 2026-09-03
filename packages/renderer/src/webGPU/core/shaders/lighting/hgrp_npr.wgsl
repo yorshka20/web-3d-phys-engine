@@ -238,11 +238,24 @@ fn hgrp_ramp_inset(u: f32) -> f32 {
 
 // Base sample with alpha clip (alpha_cutoff 0 = disabled).
 fn hgrp_base_color(uv0: vec2<f32>) -> vec4<f32> {
-    let base = textureSample(base_map, base_sampler, uv0) * hgrp_material.base_color;
+    return hgrp_base_color_sampled(uv0, base_sampler);
+}
+
+// The same through a caller-chosen sampler: the eye shader reads its base map clamped, as the
+// game does, because the parallax pushes the lookup past the card's edge.
+fn hgrp_base_color_sampled(uv0: vec2<f32>, s: sampler) -> vec4<f32> {
+    let base = textureSample(base_map, s, uv0) * hgrp_material.base_color;
     if hgrp_material.alpha_cutoff > 0.0 && base.a < hgrp_material.alpha_cutoff {
         discard;
     }
     return base;
+}
+
+// The eye matcap subsystem's two outputs (lighting/hgrp/eye_matcap.wgsl): the parallax offset
+// the base lookup subtracts, and the matcap term added on top of the shaded iris.
+struct HGRPEyeMatcap {
+    uv_offset: vec2<f32>,
+    color: vec3<f32>,
 }
 
 // A two-channel tangent-space normal (the halves of the hair's _SplitNormalMap): z rebuilt from

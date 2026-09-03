@@ -109,6 +109,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'matcap_normal_scale',
       'eyeMatcap',
       float('_MatcapNormalScale', 1, { min: 0, max: 2, step: 0.01 }),
+      'xy scale of the sphere normals the eye shader derives from its UV disc',
     ),
     vec4('emission_color', 'emission', color('_EmissionColor', BLACK_OPAQUE, true)),
     f32(
@@ -132,7 +133,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'eye_highlight',
       'eyeHighlight',
       float('_EyeHighLight', 0, TOGGLE),
-      'catchlight; the iris base alpha is the highlight mask',
+      'gates the _EyeHighLightColor / _EyeScatteringColor albedo multipliers (iris only)',
     ),
     f32(
       'outline_offset_z',
@@ -145,9 +146,14 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'eye_highlight_color',
       'eyeHighlight',
       color('_EyeHighLightColor', WHITE),
-      'HDR (~2.2); the tonemap shoulder absorbs it',
+      'HDR (~2.2) albedo multiplier outside the UV disc',
     ),
-    vec4('eye_scattering_color', 'eyeScatter', color('_EyeScatteringColor', WHITE)),
+    vec4(
+      'eye_scattering_color',
+      'eyeScatter',
+      color('_EyeScatteringColor', WHITE),
+      'HDR albedo multiplier where the base alpha is set',
+    ),
     f32(
       'line_amount',
       'hairLines',
@@ -204,8 +210,8 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
     f32(
       'parallax_scale',
       'eyeParallax',
-      float('_ParallaxScale', 0, { min: 0, max: 0.2, step: 0.001 }),
-      'iris depth-parallax UV shift (iris only)',
+      float('_ParallaxScale', 0, { min: 0, max: 0.5, step: 0.001 }),
+      'iris depth-parallax UV shift inside the disc, a quarter along v; part of the matcap path',
     ),
     vec4('pantyhose_color', 'pantyhose', color('_PantyhoseColor', BLACK_OPAQUE, true)),
     vec4(
@@ -214,26 +220,15 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       color('_HighlightMapVector', ZERO4),
       'hl_M UV offset (xy)',
     ),
-    vec4(
-      'eye_tint_color',
-      'eyeTint',
-      color('_EyeTintColor', WHITE, true),
-      "identity in Pelica's preset",
-    ),
+    // The game reads _EyeTintColor only under _CUSTOMIZE_AVATAR, which this renderer does not
+    // implement; packed, unread, no widget.
+    vec4('eye_tint_color', 'eyeTint', color('_EyeTintColor', WHITE)),
     f32(
       'hair_brow_mask_threshold',
       'browThrough',
       float('_HairBrowMaskThreshold', 0.5, { min: 0, max: 1, step: 0.01 }),
       'sw_M cutoff, brow-through mark',
     ),
-    {
-      name: 'is_iris',
-      type: 'f32',
-      subsystem: 'eyeLayer',
-      params: [],
-      pack: (material) => (material.eyeLayer === 'iris' ? 1 : 0),
-      comment: 'HGRPMaterialDescriptor.eyeLayer: 1 = iris card (unlit, parallax), 0 = brow',
-    },
     f32(
       'spec_bump_scale',
       'hairSplitNormal',

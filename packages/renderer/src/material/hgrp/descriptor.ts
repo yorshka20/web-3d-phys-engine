@@ -130,8 +130,9 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
 export const HGRP_OBJECT_FRAME_JOINT = 'Bip001_Head';
 
 // Give a material the object frame its shading expects: the SDF face shadow wants the head,
-// and so does hair — its strands run along the object-space up and its lobes fade with the
-// object-space view direction (formulas §3), and the hair meshes hang under the head bone.
+// and so do hair — its strands run along the object-space up and its lobes fade with the
+// object-space view direction (formulas §3) — and the eye, whose ramp reads the light flattened
+// to the object's horizontal plane (§4); hair and eye meshes hang under the head bone.
 // `jointNames` is the skin's joint list in palette order. A skin without the bone leaves the
 // model frame in place — and says so, since a body-frame SDF shows a seam wherever the head
 // turns.
@@ -139,7 +140,11 @@ export function hgrpResolveObjectFrame(
   material: HGRPMaterialDescriptor,
   jointNames: readonly string[],
 ): void {
-  if (!material.permutation.enabled.includes('sdf') && material.variant !== 'CharacterNPR_Hair') {
+  const wantsHead =
+    material.permutation.enabled.includes('sdf') ||
+    material.variant === 'CharacterNPR_Hair' ||
+    material.variant === 'CharacterNPR_Eye';
+  if (!wantsHead) {
     return;
   }
   const joint = jointNames.indexOf(HGRP_OBJECT_FRAME_JOINT);

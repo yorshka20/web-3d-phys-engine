@@ -218,7 +218,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     wgsl: {
       include: 'lighting/hgrp/eye_matcap.wgsl',
       fn: 'hgrp_eye_matcap',
-      off: 'vec3<f32>(0.0)',
+      off: 'HGRPEyeMatcap(vec2<f32>(0.0), vec3<f32>(0.0))',
     },
   },
   { id: 'eyeHighlight', gate: '_EyeHighLight', tier: 'numeric' },
