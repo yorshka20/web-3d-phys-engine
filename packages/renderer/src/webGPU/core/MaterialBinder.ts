@@ -38,27 +38,25 @@ export interface MaterialBindings {
  * (see docs/renderer-frame-contract.md). Handles the regular and GLTF material families; PMX
  * materials come pre-built from PMXMaterialProcessor and are assembled by the draw executor.
  */
-@Injectable(ServiceTokens.MATERIAL_BINDER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.MATERIAL_BINDER)
 export class MaterialBinder {
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
-  private bindGroupManager!: BindGroupManager;
+  private accessor bindGroupManager!: BindGroupManager;
 
   @Inject(ServiceTokens.TEXTURE_MANAGER)
-  private textureManager!: TextureManager;
+  private accessor textureManager!: TextureManager;
 
   @Inject(ServiceTokens.MATERIAL_MANAGER)
-  private materialManager!: MaterialManager;
+  private accessor materialManager!: MaterialManager;
 
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   /**
    * Resolve the material bind groups for a non-PMX renderable (once per materialKey per frame)

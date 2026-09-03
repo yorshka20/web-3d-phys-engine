@@ -42,24 +42,22 @@ interface SimpleComputeCacheEntry {
  * Advanced Pipeline Manager for WebGPU with dual-layer caching
  * Manages pipeline creation, caching, and optimization with semantic-to-GPU mapping
  */
-@Injectable(ServiceTokens.PIPELINE_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.PIPELINE_MANAGER)
 export class PipelineManager {
   @Inject(ServiceTokens.SHADER_MANAGER)
-  private shaderManager!: ShaderManager;
+  private accessor shaderManager!: ShaderManager;
 
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
-  private bindGroupManager!: BindGroupManager;
+  private accessor bindGroupManager!: BindGroupManager;
 
   @Inject(ServiceTokens.WEBGPU_CONTEXT)
-  private context!: WebGPUContext;
+  private accessor context!: WebGPUContext;
 
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
-  private pmxMaterialProcessor!: PMXMaterialProcessor; // PMXMaterialProcessor type
+  private accessor pmxMaterialProcessor!: PMXMaterialProcessor; // PMXMaterialProcessor type
 
   // Dual-layer cache system for render pipelines
   private semanticCache = new Map<string, SimpleCacheEntry>();

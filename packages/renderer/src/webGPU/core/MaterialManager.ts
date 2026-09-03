@@ -23,18 +23,16 @@ export interface MaterialUniformData {
   alphaCutoff: number; // f32
 }
 
-@Injectable(ServiceTokens.MATERIAL_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.MATERIAL_MANAGER)
 export class MaterialManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   @Inject(ServiceTokens.TEXTURE_MANAGER)
-  private textureManager!: TextureManager;
+  private accessor textureManager!: TextureManager;
 
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   private materials: Map<string, WebGPUMaterialDescriptor> = new Map();
   private materialDescriptors: Map<string, WebGPUMaterialDescriptor> = new Map();

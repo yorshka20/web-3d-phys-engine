@@ -16,15 +16,13 @@ import {
  * Geometry Manager
  * Manages different types of geometries, including caching and resource management
  */
-@Injectable(ServiceTokens.GEOMETRY_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.GEOMETRY_MANAGER)
 export class GeometryManager {
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   @Inject(ServiceTokens.GPU_RESOURCE_COORDINATOR)
-  private gpuResourceCoordinator!: GPUResourceCoordinator;
+  private accessor gpuResourceCoordinator!: GPUResourceCoordinator;
 
   /**
    * Create geometry from type and parameters

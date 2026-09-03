@@ -23,21 +23,19 @@ export interface PMXAnimationData {
   morphData: Float32Array;
 }
 
-@Injectable(ServiceTokens.PMX_ANIMATION_BUFFER_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.PMX_ANIMATION_BUFFER_MANAGER)
 export class PMXAnimationBufferManager {
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
-  private bindGroupManager!: BindGroupManager;
+  private accessor bindGroupManager!: BindGroupManager;
 
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   private animationBuffers: Map<string, PMXAnimationBuffers> = new Map();
   private maxBones = 256; // Maximum number of bones per model

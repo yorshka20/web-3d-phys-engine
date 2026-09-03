@@ -45,7 +45,7 @@ pnpm --filter @web-3d-phys-engine/ecs test            # watch mode
 pnpm --filter @web-3d-phys-engine/ecs exec vitest run src/core/pool/__tests__/PoolMemoryLeakTest.test.ts   # single file
 pnpm --filter @web-3d-phys-engine/ecs exec vitest run -t "name pattern"                                    # single test
 pnpm --filter @web-3d-phys-engine/renderer exec vitest run src/material   # HGRP contract tests (green)
-pnpm --filter @web-3d-phys-engine/renderer test       # everything, incl. the rotten decorator tests (12 fail)
+pnpm --filter @web-3d-phys-engine/renderer test       # everything (green)
 ```
 
 Known-broken test infrastructure (do not trust it, fix it before relying on it):
@@ -144,10 +144,19 @@ which extracts per-entity render data, assembles `FrameData`, and calls
 ### Renderer package
 
 - **DI via TC39 stage-3 native decorators** (`experimentalDecorators: false` — the modern
-  decorator API, not the legacy one). Every manager is `@Injectable(ServiceTokens.X)` and wires
-  dependencies with `@Inject(...)` fields; `globalContainer` + `ServiceTokens` live in
-  `packages/renderer/src/webGPU/core/decorators/DIContainer.ts`. `WebGPURenderer.init()` just
-  constructs the ~14 managers; the decorators do the wiring.
+  decorator API, not the legacy one). **Injection is automatic, registration is explicit**
+  (2026-09-03): a class declares what it needs with `@Inject(ServiceTokens.X) accessor y!: T`,
+  and every service is constructed and registered in one table,
+  `provideRendererServices()` in `webGPU/core/services.ts`. Tokens carry their service type
+  (`Token<T>`), so a token/field type mismatch is a compile error; `resolve` throws rather
+  than returning `undefined`; `@Inject` also records the declaration, so
+  `validateDependencies()` reports a missing provider at wiring time instead of on whatever
+  frame first touches the field. Resolution is lazy on purpose — `GeometryManager` and
+  `GPUResourceCoordinator` inject each other. `@ResourceHost()` is a separate concern: it
+  installs the storage helpers `@SmartResource`/`@ResourceFactory`/`@MonitorPerformance` call
+  on their host, and registers nothing. The wiring table deliberately lives outside
+  `decorators/index.ts` — every manager imports that barrel, so a barrel importing managers
+  back is the cycle described under Domain Notes.
 - Specialized managers under `webGPU/core/`: Buffer/BindGroup/Texture/Geometry/Material/
   MVPUniform/Time managers, `ResourceManager` (registry + metadata), `GPUResourceCoordinator`
   (cross-cutting cache/lifecycle), `AssetLoader` (static; PMX + glTF via `@gltf-transform` WebIO)
@@ -257,8 +266,10 @@ Current state that is easy to misread as bugs or dead code — check here before
 - Known pre-existing test rot: pool tests fail with `ComponentClass.poolConfig` on undefined
   (a `ComponentPoolList` entry is undefined under Vitest's SSR module order — same barrel-cycle
   disease as the ShaderCompiler case in Domain Notes); several `PerformanceSystem` assertions
-  drifted from evolved constants; renderer's `decorators/tests/*` (12 failures) never ran
-  before the renderer vitest config existed (2026-09-02).
+  drifted from evolved constants. The renderer suite is green as of 2026-09-03 — the 12
+  failing `decorators/tests/*` asserted the DI machinery that the same day's refactor removed
+  (constructor interception, factory/singleton registration, child containers, service
+  metadata), and were replaced by `decorators/__tests__/di.test.ts`.
 
 ## Code Conventions
 
@@ -486,7 +497,8 @@ Non-obvious specifics that are easy to get wrong:
 - `.wgsl` imports are inlined strings (wgsl-loader); `.gltf` imports are inlined **unless**
   imported with `?url` (sample models are `?url` + fetched at runtime).
 - **Inside `renderer/webGPU/core`, import decorators from `decorators/ResourceDecorators`, not
-  the `decorators` barrel** when the barrel imports your module (it top-level imports
-  `ShaderCompiler` and `WebGPUContext` for `initContainer`): the barrel cycle leaves
-  `Injectable` undefined at decoration time under Vite SSR (vitest), even though Rollup's chunk
-  ordering hides it in the browser build.
+  the `decorators` barrel** when the barrel imports your module: the barrel cycle leaves the
+  decorator undefined at decoration time under Vite SSR (vitest), even though Rollup's chunk
+  ordering hides it in the browser build. This is also why the service wiring table lives in
+  `core/services.ts` and not in the barrel — putting it there would make every manager part of
+  the cycle.

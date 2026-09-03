@@ -32,15 +32,12 @@
 
 import './ResourceDecorators';
 
-import { ShaderCompiler } from '../shaders/ShaderCompiler';
-import { WebGPUContext } from '../WebGPUContext';
-import { globalContainer, ServiceTokens } from './DIContainer';
-
 // Core decorators
 export {
   Inject,
   Injectable,
   MonitorPerformance,
+  performanceStats,
   ResourceFactory,
   SmartResource,
 } from './ResourceDecorators';
@@ -49,21 +46,11 @@ export {
 export * from './types';
 
 // Dependency injection
-export { DIContainer, globalContainer, ServiceTokens, type ServiceToken } from './DIContainer';
-
-/**
- * Advanced setup function with full DI container configuration
- */
-export function initContainer(device: GPUDevice, context: WebGPUContext) {
-  // Register basic instances that are needed for dependency injection
-  globalContainer.registerInstance(ServiceTokens.WEBGPU_DEVICE, device);
-  globalContainer.registerInstance(ServiceTokens.WEBGPU_CONTEXT, context);
-
-  // services not used in renderer will be registered here
-  globalContainer.registerInstance(ServiceTokens.SHADER_COMPILER, new ShaderCompiler());
-
-  console.log('DI container initialized with auto-registration support');
-  console.log('Services will be created automatically when needed via new operator');
-
-  return globalContainer;
-}
+export {
+  DIContainer,
+  dependencyGraph,
+  globalContainer,
+  ServiceTokens,
+  type Token,
+  validateDependencies,
+} from './DIContainer';

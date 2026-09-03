@@ -15,18 +15,16 @@ import { BufferType } from './types';
  * - Provide efficient buffer reuse and management
  * - Handle per-object MVP uniform updates
  */
-@Injectable(ServiceTokens.MVP_UNIFORM_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.MVP_UNIFORM_MANAGER)
 export class MVPUniformManager {
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
-  private bindGroupManager!: BindGroupManager;
+  private accessor bindGroupManager!: BindGroupManager;
 
   // Cache for MVP buffers and bind groups, keyed by RenderData.uniformKey (one per draw
   // instance — never share a buffer across draws with different matrices: every

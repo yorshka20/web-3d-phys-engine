@@ -8,15 +8,13 @@ import { ResourceType } from './types/constant';
  * WebGPU buffer manager
  * responsible for creating, managing, and updating various types of GPU buffer
  */
-@Injectable(ServiceTokens.BUFFER_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.BUFFER_MANAGER)
 export class BufferManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   private bufferPools: Map<BufferType, BufferPoolItem[]> = new Map();
   private activeBuffers: Set<GPUBuffer> = new Set();

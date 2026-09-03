@@ -1,6 +1,6 @@
 // Import from the defining module, not the '../decorators' barrel: the barrel
 // imports this file (initContainer registers ShaderCompiler), so going through
-// it forms a circular import and Injectable is undefined at decoration time.
+// it forms a circular import and ResourceHost is undefined at decoration time.
 import { Inject, Injectable } from '../decorators/ResourceDecorators';
 import { ServiceTokens } from '../decorators/DIContainer';
 import { resolveShaderFragment, shaderFragmentRegistry } from './registry';
@@ -17,12 +17,10 @@ import {
  * Handles shader file loading, preprocessing, and compilation
  * Only responsible for shader compilation, not pipeline creation
  */
-@Injectable(ServiceTokens.SHADER_COMPILER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.SHADER_COMPILER)
 export class ShaderCompiler {
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   private includeCache: Map<string, string> = new Map();
 

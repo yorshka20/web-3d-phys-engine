@@ -65,12 +65,10 @@ const FLOAT_COUNT = Math.ceil(PMX_SHADING_PARAM_SCHEMA.length / 4) * 4;
  * referenced by every PMX material bind group). CPU-side values accept writes before the GPU
  * buffer exists; the buffer picks them up on creation.
  */
-@Injectable(ServiceTokens.SHADING_PARAMS_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.SHADING_PARAMS_MANAGER)
 export class ShadingParamsManager {
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   private values = new Float32Array(FLOAT_COUNT);
   private indexByKey = new Map<string, number>();

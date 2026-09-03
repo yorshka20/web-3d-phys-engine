@@ -8,15 +8,13 @@ import { ResourceType } from './types/constant';
  * BindGroupManager - Dedicated manager for bind groups and bind group layouts
  * Handles creation, caching, and lifecycle management of all bind group resources
  */
-@Injectable(ServiceTokens.BIND_GROUP_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.BIND_GROUP_MANAGER)
 export class BindGroupManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   // Cache for bind group layouts
   private bindGroupLayouts: Map<string, GPUBindGroupLayout> = new Map();
@@ -29,10 +27,6 @@ export class BindGroupManager {
   private layoutCacheMissCount = 0;
   private groupCacheHitCount = 0;
   private groupCacheMissCount = 0;
-
-  // Properties from InjectableClass interface
-  resourceCache?: Map<string, GPUBindGroup | GPUBindGroupLayout>;
-  resourceLifecycles?: Map<string, string>;
 
   /**
    * Create bind group layout with automatic resource registration
@@ -88,14 +82,6 @@ export class BindGroupManager {
     const existing = this.bindGroupLayouts.get(id);
     if (existing) {
       return existing;
-    }
-
-    // Also check resourceCache (from @SmartResource decorator)
-    if (this.resourceCache && this.resourceCache.has(id)) {
-      const cachedResource = this.resourceCache.get(id) as GPUBindGroupLayout;
-      if (cachedResource) {
-        return cachedResource;
-      }
     }
 
     // Slow path: create new resource if descriptor provided
@@ -161,14 +147,6 @@ export class BindGroupManager {
     const existing = this.bindGroups.get(id);
     if (existing) {
       return existing;
-    }
-
-    // Also check resourceCache (from @SmartResource decorator)
-    if (this.resourceCache && this.resourceCache.has(id)) {
-      const cachedResource = this.resourceCache.get(id) as GPUBindGroup;
-      if (cachedResource) {
-        return cachedResource;
-      }
     }
 
     // Slow path: create new resource if descriptor provided

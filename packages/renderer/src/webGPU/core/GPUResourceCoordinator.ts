@@ -36,27 +36,25 @@ interface GPUResourceDescriptor<T extends AssetType = AssetType> {
  * - Specialized managers handle specific resource types
  * - Coordinator handles cross-cutting concerns (caching, memory management, lifecycle)
  */
-@Injectable(ServiceTokens.GPU_RESOURCE_COORDINATOR, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.GPU_RESOURCE_COORDINATOR)
 export class GPUResourceCoordinator {
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   @Inject(ServiceTokens.TEXTURE_MANAGER)
-  private textureManager!: TextureManager;
+  private accessor textureManager!: TextureManager;
 
   @Inject(ServiceTokens.GEOMETRY_MANAGER)
-  private geometryManager!: GeometryManager;
+  private accessor geometryManager!: GeometryManager;
 
   @Inject(ServiceTokens.MATERIAL_MANAGER)
-  private materialManager!: MaterialManager;
+  private accessor materialManager!: MaterialManager;
 
   @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
-  private pmxMaterialProcessor!: PMXMaterialProcessor;
+  private accessor pmxMaterialProcessor!: PMXMaterialProcessor;
 
   // PMX Asset Registry for managing model descriptors
   private pmxAssetRegistry = pmxAssetRegistry;

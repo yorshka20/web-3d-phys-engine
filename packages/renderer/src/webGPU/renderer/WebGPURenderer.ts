@@ -3,7 +3,8 @@ import { RectArea } from '../../types/base';
 import { MVPUniformManager, TimeManager, WebGPUContext, WebGPUResourceManager } from '../core';
 import { BindGroupManager } from '../core/BindGroupManager';
 import { BufferManager } from '../core/BufferManager';
-import { DIContainer, initContainer } from '../core/decorators';
+import { DIContainer, Inject, ServiceTokens } from '../core/decorators';
+import { provideRendererServices } from '../core/services';
 import { GeometryManager } from '../core/GeometryManager';
 import { GPUResourceCoordinator } from '../core/GPUResourceCoordinator';
 import { InstanceManager } from '../core/InstanceManager';
@@ -89,22 +90,26 @@ export class WebGPURenderer implements IWebGPURenderer {
   private readonly diContainer: DIContainer;
 
   // resource managers
-  private readonly bufferManager: BufferManager;
-  private readonly shaderManager: ShaderManager;
-  private readonly textureManager: TextureManager;
-  private readonly resourceManager: WebGPUResourceManager;
-  private readonly gpuResourceCoordinator: GPUResourceCoordinator;
-  private readonly timeManager: TimeManager;
-  private readonly mvpUniformManager: MVPUniformManager;
-  private readonly geometryManager: GeometryManager;
-  private readonly materialManager: MaterialManager;
-  private readonly pipelineManager: PipelineManager;
-  private readonly bindGroupManager: BindGroupManager;
-  private readonly pipelineFactory: PipelineFactory;
-  private readonly pmxMaterialProcessor: PMXMaterialProcessor;
-  private readonly pmxAnimationBufferManager: PMXAnimationBufferManager;
-  private readonly shadingParamsManager: ShadingParamsManager;
-  private readonly materialBinder: MaterialBinder;
+  @Inject(ServiceTokens.BUFFER_MANAGER) private accessor bufferManager!: BufferManager;
+  @Inject(ServiceTokens.SHADER_MANAGER) private accessor shaderManager!: ShaderManager;
+  @Inject(ServiceTokens.TEXTURE_MANAGER) private accessor textureManager!: TextureManager;
+  @Inject(ServiceTokens.RESOURCE_MANAGER) private accessor resourceManager!: WebGPUResourceManager;
+  @Inject(ServiceTokens.GPU_RESOURCE_COORDINATOR)
+  private accessor gpuResourceCoordinator!: GPUResourceCoordinator;
+  @Inject(ServiceTokens.TIME_MANAGER) private accessor timeManager!: TimeManager;
+  @Inject(ServiceTokens.MVP_UNIFORM_MANAGER) private accessor mvpUniformManager!: MVPUniformManager;
+  @Inject(ServiceTokens.GEOMETRY_MANAGER) private accessor geometryManager!: GeometryManager;
+  @Inject(ServiceTokens.MATERIAL_MANAGER) private accessor materialManager!: MaterialManager;
+  @Inject(ServiceTokens.PIPELINE_MANAGER) private accessor pipelineManager!: PipelineManager;
+  @Inject(ServiceTokens.BIND_GROUP_MANAGER) private accessor bindGroupManager!: BindGroupManager;
+  @Inject(ServiceTokens.PIPELINE_FACTORY) private accessor pipelineFactory!: PipelineFactory;
+  @Inject(ServiceTokens.PMX_MATERIAL_PROCESSOR)
+  private accessor pmxMaterialProcessor!: PMXMaterialProcessor;
+  @Inject(ServiceTokens.PMX_ANIMATION_BUFFER_MANAGER)
+  private accessor pmxAnimationBufferManager!: PMXAnimationBufferManager;
+  @Inject(ServiceTokens.SHADING_PARAMS_MANAGER)
+  private accessor shadingParamsManager!: ShadingParamsManager;
+  @Inject(ServiceTokens.MATERIAL_BINDER) private accessor materialBinder!: MaterialBinder;
 
   // frame orchestration (renderer-private, constructor-wired)
   private readonly depthPrepass: DepthPrepass;
@@ -193,27 +198,12 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.context = context;
 
     // Pass the already initialized context so every service shares one device instance
-    this.diContainer = initContainer(context.getDevice(), context);
+    this.diContainer = provideRendererServices(context.getDevice(), context);
 
-    // Order matters only in that each service must exist before anything resolves it; the
-    // @Inject fields resolve lazily, which is what lets GeometryManager and
-    // GPUResourceCoordinator depend on each other.
-    this.resourceManager = new WebGPUResourceManager();
-    this.gpuResourceCoordinator = new GPUResourceCoordinator();
-    this.bufferManager = new BufferManager();
-    this.shaderManager = new ShaderManager();
-    this.textureManager = new TextureManager();
-    this.timeManager = new TimeManager();
-    this.mvpUniformManager = new MVPUniformManager();
-    this.materialManager = new MaterialManager();
-    this.geometryManager = new GeometryManager();
-    this.pipelineManager = new PipelineManager();
-    this.bindGroupManager = new BindGroupManager();
-    this.pipelineFactory = new PipelineFactory();
-    this.shadingParamsManager = new ShadingParamsManager();
-    this.pmxMaterialProcessor = new PMXMaterialProcessor();
-    this.pmxAnimationBufferManager = new PMXAnimationBufferManager();
-    this.materialBinder = new MaterialBinder();
+    // The services themselves are constructed and registered by provideRendererServices
+    // above; the @Inject fields on this class resolve them on access. The renderer used to
+    // `new` them here as well, which quietly produced a second, unregistered set: injection
+    // saw the container's copy while create() initialised the renderer's own.
 
     this.renderBatches = new Map<string, RenderBatch>();
     this.instanceManager = new InstanceManager();

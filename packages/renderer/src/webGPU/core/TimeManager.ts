@@ -3,15 +3,13 @@ import { ServiceTokens } from './decorators/DIContainer';
 import { Inject, Injectable } from './decorators/ResourceDecorators';
 import { BufferType } from './types';
 
-@Injectable(ServiceTokens.TIME_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.TIME_MANAGER)
 export class TimeManager {
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   private startTime = performance.now();
   private lastTime = 0;

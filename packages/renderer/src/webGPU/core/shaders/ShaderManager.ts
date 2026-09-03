@@ -19,18 +19,16 @@ import {
  * derived on demand (createDerivedShaderModule): the HGRP permutation shaders exist only for
  * the permutations the loaded materials resolve to.
  */
-@Injectable(ServiceTokens.SHADER_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.SHADER_MANAGER)
 export class ShaderManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   @Inject(ServiceTokens.SHADER_COMPILER)
-  private shaderCompiler!: ShaderCompiler;
+  private accessor shaderCompiler!: ShaderCompiler;
 
   // Legacy custom shader registry (for backward compatibility) - DEPRECATED
   // @deprecated Use compiledShaders instead

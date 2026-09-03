@@ -30,9 +30,7 @@ export interface ResourceMetadata {
  * Unified WebGPU resource manager
  * Manages resource lifecycle, dependencies, and provides unified access
  */
-@Injectable(ServiceTokens.RESOURCE_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.RESOURCE_MANAGER)
 export class WebGPUResourceManager {
   private static instance: WebGPUResourceManager;
   private resources: Map<string, WebGPUResource> = new Map();

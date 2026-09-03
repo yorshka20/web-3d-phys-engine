@@ -50,21 +50,19 @@ export type MaterialDescriptor =
  * Pipeline Factory for creating specialized pipelines
  * Provides high-level methods for creating common pipeline types
  */
-@Injectable(ServiceTokens.PIPELINE_FACTORY, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.PIPELINE_FACTORY)
 export class PipelineFactory {
   private predefinedConfigs: Map<string, PredefinedPipelineConfig> = new Map();
   private predefinedComputeConfigs: Map<string, PredefinedComputePipelineConfig> = new Map();
 
   @Inject(ServiceTokens.PIPELINE_MANAGER)
-  private pipelineManager!: PipelineManager;
+  private accessor pipelineManager!: PipelineManager;
   @Inject(ServiceTokens.SHADER_MANAGER)
-  private shaderManager!: ShaderManager;
+  private accessor shaderManager!: ShaderManager;
   @Inject(ServiceTokens.WEBGPU_CONTEXT)
-  private context!: WebGPUContext;
+  private accessor context!: WebGPUContext;
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   constructor() {
     this.initializePredefinedConfigs();

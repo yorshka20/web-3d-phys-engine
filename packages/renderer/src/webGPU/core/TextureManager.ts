@@ -7,15 +7,13 @@ import texture from './texture.jpg';
 
 type SamplerId = 'linear' | 'nearest' | 'clamp';
 
-@Injectable(ServiceTokens.TEXTURE_MANAGER, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.TEXTURE_MANAGER)
 export class TextureManager {
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   @Inject(ServiceTokens.WEBGPU_DEVICE)
-  private device!: GPUDevice;
+  private accessor device!: GPUDevice;
 
   private textures: Map<string, GPUTexture> = new Map();
   private samplers: Map<SamplerId, GPUSampler> = new Map();

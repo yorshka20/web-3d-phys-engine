@@ -46,24 +46,22 @@ export interface PMXMaterialDescriptor {
   assetDescriptor: AssetDescriptor<'pmx_material'>;
 }
 
-@Injectable(ServiceTokens.PMX_MATERIAL_PROCESSOR, {
-  lifecycle: 'singleton',
-})
+@Injectable(ServiceTokens.PMX_MATERIAL_PROCESSOR)
 export class PMXMaterialProcessor {
   @Inject(ServiceTokens.TEXTURE_MANAGER)
-  private textureManager!: TextureManager;
+  private accessor textureManager!: TextureManager;
 
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
-  private bindGroupManager!: BindGroupManager;
+  private accessor bindGroupManager!: BindGroupManager;
 
   @Inject(ServiceTokens.GPU_RESOURCE_COORDINATOR)
-  private gpuResourceCoordinator!: GPUResourceCoordinator;
+  private accessor gpuResourceCoordinator!: GPUResourceCoordinator;
 
   @Inject(ServiceTokens.SHADING_PARAMS_MANAGER)
-  private shadingParamsManager!: ShadingParamsManager;
+  private accessor shadingParamsManager!: ShadingParamsManager;
 
   private defaultTextures: Map<number, PMXMaterialTextureResource> = new Map();
   private materialCache: Map<string, PMXMaterialCacheData> = new Map();

@@ -1,6 +1,6 @@
 import { BindGroupManager } from './BindGroupManager';
 import { BufferManager } from './BufferManager';
-import { Inject, Injectable, ServiceTokens } from './decorators';
+import { Inject, ServiceTokens } from './decorators';
 import { GeometryManager } from './GeometryManager';
 import { PipelineFactory } from './pipeline/PipelineFactory';
 import { PipelineManager } from './pipeline/PipelineManager';
@@ -22,9 +22,6 @@ import { WebGPUContext } from './WebGPUContext';
  * 3. Pipeline Systems - Render pipelines, compute pipelines
  * 4. Renderer Integration - Final integration and validation
  */
-@Injectable(ServiceTokens.RENDERER_INITIALIZATION_MANAGER, {
-  lifecycle: 'singleton',
-})
 export class RendererInitializationManager {
   private initializationState: 'uninitialized' | 'initializing' | 'initialized' | 'failed' =
     'uninitialized';
@@ -32,34 +29,34 @@ export class RendererInitializationManager {
   private initializationErrors: Map<string, Error> = new Map();
 
   @Inject(ServiceTokens.WEBGPU_CONTEXT)
-  private context!: WebGPUContext;
+  private accessor context!: WebGPUContext;
 
   @Inject(ServiceTokens.RESOURCE_MANAGER)
-  private resourceManager!: WebGPUResourceManager;
+  private accessor resourceManager!: WebGPUResourceManager;
 
   @Inject(ServiceTokens.SHADER_MANAGER)
-  private shaderManager!: ShaderManager;
+  private accessor shaderManager!: ShaderManager;
 
   @Inject(ServiceTokens.BIND_GROUP_MANAGER)
-  private bindGroupManager!: BindGroupManager;
+  private accessor bindGroupManager!: BindGroupManager;
 
   @Inject(ServiceTokens.BUFFER_MANAGER)
-  private bufferManager!: BufferManager;
+  private accessor bufferManager!: BufferManager;
 
   @Inject(ServiceTokens.TEXTURE_MANAGER)
-  private textureManager!: TextureManager;
+  private accessor textureManager!: TextureManager;
 
   @Inject(ServiceTokens.TIME_MANAGER)
-  private timeManager!: TimeManager;
+  private accessor timeManager!: TimeManager;
 
   @Inject(ServiceTokens.GEOMETRY_MANAGER)
-  private geometryManager!: GeometryManager;
+  private accessor geometryManager!: GeometryManager;
 
   @Inject(ServiceTokens.PIPELINE_MANAGER)
-  private pipelineManager!: PipelineManager;
+  private accessor pipelineManager!: PipelineManager;
 
   @Inject(ServiceTokens.PIPELINE_FACTORY)
-  private pipelineFactory!: PipelineFactory;
+  private accessor pipelineFactory!: PipelineFactory;
 
   private get device(): GPUDevice {
     return this.context.getDevice();
