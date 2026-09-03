@@ -374,11 +374,14 @@ export class AssetLoader {
           console.warn(`[AssetLoader] HGRP preset references a missing texture file: ${filename}`);
           return;
         }
-        await this.loadTextureFromURL(
-          textureUrl,
-          hgrpTextureAssetId(character, filename),
-          priority,
-        );
+        // The id is derived from the character and the filename, so a registered one already
+        // holds this exact image: a character and the prop it carries share one preset and
+        // texture folder, and re-decoding the whole set for the prop costs hundreds of MB.
+        const textureAssetId = hgrpTextureAssetId(character, filename);
+        if (assetRegistry.getAssetDescriptor(textureAssetId)) {
+          return;
+        }
+        await this.loadTextureFromURL(textureUrl, textureAssetId, priority);
       }),
     );
 

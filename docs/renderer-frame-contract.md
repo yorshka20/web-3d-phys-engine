@@ -42,6 +42,15 @@ Key formats by extract path (`WebGPURenderSystem`):
 - Skinned glTF/HGRP: `skinKey = gltf_{entityId}_s{skinIndex}` (PMX drives its bones through its
   own group-3 animation bind group and sets no `skinKey`).
 
+## Visibility is an entry condition, not a draw-list filter
+
+`WebGPU3DRenderComponent.visible` is read once, in `extractEntityRenderData`, before any mesh
+kind is dispatched — the one point every extract path passes through. A hidden entity
+contributes no `RenderData` at all, so none of the caches above is ever asked for its
+geometry, textures or pipeline: because GPU resources are created lazily at first draw,
+hiding an entity is also what keeps its resources from existing. Filtering later (in the
+draw list, or per primitive) would create them and then skip the draw.
+
 ## The two invariants that force this design
 
 1. **`@SmartResource(cache: true)` caches by its first argument (the label) alone** — later

@@ -1,4 +1,5 @@
-import { GLTFModel } from '@renderer/assets/GltfModel';
+import { SkeletonComponent } from '@ecs';
+import { GLTFAnimation, GLTFModel } from '@renderer/assets/GltfModel';
 import {
   HGRP_SHADING_SCHEMA_VERSION,
   HGRP_TUNABLE_COLORS,
@@ -9,15 +10,14 @@ import {
   HGRPMaterialDescriptor,
 } from '@renderer/material/hgrp';
 import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
-import { bloomSettings } from '@renderer/webGPU/renderer/passes/BloomPass';
-import { taaSettings } from '@renderer/webGPU/renderer/passes/TAAPass';
-import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
+import { FolderApi, Pane } from 'tweakpane';
 import {
-  HGRP_DEBUG_CHANNELS,
-  HGRP_DEBUG_SLOT_NAMES,
-  sceneSettings,
-} from '@renderer/webGPU/renderer/sceneSettings';
-import { Pane } from 'tweakpane';
+  applyHGRPPlacement,
+  hgrpStage,
+  HGRPStageCharacter,
+  onHGRPStageChange,
+  resetHGRPPlacement,
+} from '../stages/hgrp/characters';
 import { DebugTab } from './debugTabs';
 
 // Per-material calibration overrides for one HGRP character, keyed by material name.
@@ -81,12 +81,12 @@ function snapshotState(materials: HGRPMaterialDescriptor[]): HGRPShadingState {
 // so stale saved state survives schema evolution.
 function applyState(materials: HGRPMaterialDescriptor[], state: HGRPShadingState): void {
   if (!state || typeof state !== 'object' || typeof state.materials !== 'object') {
-    console.warn('[hgrpShadingPanel] state has no materials object, skipped');
+    console.warn('[hgrpCharacterPanel] state has no materials object, skipped');
     return;
   }
   if (state.schemaVersion !== HGRP_SHADING_SCHEMA_VERSION) {
     console.warn(
-      `[hgrpShadingPanel] schemaVersion ${state.schemaVersion} != ${HGRP_SHADING_SCHEMA_VERSION}, merging tolerantly`,
+      `[hgrpCharacterPanel] schemaVersion ${state.schemaVersion} != ${HGRP_SHADING_SCHEMA_VERSION}, merging tolerantly`,
     );
   }
   const byName = new Map(materials.map((m) => [m.materialName, m]));
@@ -95,12 +95,12 @@ function applyState(materials: HGRPMaterialDescriptor[], state: HGRPShadingState
   for (const [materialName, override] of Object.entries(state.materials)) {
     const material = byName.get(materialName);
     if (!material) {
-      console.warn(`[hgrpShadingPanel] unknown material "${materialName}" dropped`);
+      console.warn(`[hgrpCharacterPanel] unknown material "${materialName}" dropped`);
       continue;
     }
     for (const [key, value] of Object.entries(override.floats ?? {})) {
       if (!floatKeys.has(key) || typeof value !== 'number' || !Number.isFinite(value)) {
-        console.warn(`[hgrpShadingPanel] ${materialName}: float "${key}" dropped`);
+        console.warn(`[hgrpCharacterPanel] ${materialName}: float "${key}" dropped`);
         continue;
       }
       material.floats[key] = value;
@@ -108,7 +108,7 @@ function applyState(materials: HGRPMaterialDescriptor[], state: HGRPShadingState
     hgrpRefreshPermutation(material);
     for (const [key, value] of Object.entries(override.colors ?? {})) {
       if (!colorKeys.has(key) || !Array.isArray(value) || value.length !== 4) {
-        console.warn(`[hgrpShadingPanel] ${materialName}: color "${key}" dropped`);
+        console.warn(`[hgrpCharacterPanel] ${materialName}: color "${key}" dropped`);
         continue;
       }
       material.colors[key] = [value[0], value[1], value[2], value[3]];
@@ -158,16 +158,18 @@ function importState(onLoaded: (imported: HGRPShadingState) => void): void {
     try {
       onLoaded(JSON.parse(await file.text()) as HGRPShadingState);
     } catch (error) {
-      console.error('[hgrpShadingPanel] Failed to import state:', error);
+      console.error('[hgrpCharacterPanel] Failed to import state:', error);
     }
   };
   input.click();
 }
 
 /**
- * The HGRP calibration tab: every loaded character gets its own folder with its own
- * save/export/reset, because the overrides are per character (localStorage key included) —
- * two characters on screen are calibrated independently.
+ * The Character tab: one folder per character on stage, holding everything that belongs to
+ * that character — where it stands, which clip it plays, its optional material layers, and
+ * its per-material calibration with its own save/export/reset (the overrides are per
+ * character, localStorage key included, so two characters are calibrated independently).
+ * Anything shared by the whole scene lives in the Stage tab instead.
  *
  * Only the parameters a material actually declares get a widget. The preset's own key set
  * is the reflection: the binder falls back to a default for an absent key, so drawing a
@@ -175,120 +177,62 @@ function importState(onLoaded: (imported: HGRPShadingState) => void): void {
  * variant, whose vocabulary is disjoint from the CharacterNPR family's, would otherwise
  * show a full set of controls that do nothing.
  */
-export function createHGRPShadingTab(assetIds: readonly string[]): DebugTab {
+export function createHGRPCharacterTab(): DebugTab {
   return {
-    id: 'hgrp-shading',
-    label: 'Shading',
-    mount: (container) => mountPane(container, assetIds),
+    id: 'hgrp-character',
+    label: 'Character',
+    mount: mountPane,
   };
 }
 
-function mountPane(container: HTMLElement, assetIds: readonly string[]): () => void {
+function mountPane(container: HTMLElement): () => void {
   const pane = new Pane({ container });
+  const built = new Set<string>();
+  const scrubs: (() => void)[] = [];
 
-  // Global linear-light exposure ahead of the ACES curve and the scene backdrop color
-  // (session-only calibration knobs, not part of the per-material preset state)
-  const globalFolder = pane.addFolder({ title: 'Scene (global)', expanded: true });
-  globalFolder.addBinding(tonemapSettings, 'exposure', { min: 0.1, max: 4, step: 0.01 });
-  globalFolder.addBinding(bloomSettings, 'threshold', {
-    label: 'bloomThreshold',
-    min: 0,
-    max: 4,
-    step: 0.01,
-  });
-  globalFolder.addBinding(bloomSettings, 'intensity', {
-    label: 'bloomIntensity',
-    min: 0,
-    max: 1,
-    step: 0.01,
-  });
-  // Post chain: grading after the tonemap curve and the anti-aliasing stages
-  const post = globalFolder.addFolder({ title: 'Post', expanded: true });
-  post.addBinding(tonemapSettings, 'contrast', { min: 0.5, max: 2, step: 0.01 });
-  post.addBinding(tonemapSettings, 'saturation', { min: 0, max: 2, step: 0.01 });
-  post.addBinding(tonemapSettings, 'temperature', { min: -1, max: 1, step: 0.01 });
-  post.addBinding(sceneSettings, 'antiAliasing', {
-    options: { off: 'off', fxaa: 'fxaa', taa: 'taa', 'taa+fxaa': 'taa+fxaa' },
-  });
-  post.addBinding(taaSettings, 'blend', { label: 'taaBlend', min: 0.02, max: 0.5, step: 0.01 });
-
-  const backdrop = {
-    clearColor: {
-      r: sceneSettings.clearColor[0],
-      g: sceneSettings.clearColor[1],
-      b: sceneSettings.clearColor[2],
-    },
+  // A character joins the stage whenever its Stage-tab checkbox is switched on, so sections
+  // are appended as they load rather than built once: rebuilding the pane would throw away
+  // the folder state the user just arranged on the characters already there.
+  const sync = () => {
+    for (const character of hgrpStage.characters) {
+      if (!character.entity || built.has(character.assetId)) {
+        continue;
+      }
+      built.add(character.assetId);
+      const scrub = addCharacterFolder(pane, character, built.size === 1);
+      if (scrub) {
+        scrubs.push(scrub);
+      }
+    }
   };
-  globalFolder
-    .addBinding(backdrop, 'clearColor', { label: 'backdrop', color: { type: 'float' } })
-    .on('change', (ev) => {
-      sceneSettings.clearColor = [ev.value.r, ev.value.g, ev.value.b];
-    });
+  sync();
+  const unsubscribe = onHGRPStageChange(sync);
 
-  // Scene lighting: the key light the NPR shading reads and the flat ambient on top of it
-  // (uploaded per frame as the HGRP SceneLighting uniform). Calibration knobs, like exposure:
-  // the ripped materials carry no scene light.
-  const lighting = globalFolder.addFolder({ title: 'Lighting', expanded: true });
-  const [dx, dy, dz] = sceneSettings.lightDirection;
-  const lightingState = {
-    direction: { x: dx, y: dy, z: dz },
-    lightColor: rgb(sceneSettings.lightColor),
-    ambientColor: rgb(sceneSettings.ambientColor),
+  // Playback advances outside the panel, so the time scrub follows the clip. Only the scrub
+  // binding repaints — a whole-pane refresh would repaint every material slider of every
+  // character on stage, thousands of widgets once the roster fills up.
+  let frame = requestAnimationFrame(function tick() {
+    for (const refresh of scrubs) {
+      refresh();
+    }
+    frame = requestAnimationFrame(tick);
+  });
+
+  return () => {
+    cancelAnimationFrame(frame);
+    unsubscribe();
+    pane.dispose();
   };
-  const axis = { min: -1, max: 1, step: 0.01 };
-  lighting
-    .addBinding(lightingState, 'direction', { x: axis, y: axis, z: axis })
-    .on('change', (ev) => {
-      sceneSettings.lightDirection = [ev.value.x, ev.value.y, ev.value.z];
-    });
-  lighting.addBinding(sceneSettings, 'lightIntensity', { min: 0, max: 3, step: 0.01 });
-  lighting
-    .addBinding(lightingState, 'lightColor', { color: { type: 'float' } })
-    .on('change', (ev) => {
-      sceneSettings.lightColor = [ev.value.r, ev.value.g, ev.value.b];
-    });
-  lighting.addBinding(sceneSettings, 'ambientIntensity', { min: 0, max: 2, step: 0.01 });
-  lighting
-    .addBinding(lightingState, 'ambientColor', { color: { type: 'float' } })
-    .on('change', (ev) => {
-      sceneSettings.ambientColor = [ev.value.r, ev.value.g, ev.value.b];
-    });
-  lighting.addBinding(sceneSettings, 'envReflection', { min: 0, max: 3, step: 0.01 });
-  lighting.addBinding(sceneSettings, 'envGradient', { min: 0, max: 1, step: 0.01 });
-
-  // The metal look of the cloth hardware zone (_MetallicGlossMap.r = 1.0)
-  const metal = globalFolder.addFolder({ title: 'Metal (hardware zone)', expanded: true });
-  metal.addBinding(sceneSettings, 'metalDiffuse', { min: 0, max: 1, step: 0.01 });
-  metal.addBinding(sceneSettings, 'metalEdge', { min: 0, max: 4, step: 0.01 });
-  metal.addBinding(sceneSettings, 'metalEdgePower', { min: 1, max: 12, step: 0.1 });
-
-  // Material debug view: show one texture slot of every HGRP material on the mesh instead of
-  // its shading. Magenta = the material's permutation does not bind that slot.
-  const debug = globalFolder.addFolder({ title: 'Debug view (textures)', expanded: true });
-  debug.addBinding(sceneSettings.debugView, 'slot', {
-    options: Object.fromEntries(HGRP_DEBUG_SLOT_NAMES.map((name) => [name, name])),
-  });
-  debug.addBinding(sceneSettings.debugView, 'channel', {
-    options: Object.fromEntries(HGRP_DEBUG_CHANNELS.map((name) => [name, name])),
-  });
-
-  assetIds.forEach((assetId, index) => addCharacterFolder(pane, assetId, index === 0));
-
-  return () => pane.dispose();
 }
 
-function rgb(color: readonly [number, number, number]): { r: number; g: number; b: number } {
-  return { r: color[0], g: color[1], b: color[2] };
-}
-
-function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): void {
-  const materials = collectHGRPMaterials(assetId);
-  if (materials.length === 0) {
-    console.warn(`[hgrpShadingPanel] no HGRP materials on asset "${assetId}", section skipped`);
-    return;
-  }
-
-  const storageKey = `hgrp-shading-${assetId}`;
+// Returns a per-frame scrub repaint when the character has playable clips.
+function addCharacterFolder(
+  pane: Pane,
+  character: HGRPStageCharacter,
+  expanded: boolean,
+): (() => void) | undefined {
+  const materials = collectHGRPMaterials(character.assetId);
+  const storageKey = `hgrp-shading-${character.assetId}`;
   const pristine = snapshotState(materials);
   let overrides: string[] = [];
   try {
@@ -298,7 +242,7 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
       overrides = describeOverrides(pristine, snapshotState(materials));
     }
   } catch (error) {
-    console.warn('[hgrpShadingPanel] Ignoring unreadable localStorage state:', error);
+    console.warn('[hgrpCharacterPanel] Ignoring unreadable localStorage state:', error);
   }
   // Saved overrides shape the render from the moment this tab opens, which is invisible in
   // the picture itself and easy to mistake for the preset's own look — say so, and list
@@ -306,15 +250,122 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
   // hand-tuned values ("Reset to preset" drops them).
   if (overrides.length > 0) {
     console.warn(
-      `[hgrpShadingPanel] ${assetId}: ${overrides.length} saved override(s) applied over the preset:\n  ` +
+      `[hgrpCharacterPanel] ${character.assetId}: ${overrides.length} saved override(s) applied over the preset:\n  ` +
         overrides.join('\n  '),
     );
   }
 
-  const character = pane.addFolder({
-    title: assetId.replace(/^hgrp_/, '') + (overrides.length > 0 ? ' · OVERRIDES' : ''),
+  const folder = pane.addFolder({
+    title: character.label + (overrides.length > 0 ? ' · OVERRIDES' : ''),
     expanded,
   });
+
+  addTransformWidgets(folder, character, pane);
+  const scrub = addAnimationWidgets(folder, character);
+  if (materials.length > 0) {
+    addMaterialWidgets(folder, character, materials, pristine, storageKey, pane);
+  } else {
+    console.warn(
+      `[hgrpCharacterPanel] no HGRP materials on asset "${character.assetId}", section skipped`,
+    );
+  }
+  return scrub;
+}
+
+function addTransformWidgets(folder: FolderApi, character: HGRPStageCharacter, pane: Pane): void {
+  const transform = folder.addFolder({ title: 'Transform', expanded: false });
+  const apply = () => applyHGRPPlacement(character);
+  for (const axis of ['x', 'y', 'z'] as const) {
+    transform
+      .addBinding(character.offset, axis, { label: `offset ${axis}`, step: 0.05 })
+      .on('change', apply);
+  }
+  for (const axis of ['x', 'y', 'z'] as const) {
+    transform
+      .addBinding(character.rotation, axis, {
+        label: `rotate ${axis}`,
+        min: -180,
+        max: 180,
+        step: 1,
+      })
+      .on('change', apply);
+  }
+  transform.addBinding(character, 'scale', { min: 0.1, max: 10, step: 0.05 }).on('change', apply);
+  transform.addButton({ title: 'Reset placement' }).on('click', () => {
+    resetHGRPPlacement(character);
+    pane.refresh();
+  });
+}
+
+// The clips a character can play come from its glTF document (converted Unity clips,
+// scripts/hgrp/anim-convert.mjs); a model without clips gets no playback widgets.
+function animationClips(assetId: string): GLTFAnimation[] {
+  const model = assetRegistry.getAssetDescriptor<'gltf'>(assetId)?.rawData as GLTFModel | undefined;
+  return model?.animations ?? [];
+}
+
+// Playback widgets bind straight to the entity's SkeletonComponent, which
+// SkeletalAnimationSystem reads every frame, so writing the field is the whole update.
+// Returns the per-frame scrub repaint, or undefined when there is nothing to play.
+function addAnimationWidgets(
+  folder: FolderApi,
+  character: HGRPStageCharacter,
+): (() => void) | undefined {
+  const skeleton = character.entity?.getComponent<SkeletonComponent>(
+    SkeletonComponent.componentName,
+  );
+  const clips = animationClips(character.assetId);
+  if (!skeleton || clips.length === 0) {
+    return undefined;
+  }
+
+  const animation = folder.addFolder({ title: 'Animation', expanded: true });
+  const options = Object.fromEntries(
+    clips.map((clip, index) => [`${index}: ${clip.name} (${clip.duration.toFixed(2)}s)`, index]),
+  );
+  animation.addBinding(skeleton, 'clipIndex', { label: 'clip', options }).on('change', (ev) => {
+    if (ev.last) {
+      skeleton.time = 0;
+      rebuildScrub();
+    }
+  });
+  animation.addBinding(skeleton, 'playing');
+  animation.addBinding(skeleton, 'loop');
+  animation.addBinding(skeleton, 'speed', { min: -2, max: 3, step: 0.05 });
+
+  // The scrub slider spans the current clip; a clip change rebuilds it with the new duration
+  // (tweakpane bindings take their range at creation).
+  let scrub = addScrub();
+  function addScrub() {
+    const duration = clips[skeleton!.clipIndex]?.duration ?? 0;
+    return animation.addBinding(skeleton!, 'time', {
+      min: 0,
+      max: Math.max(duration, 0.001),
+      step: 0.001,
+    });
+  }
+  function rebuildScrub() {
+    scrub.dispose();
+    scrub = addScrub();
+  }
+  // A paused clip is the case where the user is dragging the scrub themselves; repainting it
+  // then would fight the drag.
+  return () => {
+    if (skeleton.playing) {
+      scrub.refresh();
+    }
+  };
+}
+
+function addMaterialWidgets(
+  folder: FolderApi,
+  character: HGRPStageCharacter,
+  materials: HGRPMaterialDescriptor[],
+  pristine: HGRPShadingState,
+  storageKey: string,
+  pane: Pane,
+): void {
+  const section = folder.addFolder({ title: 'Materials', expanded: false });
 
   // Optional layers this character actually has (HGRPCharacterFlags). The toggle flips the
   // descriptors the draw list already reads every frame, so it takes effect immediately;
@@ -330,7 +381,7 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
   }
   for (const [flag, layers] of gated) {
     const state = { [flag]: layers.every((layer) => layer.enabled) } as Record<string, boolean>;
-    character.addBinding(state, flag).on('change', () => {
+    section.addBinding(state, flag).on('change', () => {
       for (const layer of layers) {
         layer.enabled = state[flag];
       }
@@ -343,7 +394,7 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
     try {
       localStorage.setItem(storageKey, JSON.stringify(snapshotState(materials)));
     } catch (error) {
-      console.warn('[hgrpShadingPanel] Failed to persist to localStorage:', error);
+      console.warn('[hgrpCharacterPanel] Failed to persist to localStorage:', error);
     }
   };
 
@@ -358,7 +409,7 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
       continue;
     }
 
-    const folder = character.addFolder({
+    const materialFolder = section.addFolder({
       title: `${material.materialName} · ${material.variant.replace('CharacterNPR', 'NPR')}`,
       expanded: false,
     });
@@ -366,7 +417,7 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
     const floatValues: Record<string, number> = {};
     for (const def of floatDefs) {
       floatValues[def.key] = material.floats[def.key] ?? def.default;
-      folder
+      materialFolder
         .addBinding(floatValues, def.key, {
           label: def.key.slice(1),
           min: def.min,
@@ -388,7 +439,7 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
     for (const def of colorDefs) {
       const current = material.colors[def.key] ?? def.default;
       colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
-      folder
+      materialFolder
         .addBinding(colorValues, def.key, {
           label: def.key.slice(1),
           color: { type: 'float' },
@@ -413,17 +464,17 @@ function addCharacterFolder(pane: Pane, assetId: string, expanded: boolean): voi
     pane.refresh();
   };
 
-  character.addButton({ title: 'Save overrides' }).on('click', () => persist());
-  character.addButton({ title: 'Export JSON' }).on('click', () => {
-    exportState(snapshotState(materials), assetId);
+  section.addButton({ title: 'Save overrides' }).on('click', () => persist());
+  section.addButton({ title: 'Export JSON' }).on('click', () => {
+    exportState(snapshotState(materials), character.assetId);
   });
-  character.addButton({ title: 'Import JSON' }).on('click', () =>
+  section.addButton({ title: 'Import JSON' }).on('click', () =>
     importState((imported) => {
       applyState(materials, imported);
       syncWidgets();
     }),
   );
-  character.addButton({ title: 'Reset to preset' }).on('click', () => {
+  section.addButton({ title: 'Reset to preset' }).on('click', () => {
     try {
       localStorage.removeItem(storageKey);
     } catch {

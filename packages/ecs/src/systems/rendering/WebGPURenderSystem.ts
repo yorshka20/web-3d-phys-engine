@@ -278,7 +278,10 @@ export class WebGPURenderSystem extends System {
       WebGPU3DRenderComponent.componentName,
     );
 
-    if (!transformComponent || !renderComponent) {
+    // WebGPU3DRenderComponent.visible gates the whole entity here rather than at any
+    // per-primitive site: it is the only point every mesh kind passes through, so a hidden
+    // entity contributes no RenderData and therefore creates no GPU resources at all.
+    if (!transformComponent || !renderComponent || !renderComponent.isVisible()) {
       return [];
     }
 
