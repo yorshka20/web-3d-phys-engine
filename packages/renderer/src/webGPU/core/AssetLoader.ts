@@ -17,6 +17,7 @@ import {
   createDefaultHGRPMaterial,
   HGRPCharacterFlags,
   createHGRPMaterialFromPreset,
+  hgrpResolveObjectFrame,
   HGRPPreset,
   hgrpTextureAssetId,
 } from '../../material/hgrp';
@@ -332,6 +333,23 @@ export class AssetLoader {
       }
 
       const rig = this.extractGLTFRig(doc);
+
+      // Materials that shade in a joint's frame (the HGRP face shader, in the head's) learn
+      // their joint from the skin they are drawn with.
+      if (rig.skins && rig.nodes) {
+        const nodes = rig.nodes;
+        for (const instance of instances) {
+          if (instance.skinIndex === undefined) {
+            continue;
+          }
+          const jointNames = rig.skins[instance.skinIndex].joints.map((node) => nodes[node].name);
+          for (const primitive of meshes[instance.meshIndex].primitives) {
+            if (primitive.material.materialType === 'hgrp') {
+              hgrpResolveObjectFrame(primitive.material, jointNames);
+            }
+          }
+        }
+      }
 
       if (instances.length === 0) {
         console.warn(`[AssetLoader] GLTF model has no renderable scene nodes: ${assetId}`);

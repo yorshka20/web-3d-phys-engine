@@ -115,6 +115,40 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
   // draw list reads this boolean and nothing else — it must never test a character or
   // material name to decide what to draw.
   enabled: boolean;
+  // Skin-joint index (palette order) whose posed frame is this material's object space, or
+  // undefined for the model's own frame. The face shader reads the light and the camera in
+  // object space (SDF mirror and yaw, highlight offset; formulas §2), and in the game that
+  // space is the face renderer's root bone — Unity's unity_ObjectToWorld of a skinned mesh is
+  // its root bone's matrix — so the SDF turns with the head. Resolved at load by
+  // hgrpResolveObjectFrame; the shader composes the model matrix with that joint's palette
+  // entry (lighting/hgrp_npr.wgsl hgrp_object_to_world).
+  objectFrameJoint?: number;
+}
+
+// The head bone every ripped character carries (Biped naming; the face sub-joints hang under
+// it), which is the object frame of the materials that shade through the SDF face shadow.
+export const HGRP_OBJECT_FRAME_JOINT = 'Bip001_Head';
+
+// Give a material the object frame its shading expects: the SDF face shadow wants the head.
+// `jointNames` is the skin's joint list in palette order. A skin without the bone leaves the
+// model frame in place — and says so, since a body-frame SDF shows a seam wherever the head
+// turns.
+export function hgrpResolveObjectFrame(
+  material: HGRPMaterialDescriptor,
+  jointNames: readonly string[],
+): void {
+  if (!material.permutation.enabled.includes('sdf')) {
+    return;
+  }
+  const joint = jointNames.indexOf(HGRP_OBJECT_FRAME_JOINT);
+  if (joint < 0) {
+    console.warn(
+      `[hgrp] ${material.materialName}: skin has no ${HGRP_OBJECT_FRAME_JOINT} joint, the SDF ` +
+        'face shadow stays in the model frame',
+    );
+    return;
+  }
+  material.objectFrameJoint = joint;
 }
 
 export function hgrpTextureAssetId(character: string, filename: string): string {

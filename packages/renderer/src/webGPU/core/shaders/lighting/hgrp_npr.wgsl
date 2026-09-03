@@ -35,6 +35,27 @@ fn hgrp_cam_dir() -> vec3<f32> {
     return -normalize(mvp.camera_forward);
 }
 
+// The material's object frame in world space (rotation and scale): the model matrix, composed
+// with the posed frame of the joint the material names — hgrp_material.object_frame_joint,
+// -1 for the model's own frame. The face shader reads the light and the camera in this frame
+// for the SDF face shadow and the highlight offset (§2); in the game that frame is the face
+// renderer's root bone, the head, so the shadow turns with the head (guess ledger D5). The
+// palette entry maps bind-pose model space to posed model space, so the bind-pose axes come
+// out as the posed head's axes.
+fn hgrp_object_to_world() -> mat3x3<f32> {
+    let model = mat3x3<f32>(
+        mvp.model_matrix[0].xyz,
+        mvp.model_matrix[1].xyz,
+        mvp.model_matrix[2].xyz,
+    );
+    let joint = i32(hgrp_material.object_frame_joint);
+    if joint < 0 {
+        return model;
+    }
+    let palette = joint_matrices[u32(joint)];
+    return model * mat3x3<f32>(palette[0].xyz, palette[1].xyz, palette[2].xyz);
+}
+
 // Horizontal projection of a normal, the hemisphere input of the skin and eye shaders (§2,
 // §4) — with the captured axis it makes their environment term a constant 0.725. The tiny y
 // is the decompiled shader's own guard against a vertical normal normalizing to NaN.

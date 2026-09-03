@@ -26,6 +26,7 @@ import {
   hgrpPermutationForShaderId,
   hgrpPermutationShaderId,
   hgrpRefreshPermutation,
+  hgrpResolveObjectFrame,
   hgrpResolvePermutation,
   HGRPShaderVariant,
   hgrpSubsystem,
@@ -87,6 +88,7 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   metallic: 76,
   skin_rim_off_scale: 77,
   face_rim_off_scale: 78,
+  object_frame_joint: 79,
 };
 
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
@@ -560,6 +562,48 @@ describe('generated WGSL', () => {
     // hook-less static subsystems (emotion, browThrough, outline) add nothing
     expect(includes.some((p) => p.includes('emotion'))).toBe(false);
     expect(includes).toHaveLength(HGRP_STATIC_SUBSYSTEMS.filter((s) => s.wgsl).length);
+  });
+});
+
+describe('object frame', () => {
+  it('gives an SDF material the head joint by name and leaves other materials in the model frame', () => {
+    const face = createHGRPMaterialFromPreset(
+      'c',
+      'face',
+      preset(
+        'HGRP/CharacterNPR_Skin',
+        { _UseSDFLightmap: 1 },
+        { _SDFLightmap: 'sdf.png', _SDFMask: 'cm.png' },
+      ),
+    );
+    const body = createHGRPMaterialFromPreset('c', 'body', preset('HGRP/CharacterNPR_Skin', {}));
+    const joints = ['Bip001_Pelvis', 'Bip001_Neck', 'Bip001_Head', 'head_up_jnt'];
+    hgrpResolveObjectFrame(face, joints);
+    hgrpResolveObjectFrame(body, joints);
+    expect(face.objectFrameJoint).toBe(2);
+    expect(body.objectFrameJoint).toBeUndefined();
+    expect(
+      packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, face)[
+        MATERIAL_PARAMS_F32_INDEX.object_frame_joint
+      ],
+    ).toBe(2);
+    expect(
+      packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, body)[
+        MATERIAL_PARAMS_F32_INDEX.object_frame_joint
+      ],
+    ).toBe(-1);
+
+    const noHead = createHGRPMaterialFromPreset(
+      'c',
+      'face2',
+      preset(
+        'HGRP/CharacterNPR_Skin',
+        { _UseSDFLightmap: 1 },
+        { _SDFLightmap: 'sdf.png', _SDFMask: 'cm.png' },
+      ),
+    );
+    hgrpResolveObjectFrame(noHead, ['Bip001_Pelvis']);
+    expect(noHead.objectFrameJoint).toBeUndefined();
   });
 });
 

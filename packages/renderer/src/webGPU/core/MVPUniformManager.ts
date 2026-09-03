@@ -72,9 +72,11 @@ export class MVPUniformManager {
         // this draw's vertex transform, and because WebGPU caps maxBindGroups at 4 — the
         // HGRP pipelines already use time/mvp/material/frame. Shaders that do no skinning
         // simply do not declare it (a layout may carry more entries than a shader uses).
+        // Fragment-visible as well: the HGRP face shader reads the head joint's entry to
+        // build its object frame (hgrp_object_to_world).
         {
           binding: 1,
-          visibility: GPUShaderStage.VERTEX,
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' },
         },
       ],

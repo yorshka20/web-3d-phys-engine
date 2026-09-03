@@ -248,6 +248,16 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_FaceRimOffScale', 1, { min: 0, max: 2, step: 0.01 }),
       '_SDFRimColor weight where _SDFMask.b = 0',
     ),
+    {
+      name: 'object_frame_joint',
+      type: 'f32',
+      subsystem: 'sdf',
+      params: [],
+      pack: (material) => material.objectFrameJoint ?? -1,
+      comment:
+        'HGRPMaterialDescriptor.objectFrameJoint: palette index of the joint whose frame is the ' +
+        "material's object space (the head for the face), -1 = the model frame",
+    },
   ],
 };
 

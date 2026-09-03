@@ -1,6 +1,7 @@
 // SDF face shadow subsystem (_UseSDFLightmap), the face shader's shade value and albedo tint
-// (hgrp-decompiled-formulas.md §2). Object space is the model matrix; the head bone is not
-// separated out (guess ledger D5).
+// (hgrp-decompiled-formulas.md §2). Object space is the material's object frame — the head
+// joint's posed frame when the material names one (hgrp_object_to_world), which is what the
+// game's face renderer uses as its object matrix.
 //
 // Shade value: _SDFLightmap is sampled at u mirrored when the light comes from the object's -x
 // side and read as (R + G) / 2 — the face island carries G = 1 so the near-light side lands in
@@ -23,11 +24,8 @@ fn hgrp_shade_coord(
     n: vec3<f32>,
     view_dir: vec3<f32>,
 ) -> vec3<f32> {
-    let to_object = transpose(mat3x3<f32>(
-        mvp.model_matrix[0].xyz,
-        mvp.model_matrix[1].xyz,
-        mvp.model_matrix[2].xyz,
-    ));
+    // The frame carries the draw's uniform scale; every use below normalizes or takes a sign
+    let to_object = transpose(hgrp_object_to_world());
     let light_object = to_object * hgrp_light_dir();
     let mirror = light_object.x > 0.0;
     let uv_sdf = vec2<f32>(select(1.0 - uv0.x, uv0.x, mirror), uv0.y);
