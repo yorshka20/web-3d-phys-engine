@@ -59,14 +59,14 @@ fn rgb_to_hsv(rgb: vec3<f32>) -> vec3<f32> {
     return hsv;
 }
 
-// Linear to sRGB conversion
+// Linear to sRGB conversion (IEC 61966-2-1 encode)
 fn linear_to_srgb(linear: vec3<f32>) -> vec3<f32> {
     let a = 0.055;
     let gamma = 2.4;
 
     return select(
-        linear / 12.92,
-        pow((linear + vec3<f32>(a)) / (1.0 + a), vec3<f32>(gamma)),
+        linear * 12.92,
+        (1.0 + a) * pow(linear, vec3<f32>(1.0 / gamma)) - vec3<f32>(a),
         linear > vec3<f32>(0.0031308)
     );
 }

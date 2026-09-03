@@ -1,12 +1,10 @@
-// Metallic/gloss subsystem (_UseMetallicGlossMap). Channel roles of _MetallicGlossMap, from the
-// three cloth maps and two hair maps probed against the meshes (2026-09-02, hgrp-shading.md):
-// R holds discrete METALLIC zones (cloth plateaus 0 / 0.4 / 0.73 / 1; on hair it labels a
-// region the hair shader does not treat as metal), G is the SPECULAR REGION mask (~1 across
-// cloth; on hair only the highlight-bearing cards — Pelica's bangs), A is per-texel SMOOTHNESS
-// scaled by _Smoothness (fabric ~0.4, metal zones ~0.7, Pelica hair 1 — Unity's
-// _MetallicGlossMap convention). B is unread. Returns (metallic, spec mask, smoothness).
-// Off-stub (0, 1, 1): no metal, specular everywhere, gloss = _Smoothness alone.
-fn hgrp_metallic_gloss(uv0: vec2<f32>) -> vec3<f32> {
-    let p = textureSample(metallic_gloss_map, base_sampler, uv0);
-    return vec3<f32>(p.r, p.g, p.a);
+// Surface-parameter subsystem (_UseMetallicGlossMap): _MetallicGlossMap, whose channels the
+// game's shader Properties name "RGBA: Metal, Spec, Shadow, Smooth" (hgrp-decompiled-formulas.md
+// §1.5 / §1.7 / §1.9). R is the metallic amount — kd = 0.96 (1 - R), F0 = lerp(0.04 G, albedo, R);
+// G the dielectric specular amount; B the lighting ceiling, w2 = min(B, ramp.a) — the authored
+// occlusion of seams, folds and collars; A the smoothness, roughness = 1 - A. Off-stub: the
+// material's scalar parameters in the same order (_Metallic, _Specular, 1, _Smoothness), which
+// is what the game reads when the map is off.
+fn hgrp_metallic_gloss(uv0: vec2<f32>) -> vec4<f32> {
+    return textureSample(metallic_gloss_map, base_sampler, uv0);
 }

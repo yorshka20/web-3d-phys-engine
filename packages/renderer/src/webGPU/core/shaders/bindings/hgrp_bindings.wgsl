@@ -13,7 +13,9 @@
 @group(1) @binding(1) var<storage, read> joint_matrices: array<mat4x4<f32>>;
 
 // Group 3: per-frame globals — the depth-prepass texture (cleared to the far plane where
-// nothing was drawn), read by the screen-space rim, and the scene lighting block.
+// nothing was drawn; the hair variant's engine rim is a screen-space depth rim, off in the
+// captured frame, so no material shader reads it yet), the scene lighting block and the
+// material debug view.
 @group(3) @binding(0) var scene_depth: texture_depth_2d;
 @group(3) @binding(1) var<uniform> scene_lighting: SceneLighting;
 @group(3) @binding(2) var<uniform> hgrp_debug: HGRPDebugView;

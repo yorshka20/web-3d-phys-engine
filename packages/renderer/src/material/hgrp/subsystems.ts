@@ -77,8 +77,8 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_DiffRampMap'],
     wgsl: {
       include: 'lighting/hgrp/ramp.wgsl',
-      fn: 'hgrp_ramp_weight',
-      off: 'vec3<f32>(smoothstep(0.25, 0.75, shade_coord))',
+      fn: 'hgrp_ramp',
+      off: 'vec4<f32>(smoothstep(0.25, 1.0, shade))',
     },
   },
   { id: 'shadow' },
@@ -91,7 +91,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
       include: 'lighting/hgrp/shadow_lut.wgsl',
       fn: 'hgrp_shadow_color',
       off:
-        'hgrp_hsv_shadow_color(base, hgrp_material.shadow_color_brightness, ' +
+        'hgrp_shadow_color_adjust(base, hgrp_material.shadow_color_brightness, ' +
         'hgrp_material.shadow_color_saturation)',
     },
   },
@@ -114,7 +114,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     wgsl: {
       include: 'lighting/hgrp/sdf.wgsl',
       fn: 'hgrp_shade_coord',
-      off: 'vec2<f32>(ndotl * 0.5 + 0.5, 0.0)',
+      off: 'vec3<f32>(shade_nl, 0.0, 1.0)',
     },
   },
   { id: 'rim' },
@@ -123,7 +123,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     gate: '_UseSpecRampMap',
     tier: 'static',
     textures: ['_SpecRampMap'],
-    wgsl: { include: 'lighting/hgrp/spec.wgsl', fn: 'hgrp_spec_ramp_color', off: 'vec3<f32>(0.0)' },
+    wgsl: { include: 'lighting/hgrp/spec.wgsl', fn: 'hgrp_spec_ramp_color', off: 'vec3<f32>(1.0)' },
   },
   {
     id: 'metallicGloss',
@@ -133,7 +133,9 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     wgsl: {
       include: 'lighting/hgrp/metallic_gloss.wgsl',
       fn: 'hgrp_metallic_gloss',
-      off: 'vec3<f32>(0.0, 1.0, 1.0)',
+      off:
+        'vec4<f32>(hgrp_material.metallic, hgrp_material.specular, 1.0, ' +
+        'hgrp_material.smoothness)',
     },
   },
   {

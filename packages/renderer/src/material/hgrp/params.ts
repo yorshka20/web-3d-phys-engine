@@ -30,11 +30,11 @@ import {
 const BASE_COLOR = color('_BaseColor', WHITE, true);
 const HAIR_BASE_TINT = color('_HairBaseTintColor', WHITE);
 const SDF_RIM_COLOR = color('_SDFRimColor', WHITE, true);
-const RIM_COLOR = color('_ColorAdjustmentRimColor', WHITE, true);
-const RIM_INTENSITY = float('_ColorAdjustmentRimIntensity', 0, { min: 0, max: 8, step: 0.05 });
-const SKIN_RIM_OFF = float('_SkinRimOff', 0);
-const SKIN_RIM_OFF_SCALE = float('_SkinRimOffScale', 1);
-const FACE_RIM_OFF_SCALE = float('_FaceRimOffScale', 1);
+// The _ColorAdjustmentRim* trio exists in the game's shader only under
+// _EnableVFXColorAdjustment (0 in every preset; hgrp-decompiled-formulas.md §1.11), so no
+// shader reads these fields yet and they carry no calibration widget.
+const RIM_COLOR = color('_ColorAdjustmentRimColor', WHITE);
+const RIM_INTENSITY = float('_ColorAdjustmentRimIntensity', 0);
 
 // _HairBaseTintColor pre-multiplies the hair base color (identity in Pelica's preset;
 // _HairAddTintColor's target region is unknown and stays unwired — see the param ledger).
@@ -47,20 +47,6 @@ function packBaseColor(material: HGRPMaterialDescriptor): HGRPVec4 {
 // alpha_cutoff doubles as the clip switch: 0 disables the discard in the shader.
 function packAlphaCutoff(material: HGRPMaterialDescriptor): number {
   return material.alphaMode === 'mask' ? material.alphaCutoff : 0;
-}
-
-// _SkinRimOff reduces the rim on skin by its scale factor; pre-composed here so the shader
-// sees one effective intensity.
-function packRimIntensity(material: HGRPMaterialDescriptor): number {
-  const rimOffScale =
-    (readHGRPParam(material, SKIN_RIM_OFF) as number) > 0
-      ? (readHGRPParam(material, SKIN_RIM_OFF_SCALE) as number)
-      : 1;
-  return (
-    (readHGRPParam(material, RIM_INTENSITY) as number) *
-    rimOffScale *
-    (readHGRPParam(material, FACE_RIM_OFF_SCALE) as number)
-  );
 }
 
 export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
@@ -99,21 +85,20 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_ShadowColorSaturation', 1, { min: 0, max: 3, step: 0.01 }),
     ),
     f32('bump_scale', 'normal', float('_BumpScale', 1, { min: 0, max: 3, step: 0.01 })),
-    {
-      name: 'rim_intensity',
-      type: 'f32',
-      subsystem: 'rim',
-      params: [RIM_INTENSITY, SKIN_RIM_OFF, SKIN_RIM_OFF_SCALE, FACE_RIM_OFF_SCALE],
-      pack: packRimIntensity,
-      comment: '_ColorAdjustmentRimIntensity pre-scaled by _SkinRimOffScale / _FaceRimOffScale',
-    },
+    f32('rim_intensity', 'rim', RIM_INTENSITY),
+    f32('rim_width', 'rim', float('_ColorAdjustmentRimWidth', 0.35)),
     f32(
-      'rim_width',
-      'rim',
-      float('_ColorAdjustmentRimWidth', 0.35, { min: 0, max: 1, step: 0.01 }),
+      'smoothness',
+      'spec',
+      float('_Smoothness', 0.5, { min: 0, max: 1, step: 0.01 }),
+      "roughness = 1 - smoothness; the metallic-gloss map's A channel replaces it",
     ),
-    f32('spec_smoothness', 'spec', float('_Smoothness', 0.5, { min: 0, max: 1, step: 0.01 })),
-    f32('spec_intensity', 'spec', float('_Specular', 0.5, { min: 0, max: 4, step: 0.05 })),
+    f32(
+      'specular',
+      'spec',
+      float('_Specular', 1, { min: 0, max: 2, step: 0.01 }),
+      "dielectric F0 = 0.04 x specular; the metallic-gloss map's G channel replaces it",
+    ),
     f32(
       'aniso_intensity',
       'hairBand',
@@ -243,7 +228,25 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'sdf_rim_color',
       'sdf',
       SDF_RIM_COLOR,
-      'terminator tint inside the _SDFMask cheek zone; a = tint weight',
+      'albedo tint at grazing view inside the _SDFMask.r zone (formulas §2)',
+    ),
+    f32(
+      'metallic',
+      'spec',
+      float('_Metallic', 0, { min: 0, max: 1, step: 0.01 }),
+      "the metallic-gloss map's R channel replaces it",
+    ),
+    f32(
+      'skin_rim_off_scale',
+      'sdf',
+      float('_SkinRimOffScale', 0.5, { min: 0, max: 2, step: 0.01 }),
+      '_SDFRimColor weight where _SDFMask.b = 1',
+    ),
+    f32(
+      'face_rim_off_scale',
+      'sdf',
+      float('_FaceRimOffScale', 1, { min: 0, max: 2, step: 0.01 }),
+      '_SDFRimColor weight where _SDFMask.b = 0',
     ),
   ],
 };

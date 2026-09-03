@@ -41,7 +41,8 @@ import { layoutUniformStruct } from '../../uniformStruct';
 // removed field is a conscious change, not a drift. The ten static gates (use_diff_ramp,
 // use_shadow_lut, ...) left the struct when they became permutation selectors (2026-09-02);
 // the two numeric gates (eye_highlight, use_pantyhose) stay. spec_bump_scale and
-// sdf_rim_color were appended when the hair split-normal and SDF-mask hooks landed.
+// sdf_rim_color were appended when the hair split-normal and SDF-mask hooks landed; metallic
+// and the two _SDFRimColor off-scales with the decompiled-formula rewrite (2026-09-03).
 const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   base_color: 0,
   rim_color: 4,
@@ -51,8 +52,8 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   bump_scale: 11,
   rim_intensity: 12,
   rim_width: 13,
-  spec_smoothness: 14,
-  spec_intensity: 15,
+  smoothness: 14,
+  specular: 15,
   aniso_intensity: 16,
   matcap_normal_scale: 17,
   emission_color: 20,
@@ -83,6 +84,9 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   is_iris: 69,
   spec_bump_scale: 70,
   sdf_rim_color: 72,
+  metallic: 76,
+  skin_rim_off_scale: 77,
+  face_rim_off_scale: 78,
 };
 
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
@@ -175,8 +179,8 @@ describe('HGRP material contract', () => {
     expect(() => validateHGRPContract()).not.toThrow();
   });
 
-  it('keeps the HGRPMaterialParams byte layout (304 bytes)', () => {
-    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(304);
+  it('keeps the HGRPMaterialParams byte layout (320 bytes)', () => {
+    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(320);
     const actual = Object.fromEntries(
       HGRP_MATERIAL_PARAMS_LAYOUT.fields.map((f) => [f.name, f.offset / 4]),
     );
@@ -278,7 +282,7 @@ describe('HGRP material contract', () => {
     expect(new Set(Object.values(names)).size).toBe(Object.keys(names).length);
   });
 
-  it('exposes the calibration GUI schema (41 floats, 7 colors)', () => {
+  it('exposes the calibration GUI schema (42 floats, 6 colors)', () => {
     expect(HGRP_TUNABLE_FLOATS.map((d) => d.key).sort()).toEqual(
       [
         '_UseDiffRampMap',
@@ -292,10 +296,11 @@ describe('HGRP material contract', () => {
         '_ShadowColorBrightness',
         '_ShadowColorSaturation',
         '_BumpScale',
-        '_ColorAdjustmentRimIntensity',
-        '_ColorAdjustmentRimWidth',
         '_Smoothness',
         '_Specular',
+        '_Metallic',
+        '_SkinRimOffScale',
+        '_FaceRimOffScale',
         '_AnisotropyIntensity',
         '_AnisotropyValue',
         '_UseMatcap',
@@ -327,7 +332,6 @@ describe('HGRP material contract', () => {
     expect(HGRP_TUNABLE_COLORS.map((d) => d.key).sort()).toEqual(
       [
         '_BaseColor',
-        '_ColorAdjustmentRimColor',
         '_EmissionColor',
         '_MatcapColor',
         '_PantyhoseColor',
@@ -591,7 +595,7 @@ describe('eye layer role', () => {
 describe('packHGRPParams', () => {
   it('packs defaults when a preset omits every key', () => {
     const packed = packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, material('CharacterNPR'));
-    expect(packed).toHaveLength(76);
+    expect(packed).toHaveLength(80);
     expect(Array.from(packed.subarray(0, 8))).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_width]).toBeCloseTo(0.35);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.line_amount]).toBe(300);
@@ -599,7 +603,7 @@ describe('packHGRPParams', () => {
     expect(packed[MATERIAL_PARAMS_F32_INDEX.alpha_cutoff]).toBe(0);
   });
 
-  it('applies the composite rules: hair tint, rim off-scale, alpha clip; SDF rim color has its own field', () => {
+  it('applies the composite rules: hair tint, alpha clip; the SDF tint color and its off-scales have their own fields', () => {
     const packed = packHGRPParams(
       HGRP_MATERIAL_PARAMS_LAYOUT,
       material('CharacterNPR_Skin', {
@@ -626,7 +630,9 @@ describe('packHGRPParams', () => {
       0.65, 0.4, 0.42, 1,
     ]);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.alpha_cutoff]).toBeCloseTo(0.42);
-    expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_intensity]).toBeCloseTo(4 * 0.25 * 0.5);
+    expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_intensity]).toBe(4);
+    expect(packed[MATERIAL_PARAMS_F32_INDEX.skin_rim_off_scale]).toBeCloseTo(0.25);
+    expect(packed[MATERIAL_PARAMS_F32_INDEX.face_rim_off_scale]).toBeCloseTo(0.5);
   });
 
   it('round-trips every direct param through its field offset', () => {

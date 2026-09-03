@@ -40,14 +40,12 @@ function mountPane(container: HTMLElement, world: World): () => void {
   addLightingWidgets(pane);
   addPostWidgets(pane);
 
-  // The metal look of the cloth hardware zone (_MetallicGlossMap.r = 1.0). metalEnv is the
-  // radiance of the environment the metal reflects in its own base color, in the same units as
-  // the lighting above: 1 = as bright as full lighting. It is what decides whether the silver
-  // hardware reads as metal at all.
-  const metal = pane.addFolder({ title: 'Metal (hardware zone)', expanded: false });
-  metal.addBinding(sceneSettings, 'metalEnv', { min: 0, max: 4, step: 0.01 });
-  metal.addBinding(sceneSettings, 'metalDiffuse', { min: 0, max: 1, step: 0.01 });
-  metal.addBinding(sceneSettings, 'metalEdge', { min: 0, max: 4, step: 0.01 });
+  // The hemisphere standing in for the character cubemap, which the IBL term of every cloth
+  // material reflects (silver hardware most visibly): envRadiance is its brightness, 1 = as
+  // bright as full lighting; envGradient its up/down contrast.
+  const env = pane.addFolder({ title: 'Environment (cubemap stand-in)', expanded: false });
+  env.addBinding(sceneSettings, 'envRadiance', { min: 0, max: 4, step: 0.01 });
+  env.addBinding(sceneSettings, 'envGradient', { min: 0, max: 1, step: 0.01 });
 
   // Material debug view: show one texture slot of every HGRP material on the mesh instead of
   // its shading. Magenta = the material's permutation does not bind that slot.
@@ -82,16 +80,18 @@ function addCharacterSwitches(pane: Pane, world: World): void {
   }
 }
 
-// Scene lighting: the key light the NPR shading reads and the flat ambient on top of it
-// (uploaded per frame as the HGRP SceneLighting uniform), plus the backdrop the characters
-// stand against.
+// Scene lighting: the key light the NPR shading reads (uploaded per frame in the HGRP
+// SceneLighting uniform), the environment intensity and the backdrop the characters stand
+// against. The key light's direction, color and intensity are bound per frame in-game and did
+// not survive the rip; the environment intensity came from the scene's light probe in the
+// captured frame. The environment colors, hemisphere and multipliers are captured constants
+// (sceneSettings HGRP_CHARACTER_GLOBALS) and deliberately have no widget.
 function addLightingWidgets(pane: Pane): void {
   const lighting = pane.addFolder({ title: 'Lighting', expanded: true });
   const [dx, dy, dz] = sceneSettings.lightDirection;
   const lightingState = {
     direction: { x: dx, y: dy, z: dz },
     lightColor: rgb(sceneSettings.lightColor),
-    ambientColor: rgb(sceneSettings.ambientColor),
     clearColor: rgb(sceneSettings.clearColor),
   };
   const axis = { min: -1, max: 1, step: 0.01 };
@@ -106,14 +106,7 @@ function addLightingWidgets(pane: Pane): void {
     .on('change', (ev) => {
       sceneSettings.lightColor = [ev.value.r, ev.value.g, ev.value.b];
     });
-  lighting.addBinding(sceneSettings, 'ambientIntensity', { min: 0, max: 2, step: 0.01 });
-  lighting
-    .addBinding(lightingState, 'ambientColor', { color: { type: 'float' } })
-    .on('change', (ev) => {
-      sceneSettings.ambientColor = [ev.value.r, ev.value.g, ev.value.b];
-    });
-  lighting.addBinding(sceneSettings, 'envReflection', { min: 0, max: 3, step: 0.01 });
-  lighting.addBinding(sceneSettings, 'envGradient', { min: 0, max: 1, step: 0.01 });
+  lighting.addBinding(sceneSettings, 'ambientIntensity', { min: 0, max: 1.5, step: 0.01 });
   lighting
     .addBinding(lightingState, 'clearColor', { label: 'backdrop', color: { type: 'float' } })
     .on('change', (ev) => {

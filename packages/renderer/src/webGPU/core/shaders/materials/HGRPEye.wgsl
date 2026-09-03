@@ -11,7 +11,6 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.world_tangent,
         input.world_bitangent,
         input.world_position,
-        input.position,
     );
     return hgrp_debug_view(shaded, input.uv0);
 }

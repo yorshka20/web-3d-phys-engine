@@ -21,20 +21,26 @@ import { hgrpSlotOwner } from './subsystems';
 // visible instead of being deleted. The shader catalog test enforces both directions.
 
 // Color slots are created as rgba8unorm-srgb so sampling decodes to linear; everything else
-// (normals, masks, ramp weights, LUTs) is data and stays raw. _DiffRampMap (per-channel blend
-// weights), _ShadowLutTex and _SpecRampMap are deliberately raw — their authoring domain is a
-// calibration experiment (learnings color-pipeline.md, L4).
+// (normals, masks) is data and stays raw. The three lookup tables are color textures: the
+// game's shader indexes _ShadowLutTex by the sRGB-ENCODED albedo (hgrp-decompiled-formulas.md
+// §1.6), i.e. the LUT is authored in display space, and its output is display space too — read
+// raw, the skin LUT turns a 0.03 albedo into a 0.20 shadow color, a shadow six times brighter
+// than the lit surface, while decoded it gives 0.034, the albedo tinted warm (probe
+// 2026-09-03-5). _SpecRampMap is the specular COLOR the F0 is multiplied by and _DiffRampMap's
+// rgb is a color tint (its alpha, the lit weight, is unaffected by the format either way):
+// Unity imports color textures as sRGB unless told otherwise, and nothing in the shader undoes
+// that.
 export const HGRP_TEXTURE_SLOTS: Readonly<Record<string, { srgb: boolean }>> = {
   _BaseMap: { srgb: true },
-  _DiffRampMap: { srgb: false },
+  _DiffRampMap: { srgb: true },
   _BumpMap: { srgb: false },
-  _ShadowLutTex: { srgb: false },
+  _ShadowLutTex: { srgb: true },
   _SDFLightmap: { srgb: false },
   _SDFMask: { srgb: false },
   _HighlightMap: { srgb: false },
   _EmotionMap: { srgb: true },
   _EmissionMap: { srgb: true },
-  _SpecRampMap: { srgb: false },
+  _SpecRampMap: { srgb: true },
   _MetallicGlossMap: { srgb: false },
   _SplitNormalMap: { srgb: false },
   _HairBrowMask: { srgb: false },

@@ -47,15 +47,12 @@ fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {
 
 @fragment
 fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
-    // frag_coord.z carries the camera-biased overlay depth (slightly nearer than the true
-    // surface); the iris path takes no rim, so the bias never reaches an edge test.
     let shaded = hgrp_shade_eye(
         input.uv0,
         input.world_normal,
         input.world_tangent,
         input.world_bitangent,
         input.world_position,
-        input.position,
     );
     return hgrp_debug_view(shaded, input.uv0);
 }

@@ -1,9 +1,9 @@
-// HGRP/CharacterNPR (cloth / general): normal-mapped ramp shadow blend with HSV (or LUT)
-// shadow color, spec-ramp highlights on the metallic zones, HDR emission (rolls off through
-// the tonemap shoulder) and the scene ambient on the albedo. A metal zone keeps only a
-// residual of its diffuse and instead reflects the environment in its own base color, which
-// is what makes the silver hardware read as metal rather than as a black hole. Group-2
-// bindings and the subsystem hooks come from the permutation's generated fragments
+// HGRP/CharacterNPR (cloth / general): normal-mapped shade blend under the NPR lighting
+// multiplier (lighting/hgrp_npr.wgsl), a GGX specular colored by the spec ramp, the split-sum
+// IBL that gives the metal zones their reflected environment, and HDR emission (rolls off
+// through the tonemap shoulder). The surface map (_MetallicGlossMap) supplies metallic,
+// specular amount, occlusion and smoothness; without it the material's scalars stand in.
+// Group-2 bindings and the subsystem hooks come from the permutation's generated fragments
 // (material/hgrp).
 
 @fragment
@@ -14,44 +14,30 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.world_bitangent,
         input.uv0,
     );
-    let core = hgrp_shade_core(input.uv0, n, input.position);
-
-    // Spec v3 (reference-screenshot driven): the RS stays a specular COLOR lookup (raw
-    // addition whitewashes — v1 lesson). _MetallicGlossMap.r holds discrete METALLIC zones:
-    // metal has no diffuse, so the shaded base is suppressed there and the albedo tints the
-    // spec color (silver parts read as metal instead of white); .a is per-texel SMOOTHNESS
-    // modulating the RS row and the Blinn-Phong exponent — the leather/satin sheen on
-    // non-metal parts, which v2's metallic-only mask killed (v3 read .g here; the probe of
-    // 2026-09-02 found .g ~1 across every cloth map and .a the continuous channel that is
-    // smoother on the metal zones); .g masks where specular applies at all. mix(0.15, 1,
-    // metallic) keeps fabric sheen modest without a separate parameter (v3 assumption,
-    // GUI-calibrated via _Specular). Gated by _UseMetallicGlossMap / _UseSpecRampMap through
-    // the hooks.
     let view_dir = normalize(mvp.camera_pos - input.world_position);
-    let light = hgrp_light_dir();
-    let h = normalize(light + view_dir);
-    let ndoth = clamp(dot(n, h), 0.0, 1.0);
-    let ndotl = clamp(dot(n, light), 0.0, 1.0);
+    let surface = hgrp_metallic_gloss(input.uv0);
+    let core = hgrp_shade_core(
+        input.uv0,
+        n,
+        n,
+        scene_lighting.env_color.rgb,
+        surface,
+        view_dir,
+    );
 
-    let mg = hgrp_metallic_gloss(input.uv0);
-    // _MetallicGlossMap.r is a zone CODE, not an amount (debug view, 2026-09-03): 1.0 = the
-    // hardware — buckles, zips, shoulder plate; ~0.73 = the quilted satin lining; ~0.4 = a
-    // small inner-chest patch; 0 = fabric. Only the hardware is metal: it alone loses its
-    // diffuse and tints its highlight with the base color (the verified silver look). The
-    // lining keeps its diffuse and gets a satin sheen whose strength still follows R.
-    let metal = smoothstep(0.85, 0.95, mg.x);
-    let sheen_zone = mg.x;
-    let gloss = clamp(hgrp_material.spec_smoothness * mg.z, 0.0, 1.0);
-
-    let spec_color = hgrp_spec_ramp_color(ndoth, gloss);
-    let shape = pow(ndoth, mix(8.0, 128.0, gloss));
-    let spec = spec_color * mix(vec3<f32>(1.0), core.lit, metal) * scene_lighting.light.rgb *
-        (shape * smoothstep(0.0, 0.3, ndotl) * hgrp_material.spec_intensity * mg.y *
-            mix(0.15, 1.0, sheen_zone));
-
-    // Metal keeps only a residual of its diffuse (sceneSettings.metalDiffuse); the fabric path
-    // keeps all of it.
-    let diffuse = core.lit * mix(1.0, scene_lighting.metal.x, metal);
+    // Specular (formulas §1.9): F0 = lerp(0.04 x specular amount, albedo, metallic), colored
+    // by the spec ramp read at the normalized GGX lobe and roughness x (1 - metallic), scaled
+    // by the GGX term, the shadow-side attenuation and light(N).
+    let metallic = surface.r;
+    let roughness = 1.0 - surface.a;
+    let alpha = hgrp_ggx_alpha(roughness);
+    let h = hgrp_half_vector(view_dir);
+    let d = hgrp_ggx_d(dot(n, h), alpha);
+    let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
+    let f0 = mix(vec3<f32>(0.04 * surface.g), core.albedo, metallic);
+    let rs = hgrp_spec_ramp_color(d * (alpha * alpha + 1e-4), roughness * (1.0 - metallic));
+    let spec = f0 * rs * (hgrp_spec_term(d, alpha, ndotv) * hgrp_shade_spec(core.w2)) *
+        core.light;
 
     let emission = hgrp_emission(input.uv0);
 
@@ -63,11 +49,12 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // layers stack up and densify toward _PantyhoseColor (its alpha = layer weight). The
     // silky sheen is a Kajiya-Kay lobe along the tangent rotated by
     // _PantyhoseAnisotropyDirection (-1..1 read as quarter turns, v1 assumption — the
-    // formula did not survive the rip).
-    let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
+    // formula did not survive the rip). The decompiled silk-stockings formula (formulas
+    // §1.12) replaces this block.
+    let ndotl = clamp(dot(n, hgrp_light_dir()), 0.0, 1.0);
     let density = pow(1.0 - ndotv, 2.0);
     var color = mix(
-        diffuse,
+        core.lit,
         hgrp_material.pantyhose_color.rgb,
         density * hgrp_material.pantyhose_color.a * hgrp_material.use_pantyhose,
     );
@@ -75,7 +62,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let sheer = clamp((1.0 - core.alpha) * 2.0, 0.0, 1.0);
     let transmit = (ndotv * ndotv) * (0.4 + 0.6 * ndotl) * sheer *
         hgrp_material.pantyhose_specular_value;
-    color += diffuse * (transmit * hgrp_material.use_pantyhose);
+    color += core.lit * (transmit * hgrp_material.use_pantyhose);
 
     let angle = hgrp_material.pantyhose_aniso_direction * HALF_PI;
     let strand = normalize(
@@ -87,36 +74,15 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let sheen = pow(sin_th, 16.0) *
         (hgrp_material.pantyhose_specular_int * 1.5 * hgrp_material.use_pantyhose);
 
-    // Opt-in environment reflection on the metallic zones (sceneSettings.envReflection,
-    // 0 by default): the ambient hemisphere along the reflected view direction, through the
-    // normal-mapped normal — the hypothesis under test is that the quilted metallic lining
-    // reads bright in-game because its normal map reflects the surroundings everywhere,
-    // where a flat metal plate does not (guess ledger A8).
-    let env_spec = hgrp_env(reflect(-view_dir, n)) *
-        (sheen_zone * mg.y * scene_lighting.ambient.w);
-
-    // Metal zone (guess ledger E7). A metal has almost no diffuse; what it shows is the
-    // environment reflected in its own base color over its whole surface, F0 = albedo. The
-    // hardware zone is painted silver for exactly that — (148, 147, 150) sRGB where
-    // _MetallicGlossMap.r = 1, measured off _BaseMap — so suppressing the diffuse without
-    // adding the reflection leaves a plate facing the camera with nothing at all.
-    //
-    // hgrp_env_brdf is the split-sum environment BRDF the decompiled HGRP shader composes its
-    // IBL specular from; a Schlick fresnel is not a substitute for it (see that function).
-    // The reflection uses the GEOMETRIC normal: the normal map would fire it across every
-    // wrinkle of a flat plate. `metal_ndotv` is named apart from the pantyhose block's ndotv
-    // above because the two use different normals in one shared function scope.
-    let n_geom = normalize(input.world_normal);
-    let metal_ndotv = clamp(dot(n_geom, view_dir), 0.0, 1.0);
-    let metal_brdf = hgrp_env_brdf(core.albedo, 1.0 - gloss, metal_ndotv, scene_lighting.metal.y);
-    // hgrp_env carries the flat ambient's intensity; dividing it back out keeps metalEnv the
-    // environment's own radiance, so re-balancing the ambient does not re-calibrate the metal.
-    let env_radiance = scene_lighting.metal.w / max(scene_lighting.light.w, 1e-4);
-    let metal_env = hgrp_env(reflect(-view_dir, n_geom)) * metal_brdf * env_radiance;
-    let ambient = mix(hgrp_ambient(core.albedo), metal_env, metal);
+    // Environment reflection (formulas §1.10) for every material through its F0: on the
+    // silver hardware (metallic 1) it is the whole look, since a metal has no diffuse.
+    let ibl = hgrp_ibl(f0, roughness, ndotv, n, view_dir, core.w2, scene_lighting.env_color.rgb);
 
     return hgrp_debug_view(
-        vec4<f32>(color + vec3<f32>(sheen) + spec + emission + ambient + env_spec, core.alpha),
+        vec4<f32>(
+            hgrp_bright_saturation(color + vec3<f32>(sheen) + spec) + emission + ibl,
+            core.alpha,
+        ),
         input.uv0,
     );
 }

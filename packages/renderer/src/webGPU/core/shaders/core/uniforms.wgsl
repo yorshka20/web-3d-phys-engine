@@ -22,19 +22,31 @@ struct MVPUniforms {
     camera_right: vec3<f32>,           // Camera right direction
 }
 
-// Per-frame scene lighting for the HGRP family (renderer/sceneSettings.ts packSceneLighting):
-// the key light direction (toward the light, normalized; w = envGradient), the key light color
-// pre-multiplied by its intensity (w = ambientIntensity, so the metal term can undo the
-// ambient's pre-multiplication), and the ambient color pre-multiplied by its intensity
-// (w = envReflection, the opt-in metal environment-reflection strength).
-// metal: the hardware-zone look of the cloth shader (materials/HGRPNpr.wgsl) —
-// x = residual diffuse, y = scale on the environment BRDF's grazing term, z unused,
-// w = the reflected environment's radiance (see sceneSettings.metalEnv).
+// Per-frame scene lighting for the HGRP family (renderer/sceneSettings.ts packSceneLighting).
+// The fields are what the decompiled character shader reads from its engine globals
+// (learnings hgrp-decompiled-formulas.md §0): the key light, and the `_CharacterParams*`
+// constants under their game names, so every constant in lighting/hgrp_npr.wgsl points back
+// at a row of that table. `env_stand_in` describes the hemisphere that stands in for the
+// character cubemap the rip did not carry.
 struct SceneLighting {
+    // xyz: L, toward the key light (unit); w: _CharacterParams11.w, the ramp coordinate bias
     light_dir: vec4<f32>,
-    light: vec4<f32>,
-    ambient: vec4<f32>,
-    metal: vec4<f32>,
+    // rgb: key light color x intensity (Lc); w: environment intensity — the scene probe's
+    // irradiance x _EnvironmentGlobalParams0.x, a calibration knob (sceneSettings.ambientIntensity)
+    light_color: vec4<f32>,
+    // _CharacterParams0: y lighting multiplier, z shadow multiplier, w IBL multiplier (x unread)
+    character_params0: vec4<f32>,
+    // _CharacterParams2 (rgb): environment color where no light probe applies — cloth / hair / eye
+    env_color: vec4<f32>,
+    // _CharacterParams3 (rgb): the same for the skin shader
+    env_color_skin: vec4<f32>,
+    // _CharacterParams6 (xyz): hemisphere axis
+    hemi_axis: vec4<f32>,
+    // _CharacterParams7 (xyz): hemisphere bias, scale, floor
+    hemi_params: vec4<f32>,
+    // Cubemap stand-in (sceneSettings.envGradient / envRadiance): x up/down contrast of the
+    // hemisphere, y its radiance
+    env_stand_in: vec4<f32>,
 }
 
 // Material debug view (renderer/sceneSettings.ts packHGRPDebugView): x = texture slot id
