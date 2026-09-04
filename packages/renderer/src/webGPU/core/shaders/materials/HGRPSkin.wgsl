@@ -23,7 +23,7 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.uv0,
         n,
         hgrp_horizontal(n),
-        scene_lighting.env_color_skin.rgb,
+        scene_lighting.env_color.rgb,
         surface,
         view_dir,
     );

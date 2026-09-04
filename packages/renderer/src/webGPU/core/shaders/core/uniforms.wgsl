@@ -36,10 +36,10 @@ struct SceneLighting {
     light_color: vec4<f32>,
     // _CharacterParams0: y lighting multiplier, z shadow multiplier, w IBL multiplier (x unread)
     character_params0: vec4<f32>,
-    // _CharacterParams2 (rgb): environment color where no light probe applies — cloth / hair / eye
+    // rgb: environment color — the scene probe's desaturated irradiance color in the game, a
+    // calibration knob here (sceneSettings.ambientColor); every variant's hemisphere ambient
+    // and the IBL multiply it
     env_color: vec4<f32>,
-    // _CharacterParams3 (rgb): the same for the skin shader
-    env_color_skin: vec4<f32>,
     // _CharacterParams6 (xyz): hemisphere axis
     hemi_axis: vec4<f32>,
     // _CharacterParams7 (xyz): hemisphere bias, scale, floor

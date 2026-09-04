@@ -22,9 +22,18 @@ export const sceneSettings = {
   // formulas §10): the direction defaults to `_CharacterParams11.xyz`, the character light
   // the shader substitutes for the scene light — 30° elevation, 30° to the character's left
   // — with the x sign to be confirmed against the converted model's handedness; the color
-  // and intensity (`DirectionalLightCustomData1`) start at white x 1 and are calibrated
-  // against in-game screenshots. Everything else the lighting reads is a captured constant
-  // (HGRP_CHARACTER_GLOBALS), not a knob — except the environment intensity below.
+  // and intensity (`DirectionalLightCustomData1`) are calibrated against in-game screenshots.
+  // Everything else the lighting reads is a captured constant (HGRP_CHARACTER_GLOBALS), not a
+  // knob — except the environment intensity and color below, which the game takes from the
+  // scene probe.
+  //
+  // The intensity is the term that carries the whole picture's level, and it is the only one
+  // that lifts skin and cloth together: light(N) = P0.y (luma(Lc) + hemi(N) x ambient), and the
+  // skin variant's hemisphere is a constant 0.725 (it reads the horizontal normal, formulas §2)
+  // while cloth's runs to 2.0, so raising the ambient instead brightens up-facing cloth three
+  // times as much as skin. Against it, `envRadiance` below is the environment's radiance in the
+  // same units — the two together are a lighting rig, and their ratio decides how directly lit
+  // a character reads.
   lightDirection: [-0.433, 0.5, 0.75] as [number, number, number], // toward the light, world space
   lightColor: [1, 1, 1] as [number, number, number],
   lightIntensity: 1,
@@ -33,16 +42,29 @@ export const sceneSettings = {
   // so it is scene-dependent and unknown. The shader clamps it to [0, 1.5] for the diffuse
   // ambient and to [0.5, 1.5] for the IBL; the no-probe fallback (1.67) is the ceiling of both.
   // At the ceiling the hemisphere term more than doubles light(N) from a side-facing to an
-  // up-facing surface and the white cloth saturates while the skin (a horizontal-normal
-  // hemisphere, 0.725) stays dim; the in-game frame shows nearly flat white cloth and a
-  // mid-grey quilted lining, which puts the value at or below the IBL floor. 0.5 is that floor.
+  // up-facing surface and floods every up-facing surface with the ambient color, which the
+  // in-game frame's mid-grey quilted lining rules out. What this knob controls is the sky
+  // shaping — how much brighter an up-facing surface is than a side-facing one — not the
+  // level; the level is the key light's.
   ambientIntensity: 0.5,
+  // Environment color, linear: the scene probe's irradiance color, which the game desaturates
+  // (HSV saturation capped at 0.35 for cool hues, 0.7 for warm) before it multiplies both the
+  // hemisphere ambient of every variant and the IBL. Unknown for the captured frame; the
+  // shader's no-probe fallbacks (_CharacterParams2 blue-white for cloth, _CharacterParams3 warm
+  // for skin) tinted the whole character blue in the browser, so this starts neutral.
+  ambientColor: [1, 1, 1] as [number, number, number],
   // The hemisphere that stands in for the character cubemap (`_CharMaxCubemap` did not come
   // with the rip; formulas §10): looked up along the reflected view direction by the IBL term
   // of every cloth material (formulas §1.10), which multiplies it by the environment color and
-  // the captured multipliers. envGradient is its up/down contrast, envRadiance its brightness
-  // in "a fully lit surface sits at its albedo" units — 1 means the environment is as bright as
-  // full lighting. Both are calibration knobs until a cubemap exists.
+  // the captured multipliers. envRadiance is its mean radiance in the same units as
+  // lightIntensity above — 1 would mean the environment is as bright as the key light — and
+  // envGradient the up/down contrast around that mean, which is what gives a smooth metal its
+  // dark-below/bright-above depth.
+  //
+  // envRadiance decides how much of a DARK material's pixel is environment rather than
+  // shading, because the split-sum's bias term B reaches ~0.16 at grazing incidence whatever
+  // the F0: it is additive, independent of the key light, and therefore invisible on a light
+  // albedo and dominant on a black one. Both are calibration knobs until a cubemap exists.
   envGradient: 0.5,
   envRadiance: 1.0,
 
@@ -84,17 +106,13 @@ export function isHGRPDebugViewOn(): boolean {
 // Engine globals of the character shader, as captured with the decompiled shader (learnings
 // hgrp-decompiled-formulas.md §0, table of `_CharacterParams*`). Constants, not knobs: the
 // shading formulas in lighting/hgrp_npr.wgsl read them by these names, and a value here
-// changes only when a capture says so. In-game, the environment color and intensity come
-// from the scene's irradiance volume and these are the no-probe fallbacks.
+// changes only when a capture says so. The environment color and intensity are not here: in
+// the game they come from the scene's irradiance volume (the shader's no-probe fallbacks,
+// _CharacterParams2 / _CharacterParams3 and _EnvironmentGlobalParams0.x, are recorded in the
+// formulas document), so they are the knobs above.
 export const HGRP_CHARACTER_GLOBALS = {
   // _CharacterParams0: (unread, lighting multiplier, shadow multiplier, IBL multiplier)
   characterParams0: [0, 0.9, 0.8, 0.8],
-  // _CharacterParams2 / _CharacterParams3: environment color where no probe applies,
-  // cloth-hair-eye / skin. The intensity is not here: it is the probe-dependent
-  // sceneSettings.ambientIntensity (its no-probe fallback, _EnvironmentGlobalParams0.x = 1.67,
-  // is the value the shader clamps down to 1.5).
-  envColor: [0.783019, 0.829308, 1.0],
-  envColorSkin: [1.0, 0.781146, 0.684906],
   // _CharacterParams6 / _CharacterParams7: hemisphere axis; bias, scale, floor
   hemiAxis: [0, 1, 0],
   hemiParams: [0.15, 1.5, 0.5],
@@ -102,10 +120,10 @@ export const HGRP_CHARACTER_GLOBALS = {
   rampBias: -0.4,
 } as const;
 
-// SceneLighting uniform block (core/uniforms.wgsl): eight vec4s in struct order.
-export const SCENE_LIGHTING_BYTE_SIZE = 128;
+// SceneLighting uniform block (core/uniforms.wgsl): seven vec4s in struct order.
+export const SCENE_LIGHTING_BYTE_SIZE = 112;
 
-export function packSceneLighting(out: Float32Array = new Float32Array(32)): Float32Array {
+export function packSceneLighting(out: Float32Array = new Float32Array(28)): Float32Array {
   const g = HGRP_CHARACTER_GLOBALS;
   const [dx, dy, dz] = sceneSettings.lightDirection;
   const len = Math.hypot(dx, dy, dz) || 1;
@@ -115,10 +133,9 @@ export function packSceneLighting(out: Float32Array = new Float32Array(32)): Flo
   }
   out[7] = sceneSettings.ambientIntensity;
   out.set(g.characterParams0, 8);
-  out.set(g.envColor, 12);
-  out.set(g.envColorSkin, 16);
-  out.set(g.hemiAxis, 20);
-  out.set(g.hemiParams, 24);
-  out.set([sceneSettings.envGradient, sceneSettings.envRadiance, 0, 0], 28);
+  out.set(sceneSettings.ambientColor, 12);
+  out.set(g.hemiAxis, 16);
+  out.set(g.hemiParams, 20);
+  out.set([sceneSettings.envGradient, sceneSettings.envRadiance, 0, 0], 24);
   return out;
 }

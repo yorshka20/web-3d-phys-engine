@@ -12,17 +12,23 @@ export interface TonemapTargets {
 // Global tonemap controls, mutated by the calibration GUI (module-scoped like the pass
 // itself — TonemapPass is renderer-private and constructor-wired, not a DI service).
 export const tonemapSettings = {
-  // Linear-light multiplier applied before the ACES curve. The scene's static lights are
-  // normalized around 1.0, which may sit darker in linear space than the old
-  // display-referred calibration — this is the knob that re-anchors mid-grey.
-  exposure: 1.0,
+  // Linear-light multiplier applied before the curve: the game's pre-exposure
+  // (_ExposureWithMiscParams.y), whose value the rip does not carry. The curve is the game's
+  // ACES_MODIFIED (passes/tonemap.wgsl), middle grey 0.18 -> 0.10 display-linear; 2.0 puts the
+  // mid-tones where the previous Narkowicz curve had them at 1.0 (its 0.4 and this curve's 0.8
+  // both land near 0.54), so the lighting calibrated against that curve carries over.
+  exposure: 2.0,
   // Grading after the curve, in the encoded (perceptual) domain: contrast about mid grey,
-  // saturation about luma, temperature as an opposing red/blue gain (negative = cooler).
-  // Identity by default; the in-game look reads cooler and higher-contrast than ours, and
-  // these are the knobs to find by how much before a grading LUT is worth baking.
+  // saturation about luma. Identity by default.
   contrast: 1.0,
   saturation: 1.0,
-  temperature: 0.0,
+  // The color filter, a linear multiplier in AP1 ahead of the curve — the game's
+  // `_ColorGradingCB_ColorFilter`, which lutbuilder2d applies in that position. Ahead of the
+  // curve a tint moves the mid-tones while a bright pixel still bleaches toward white; a gain
+  // after the curve would tint the blacks instead. It stays identity: a global tint is the
+  // wrong shape for a per-garment difference, and the grading stages that can lift one
+  // material without the others (split toning, lift-gamma-gain) are not reproduced.
+  colorFilter: [1.0, 1.0, 1.0] as [number, number, number],
 };
 
 /**
@@ -66,8 +72,8 @@ export class TonemapPass {
     this.settingsData[1] = bloomSettings.intensity;
     this.settingsData[2] = tonemapSettings.contrast;
     this.settingsData[3] = tonemapSettings.saturation;
-    this.settingsData[4] = tonemapSettings.temperature;
-    this.settingsData[5] = isHGRPDebugViewOn() ? 1 : 0;
+    this.settingsData.set(tonemapSettings.colorFilter, 4);
+    this.settingsData[7] = isHGRPDebugViewOn() ? 1 : 0;
     this.device.queue.writeBuffer(this.settingsBuffer!, 0, this.settingsData);
 
     const renderPass = commandEncoder.beginRenderPass({

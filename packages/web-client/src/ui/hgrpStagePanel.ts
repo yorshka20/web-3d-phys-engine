@@ -41,8 +41,9 @@ function mountPane(container: HTMLElement, world: World): () => void {
   addPostWidgets(pane);
 
   // The hemisphere standing in for the character cubemap, which the IBL term of every cloth
-  // material reflects (silver hardware most visibly): envRadiance is its brightness, 1 = as
-  // bright as full lighting; envGradient its up/down contrast.
+  // material reflects (silver hardware most visibly): envRadiance is its mean radiance in the
+  // same units as lightIntensity — it decides how much of a dark material's pixel is
+  // environment rather than shading — and envGradient the up/down contrast around that mean.
   const env = pane.addFolder({ title: 'Environment (cubemap stand-in)', expanded: false });
   env.addBinding(sceneSettings, 'envRadiance', { min: 0, max: 4, step: 0.01 });
   env.addBinding(sceneSettings, 'envGradient', { min: 0, max: 1, step: 0.01 });
@@ -81,17 +82,18 @@ function addCharacterSwitches(pane: Pane, world: World): void {
 }
 
 // Scene lighting: the key light the NPR shading reads (uploaded per frame in the HGRP
-// SceneLighting uniform), the environment intensity and the backdrop the characters stand
-// against. The key light's direction, color and intensity are bound per frame in-game and did
-// not survive the rip; the environment intensity came from the scene's light probe in the
-// captured frame. The environment colors, hemisphere and multipliers are captured constants
-// (sceneSettings HGRP_CHARACTER_GLOBALS) and deliberately have no widget.
+// SceneLighting uniform), the environment intensity and color, and the backdrop the
+// characters stand against. The key light's direction, color and intensity are bound per
+// frame in-game and did not survive the rip; the environment intensity and color came from
+// the scene's light probe in the captured frame. The hemisphere and the multipliers are
+// captured constants (sceneSettings HGRP_CHARACTER_GLOBALS) and deliberately have no widget.
 function addLightingWidgets(pane: Pane): void {
   const lighting = pane.addFolder({ title: 'Lighting', expanded: true });
   const [dx, dy, dz] = sceneSettings.lightDirection;
   const lightingState = {
     direction: { x: dx, y: dy, z: dz },
     lightColor: rgb(sceneSettings.lightColor),
+    ambientColor: rgb(sceneSettings.ambientColor),
     clearColor: rgb(sceneSettings.clearColor),
   };
   const axis = { min: -1, max: 1, step: 0.01 };
@@ -107,6 +109,11 @@ function addLightingWidgets(pane: Pane): void {
       sceneSettings.lightColor = [ev.value.r, ev.value.g, ev.value.b];
     });
   lighting.addBinding(sceneSettings, 'ambientIntensity', { min: 0, max: 1.5, step: 0.01 });
+  lighting
+    .addBinding(lightingState, 'ambientColor', { color: { type: 'float' } })
+    .on('change', (ev) => {
+      sceneSettings.ambientColor = [ev.value.r, ev.value.g, ev.value.b];
+    });
   lighting
     .addBinding(lightingState, 'clearColor', { label: 'backdrop', color: { type: 'float' } })
     .on('change', (ev) => {
@@ -133,7 +140,10 @@ function addPostWidgets(pane: Pane): void {
   });
   post.addBinding(tonemapSettings, 'contrast', { min: 0.5, max: 2, step: 0.01 });
   post.addBinding(tonemapSettings, 'saturation', { min: 0, max: 2, step: 0.01 });
-  post.addBinding(tonemapSettings, 'temperature', { min: -1, max: 1, step: 0.01 });
+  const postState = { colorFilter: rgb(tonemapSettings.colorFilter) };
+  post.addBinding(postState, 'colorFilter', { color: { type: 'float' } }).on('change', (ev) => {
+    tonemapSettings.colorFilter = [ev.value.r, ev.value.g, ev.value.b];
+  });
   post.addBinding(sceneSettings, 'antiAliasing', {
     options: { off: 'off', fxaa: 'fxaa', taa: 'taa', 'taa+fxaa': 'taa+fxaa' },
   });
