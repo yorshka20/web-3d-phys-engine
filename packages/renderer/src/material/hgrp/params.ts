@@ -406,9 +406,37 @@ export const HGRP_VFX_PARAMS: HGRPParamsStruct = {
   ],
 };
 
+// ---------------------------------------------------------------------------------------
+// HGRPOverlayShadowParams — HGRP/CharacterNPR_OverlayShadow (the shadow shells)
+// ---------------------------------------------------------------------------------------
+
+export const HGRP_OVERLAY_SHADOW_PARAMS: HGRPParamsStruct = {
+  structName: 'HGRPOverlayShadowParams',
+  uniformVar: 'hgrp_overlay_shadow',
+  variants: ['CharacterNPR_OverlayShadow'],
+  header:
+    'Uniform block for HGRP/CharacterNPR_OverlayShadow, the unlit multiply shells (eye-white\n' +
+    'shadow, hair shadow): a color and the choice of the mask channel that carries the density.',
+  fields: [
+    vec4(
+      'base_color',
+      'base',
+      color('_BaseColor', WHITE, true),
+      'the shadow tint; a scales the density',
+    ),
+    f32(
+      'use_gray_as_alpha',
+      'base',
+      float('_UseGrayAsAlpha', 0, TOGGLE),
+      'density from the mask R (and the tint alone) instead of the mask alpha (and rgb x tint)',
+    ),
+  ],
+};
+
 export const HGRP_PARAMS_STRUCTS: readonly HGRPParamsStruct[] = [
   HGRP_MATERIAL_PARAMS,
   HGRP_VFX_PARAMS,
+  HGRP_OVERLAY_SHADOW_PARAMS,
 ];
 
 export function hgrpParamsStructForVariant(variant: HGRPShaderVariant): HGRPParamsStruct {

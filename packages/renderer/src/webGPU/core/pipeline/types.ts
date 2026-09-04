@@ -1,5 +1,5 @@
 import { GeometryData, VertexFormat } from '@renderer/geometry/GeometryFactory';
-import { AlphaMode, MaterialPipelineFacts } from '../../../material/types';
+import { AlphaMode, MaterialPipelineFacts, TransparentBlendMode } from '../../../material/types';
 import {
   HGRPMaterialDescriptor,
   HGRPStencilRole,
@@ -88,13 +88,14 @@ export interface SemanticPipelineKey {
   // Blend materials that still write depth (_TransparentDepthWrite — the game's transparent
   // cloth/hair self-occludes; only meaningful when alphaMode is 'blend')
   transparentDepthWrite: boolean;
-  // Blend materials whose colour is already scaled by coverage (HGRP's effect shaders ask
-  // for One/OneMinusSrcAlpha). Rendering those as straight alpha darkens them by a second
-  // factor of alpha; only meaningful when alphaMode is 'blend'.
-  premultipliedAlpha: boolean;
-  // The HGRP stencil role of the draw (material/hgrp hgrpStencilRole): stamp its group or yield
-  // to the eye group. Expressed here because it is pipeline state; the reference value is pass
-  // state the encoder sets per draw.
+  // How a blend material combines with the framebuffer (material/types.ts): straight alpha,
+  // premultiplied (HGRP's effect shaders ask for One/OneMinusSrcAlpha — rendered as straight
+  // they darken by a second factor of alpha) or multiply (the overlay-shadow shells). Only
+  // meaningful when alphaMode is 'blend'.
+  blendMode: TransparentBlendMode;
+  // The HGRP stencil role of the draw (material/hgrp hgrpStencilRole): stamp its group, yield
+  // to the eye group, or gate on it. Expressed here because it is pipeline state; the
+  // reference value is pass state the encoder sets per draw.
   stencil: HGRPStencilRole;
 
   // Vertex format (affects shader compilation)
@@ -117,9 +118,16 @@ export interface SemanticPipelineKey {
  * GPU Pipeline Key - WebGPU renderer internal
  * Direct mapping to WebGPU states and shader compilation parameters
  */
+export type GpuBlendState =
+  | 'replace'
+  | 'alpha-blend'
+  | 'alpha-blend-premultiplied'
+  | 'multiply'
+  | 'alpha-to-coverage';
+
 export interface GpuPipelineKey {
   // Direct WebGPU state mapping
-  blendState: 'replace' | 'alpha-blend' | 'alpha-blend-premultiplied' | 'alpha-to-coverage';
+  blendState: GpuBlendState;
   cullMode: 'none' | 'front' | 'back';
   topology: 'triangle-list' | 'line-list';
   depthWrite: boolean;
@@ -284,9 +292,7 @@ export function generateSemanticPipelineKey(
       ('floats' in material
         ? (material as { floats: Record<string, number> }).floats._TransparentDepthWrite === 1
         : false),
-    premultipliedAlpha:
-      material.alphaMode === 'blend' &&
-      (material as { blendMode?: string }).blendMode === 'premultiplied',
+    blendMode: material.alphaMode === 'blend' ? (material.blendMode ?? 'straight') : 'straight',
     stencil:
       material.materialType === 'hgrp'
         ? hgrpStencilRole(material as HGRPMaterialDescriptor)
@@ -309,7 +315,7 @@ export function generateSemanticCacheKey(key: SemanticPipelineKey): string {
     key.alphaMode,
     key.doubleSided,
     key.transparentDepthWrite,
-    key.premultipliedAlpha,
+    key.blendMode,
     key.stencil,
     key.vertexFormat,
     key.hasTextures,
@@ -429,11 +435,16 @@ function determinePrimitiveType(
 /**
  * Determine blend state from semantic key
  */
-function determineBlendState(
-  semanticKey: SemanticPipelineKey,
-): 'replace' | 'alpha-blend' | 'alpha-blend-premultiplied' | 'alpha-to-coverage' {
+function determineBlendState(semanticKey: SemanticPipelineKey): GpuBlendState {
   if (semanticKey.alphaMode === 'blend') {
-    return semanticKey.premultipliedAlpha ? 'alpha-blend-premultiplied' : 'alpha-blend';
+    switch (semanticKey.blendMode) {
+      case 'premultiplied':
+        return 'alpha-blend-premultiplied';
+      case 'multiply':
+        return 'multiply';
+      default:
+        return 'alpha-blend';
+    }
   } else if (semanticKey.alphaMode === 'mask') {
     return 'alpha-to-coverage';
   }

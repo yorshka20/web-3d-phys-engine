@@ -15,6 +15,7 @@ import {
 import { PMXModel } from '../../assets/PMXModel';
 import {
   createDefaultHGRPMaterial,
+  HGRP_COMMON_SHELLS,
   HGRPCharacterFlags,
   createHGRPMaterialFromPreset,
   hgrpResolveObjectFrame,
@@ -396,6 +397,13 @@ export class AssetLoader {
         filenames.add(filename);
       }
     }
+    // The shadow shells' masks: referenced by no preset material (their material JSON did not
+    // survive the rip), consumed by the default-fill OverlayShadow materials when present
+    for (const shell of Object.values(HGRP_COMMON_SHELLS)) {
+      if (shell.mask in textureUrls) {
+        filenames.add(shell.mask);
+      }
+    }
 
     await Promise.all(
       Array.from(filenames).map(async (filename) => {
@@ -422,7 +430,11 @@ export class AssetLoader {
         console.warn(
           `[AssetLoader] glb material has no HGRP preset entry, default-filling: ${materialName}`,
         );
-        return createDefaultHGRPMaterial(character, materialName);
+        return createDefaultHGRPMaterial(
+          character,
+          materialName,
+          (filename) => filename in textureUrls,
+        );
       }
       return createHGRPMaterialFromPreset(character, materialName, presetMaterial, flags);
     });

@@ -1,6 +1,7 @@
 import {
   HGRP_SAMPLER_BINDINGS,
   HGRP_STENCIL_EYE_BIT,
+  HGRP_STENCIL_GATE_MASK,
   HGRPPermutation,
   hgrpPermutationShaderId,
   HGRPStencilRole,
@@ -120,6 +121,10 @@ export function hgrpStencilState(role: HGRPStencilRole): Partial<GPUDepthStencil
         stencilReadMask: HGRP_STENCIL_EYE_BIT,
         stencilWriteMask: 0xff & ~HGRP_STENCIL_EYE_BIT,
       };
+    }
+    case 'gate': {
+      const face: GPUStencilFaceState = { compare: 'equal' };
+      return { stencilFront: face, stencilBack: face, stencilReadMask: HGRP_STENCIL_GATE_MASK };
     }
     default:
       return {};

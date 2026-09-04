@@ -96,6 +96,8 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
     // UV-space stencil confining the effect to the mesh's UV island. No _BaseMap/_DiffRampMap:
     // the effect shader has no base color and no ramp.
     CharacterNPR_VFX: ['_MainTex', '_BlendTex', '_DisturbTex1', '_MaskTex'],
+    // The shadow shells: one mask, read as the multiply density (materials/HGRPOverlayShadow.wgsl)
+    CharacterNPR_OverlayShadow: ['_BaseMap'],
   };
 
 // Listed slots whose shading this renderer does not implement yet, with what is missing. The

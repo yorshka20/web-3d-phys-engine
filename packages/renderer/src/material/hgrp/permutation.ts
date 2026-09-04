@@ -25,6 +25,7 @@ export const HGRP_SHADER_ID_BY_VARIANT = {
   CharacterNPR_Hair: 'hgrp_hair_shader',
   CharacterNPR_Eye: 'hgrp_eye_shader',
   CharacterNPR_VFX: 'hgrp_vfx_shader',
+  CharacterNPR_OverlayShadow: 'hgrp_overlay_shadow_shader',
 } as const satisfies Record<HGRPShaderVariant, string>;
 
 // Base shader id of a variant (the all-off permutation).

@@ -413,6 +413,10 @@ const HGRP_VARIANT_MAIN: Record<HGRPShaderVariant, { fileName: string; descripti
     fileName: 'materials/HGRPVfx.wgsl',
     description: 'HGRP CharacterNPR_VFX material shader (character effect layers)',
   },
+  CharacterNPR_OverlayShadow: {
+    fileName: 'materials/HGRPOverlayShadow.wgsl',
+    description: 'HGRP CharacterNPR_OverlayShadow material shader (multiply shadow shells)',
+  },
 };
 
 // Pass shaders built on a material permutation. `vertex`: include the shared vertex stage
@@ -515,6 +519,34 @@ function hgrpVfxIncludes(permutation: HGRPPermutation): string[] {
   ];
 }
 
+// The overlay-shadow shells are unlit multiply layers: the shared vertex stage, their own
+// uniform block and one mask — no lighting core, no hooks.
+function hgrpOverlayShadowIncludes(permutation: HGRPPermutation): string[] {
+  return [
+    'core/constants.wgsl',
+    'core/uniforms.wgsl',
+    'core/gltf_types.wgsl',
+    hgrpParamsLayoutForVariant(permutation.variant).fragmentPath,
+    'core/gltf_skinning.wgsl',
+    'bindings/hgrp_bindings.wgsl',
+    hgrpGroup2BindingsFragment(permutation),
+    'core/hgrp_vertex.wgsl',
+    'core/hgrp_debug.wgsl',
+    hgrpDebugViewFragment(permutation),
+  ];
+}
+
+function hgrpMaterialIncludes(permutation: HGRPPermutation): string[] {
+  switch (permutation.variant) {
+    case 'CharacterNPR_VFX':
+      return hgrpVfxIncludes(permutation);
+    case 'CharacterNPR_OverlayShadow':
+      return hgrpOverlayShadowIncludes(permutation);
+    default:
+      return hgrpNprFamilyIncludes(permutation, { vertex: true, shading: true });
+  }
+}
+
 const HGRP_RENDER_STATE = {
   blendMode: 'replace',
   depthTest: true,
@@ -534,10 +566,7 @@ function createHGRPMaterialShaderModule(shaderId: string): HGRPMaterialShaderMod
     type: 'render',
     fileName: main.fileName,
     sourceCode: shaderFragmentRegistry.get(main.fileName) || '',
-    includes:
-      permutation.variant === 'CharacterNPR_VFX'
-        ? hgrpVfxIncludes(permutation)
-        : hgrpNprFamilyIncludes(permutation, { vertex: true, shading: true }),
+    includes: hgrpMaterialIncludes(permutation),
     compilationOptions: { vertexFormat: ['full'] },
     runtimeParams: {},
     renderState: HGRP_RENDER_STATE,

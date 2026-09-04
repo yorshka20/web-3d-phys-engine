@@ -75,7 +75,8 @@ opaque:  sort by renderOrder → HGRP stencil group (eye stamps → body stamps 
          game's prepass order, so a brow shows through the hair but not through the face)
          → pipelineKey (semantic cache key) → materialKey → geometryId
 transp.: sort by renderOrder → sortPriority → view-space depth, back to front (correctness over
-         state dedup)
+         state dedup); the overlay-shadow shells multiply here, gated on the stencil the
+         opaque walk left
 prepare: async — resolve pipelines (once per pipelineKey), geometry, material bind groups
          (once per materialKey per frame), PMX animation buffers (once per asset per frame)
 encode:  fully synchronous state-cached walk over opaque then transparent, one pass encoder;

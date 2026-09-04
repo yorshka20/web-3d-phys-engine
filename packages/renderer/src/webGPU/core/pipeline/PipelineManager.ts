@@ -971,6 +971,19 @@ export class PipelineManager {
           writeMask: GPUColorWrite.ALL,
         },
       ];
+    } else if (gpuKey.blendState === 'multiply') {
+      // The color is a per-channel attenuation of what is already there (dst x src); alpha
+      // accumulates. The overlay-shadow shells' Blend Zero SrcColor, One One.
+      return [
+        {
+          format,
+          blend: {
+            color: { srcFactor: 'zero', dstFactor: 'src', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+          },
+          writeMask: GPUColorWrite.ALL,
+        },
+      ];
     } else if (gpuKey.blendState === 'alpha-to-coverage') {
       // Alpha to coverage
       return [

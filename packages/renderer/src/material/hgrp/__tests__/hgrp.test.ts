@@ -2,15 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createDefaultHGRPMaterial,
   createHGRPMaterialFromPreset,
-  HGRP_MATERIAL_PARAMS,
   HGRP_MATERIAL_PARAMS_LAYOUT,
+  HGRP_OVERLAY_SHADOW_PARAMS_LAYOUT,
   HGRP_PARAMS_STRUCTS,
   HGRP_STATIC_SUBSYSTEMS,
   HGRP_TEXTURE_SLOTS,
   HGRP_TEXTURE_SLOTS_BY_VARIANT,
   HGRP_TUNABLE_COLORS,
   HGRP_TUNABLE_FLOATS,
-  HGRP_VFX_PARAMS,
   HGRP_VFX_PARAMS_LAYOUT,
   hgrpAllTextureBindings,
   hgrpApplicableSubsystems,
@@ -201,6 +200,15 @@ describe('HGRP material contract', () => {
     expect(actual).toEqual(MATERIAL_PARAMS_F32_INDEX);
   });
 
+  it('keeps the HGRPOverlayShadowParams byte layout (32 bytes)', () => {
+    expect(HGRP_OVERLAY_SHADOW_PARAMS_LAYOUT.byteSize).toBe(32);
+    expect(
+      Object.fromEntries(
+        HGRP_OVERLAY_SHADOW_PARAMS_LAYOUT.fields.map((f) => [f.name, f.offset / 4]),
+      ),
+    ).toEqual({ base_color: 0, use_gray_as_alpha: 4 });
+  });
+
   it('keeps the HGRPVfxParams byte layout (224 bytes)', () => {
     expect(HGRP_VFX_PARAMS_LAYOUT.byteSize).toBe(224);
     const actual = Object.fromEntries(
@@ -296,7 +304,7 @@ describe('HGRP material contract', () => {
     expect(new Set(Object.values(names)).size).toBe(Object.keys(names).length);
   });
 
-  it('exposes the calibration GUI schema (49 floats, 6 colors)', () => {
+  it('exposes the calibration GUI schema (50 floats, 6 colors)', () => {
     expect(HGRP_TUNABLE_FLOATS.map((d) => d.key).sort()).toEqual(
       [
         '_UseDiffRampMap',
@@ -348,6 +356,7 @@ describe('HGRP material contract', () => {
         '_SilkStockingsMinAffect',
         '_SilkStockingsMaxAffect',
         '_SilkStockingsSpecularFalloff',
+        '_UseGrayAsAlpha',
       ].sort(),
     );
     expect(HGRP_TUNABLE_COLORS.map((d) => d.key).sort()).toEqual(
@@ -475,6 +484,29 @@ describe('permutations', () => {
     expect(fill.customShaderId).toBe('hgrp_npr_shader');
     expect(fill.permutation.enabled).toEqual([]);
     warn.mockRestore();
+  });
+
+  it('fills the known shadow shells as multiply OverlayShadow materials when their mask is present', () => {
+    const shell = createDefaultHGRPMaterial(
+      'c',
+      'M_eyewhiteshadow_common_01',
+      (filename) => filename === 'T_actor_common_eyeshadow_01_M.png',
+    );
+    expect(shell.variant).toBe('CharacterNPR_OverlayShadow');
+    expect(shell.customShaderId).toBe('hgrp_overlay_shadow_shader');
+    expect(shell.textures._BaseMap).toBe('hgrp_c_T_actor_common_eyeshadow_01_M.png');
+    expect(shell.floats).toEqual({ _UseGrayAsAlpha: 1, _ShadowOverIris: 20 });
+    expect(shell.alphaMode).toBe('blend');
+    expect(shell.blendMode).toBe('multiply');
+    expect(hgrpStencilRole(shell)).toBe('gate');
+    expect(hgrpStencilRef(shell)).toBe(20);
+
+    const hairShadow = createDefaultHGRPMaterial('c', 'M_hairshadow_common_01', () => true);
+    expect(hgrpStencilRef(hairShadow)).toBe(4);
+
+    // Without the mask on disk the shell falls back to the generic translucent fill
+    const noMask = createDefaultHGRPMaterial('c', 'M_hairshadow_common_01');
+    expect(noMask.variant).toBe('CharacterNPR');
   });
 
   it('assigns the stencil groups of the game prepass: eye stamps 52, body and hair 36, blend none; the under-brow strands yield with _HairStencilRef', () => {
@@ -718,7 +750,7 @@ describe('packHGRPParams', () => {
     const floats: Record<string, number> = {};
     const colors: Record<string, [number, number, number, number]> = {};
     let i = 1;
-    for (const struct of [HGRP_MATERIAL_PARAMS, HGRP_VFX_PARAMS]) {
+    for (const struct of HGRP_PARAMS_STRUCTS) {
       for (const field of struct.fields) {
         for (const param of field.params) {
           if (param.kind === 'float') {
@@ -732,6 +764,7 @@ describe('packHGRPParams', () => {
     for (const [variant, layout] of [
       ['CharacterNPR', HGRP_MATERIAL_PARAMS_LAYOUT],
       ['CharacterNPR_VFX', HGRP_VFX_PARAMS_LAYOUT],
+      ['CharacterNPR_OverlayShadow', HGRP_OVERLAY_SHADOW_PARAMS_LAYOUT],
     ] as const) {
       const packed = packHGRPParams(layout, material(variant, { floats, colors }));
       for (const field of layout.fields) {

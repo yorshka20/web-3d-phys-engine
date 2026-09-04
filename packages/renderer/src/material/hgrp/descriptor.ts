@@ -1,4 +1,4 @@
-import { AlphaMode, BaseMaterial } from '../types';
+import { AlphaMode, BaseMaterial, TransparentBlendMode } from '../types';
 import {
   HGRP_SHADER_ID_BY_VARIANT,
   HGRPDroppedSubsystem,
@@ -16,7 +16,8 @@ export type HGRPShaderVariant =
   | 'CharacterNPR_Skin'
   | 'CharacterNPR_Hair'
   | 'CharacterNPR_Eye'
-  | 'CharacterNPR_VFX';
+  | 'CharacterNPR_VFX'
+  | 'CharacterNPR_OverlayShadow';
 
 // The shader id vocabulary (base id per variant, permutation suffix) lives in permutation.ts.
 
@@ -58,8 +59,10 @@ export interface HGRPPreset {
 // Unity BlendMode enum values that survive in the preset: 1 = One, 5 = SrcAlpha,
 // 10 = OneMinusSrcAlpha. The engine's generic 'blend' alphaMode means straight alpha
 // (SrcAlpha/OneMinusSrcAlpha); the effect shaders ask for One/OneMinusSrcAlpha, i.e.
-// premultiplied, which darkens by an extra factor of alpha if rendered as straight.
-export type HGRPBlendMode = 'straight' | 'premultiplied';
+// premultiplied, which darkens by an extra factor of alpha if rendered as straight. The
+// overlay-shadow shells (Blend Zero SrcColor) multiply; their material JSON did not survive
+// the rip, so that mode is assigned by the default-fill factory, never derived from a preset.
+export type HGRPBlendMode = TransparentBlendMode;
 
 const UNITY_BLEND_ONE = 1;
 const UNITY_BLEND_ONE_MINUS_SRC_ALPHA = 10;
@@ -79,22 +82,31 @@ export function hgrpBlendMode(floats: Record<string, number>): HGRPBlendMode {
 // 'hairYield': the hair strands inside the brow cut-out (_HairBrowMask, drawn by
 // HGRPHairUnderBrowStage after the opaque walk with _HairStencilRef: 36 = "On", 52 turns the
 // yield off) draw only where bit 16 is clear, so the brow shows through the bangs but never
-// through the face, and never through hair the mask leaves white. 'none': the pass default
-// (blend materials, the outline hulls of non-hair materials).
-export type HGRPStencilRole = 'none' | 'stamp' | 'hairYield';
+// through the face, and never through hair the mask leaves white. 'gate': the overlay-shadow
+// shells read the result — _ShadowOverIris 20 draws only over eye pixels (bits 16 + 4), 4 only
+// over the rest of the character. 'none': the pass default (blend materials, the outline hulls
+// of non-hair materials).
+export type HGRPStencilRole = 'none' | 'stamp' | 'hairYield' | 'gate';
 
 export const HGRP_STENCIL_EYE_BIT = 16;
+export const HGRP_STENCIL_GATE_MASK = 20;
 const HGRP_STENCIL_BODY_REF = 36;
+const HGRP_STENCIL_SHELL_OVER_BODY = 4;
 
 // Role of a material's main draw (the under-brow strands are a second draw, see
 // hgrpHairYieldRef).
 export function hgrpStencilRole(material: HGRPMaterialDescriptor): HGRPStencilRole {
+  if (material.variant === 'CharacterNPR_OverlayShadow') {
+    return 'gate';
+  }
   return material.alphaMode === 'blend' ? 'none' : 'stamp';
 }
 
 // The stencil reference a material's main draw runs with, for its role above.
 export function hgrpStencilRef(material: HGRPMaterialDescriptor): number {
   switch (hgrpStencilRole(material)) {
+    case 'gate':
+      return material.floats._ShadowOverIris ?? HGRP_STENCIL_SHELL_OVER_BODY;
     case 'stamp':
       return material.floats._PreZStencilRefOption ?? HGRP_STENCIL_BODY_REF;
     default:
@@ -297,36 +309,79 @@ export function createHGRPMaterialFromPreset(
   return material;
 }
 
-// glb materials with no preset entry: the shared eye-white/hair shadow overlay meshes, whose
-// ripped material JSON does not exist. They are shadow overlay layers in-game, so the fill
-// renders them as translucent dark shells (an opaque grey fill read as blank grey eyes /
-// a grey cap); the real overlay formulas belong to the material-forensics session.
+// The shared shadow shells every character's glb carries under these material names, whose
+// ripped material JSON does not exist (common materials): what the game's OverlayShadow
+// shader would read for them. The masks are the two 32x32 vertical R-gradients that ship in
+// every character's texture folder (param ledger, "新证据"); the stencil gate is the shader's
+// _ShadowOverIris enum — 20 = only over the iris and brow, 4 = only over the rest of the
+// character. _BaseColor is the one value the rip does not carry: a muted cool-grey shadow
+// tint, calibrated in the GUI (guess ledger G9).
+interface HGRPCommonShell {
+  mask: string;
+  shadowOverIris: 4 | 20;
+  baseColor: [number, number, number, number];
+}
+
+export const HGRP_COMMON_SHELLS: Readonly<Record<string, HGRPCommonShell>> = {
+  M_eyewhiteshadow_common_01: {
+    mask: 'T_actor_common_eyeshadow_01_M.png',
+    shadowOverIris: 20,
+    baseColor: [0.6, 0.55, 0.62, 1],
+  },
+  M_hairshadow_common_01: {
+    mask: 'T_actor_common_hairshadow_01_M.png',
+    shadowOverIris: 4,
+    baseColor: [0.6, 0.55, 0.62, 1],
+  },
+};
+
+// glb materials with no preset entry. The known shadow shells become OverlayShadow materials —
+// unlit multiply layers reading their gradient mask as density (materials/HGRPOverlayShadow.wgsl)
+// — when the character's texture folder has the mask (`hasTexture` answers by filename); any
+// other unmatched material gets a translucent dark CharacterNPR fill, so the gap shows instead
+// of rendering as an opaque grey slab.
 export function createDefaultHGRPMaterial(
   character: string,
   materialName: string,
+  hasTexture: (filename: string) => boolean = () => false,
 ): HGRPMaterialDescriptor {
-  const material: HGRPMaterialDescriptor = {
-    materialType: 'hgrp',
-    customShaderId: HGRP_SHADER_ID_BY_VARIANT.CharacterNPR,
-    materialKey: hgrpMaterialKey(character, materialName),
-    materialName,
-    variant: 'CharacterNPR',
-    textures: {},
-    // Explicit shadow params so the fill still shades instead of rendering unlit
-    floats: { _ShadowColorBrightness: 0.5, _ShadowColorSaturation: 1 },
-    // Near-transparent cool shadow: the shells' real material JSONs did not survive the rip
-    // (common materials), and the eyeshadow shell covers the upper HALF of the eyeball — an
-    // opaque guess reads as a black lid (falsified by the pink-shell test, 2026-09-01). It
-    // is either a subtle lid-shadow layer or a blink eyelid meant to be hidden at rest;
-    // both want it barely visible. GUI-calibrated guess.
-    colors: { _BaseColor: [0.12, 0.15, 0.25, 0.15] },
-    alphaMode: 'blend',
-    alphaCutoff: 0.5,
-    doubleSided: false,
-    blendMode: 'straight',
-    permutation: { variant: 'CharacterNPR', enabled: [] },
-    enabled: true,
-  };
+  const shell = HGRP_COMMON_SHELLS[materialName];
+  const material: HGRPMaterialDescriptor =
+    shell && hasTexture(shell.mask)
+      ? {
+          materialType: 'hgrp',
+          customShaderId: HGRP_SHADER_ID_BY_VARIANT.CharacterNPR_OverlayShadow,
+          materialKey: hgrpMaterialKey(character, materialName),
+          materialName,
+          variant: 'CharacterNPR_OverlayShadow',
+          textures: { _BaseMap: hgrpTextureAssetId(character, shell.mask) },
+          // Gray-as-alpha: the masks carry their gradient in R alone (G = B = A = 1)
+          floats: { _UseGrayAsAlpha: 1, _ShadowOverIris: shell.shadowOverIris },
+          colors: { _BaseColor: [...shell.baseColor] },
+          alphaMode: 'blend',
+          alphaCutoff: 0.5,
+          doubleSided: false,
+          blendMode: 'multiply',
+          permutation: { variant: 'CharacterNPR_OverlayShadow', enabled: [] },
+          enabled: true,
+        }
+      : {
+          materialType: 'hgrp',
+          customShaderId: HGRP_SHADER_ID_BY_VARIANT.CharacterNPR,
+          materialKey: hgrpMaterialKey(character, materialName),
+          materialName,
+          variant: 'CharacterNPR',
+          textures: {},
+          // Explicit shadow params so the fill still shades instead of rendering unlit
+          floats: { _ShadowColorBrightness: 0.5, _ShadowColorSaturation: 1 },
+          colors: { _BaseColor: [0.12, 0.15, 0.25, 0.15] },
+          alphaMode: 'blend',
+          alphaCutoff: 0.5,
+          doubleSided: false,
+          blendMode: 'straight',
+          permutation: { variant: 'CharacterNPR', enabled: [] },
+          enabled: true,
+        };
   hgrpRefreshPermutation(material);
   return material;
 }

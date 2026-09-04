@@ -1,6 +1,11 @@
 import { layoutUniformStruct, UniformStructLayout } from '../uniformStruct';
 import type { HGRPMaterialDescriptor, HGRPShaderVariant } from './descriptor';
-import { HGRP_MATERIAL_PARAMS, HGRP_VFX_PARAMS, hgrpParamsStructForVariant } from './params';
+import {
+  HGRP_MATERIAL_PARAMS,
+  HGRP_OVERLAY_SHADOW_PARAMS,
+  HGRP_VFX_PARAMS,
+  hgrpParamsStructForVariant,
+} from './params';
 import { HGRPParamsStruct, HGRPUniformField, readHGRPParam } from './primitives';
 
 // Byte layouts of the two uniform structs and the packer that fills them from a descriptor.
@@ -31,9 +36,15 @@ export const HGRP_VFX_PARAMS_LAYOUT = layoutParams(
   'generated/hgrp_vfx_params.wgsl',
 );
 
+export const HGRP_OVERLAY_SHADOW_PARAMS_LAYOUT = layoutParams(
+  HGRP_OVERLAY_SHADOW_PARAMS,
+  'generated/hgrp_overlay_shadow_params.wgsl',
+);
+
 const LAYOUT_BY_STRUCT = new Map<HGRPParamsStruct, HGRPParamsLayout>([
   [HGRP_MATERIAL_PARAMS, HGRP_MATERIAL_PARAMS_LAYOUT],
   [HGRP_VFX_PARAMS, HGRP_VFX_PARAMS_LAYOUT],
+  [HGRP_OVERLAY_SHADOW_PARAMS, HGRP_OVERLAY_SHADOW_PARAMS_LAYOUT],
 ]);
 
 export const HGRP_PARAMS_LAYOUTS: readonly HGRPParamsLayout[] = Array.from(

@@ -14,10 +14,18 @@ export interface BaseMaterial {
 // belongs to. Those two are the only cross-family readers, and typing them against the regular
 // family's descriptor is what let a Material3D claim `materialType: 'gltf'` and be cast to a
 // GLTFMaterial whose fields it does not have.
+// How a blend material combines with what is behind it: straight alpha (src-alpha /
+// one-minus-src-alpha), premultiplied (one / one-minus-src-alpha — the color already carries its
+// coverage) or multiply (zero / src — the color is a per-channel attenuation of the framebuffer,
+// the overlay-shadow shells).
+export type TransparentBlendMode = 'straight' | 'premultiplied' | 'multiply';
+
 export interface MaterialPipelineFacts extends BaseMaterial {
   alphaMode?: AlphaMode;
   alphaCutoff?: number;
   doubleSided?: boolean;
+  // Only meaningful when alphaMode is 'blend'; absent = straight alpha
+  blendMode?: TransparentBlendMode;
   albedoTexture?: string;
   normalTexture?: string;
   metallicRoughnessTexture?: string;
