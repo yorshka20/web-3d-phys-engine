@@ -71,8 +71,11 @@ runs). Ordering is the first-class contract because transparency and `renderOrde
 
 ```
 build:   partition by alphaMode — blend → transparent, opaque/mask → opaque
-opaque:  sort by renderOrder → pipelineKey (semantic cache key) → materialKey → geometryId
-transp.: sort by renderOrder → view-space depth, back to front (correctness over state dedup)
+opaque:  sort by renderOrder → HGRP stencil group (eye stamps → body stamps → hair yields; the
+         game's prepass order, so a brow shows through the hair but not through the face)
+         → pipelineKey (semantic cache key) → materialKey → geometryId
+transp.: sort by renderOrder → sortPriority → view-space depth, back to front (correctness over
+         state dedup)
 prepare: async — resolve pipelines (once per pipelineKey), geometry, material bind groups
          (once per materialKey per frame), PMX animation buffers (once per asset per frame)
 encode:  fully synchronous state-cached walk over opaque then transparent, one pass encoder;

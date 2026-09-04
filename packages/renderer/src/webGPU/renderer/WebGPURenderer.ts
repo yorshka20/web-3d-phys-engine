@@ -37,8 +37,8 @@ import { BloomPass } from './passes/BloomPass';
 import { DepthPrepass } from './passes/DepthPrepass';
 import { ForwardPass } from './passes/ForwardPass';
 import { FXAAPass } from './passes/FXAAPass';
-import { HGRPBrowCompositeStage } from './passes/hgrp/HGRPBrowCompositeStage';
 import { HGRPEyeOverlayStage } from './passes/hgrp/HGRPEyeOverlayStage';
+import { HGRPHairUnderBrowStage } from './passes/hgrp/HGRPHairUnderBrowStage';
 import { HGRPOutlineStage } from './passes/hgrp/HGRPOutlineStage';
 import { TAAPass, taaJitterPixels } from './passes/TAAPass';
 import { TonemapPass } from './passes/TonemapPass';
@@ -337,12 +337,12 @@ export class WebGPURenderer implements IWebGPURenderer {
     const eyeOverlayStage = new HGRPEyeOverlayStage({
       getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });
-    const browCompositeStage = new HGRPBrowCompositeStage({
+    const hairUnderBrowStage = new HGRPHairUnderBrowStage({
       getFrameBindGroup: () => this.getHGRPFrameBindGroup(),
     });
 
     const forwardPass = new ForwardPass(
-      { outlineStage, eyeOverlayStage, browCompositeStage },
+      { outlineStage, eyeOverlayStage, hairUnderBrowStage },
       {
         getColorView: () => this.sizedTextures.sceneColor.createView(),
         getDepthView: () => this.sizedTextures.depth.createView(),

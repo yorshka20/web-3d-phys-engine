@@ -24,6 +24,7 @@
 @group(2) @binding(1) var base_map: texture_2d<f32>;
 @group(2) @binding(2) var base_sampler: sampler;
 @group(2) @binding(3) var outline_mask: texture_2d<f32>; // _OutlineMask (ST), default white
+@group(2) @binding(4) var hair_brow_mask: texture_2d<f32>; // hair's _HairBrowMask cut-out, else white
 
 @group(3) @binding(0) var scene_depth: texture_depth_2d;
 @group(3) @binding(1) var<uniform> scene_lighting: SceneLighting;
@@ -88,6 +89,10 @@ fn vs_main(input: GLTFVertexInput) -> OutlineVertexOutput {
 fn fs_main(input: OutlineVertexOutput) -> @location(0) vec4<f32> {
     let base = textureSample(base_map, base_sampler, input.uv0) * hgrp_material.base_color;
     if hgrp_material.alpha_cutoff > 0.0 && base.a < hgrp_material.alpha_cutoff {
+        discard;
+    }
+    // The hair's brow cut-out (formulas §5): its hull leaves the same hole its body does
+    if textureSample(hair_brow_mask, base_sampler, input.uv0).r < hgrp_material.hair_brow_mask_threshold {
         discard;
     }
     let darkened = base.rgb * hgrp_material.outline_color_brightness;

@@ -417,7 +417,7 @@ const HGRP_VARIANT_MAIN: Record<HGRPShaderVariant, { fileName: string; descripti
 
 // Pass shaders built on a material permutation. `vertex`: include the shared vertex stage
 // (the eye overlay brings its own depth-biased one). `shading`: include the NPR core and the
-// subsystem hooks (the hair stencil only samples its mask).
+// subsystem hooks.
 export const HGRP_PASS_SHADERS = {
   eyeOverlay: {
     id: 'hgrp_eye_overlay_shader',
@@ -429,25 +429,15 @@ export const HGRP_PASS_SHADERS = {
     shading: true,
     tags: ['hgrp', 'eye', 'npr'],
   },
-  hairStencil: {
-    id: 'hgrp_hair_stencil_shader',
+  hairUnderBrow: {
+    id: 'hgrp_hair_under_brow_shader',
     variant: 'CharacterNPR_Hair',
-    fileName: 'passes/hgrp_hair_stencil.wgsl',
-    name: 'HGRP Hair Stencil Shader',
-    description: 'HGRP hair stencil mark (sw_M-masked, brow-through compositing)',
-    vertex: true,
-    shading: false,
-    tags: ['hgrp', 'hair', 'stencil', 'npr'],
-  },
-  browThrough: {
-    id: 'hgrp_brow_through_shader',
-    variant: 'CharacterNPR_Eye',
-    fileName: 'passes/hgrp_brow_through.wgsl',
-    name: 'HGRP Brow Through Shader',
-    description: 'HGRP occluded-brow overlay (stencil-gated through the hair mark)',
+    fileName: 'passes/hgrp_hair_under_brow.wgsl',
+    name: 'HGRP Hair Under Brow Shader',
+    description: 'HGRP hair strands inside the brow cut-out (hair shading, stencil yield)',
     vertex: true,
     shading: true,
-    tags: ['hgrp', 'brow', 'stencil', 'npr'],
+    tags: ['hgrp', 'hair', 'brow', 'npr'],
   },
 } as const satisfies Record<
   string,
@@ -499,6 +489,9 @@ function hgrpNprFamilyIncludes(
           'lighting/hgrp_lighting.wgsl',
           'lighting/hgrp_npr.wgsl',
           ...(permutation.variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
+          ...(permutation.variant === 'CharacterNPR_Hair'
+            ? ['lighting/hgrp_hair_shading.wgsl']
+            : []),
           ...(permutation.variant === 'CharacterNPR' ? ['lighting/hgrp_silk_stockings.wgsl'] : []),
           'core/hgrp_debug.wgsl',
           hgrpDebugViewFragment(permutation),

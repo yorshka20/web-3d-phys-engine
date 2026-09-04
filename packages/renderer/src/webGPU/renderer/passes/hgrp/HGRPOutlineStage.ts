@@ -10,7 +10,7 @@ import { MaterialBinder } from '../../../core/MaterialBinder';
 import { MVPUniformManager } from '../../../core/MVPUniformManager';
 import { createGltfVertexBufferLayout } from '../../../core/pipeline/vertexLayouts';
 import { ShaderManager } from '../../../core/shaders/ShaderManager';
-import { HGRPMaterialDescriptor } from '../../../../material/hgrp';
+import { HGRP_STENCIL_EYE_BIT, HGRPMaterialDescriptor } from '../../../../material/hgrp';
 import { Inject, ServiceTokens } from '../../../core/decorators';
 import { WebGPUContext } from '../../../core/WebGPUContext';
 import { DrawItem } from '../../frame/DrawListBuilder';
@@ -52,13 +52,29 @@ function outlineDepthCompare(material: HGRPMaterialDescriptor | undefined): GPUC
 }
 
 /**
+ * The hair's hull, like the hair itself, skips every pixel the eye group stamped (the game's
+ * CharacterOutline pass on hair: Ref 16, ReadMask 16, NotEqual — formulas §5), so no stroke
+ * runs across a brow or an iris showing through the bangs. Other hulls use the pass default.
+ */
+function isHairHull(material: HGRPMaterialDescriptor | undefined): boolean {
+  return material?.variant === 'CharacterNPR_Hair';
+}
+
+const HAIR_HULL_STENCIL: Partial<GPUDepthStencilState> = {
+  stencilFront: { compare: 'not-equal' },
+  stencilBack: { compare: 'not-equal' },
+  stencilReadMask: HGRP_STENCIL_EYE_BIT,
+};
+
+/**
  * HGRP Outline Stage
  *
  * Draws the inverted-hull outline lists inside the forward render pass (same attachments, so
  * this is a draw stage of ForwardPass, not a render pass of its own). The pipelines are built
  * here rather than through the semantic pipeline key, which cannot express front-face culling;
- * per-material state is the outline bind group (material uniform + base map) resolved by
- * MaterialBinder, plus the depth comparison the material's _OutlineZTest asks for.
+ * per-material state is the outline bind group (material uniform + base map + masks) resolved
+ * by MaterialBinder, plus the depth comparison the material's _OutlineZTest asks for and the
+ * hair hull's stencil yield.
  */
 export class HGRPOutlineStage {
   @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
@@ -69,10 +85,10 @@ export class HGRPOutlineStage {
   @Inject(ServiceTokens.MVP_UNIFORM_MANAGER) private accessor mvpUniformManager!: MVPUniformManager;
   @Inject(ServiceTokens.GEOMETRY_MANAGER) private accessor geometryManager!: GeometryManager;
 
-  // One pipeline per distinct depth comparison the frame's materials ask for (_OutlineZTest).
-  // The whole current roster collapses to a single entry; the map exists so a preset value
+  // One pipeline per distinct (depth comparison, hair yield) the frame's materials ask for.
+  // The whole current roster collapses to two entries; the map exists so a preset value
   // outside that set lands on its own pipeline instead of being silently rendered wrong.
-  private pipelines = new Map<GPUCompareFunction, GPURenderPipeline>();
+  private pipelines = new Map<string, GPURenderPipeline>();
   private frameBindings = new Map<string, GPUBindGroup>();
 
   // The frame group carries the prepass depth (its size is the half-pixel floor of the stroke
@@ -86,11 +102,8 @@ export class HGRPOutlineStage {
     }
     for (const item of items) {
       const { renderable } = item;
-      const material =
-        renderable.material.materialType === 'hgrp'
-          ? (renderable.material as HGRPMaterialDescriptor)
-          : undefined;
-      item.pipeline = this.ensurePipeline(outlineDepthCompare(material));
+      const material = hgrpMaterialOf(renderable.material);
+      item.pipeline = this.ensurePipeline(outlineDepthCompare(material), isHairHull(material));
       item.geometry = this.geometryManager.createGeometryFromData(renderable.geometryId, {
         geometryData: renderable.geometryData,
       });
@@ -107,7 +120,8 @@ export class HGRPOutlineStage {
    * Encode one hull list. Called twice per frame — the opaque materials' hulls between the
    * opaque and transparent walks, the blend materials' after the transparent walk (each hull
    * needs its own object's depth already down; see DrawLists.transparentOutline). The caller's
-   * encode-state cache is invalid afterwards, since this stage binds its own pipeline/groups.
+   * encode-state cache is invalid afterwards, since this stage binds its own pipeline/groups
+   * and stencil reference.
    */
   encode(renderPass: GPURenderPassEncoder, items: DrawItem[], frameData: FrameData): void {
     if (items.length === 0) {
@@ -119,6 +133,8 @@ export class HGRPOutlineStage {
     let boundGeometryId: string | undefined;
     let boundUniformKey: string | undefined;
     renderPass.setBindGroup(3, this.globals.getFrameBindGroup());
+    // Only the hair hull tests the stencil, against the eye bit
+    renderPass.setStencilReference(HGRP_STENCIL_EYE_BIT);
 
     for (const item of items) {
       const { renderable } = item;
@@ -149,8 +165,9 @@ export class HGRPOutlineStage {
     }
   }
 
-  private ensurePipeline(depthCompare: GPUCompareFunction): GPURenderPipeline {
-    const cached = this.pipelines.get(depthCompare);
+  private ensurePipeline(depthCompare: GPUCompareFunction, hairHull: boolean): GPURenderPipeline {
+    const key = `${depthCompare}:${hairHull ? 'hair' : 'body'}`;
+    const cached = this.pipelines.get(key);
     if (cached) {
       return cached;
     }
@@ -169,7 +186,7 @@ export class HGRPOutlineStage {
     const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager);
 
     const pipeline = this.device.createRenderPipeline({
-      label: `hgrp_outline_pipeline_${depthCompare}`,
+      label: `hgrp_outline_pipeline_${key}`,
       layout: this.device.createPipelineLayout({
         label: 'hgrp_outline_pipeline_layout',
         bindGroupLayouts: [timeLayout, mvpLayout, outlineLayout, frameLayout],
@@ -190,9 +207,16 @@ export class HGRPOutlineStage {
         format: this.context.getDepthStencilFormat(),
         depthWriteEnabled: true,
         depthCompare,
+        ...(hairHull ? HAIR_HULL_STENCIL : {}),
       },
     });
-    this.pipelines.set(depthCompare, pipeline);
+    this.pipelines.set(key, pipeline);
     return pipeline;
   }
+}
+
+function hgrpMaterialOf(
+  material: DrawItem['renderable']['material'],
+): HGRPMaterialDescriptor | undefined {
+  return material.materialType === 'hgrp' ? (material as HGRPMaterialDescriptor) : undefined;
 }

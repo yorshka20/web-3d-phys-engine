@@ -7,7 +7,7 @@ import {
   hgrpResolvePermutation,
 } from './permutation';
 
-// The HGRP (HypergryphRenderPipeline) material family reproduces the four CharacterNPR shader
+// The HGRP (HypergryphRenderPipeline) material family reproduces the CharacterNPR shader
 // variants from ripped Unity material data. Parameter and texture-slot names mirror the HGRP
 // property names verbatim so preset values load without translation.
 
@@ -69,6 +69,43 @@ export function hgrpBlendMode(floats: Record<string, number>): HGRPBlendMode {
     floats._DstBlend === UNITY_BLEND_ONE_MINUS_SRC_ALPHA
     ? 'premultiplied'
     : 'straight';
+}
+
+// The game's stencil choreography (hgrp-decompiled-formulas.md §5), transplanted from its
+// depth prepass into the forward pass's opaque walk, which DrawListBuilder orders the same way.
+// 'stamp': every opaque material's main draw writes its group, always, replacing — the eye
+// materials _PreZStencilRefOption (52, "Draw Over Hair", carries bit 16; 36 is off), cloth,
+// skin and the hair body 36 — so a surface in front of a brow takes its pixels back.
+// 'hairYield': the hair strands inside the brow cut-out (_HairBrowMask, drawn by
+// HGRPHairUnderBrowStage after the opaque walk with _HairStencilRef: 36 = "On", 52 turns the
+// yield off) draw only where bit 16 is clear, so the brow shows through the bangs but never
+// through the face, and never through hair the mask leaves white. 'none': the pass default
+// (blend materials, the outline hulls of non-hair materials).
+export type HGRPStencilRole = 'none' | 'stamp' | 'hairYield';
+
+export const HGRP_STENCIL_EYE_BIT = 16;
+const HGRP_STENCIL_BODY_REF = 36;
+
+// Role of a material's main draw (the under-brow strands are a second draw, see
+// hgrpHairYieldRef).
+export function hgrpStencilRole(material: HGRPMaterialDescriptor): HGRPStencilRole {
+  return material.alphaMode === 'blend' ? 'none' : 'stamp';
+}
+
+// The stencil reference a material's main draw runs with, for its role above.
+export function hgrpStencilRef(material: HGRPMaterialDescriptor): number {
+  switch (hgrpStencilRole(material)) {
+    case 'stamp':
+      return material.floats._PreZStencilRefOption ?? HGRP_STENCIL_BODY_REF;
+    default:
+      return 0;
+  }
+}
+
+// The reference of the hair's under-brow draw ('hairYield'): with bit 16 clear (36) the test
+// passes only where no eye stamp is; with 52 it always passes and the yield is off.
+export function hgrpHairYieldRef(material: HGRPMaterialDescriptor): number {
+  return material.floats._HairStencilRef ?? HGRP_STENCIL_BODY_REF;
 }
 
 // Which eye-region surface a CharacterNPR_Eye material is. The two share one shader in the

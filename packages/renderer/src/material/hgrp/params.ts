@@ -244,7 +244,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'hair_brow_mask_threshold',
       'browThrough',
       float('_HairBrowMaskThreshold', 0.5, { min: 0, max: 1, step: 0.01 }),
-      'sw_M cutoff, brow-through mark',
+      'the hair and its outline discard where _HairBrowMask.r falls below this',
     ),
     f32(
       'spec_bump_scale',

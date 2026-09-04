@@ -1,5 +1,5 @@
 import { FrameData } from '../../../../frame/types';
-import { HGRPMaterialDescriptor, hgrpStencilRef } from '../../../../material/hgrp';
+import { hgrpHairYieldRef, HGRPMaterialDescriptor } from '../../../../material/hgrp';
 import { BindGroupManager } from '../../../core/BindGroupManager';
 import { GeometryManager } from '../../../core/GeometryManager';
 import {
@@ -18,23 +18,20 @@ import { DrawItem } from '../../frame/DrawListBuilder';
 import { HGRPFrameGlobals } from './types';
 
 /**
- * HGRP Eye Overlay Stage
+ * HGRP Hair Under-Brow Stage
  *
- * Draws the iris, which sits behind the face's eye-white surface. The overlay shader
- * (passes/hgrp_eye_overlay.wgsl) pulls the projected position slightly toward the camera,
- * so the iris wins the depth test against the eye-white millimetres in front of it but
- * still loses to the cheek/hair centimetres in front at grazing angles — the game's pre-Z
- * stencil compositing achieves the same gating, but its writer semantics did not survive
- * the rip (and the eye-white shadow shell only covers the upper eye, so it cannot stamp
- * the opening; probed 2026-09-01).
+ * Draws the hair strands inside the brow cut-out — the bangs _HairBrowMask marks — right
+ * after the opaque walk, with the game's hair stencil yield (hgrp-decompiled-formulas.md §5:
+ * Ref _HairStencilRef, ReadMask 16, GEqual): the strands skip every pixel the brow stamped in
+ * the opaque walk and the body did not take back, so the brow shows through the bangs at full
+ * strength, while the face in front of a brow still hides it. The hair's main draw leaves these
+ * strands out (materials/HGRPHair.wgsl), so nothing is drawn twice.
  *
- * Fragment shading is the shared Eye-variant path with the regular variant bind groups;
- * only the vertex projection and depth-write state differ, which the semantic pipeline key
- * cannot express — so the pipelines are pass-private (same rule as HGRPOutlineStage), one
- * per Eye permutation met (the shader and the group-2 layout follow the material's
- * permutation, so an iris with a matcap and a brow with a LUT are two pipelines).
+ * Same shading and vertex stage as the hair material; only the discard polarity and the stencil
+ * state differ, which the semantic pipeline key cannot express — so the pipelines are
+ * pass-private, one per Hair permutation met.
  */
-export class HGRPEyeOverlayStage {
+export class HGRPHairUnderBrowStage {
   private pipelines = new Map<string, GPURenderPipeline>();
   private frameBindings = new Map<string, GPUBindGroup | undefined>();
 
@@ -65,10 +62,9 @@ export class HGRPEyeOverlayStage {
   }
 
   /**
-   * Encode the overlay draws. Runs after the opaque/outline walks and before transparent
-   * (the translucent eye-white shadow shell blends on top); the caller's encode-state cache
-   * is invalid afterwards. Items arrive sorted by materialKey, so pipeline switches are
-   * bounded by the number of materials.
+   * Encode the under-brow draws. Runs right after the opaque walk, so every stamp the brow
+   * left and the body took back is in the stencil; the caller's encode-state cache is invalid
+   * afterwards.
    */
   encode(renderPass: GPURenderPassEncoder, items: DrawItem[], frameData: FrameData): void {
     if (items.length === 0) {
@@ -96,7 +92,7 @@ export class HGRPEyeOverlayStage {
           renderPass.setBindGroup(2, bindGroup);
         }
         renderPass.setStencilReference(
-          hgrpStencilRef(renderable.material as HGRPMaterialDescriptor),
+          hgrpHairYieldRef(renderable.material as HGRPMaterialDescriptor),
         );
         boundMaterialKey = renderable.materialKey;
       }
@@ -116,8 +112,9 @@ export class HGRPEyeOverlayStage {
   }
 
   private ensurePipeline(material: HGRPMaterialDescriptor): GPURenderPipeline {
-    const shaderId = hgrpPassShaderId('eyeOverlay', material.permutation);
-    const existing = this.pipelines.get(shaderId);
+    const shaderId = hgrpPassShaderId('hairUnderBrow', material.permutation);
+    const key = `${shaderId}:${material.doubleSided ? 'none' : 'back'}`;
+    const existing = this.pipelines.get(key);
     if (existing) {
       return existing;
     }
@@ -127,19 +124,19 @@ export class HGRPEyeOverlayStage {
     const timeLayout = this.bindGroupManager.getBindGroupLayout('timeBindGroupLayout');
     const mvpLayout = this.bindGroupManager.getBindGroupLayout('mvpBindGroupLayout');
     if (!timeLayout || !mvpLayout) {
-      throw new Error('Time/MVP bind group layouts not found for the eye overlay pipeline');
+      throw new Error('Time/MVP bind group layouts not found for the hair under-brow pipeline');
     }
-    const eyeLayout = getOrCreateHGRPMaterialBindGroupLayout(
+    const hairLayout = getOrCreateHGRPMaterialBindGroupLayout(
       this.bindGroupManager,
       material.permutation,
     );
     const frameLayout = getOrCreateHGRPFrameBindGroupLayout(this.bindGroupManager);
 
     const pipeline = this.device.createRenderPipeline({
-      label: `hgrp_eye_overlay_pipeline:${shaderId}`,
+      label: `hgrp_hair_under_brow_pipeline:${key}`,
       layout: this.device.createPipelineLayout({
-        label: `hgrp_eye_overlay_pipeline_layout:${shaderId}`,
-        bindGroupLayouts: [timeLayout, mvpLayout, eyeLayout, frameLayout],
+        label: `hgrp_hair_under_brow_pipeline_layout:${shaderId}`,
+        bindGroupLayouts: [timeLayout, mvpLayout, hairLayout, frameLayout],
       }),
       vertex: {
         module: shaderModule,
@@ -151,19 +148,21 @@ export class HGRPEyeOverlayStage {
         entryPoint: 'fs_main',
         targets: [{ format: this.context.getSceneColorFormat() }],
       },
-      primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
+      primitive: {
+        topology: 'triangle-list',
+        cullMode: material.doubleSided ? 'none' : 'back',
+        frontFace: 'ccw',
+      },
+      // An opaque draw like the hair body's, plus the yield: depth-tested and written against
+      // everything the opaque walk drew.
       depthStencil: {
         format: this.context.getDepthStencilFormat(),
-        // Depth-tested against the real scene; the biased projection provides the gating.
-        // No depth write: the biased depths must not pollute the buffer.
-        depthWriteEnabled: false,
+        depthWriteEnabled: true,
         depthCompare: 'less',
-        // The iris stamps its stencil group like its opaque draw would, so the overlay-shadow
-        // shell gated on eye pixels (_ShadowOverIris 20) finds it.
-        ...hgrpStencilState('stamp'),
+        ...hgrpStencilState('hairYield'),
       },
     });
-    this.pipelines.set(shaderId, pipeline);
+    this.pipelines.set(key, pipeline);
     return pipeline;
   }
 }

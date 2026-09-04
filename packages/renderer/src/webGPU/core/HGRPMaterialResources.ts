@@ -1,7 +1,9 @@
 import {
   HGRP_SAMPLER_BINDINGS,
+  HGRP_STENCIL_EYE_BIT,
   HGRPPermutation,
   hgrpPermutationShaderId,
+  HGRPStencilRole,
   hgrpTextureBindings,
 } from '../../material/hgrp';
 import { BindGroupManager } from './BindGroupManager';
@@ -53,9 +55,10 @@ export function getOrCreateHGRPFrameBindGroupLayout(
 
 // Group 2 for the HGRP outline stage: the material uniform (same buffer as the variant bind
 // group; outline_width/offset_z are read in the vertex stage) plus the base map for the
-// outline color and the _OutlineMask width mask (sampled in the VERTEX stage via
-// textureSampleLevel, hence the sampler/mask visibilities). One layout for every variant;
-// the matching declarations are hand-written in passes/hgrp_outline.wgsl.
+// outline color, the _OutlineMask width mask (sampled in the VERTEX stage via
+// textureSampleLevel, hence the sampler/mask visibilities) and the hair's _HairBrowMask
+// cut-out (white on every other material). One layout for every variant; the matching
+// declarations are hand-written in passes/hgrp_outline.wgsl.
 export const HGRP_OUTLINE_BIND_GROUP_LAYOUT_ID = 'hgrpOutlineBindGroupLayout';
 
 export function getOrCreateHGRPOutlineBindGroupLayout(
@@ -88,9 +91,39 @@ export function getOrCreateHGRPOutlineBindGroupLayout(
         visibility: GPUShaderStage.VERTEX,
         texture: { sampleType: 'float' },
       },
+      {
+        binding: 4,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'float' },
+      },
     ],
     label: HGRP_OUTLINE_BIND_GROUP_LAYOUT_ID,
   });
+}
+
+// The stencil half of a depth-stencil state for one HGRP stencil role (material/hgrp
+// hgrpStencilRole; the game's PreGBuffer / OverlayShadow stencil blocks, formulas §5). The
+// reference value is pass state the encoder sets per material (hgrpStencilRef).
+export function hgrpStencilState(role: HGRPStencilRole): Partial<GPUDepthStencilState> {
+  switch (role) {
+    case 'stamp': {
+      const face: GPUStencilFaceState = { compare: 'always', passOp: 'replace' };
+      return { stencilFront: face, stencilBack: face };
+    }
+    case 'hairYield': {
+      // Passes only where the eye bit is clear: ref & 16 = 0 >= stencil & 16. The write mask
+      // leaves the eye bit alone, as the game's does.
+      const face: GPUStencilFaceState = { compare: 'greater-equal', passOp: 'replace' };
+      return {
+        stencilFront: face,
+        stencilBack: face,
+        stencilReadMask: HGRP_STENCIL_EYE_BIT,
+        stencilWriteMask: 0xff & ~HGRP_STENCIL_EYE_BIT,
+      };
+    }
+    default:
+      return {};
+  }
 }
 
 // Group 2 of one HGRP permutation: the uniform block, the enabled subsystems' texture slots

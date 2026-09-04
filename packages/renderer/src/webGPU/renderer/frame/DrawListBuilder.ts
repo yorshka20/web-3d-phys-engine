@@ -1,5 +1,11 @@
 import { FrameData, RenderData } from '../../../frame/types';
-import { HGRPMaterialDescriptor, hgrpPermutationEnables } from '../../../material/hgrp';
+import {
+  HGRPMaterialDescriptor,
+  HGRP_STENCIL_EYE_BIT,
+  hgrpPermutationEnables,
+  hgrpStencilRef,
+  hgrpStencilRole,
+} from '../../../material/hgrp';
 import { vec3 } from 'gl-matrix';
 import { generateSemanticCacheKey, generateSemanticPipelineKey } from '../../core/pipeline/types';
 import { GeometryCacheItem } from '../../core/types';
@@ -25,6 +31,11 @@ export interface DrawItem {
   viewDepth: number;
   /** `_TransparentSortPriority`: higher renders later (on top), between renderOrder and depth. */
   sortPriority?: number;
+  /**
+   * Stencil reference the draw runs with (the HGRP stencil groups, material/hgrp
+   * hgrpStencilRef); undefined leaves the pass's current reference in place.
+   */
+  stencilRef?: number;
   /** Resolved in the prepare phase — see the interface note. */
   pipeline?: GPURenderPipeline;
   /** Resolved in the prepare phase — see the interface note. */
@@ -35,14 +46,14 @@ export interface DrawItem {
  * The frame's draws, split by the order ForwardPass has to encode them in.
  *
  * A renderable lands in exactly one of `opaque` / `transparent` / `eyeOverlay` (its main
- * draw), and may additionally appear in the hull and stencil lists, which re-draw the same
+ * draw), and may additionally appear in the hull and under-brow lists, which re-draw the same
  * geometry with a different pipeline.
  */
 export interface DrawLists {
   /**
-   * Main draws of every non-blend material, encoded first. Sorted by state-change cost
-   * (renderOrder stays the outermost contract), since depth testing makes their order
-   * otherwise free.
+   * Main draws of every non-blend material, encoded first. Sorted by renderOrder, then by the
+   * HGRP stencil group (see `stencilOrder`), then by state-change cost, since depth testing
+   * makes the order otherwise free.
    */
   opaque: DrawItem[];
   /**
@@ -79,14 +90,12 @@ export interface DrawLists {
    */
   eyeOverlay: DrawItem[];
   /**
-   * Brow-through compositing, encoded as a pair after the eye overlay
-   * (see HGRPBrowCompositeStage): `hairStencil` is the hair whose permutation enables
-   * browThrough (`_DrawUnderBrow` with its sw_M mask present), stamping a masked stencil
-   * mark; `browThrough` is the brow re-drawing where that mark says it is occluded. The brow
-   * also keeps its ordinary draw in `opaque`.
+   * The hair strands inside the brow cut-out, re-drawn right after the opaque walk with the
+   * hair stencil yield (see HGRPHairUnderBrowStage): the hair whose permutation enables
+   * browThrough (`_DrawUnderBrow` with its sw_M mask present). The hair's main draw in `opaque`
+   * leaves those strands out.
    */
-  hairStencil: DrawItem[];
-  browThrough: DrawItem[];
+  hairUnderBrow: DrawItem[];
 }
 
 /**
@@ -96,8 +105,7 @@ export interface DrawLists {
 const STAGE_TAG = {
   outline: 'hgrp_outline',
   eyeOverlay: 'hgrp_eye_overlay',
-  hairStencil: 'hgrp_hair_stencil',
-  browThrough: 'hgrp_brow_through',
+  hairUnderBrow: 'hgrp_hair_under_brow',
 } as const;
 
 // Plain code-unit comparison: sort keys are opaque cache ids, locale rules must not apply.
@@ -115,6 +123,20 @@ function byStateCost(a: DrawItem, b: DrawItem): number {
     compareKeys(a.renderable.materialKey, b.renderable.materialKey) ||
     compareKeys(a.renderable.geometryId, b.renderable.geometryId)
   );
+}
+
+/**
+ * Position of an opaque draw in the HGRP stencil choreography (material/hgrp hgrpStencilRole,
+ * the game's PreGBuffer order): the eye group stamps first (0), so that everything else (1)
+ * restamps its own pixels wherever it is in front of a brow; the under-brow hair strands, which
+ * skip every pixel still carrying the eye bit, are a separate stage after the walk.
+ */
+function stencilOrder(item: DrawItem): number {
+  const material = hgrpMaterialOf(item.renderable);
+  if (!material || hgrpStencilRole(material) !== 'stamp') {
+    return 1;
+  }
+  return (hgrpStencilRef(material) & HGRP_STENCIL_EYE_BIT) !== 0 ? 0 : 1;
 }
 
 const scratchBoundsCenter = vec3.create();
@@ -160,8 +182,7 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
     outline: [],
     transparentOutline: [],
     eyeOverlay: [],
-    hairStencil: [],
-    browThrough: [],
+    hairUnderBrow: [],
   };
   const viewMatrix = frameData.scene.camera.viewMatrix;
 
@@ -172,6 +193,7 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
   lists.opaque.sort(
     (a, b) =>
       a.renderable.renderOrder - b.renderable.renderOrder ||
+      stencilOrder(a) - stencilOrder(b) ||
       compareKeys(a.pipelineKey, b.pipelineKey) ||
       byStateCost(a, b),
   );
@@ -186,8 +208,7 @@ export function buildDrawLists(frameData: FrameData): DrawLists {
   lists.outline.sort(byStateCost);
   lists.transparentOutline.sort(byStateCost);
   lists.eyeOverlay.sort(byStateCost);
-  lists.hairStencil.sort(byStateCost);
-  lists.browThrough.sort(byStateCost);
+  lists.hairUnderBrow.sort(byStateCost);
 
   return lists;
 }
@@ -224,6 +245,8 @@ function route(renderable: RenderData, lists: DrawLists, viewMatrix: Float32Arra
     renderable,
     pipelineKey: generateSemanticCacheKey(semanticKey),
     viewDepth: 0,
+    stencilRef:
+      material && hgrpStencilRole(material) !== 'none' ? hgrpStencilRef(material) : undefined,
   };
 
   if (isBlend) {
@@ -236,9 +259,6 @@ function route(renderable: RenderData, lists: DrawLists, viewMatrix: Float32Arra
   lists.opaque.push(item);
 
   if (material && hgrpPermutationEnables(material.permutation, 'browThrough')) {
-    lists.hairStencil.push(stageDraw(renderable, STAGE_TAG.hairStencil));
-  }
-  if (material?.variant === 'CharacterNPR_Eye') {
-    lists.browThrough.push(stageDraw(renderable, STAGE_TAG.browThrough));
+    lists.hairUnderBrow.push(stageDraw(renderable, STAGE_TAG.hairUnderBrow));
   }
 }

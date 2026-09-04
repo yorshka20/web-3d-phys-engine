@@ -1,5 +1,10 @@
 import { GeometryData, VertexFormat } from '@renderer/geometry/GeometryFactory';
 import { AlphaMode, MaterialPipelineFacts } from '../../../material/types';
+import {
+  HGRPMaterialDescriptor,
+  HGRPStencilRole,
+  hgrpStencilRole,
+} from '../../../material/hgrp/descriptor';
 import { mat4, vec3 } from 'gl-matrix';
 import { GeometryCacheItem } from '../types';
 
@@ -87,6 +92,10 @@ export interface SemanticPipelineKey {
   // for One/OneMinusSrcAlpha). Rendering those as straight alpha darkens them by a second
   // factor of alpha; only meaningful when alphaMode is 'blend'.
   premultipliedAlpha: boolean;
+  // The HGRP stencil role of the draw (material/hgrp hgrpStencilRole): stamp its group or yield
+  // to the eye group. Expressed here because it is pipeline state; the reference value is pass
+  // state the encoder sets per draw.
+  stencil: HGRPStencilRole;
 
   // Vertex format (affects shader compilation)
   vertexFormat: VertexFormat; // simple=position, full=position+normal+uv, colored=position+color
@@ -115,6 +124,7 @@ export interface GpuPipelineKey {
   topology: 'triangle-list' | 'line-list';
   depthWrite: boolean;
   depthTest: boolean;
+  stencil: HGRPStencilRole;
 
   // Shader compilation parameters
   vertexAttributes: number; // Bitmask: POSITION|NORMAL|UV|COLOR
@@ -277,6 +287,10 @@ export function generateSemanticPipelineKey(
     premultipliedAlpha:
       material.alphaMode === 'blend' &&
       (material as { blendMode?: string }).blendMode === 'premultiplied',
+    stencil:
+      material.materialType === 'hgrp'
+        ? hgrpStencilRole(material as HGRPMaterialDescriptor)
+        : 'none',
     hasTextures: hasAnyTexture(material),
     primitiveType: determinePrimitiveType(geometry, options),
     vertexFormat: geometry.vertexFormat,
@@ -296,6 +310,7 @@ export function generateSemanticCacheKey(key: SemanticPipelineKey): string {
     key.doubleSided,
     key.transparentDepthWrite,
     key.premultipliedAlpha,
+    key.stencil,
     key.vertexFormat,
     key.hasTextures,
     key.primitiveType,
@@ -315,6 +330,7 @@ export function generateGpuCacheKey(key: GpuPipelineKey): string {
     key.topology,
     key.depthWrite,
     key.depthTest,
+    key.stencil,
     key.vertexAttributes,
     defines,
     key.customShaderId || 'default',
@@ -332,6 +348,7 @@ export function convertToGpuPipelineKey(semanticKey: SemanticPipelineKey): GpuPi
     topology: determineTopology(semanticKey),
     depthWrite: determineDepthWrite(semanticKey),
     depthTest: determineDepthTest(semanticKey),
+    stencil: semanticKey.stencil,
     vertexAttributes: semanticKey.vertexAttributes ?? determineVertexAttributes(semanticKey),
     shaderDefines: generateShaderDefines(semanticKey),
     customShaderId: semanticKey.customShaderId,

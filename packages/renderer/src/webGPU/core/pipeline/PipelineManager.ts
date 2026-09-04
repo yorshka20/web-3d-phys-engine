@@ -4,6 +4,7 @@ import { Inject, Injectable, ServiceTokens } from '../decorators';
 import {
   getOrCreateHGRPFrameBindGroupLayout,
   getOrCreateHGRPMaterialBindGroupLayout,
+  hgrpStencilState,
 } from '../HGRPMaterialResources';
 import { PMXMaterialProcessor } from '../PMXMaterialProcessor';
 import { WebGPUResourceManager } from '../ResourceManager';
@@ -1015,6 +1016,7 @@ export class PipelineManager {
       format: this.context.getDepthStencilFormat(),
       depthWriteEnabled: gpuKey.depthWrite,
       depthCompare: 'less',
+      ...hgrpStencilState(gpuKey.stencil),
     };
   }
 

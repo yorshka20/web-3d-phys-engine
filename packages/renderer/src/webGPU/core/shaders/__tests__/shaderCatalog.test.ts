@@ -70,12 +70,14 @@ const REAL_PERMUTATIONS: HGRPPermutation[] = [
 // and the hook fragments of whichever subsystems are on, all sharing one function scope: a
 // name the material declares can collide with one a hook declares, and only in the
 // permutations where both are present — so checking one permutation proves nothing. A WGSL
-// parser alone does not catch it either; this is a scope check, not a syntax check.
+// parser alone does not catch it either; this is a scope check, not a syntax check. Module-scope
+// functions are checked the same way: a helper that moves into a shared include while its old
+// copy stays in a material file is declared twice in every module that composes both.
 function findRedeclarations(source: string): string[] {
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   const scopes: Set<string>[] = [new Set()];
   const clashes: string[] = [];
-  const token = /(\{)|(\})|\b(?:let|var|const)\s+([A-Za-z_]\w*)/g;
+  const token = /(\{)|(\})|\b(?:let|var|const|fn)\s+([A-Za-z_]\w*)/g;
   for (let m = token.exec(code); m !== null; m = token.exec(code)) {
     if (m[1]) {
       scopes.push(new Set());
@@ -189,10 +191,9 @@ describe('HGRP derived shader modules', () => {
       expectTexturesDeclared(derive(hgrpPermutationShaderId(permutation)));
       if (permutation.variant === 'CharacterNPR_Eye') {
         expectTexturesDeclared(derive(hgrpPassShaderId('eyeOverlay', permutation)));
-        expectTexturesDeclared(derive(hgrpPassShaderId('browThrough', permutation)));
       }
       if (permutation.enabled.includes('browThrough')) {
-        expectTexturesDeclared(derive(hgrpPassShaderId('hairStencil', permutation)));
+        expectTexturesDeclared(derive(hgrpPassShaderId('hairUnderBrow', permutation)));
       }
     }
   });
@@ -261,7 +262,8 @@ describe('HGRP derived shader modules', () => {
   it('gives a pass shader the suffix of the material it shades', () => {
     const iris: HGRPPermutation = { variant: 'CharacterNPR_Eye', enabled: ['ramp', 'eyeMatcap'] };
     expect(hgrpPassShaderId('eyeOverlay', iris)).toBe('hgrp_eye_overlay_shader+ramp+eyeMatcap');
-    expect(() => hgrpPassShaderId('hairStencil', iris)).toThrow(/CharacterNPR_Hair/);
+    const hair: HGRPPermutation = { variant: 'CharacterNPR_Hair', enabled: ['ramp'] };
+    expect(() => hgrpPassShaderId('eyeOverlay', hair)).toThrow(/CharacterNPR_Eye/);
   });
 });
 
@@ -281,10 +283,9 @@ function shadingSources(variant: HGRPShaderVariant): string {
   const modules = [derive(hgrpPermutationShaderId(permutation))];
   if (variant === 'CharacterNPR_Eye') {
     modules.push(derive(hgrpPassShaderId('eyeOverlay', permutation)));
-    modules.push(derive(hgrpPassShaderId('browThrough', permutation)));
   }
   if (variant === 'CharacterNPR_Hair') {
-    modules.push(derive(hgrpPassShaderId('hairStencil', permutation)));
+    modules.push(derive(hgrpPassShaderId('hairUnderBrow', permutation)));
   }
   return modules
     .flatMap((module) => [...(module.includes ?? []), module.fileName])

@@ -227,14 +227,19 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
   { id: 'eyeParallax' },
   { id: 'eyeLayer' },
   { id: 'pantyhose', gate: '_Pantyhose', tier: 'numeric' },
-  // Draw-list gate whose mask the hair stencil pass samples through the material's own group 2,
-  // so it does take part in the Hair permutation.
+  // The hair's cut-out over the brow (formulas §5): where the mask is below
+  // _HairBrowMaskThreshold the hair's own draws — the material and its outline hull — discard,
+  // so the brow and the skin under those strands show. Off-stub: an opaque mask.
   {
     id: 'browThrough',
     gate: '_DrawUnderBrow',
     tier: 'static',
     textures: ['_HairBrowMask'],
-    drawList: true,
+    wgsl: {
+      include: 'lighting/hgrp/brow_cutout.wgsl',
+      fn: 'hgrp_brow_cutout',
+      off: '1.0',
+    },
   },
   { id: 'vfx', textures: ['_MainTex', '_BlendTex', '_DisturbTex1', '_MaskTex'] },
 ];

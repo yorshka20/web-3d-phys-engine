@@ -18,6 +18,7 @@ import {
   hgrpDebugViewFragment,
   hgrpGeneratedFragment,
   hgrpGroup2BindingsFragment,
+  hgrpHairYieldRef,
   HGRPMaterialDescriptor,
   hgrpOffStubFragment,
   hgrpOffStubWgsl,
@@ -29,6 +30,8 @@ import {
   hgrpResolveObjectFrame,
   hgrpResolvePermutation,
   HGRPShaderVariant,
+  hgrpStencilRef,
+  hgrpStencilRole,
   hgrpSubsystem,
   hgrpSubsystemIncludes,
   hgrpTextureBindings,
@@ -474,6 +477,24 @@ describe('permutations', () => {
     warn.mockRestore();
   });
 
+  it('assigns the stencil groups of the game prepass: eye stamps 52, body and hair 36, blend none; the under-brow strands yield with _HairStencilRef', () => {
+    const brow = material('CharacterNPR_Eye', { floats: { _PreZStencilRefOption: 52 } });
+    expect(hgrpStencilRole(brow)).toBe('stamp');
+    expect(hgrpStencilRef(brow)).toBe(52);
+    const cloth = material('CharacterNPR');
+    expect(hgrpStencilRole(cloth)).toBe('stamp');
+    expect(hgrpStencilRef(cloth)).toBe(36);
+    const hair = material('CharacterNPR_Hair', { floats: { _HairStencilRef: 36 } });
+    expect(hgrpStencilRole(hair)).toBe('stamp');
+    expect(hgrpStencilRef(hair)).toBe(36);
+    expect(hgrpHairYieldRef(hair)).toBe(36);
+    expect(
+      hgrpHairYieldRef(material('CharacterNPR_Hair', { floats: { _HairStencilRef: 52 } })),
+    ).toBe(52);
+    const glass = material('CharacterNPR', { alphaMode: 'blend' });
+    expect(hgrpStencilRole(glass)).toBe('none');
+  });
+
   it('re-resolves after a gate edit (the calibration GUI path)', () => {
     const m = material('CharacterNPR', {
       textures: { _BaseMap: 'b', _EmissionMap: 'e' },
@@ -576,7 +597,7 @@ describe('generated WGSL', () => {
     expect(includes).toContain(hgrpOffStubFragment('sdf'));
     expect(includes).toContain(hgrpOffStubFragment('emission'));
     expect(includes).not.toContain(hgrpOffStubFragment('ramp'));
-    // hook-less static subsystems (emotion, browThrough, outline) add nothing
+    // hook-less static subsystems (emotion, outline) add nothing
     expect(includes.some((p) => p.includes('emotion'))).toBe(false);
     expect(includes).toHaveLength(HGRP_STATIC_SUBSYSTEMS.filter((s) => s.wgsl).length);
   });

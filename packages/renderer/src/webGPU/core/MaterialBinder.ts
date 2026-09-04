@@ -5,6 +5,7 @@ import {
   HGRP_SAMPLER_BINDINGS,
   HGRPMaterialDescriptor,
   hgrpParamsLayoutForVariant,
+  hgrpPermutationEnables,
   hgrpTextureBindings,
   packHGRPParams,
 } from '../../material/hgrp';
@@ -168,6 +169,13 @@ export class MaterialBinder {
       material.textures._OutlineMask,
       'gltf_default_white',
     );
+    // The hair's brow cut-out, only when its browThrough subsystem is on (white cuts nothing)
+    const browMask = await this.getGLTFTexture(
+      hgrpPermutationEnables(material.permutation, 'browThrough')
+        ? material.textures._HairBrowMask
+        : undefined,
+      'gltf_default_white',
+    );
 
     return this.bindGroupManager.createBindGroup(`${materialId}_outline`, {
       layout,
@@ -176,6 +184,7 @@ export class MaterialBinder {
         { binding: 1, resource: baseMap.createView() },
         { binding: 2, resource: this.textureManager.getSampler('linear') },
         { binding: 3, resource: outlineMask.createView() },
+        { binding: 4, resource: browMask.createView() },
       ],
       label: `${materialId}_outline`,
     });

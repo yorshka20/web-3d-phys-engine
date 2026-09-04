@@ -11,8 +11,8 @@ import { WebGPUResourceManager } from '../../core/ResourceManager';
 import { GeometryCacheItem } from '../../core/types';
 import { buildDrawLists, DrawItem } from '../frame/DrawListBuilder';
 import { sceneSettings } from '../sceneSettings';
-import { HGRPBrowCompositeStage } from './hgrp/HGRPBrowCompositeStage';
 import { HGRPEyeOverlayStage } from './hgrp/HGRPEyeOverlayStage';
+import { HGRPHairUnderBrowStage } from './hgrp/HGRPHairUnderBrowStage';
 import { HGRPOutlineStage } from './hgrp/HGRPOutlineStage';
 
 // GPU resources resolved once per frame during prepare, consumed by the synchronous encode.
@@ -28,6 +28,7 @@ interface EncodeStateCache {
   materialKey?: string;
   geometryId?: string;
   uniformKey?: string;
+  stencilRef?: number;
 }
 
 /**
@@ -46,7 +47,7 @@ export interface ForwardPassTargets {
 export interface ForwardPassStages {
   outlineStage: HGRPOutlineStage;
   eyeOverlayStage: HGRPEyeOverlayStage;
-  browCompositeStage: HGRPBrowCompositeStage;
+  hairUnderBrowStage: HGRPHairUnderBrowStage;
 }
 
 /**
@@ -81,15 +82,8 @@ export class ForwardPass {
     // Prepare phase (async): build the ordered draw lists and resolve every GPU resource up
     // front, so the encode phase below is fully synchronous — no await between beginRenderPass
     // and end.
-    const {
-      opaque,
-      transparent,
-      outline,
-      transparentOutline,
-      eyeOverlay,
-      hairStencil,
-      browThrough,
-    } = buildDrawLists(frameData);
+    const { opaque, transparent, outline, transparentOutline, eyeOverlay, hairUnderBrow } =
+      buildDrawLists(frameData);
     const frame: FrameResources = {
       pipelines: new Map(),
       materials: new Map(),
@@ -101,7 +95,7 @@ export class ForwardPass {
     // materialKey and cleared on entry, so preparing them separately would drop the first set.
     await this.stages.outlineStage.prepare([...outline, ...transparentOutline]);
     await this.stages.eyeOverlayStage.prepare(eyeOverlay);
-    await this.stages.browCompositeStage.prepare(hairStencil, browThrough);
+    await this.stages.hairUnderBrowStage.prepare(hairUnderBrow);
 
     const renderPass = commandEncoder.beginRenderPass({
       label: 'main_render_pass',
@@ -126,15 +120,17 @@ export class ForwardPass {
 
     this.setFrameBindGroups(renderPass);
 
-    // Opaque first (state-sorted), then the HGRP outline hulls (depth-tested against the
-    // opaque geometry), then the depth-biased iris overlays, then transparent
-    // (back-to-front) on top of everything — the translucent eye-white shadow shell blends
-    // over the iris. The stages bind their own pipeline/groups, so the transparent walk
-    // starts from a fresh state cache.
+    // Opaque first (state-sorted, eye group before the rest — DrawLists.opaque), then the hair
+    // strands inside the brow cut-out with the stencil yield that lets the brow show through
+    // them, then the HGRP outline hulls (depth-tested against the opaque geometry), then the
+    // depth-biased iris overlays, then transparent (back-to-front) on top of everything — the
+    // overlay-shadow shells multiply over the iris and the forehead, gated by the stencil the
+    // earlier walks left. The stages bind their own pipeline/groups and stencil reference, so
+    // the transparent walk starts from a fresh state cache.
     this.encode(renderPass, opaque, frameData, frame, {});
+    this.stages.hairUnderBrowStage.encode(renderPass, hairUnderBrow, frameData);
     this.stages.outlineStage.encode(renderPass, outline, frameData);
     this.stages.eyeOverlayStage.encode(renderPass, eyeOverlay, frameData);
-    this.stages.browCompositeStage.encode(renderPass, hairStencil, browThrough, frameData);
     this.encode(renderPass, transparent, frameData, frame, {});
     // A blend material's hull comes last: it needs that material's own depth in the buffer
     // to be rejected outside the silhouette ring (see DrawLists.transparentOutline).
@@ -246,6 +242,13 @@ export class ForwardPass {
       if (item.pipelineKey !== cache.pipelineKey) {
         renderPass.setPipeline(item.pipeline!);
         cache.pipelineKey = item.pipelineKey;
+      }
+
+      // The stencil reference is pass state, not pipeline state: the HGRP stencil groups
+      // (material/hgrp hgrpStencilRef) share one stamping pipeline and differ only here.
+      if (item.stencilRef !== undefined && item.stencilRef !== cache.stencilRef) {
+        renderPass.setStencilReference(item.stencilRef);
+        cache.stencilRef = item.stencilRef;
       }
 
       if (renderable.materialKey !== cache.materialKey) {
