@@ -395,6 +395,9 @@ fallbacks / caches / special-case handling.
    - "Slowly drift to the correct value" (diluting a wrong state with time)
    - "Temporarily turn off / skip in this case" (feature-flag safety net)
    - "Retry N times" (don't know why it fails, so try our luck)
+   - "Push the global knob until it looks right" (calibrating a parameter to cancel a defect —
+     if a model, a spec or a reference says one thing and the running system shows another,
+     suspect the implementation before you touch a parameter)
 4. **The only scenario where a patch is allowed: a genuine edge case** — a confirmed
    uncontrollable external factor (a browser/driver bug, a known third-party library bug), where
    the cost of a root-cause fix vastly exceeds its impact. Then you must **state it explicitly**:
