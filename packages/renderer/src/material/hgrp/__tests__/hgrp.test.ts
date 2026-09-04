@@ -43,7 +43,8 @@ import { layoutUniformStruct } from '../../uniformStruct';
 // use_shadow_lut, ...) left the struct when they became permutation selectors (2026-09-02);
 // the two numeric gates (eye_highlight, use_pantyhose) stay. spec_bump_scale and
 // sdf_rim_color were appended when the hair split-normal and SDF-mask hooks landed; metallic
-// and the two _SDFRimColor off-scales with the decompiled-formula rewrite (2026-09-03).
+// and the two _SDFRimColor off-scales with the decompiled-formula rewrite (2026-09-03); the
+// three _SilkStockings* fields with the silk-stockings transcription (2026-09-04).
 const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   base_color: 0,
   rim_color: 4,
@@ -94,6 +95,9 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   aniso_dir_x: 83,
   aniso_color2: 84,
   line_map_st: 88,
+  pantyhose_min_affect: 92,
+  pantyhose_max_affect: 93,
+  pantyhose_spec_falloff: 94,
 };
 
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
@@ -186,8 +190,8 @@ describe('HGRP material contract', () => {
     expect(() => validateHGRPContract()).not.toThrow();
   });
 
-  it('keeps the HGRPMaterialParams byte layout (368 bytes)', () => {
-    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(368);
+  it('keeps the HGRPMaterialParams byte layout (384 bytes)', () => {
+    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(384);
     const actual = Object.fromEntries(
       HGRP_MATERIAL_PARAMS_LAYOUT.fields.map((f) => [f.name, f.offset / 4]),
     );
@@ -289,7 +293,7 @@ describe('HGRP material contract', () => {
     expect(new Set(Object.values(names)).size).toBe(Object.keys(names).length);
   });
 
-  it('exposes the calibration GUI schema (46 floats, 6 colors)', () => {
+  it('exposes the calibration GUI schema (49 floats, 6 colors)', () => {
     expect(HGRP_TUNABLE_FLOATS.map((d) => d.key).sort()).toEqual(
       [
         '_UseDiffRampMap',
@@ -338,6 +342,9 @@ describe('HGRP material contract', () => {
         '_PantyhoseSpecularInt',
         '_PantyhoseSpecularValue',
         '_PantyhoseAnisotropyDirection',
+        '_SilkStockingsMinAffect',
+        '_SilkStockingsMaxAffect',
+        '_SilkStockingsSpecularFalloff',
       ].sort(),
     );
     expect(HGRP_TUNABLE_COLORS.map((d) => d.key).sort()).toEqual(
@@ -646,7 +653,7 @@ describe('eye layer role', () => {
 describe('packHGRPParams', () => {
   it('packs defaults when a preset omits every key', () => {
     const packed = packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, material('CharacterNPR'));
-    expect(packed).toHaveLength(92);
+    expect(packed).toHaveLength(96);
     expect(Array.from(packed.subarray(0, 8))).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_width]).toBeCloseTo(0.35);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.line_amount]).toBe(300);

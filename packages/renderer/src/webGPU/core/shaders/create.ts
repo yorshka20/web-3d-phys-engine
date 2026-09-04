@@ -499,6 +499,7 @@ function hgrpNprFamilyIncludes(
           'lighting/hgrp_lighting.wgsl',
           'lighting/hgrp_npr.wgsl',
           ...(permutation.variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
+          ...(permutation.variant === 'CharacterNPR' ? ['lighting/hgrp_silk_stockings.wgsl'] : []),
           'core/hgrp_debug.wgsl',
           hgrpDebugViewFragment(permutation),
         ]

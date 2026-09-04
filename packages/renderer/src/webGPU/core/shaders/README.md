@@ -92,7 +92,10 @@ shaders/
 │   ├── phong.wgsl         # Phong lighting
 │   ├── pbr.wgsl           # Physically-based rendering
 │   ├── toon.wgsl          # Toon shading
+│   ├── hgrp_lighting.wgsl # HGRP hook-free formulas: light(N), shade blend, GGX, IBL, object frame
 │   ├── hgrp_npr.wgsl      # HGRP shading core (calls the subsystem hooks)
+│   ├── hgrp_eye_shading.wgsl        # CharacterNPR_Eye: UV-disc normals, matcap, HDR multipliers
+│   ├── hgrp_silk_stockings.wgsl     # CharacterNPR tights: coverage lerp + anisotropic GGX lobe
 │   └── hgrp/              # HGRP static subsystem hooks, one per subsystem (ramp, sdf, ...)
 ├── bindings/               # Binding group definitions
 │   ├── pmx_bindings.wgsl  # PMX model bindings

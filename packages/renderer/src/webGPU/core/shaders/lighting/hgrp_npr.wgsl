@@ -63,20 +63,25 @@ struct HGRPShade {
     spec_gate: f32,
 }
 
-// Base + shade blend + lighting for a given (already normalized) shading normal `n`, the
-// normal the hemisphere reads (`hemi_n`), the variant's environment color and its surface
-// parameters (hgrp_metallic_gloss: metallic, specular, occlusion, smoothness). The shadow
-// color, the shade value and the ramp come from the permutation's hooks. The shadow color is
-// graded from the untinted albedo; the SDF subsystem's _SDFRimColor tint applies to the albedo
-// the lit tier and F0 read (§2).
-fn hgrp_shade_core(
-    uv0: vec2<f32>,
-    n: vec3<f32>,
-    hemi_n: vec3<f32>,
-    env_color: vec3<f32>,
-    surface: vec4<f32>,
-    view_dir: vec3<f32>,
-) -> HGRPShade {
+// The texture-driven half of the shading core, everything the shade blend reads: the base
+// sample, the albedo (base x the SDF tint), the shadow color, the two ramp reads and the
+// SDF's specular gate. A surface model that rewrites the albedo and the shadow color as a pair
+// before they are blended — the silk stockings' coverage lerp (lighting/hgrp_silk_stockings.wgsl)
+// — runs this stage, edits both, and hands the result to hgrp_shade_lit.
+struct HGRPShadeInputs {
+    base: vec4<f32>,
+    albedo: vec3<f32>,
+    shadow_color: vec3<f32>,
+    ramp: vec4<f32>,
+    ramp_view: f32,
+    spec_gate: f32,
+}
+
+// Base + ramp reads for a given (already normalized) shading normal `n`. The shadow color, the
+// shade value and the ramp come from the permutation's hooks. The shadow color is graded from
+// the untinted albedo; the SDF subsystem's _SDFRimColor tint applies to the albedo the lit
+// tier and F0 read (§2).
+fn hgrp_shade_inputs(uv0: vec2<f32>, n: vec3<f32>, view_dir: vec3<f32>) -> HGRPShadeInputs {
     let base = hgrp_base_color(uv0);
     let ndotl = dot(n, hgrp_light_dir());
     // §1.5: the ramp reads n.l biased by _CharacterParams11.w, clamped to [-1, 1]
@@ -87,7 +92,46 @@ fn hgrp_shade_core(
 
     let shadow_color = hgrp_shadow_color(base.rgb);
     let albedo = base.rgb * mix(vec3<f32>(1.0), hgrp_material.sdf_rim_color.rgb, shade.y);
-    let blend = hgrp_shade_blend(albedo, shadow_color, ramp, ramp_view, surface.b, surface.r);
+    return HGRPShadeInputs(base, albedo, shadow_color, ramp, ramp_view, shade.z);
+}
+
+// Shade blend + lighting of the inputs: the normal the hemisphere reads (`hemi_n`), the
+// variant's environment color and its surface parameters (hgrp_metallic_gloss: metallic,
+// specular, occlusion, smoothness).
+fn hgrp_shade_lit(
+    inputs: HGRPShadeInputs,
+    hemi_n: vec3<f32>,
+    env_color: vec3<f32>,
+    surface: vec4<f32>,
+) -> HGRPShade {
+    let blend = hgrp_shade_blend(
+        inputs.albedo,
+        inputs.shadow_color,
+        inputs.ramp,
+        inputs.ramp_view,
+        surface.b,
+        surface.r,
+    );
     let light = hgrp_light(hemi_n, env_color, blend.w2);
-    return HGRPShade(light * blend.col, light, albedo, base.a, blend.w2, shade.z);
+    return HGRPShade(
+        light * blend.col,
+        light,
+        inputs.albedo,
+        inputs.base.a,
+        blend.w2,
+        inputs.spec_gate,
+    );
+}
+
+// Base + shade blend + lighting in one call, for the variants that shade their inputs as
+// sampled.
+fn hgrp_shade_core(
+    uv0: vec2<f32>,
+    n: vec3<f32>,
+    hemi_n: vec3<f32>,
+    env_color: vec3<f32>,
+    surface: vec4<f32>,
+    view_dir: vec3<f32>,
+) -> HGRPShade {
+    return hgrp_shade_lit(hgrp_shade_inputs(uv0, n, view_dir), hemi_n, env_color, surface);
 }

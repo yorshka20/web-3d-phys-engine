@@ -189,22 +189,29 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_LineValue', 1, { min: 0, max: 2, step: 0.01 }),
       'line lobe shift (2v - 1 along the specular normal)',
     ),
-    f32('use_pantyhose', 'pantyhose', float('_Pantyhose', 0, TOGGLE), 'cloth tights shading'),
+    f32(
+      'use_pantyhose',
+      'pantyhose',
+      float('_Pantyhose', 0, TOGGLE),
+      'silk-stockings coverage and anisotropic lobe (lighting/hgrp_silk_stockings.wgsl)',
+    ),
     f32(
       'pantyhose_specular_int',
       'pantyhose',
-      float('_PantyhoseSpecularInt', 0, { min: 0, max: 1, step: 0.01 }),
+      float('_PantyhoseSpecularInt', 5, { min: 0, max: 10, step: 0.01 }),
+      'scale of the anisotropic lobe (GGX D clamped at 20); shader default 5, presets 0.05-0.5',
     ),
     f32(
       'pantyhose_specular_value',
       'pantyhose',
-      float('_PantyhoseSpecularValue', 0, { min: 0, max: 1, step: 0.01 }),
+      float('_PantyhoseSpecularValue', 2, { min: -2, max: 2, step: 0.01 }),
+      'view-direction weight added to the half vector the lobe is evaluated at',
     ),
     f32(
       'pantyhose_aniso_direction',
       'pantyhose',
       float('_PantyhoseAnisotropyDirection', 0, { min: -1, max: 1, step: 0.01 }),
-      '-1..1, quarter-turn units',
+      'anisotropy sign and amount, -1..1, mixed toward 0.5 by the base alpha',
     ),
     f32(
       'aniso_value',
@@ -218,7 +225,12 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_ParallaxScale', 0, { min: 0, max: 0.5, step: 0.001 }),
       'iris depth-parallax UV shift inside the disc, a quarter along v; part of the matcap path',
     ),
-    vec4('pantyhose_color', 'pantyhose', color('_PantyhoseColor', BLACK_OPAQUE, true)),
+    vec4(
+      'pantyhose_color',
+      'pantyhose',
+      color('_PantyhoseColor', BLACK_OPAQUE, true),
+      'edge color the coverage lerps toward; a offsets the sheerness (1 = the base alpha as painted)',
+    ),
     vec4(
       'highlight_vector',
       'skinHighlight',
@@ -309,6 +321,26 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       'hairLines',
       color('_LineMap_ST', [1, 1, 0, 0]),
       '_LineMap tiling (xy) and offset (zw); Unity default when the preset carries none',
+    ),
+    // The three _SilkStockings* keys exist only in the shader version the decompile came from;
+    // the ripped presets predate them, so every material packs the shader Properties default.
+    f32(
+      'pantyhose_min_affect',
+      'pantyhose',
+      float('_SilkStockingsMinAffect', 0.05, { min: 0, max: 0.49, step: 0.01 }),
+      'coverage facing the viewer',
+    ),
+    f32(
+      'pantyhose_max_affect',
+      'pantyhose',
+      float('_SilkStockingsMaxAffect', 0.9, { min: 0.5, max: 0.9, step: 0.01 }),
+      'coverage at grazing angles',
+    ),
+    f32(
+      'pantyhose_spec_falloff',
+      'pantyhose',
+      float('_SilkStockingsSpecularFalloff', 0.8, { min: 0, max: 1, step: 0.01 }),
+      'how much the sheerness cancels the anisotropy',
     ),
   ],
 };

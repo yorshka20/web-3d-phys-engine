@@ -57,7 +57,11 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     let to_object = transpose(to_world);
     let strand_up = normalize(to_world * vec3<f32>(hgrp_material.aniso_dir_x, 1.0, 0.0));
     let tangent = normalize(input.world_tangent);
-    let handedness = sign(dot(cross(normalize(input.world_normal), tangent), input.world_bitangent));
+    let handedness = hgrp_tangent_handedness(
+        normalize(input.world_normal),
+        tangent,
+        input.world_bitangent,
+    );
     let strand = cross(n_spec, mix(cross(n_spec, strand_up), tangent, surface.r)) *
         mix(1.0, handedness, surface.r);
 

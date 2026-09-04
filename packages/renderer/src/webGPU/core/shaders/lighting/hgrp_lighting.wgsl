@@ -51,6 +51,13 @@ fn hgrp_horizontal(n: vec3<f32>) -> vec3<f32> {
     return normalize(vec3<f32>(n.x, 6.1e-5, n.z));
 }
 
+// Handedness of the mesh tangent frame (the shader's tangent.w), recovered from the interpolated
+// bitangent since the vertex stream carries no sign: +1 where n x t runs along b, -1 for a
+// mirrored UV island.
+fn hgrp_tangent_handedness(n: vec3<f32>, t: vec3<f32>, b: vec3<f32>) -> f32 {
+    return sign(dot(cross(n, t), b));
+}
+
 // Hemisphere shape of the environment term (§1.4): clamp(n.P6 + P7.x, 0, 1) x P7.y + P7.z —
 // 2.225 facing up, 0.725 horizontal, 0.5 facing down.
 fn hgrp_hemi(n: vec3<f32>) -> f32 {
