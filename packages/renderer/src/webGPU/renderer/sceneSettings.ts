@@ -83,11 +83,29 @@ export const sceneSettings = {
   // every HGRP material instead of its shading, so what each map controls can be seen on the
   // mesh. 'off' = shade normally. Materials whose permutation does not bind the slot show
   // magenta — that absence is information too.
+  //
+  // Frame debug views (renderer/passes/DebugViewPass.ts), for seeing what a knob does rather
+  // than what a map holds — each presents one of the frame's intermediate textures in place
+  // of the picture: 'bloom' a level of the bloom chain (bloomLevel; 0 is what the composite
+  // adds), 'luminance' the exposed luminance as a heat ramp with a white contour where the
+  // bloom threshold is crossed, 'stencil' the stencil groups one hue each, 'diff' the
+  // difference against the frame it was switched on at, around mid grey and amplified by
+  // diffGain (flat grey = unchanged, lighter/darker = a knob moved the level, tinted = it
+  // moved the colour). The material view takes precedence while a slot is selected.
   debugView: {
     slot: 'off' as string,
     channel: 'plateau' as HGRPDebugChannel,
+    view: 'off' as DebugViewMode,
+    bloomLevel: 0,
+    diffGain: 8,
   },
 };
+
+export const DEBUG_VIEW_MODES = ['off', 'bloom', 'luminance', 'stencil', 'diff'] as const;
+export type DebugViewMode = (typeof DEBUG_VIEW_MODES)[number];
+// What the debug view pass shows this frame: the material view when a slot is selected, else
+// the frame view; 'off' means the production chain presents
+export type ActiveDebugView = DebugViewMode | 'material';
 
 // Channel modes of the debug view, in the order the shader switches on
 // (core/hgrp_debug.wgsl): single channels as grey, the raw rgb, or the R channel quantized to
@@ -112,6 +130,10 @@ export function packHGRPDebugView(out: Float32Array = new Float32Array(4)): Floa
 
 export function isHGRPDebugViewOn(): boolean {
   return sceneSettings.debugView.slot in HGRP_TEXTURE_SLOTS;
+}
+
+export function activeDebugView(): ActiveDebugView {
+  return isHGRPDebugViewOn() ? 'material' : sceneSettings.debugView.view;
 }
 
 // Engine globals of the character shader, as captured with the decompiled shader (learnings

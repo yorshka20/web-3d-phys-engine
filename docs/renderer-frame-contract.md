@@ -124,7 +124,16 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   directly instead of going through the material-pipeline machinery (ShaderManager
   registration and semantic pipeline keys are material-shader concerns). Material pipelines
   consequently declare the scene-color format as their color target, not the swapchain
-  format.
+  format. Carries no debug code (see DebugViewPass).
+- `webGPU/renderer/passes/DebugViewPass.ts` — the frame's debug views, as their own pass at
+  the end of the frame: presents one of the intermediate textures (raw material-view output,
+  a bloom chain level, the exposed-luminance heat map with the bloom-threshold contour, the
+  stencil groups, the diff against a held frame) straight to the swapchain in place of the
+  anti-aliasing stages. **Rule**: production passes and shaders carry no debug branches — a
+  debug view is either a separate generated material permutation (the slot view, whose raw
+  output this pass presents) or a mode of this pass reading textures the frame already
+  produced. It runs only while a view is selected, and the renderer then runs only the passes
+  whose output it shows.
 - `webGPU/renderer/passes/TAAPass.ts` — temporal anti-aliasing over the encoded LDR output:
   reprojects its ping-pong history through the forward depth buffer with the unjittered
   view-projection matrices, clamps it to the current 3x3 neighbourhood (no velocity buffer
@@ -146,5 +155,7 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   pass (commented out), then `DepthPrepass → ForwardPass(HDR) → BloomPass → TonemapPass(LDR)
   → [TAAPass(history)] → FXAAPass(swapchain) | BlitPass(swapchain)` — the anti-aliasing tail
   follows `sceneSettings.antiAliasing`; with TAA on, `MVPUniformManager.setProjectionJitter`
-  offsets every draw's projection by the frame's sub-pixel jitter before any geometry pass. Future passes join as sibling objects under `passes/` in this
-  schedule.
+  offsets every draw's projection by the frame's sub-pixel jitter before any geometry pass.
+  While `sceneSettings.debugView` selects a view, `DebugViewPass(swapchain)` replaces the
+  anti-aliasing tail (jitter off, TAA history dropped) and only the passes it reads run.
+  Future passes join as sibling objects under `passes/` in this schedule.

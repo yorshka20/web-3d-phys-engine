@@ -1,8 +1,10 @@
 import { World } from '@ecs/core/ecs/World';
 import { bloomSettings } from '@renderer/webGPU/renderer/passes/BloomPass';
 import { taaSettings } from '@renderer/webGPU/renderer/passes/TAAPass';
+import { requestFrameHold } from '@renderer/webGPU/renderer/passes/DebugViewPass';
 import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
 import {
+  DEBUG_VIEW_MODES,
   HGRP_DEBUG_CHANNELS,
   HGRP_DEBUG_SLOT_NAMES,
   sceneSettings,
@@ -49,14 +51,26 @@ function mountPane(container: HTMLElement, world: World): () => void {
   env.addBinding(sceneSettings, 'envGradient', { min: 0, max: 1, step: 0.01 });
 
   // Material debug view: show one texture slot of every HGRP material on the mesh instead of
-  // its shading. Magenta = the material's permutation does not bind that slot.
-  const debug = pane.addFolder({ title: 'Debug view (textures)', expanded: false });
+  // its shading. Magenta = the material's permutation does not bind that slot. Below it the
+  // frame views of DebugViewPass (learnings renderer-debug-views.md): a bloom chain level, the
+  // exposed-luminance heat ramp with the bloom-threshold contour, the stencil groups, and the
+  // diff against a held frame that shows where and in which direction a knob moves the
+  // picture (flat grey = no change).
+  const debug = pane.addFolder({ title: 'Debug view', expanded: false });
   debug.addBinding(sceneSettings.debugView, 'slot', {
     options: Object.fromEntries(HGRP_DEBUG_SLOT_NAMES.map((name) => [name, name])),
   });
   debug.addBinding(sceneSettings.debugView, 'channel', {
     options: Object.fromEntries(HGRP_DEBUG_CHANNELS.map((name) => [name, name])),
   });
+  debug.addBinding(sceneSettings.debugView, 'view', {
+    options: Object.fromEntries(DEBUG_VIEW_MODES.map((name) => [name, name])),
+  });
+  debug.addBinding(sceneSettings.debugView, 'bloomLevel', { min: 0, max: 7, step: 1 });
+  debug.addBinding(sceneSettings.debugView, 'diffGain', { min: 1, max: 64, step: 1 });
+  debug.addButton({ title: 'hold frame again' }).on('click', () => requestFrameHold());
+  const legend = { heat: 'blue 1/16 · 1/4 · green 1 · yellow 4 · red 16 · white = bloom edge' };
+  debug.addBinding(legend, 'heat', { readonly: true, interval: 0 });
 
   return () => pane.dispose();
 }

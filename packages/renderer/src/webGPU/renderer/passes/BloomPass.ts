@@ -107,9 +107,17 @@ export class BloomPass {
 
   /** The blended bloom (up chain mip 0, half resolution), for the tonemap composite. */
   getBloomView(): GPUTextureView {
+    return this.getLevelView(0);
+  }
+
+  /**
+   * The chain's result at one level, for the debug view: the blended up level, or the
+   * coarsest down level, which is what the blend toward it starts from. Clamped to the chain.
+   */
+  getLevelView(level: number): GPUTextureView {
     this.ensureResources();
-    // A one-level chain has nothing to blend up: the prefilter output is the bloom
-    return this.chainMipCount > 1 ? this.upViews[0] : this.downViews[0];
+    const i = Math.max(0, Math.min(Math.floor(level), this.chainMipCount - 1));
+    return i < this.chainMipCount - 1 ? this.upViews[i] : this.downViews[i];
   }
 
   execute(commandEncoder: GPUCommandEncoder): void {

@@ -11,9 +11,10 @@ import { InstanceManager } from '../core/InstanceManager';
 import { getOrCreateHGRPFrameBindGroupLayout } from '../core/HGRPMaterialResources';
 import {
   HGRP_DEBUG_VIEW_BYTE_SIZE,
+  SCENE_LIGHTING_BYTE_SIZE,
+  activeDebugView,
   packHGRPDebugView,
   packSceneLighting,
-  SCENE_LIGHTING_BYTE_SIZE,
   sceneSettings,
 } from './sceneSettings';
 import { MaterialBinder } from '../core/MaterialBinder';
@@ -34,6 +35,7 @@ import { TextureManager } from '../core/TextureManager';
 import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/types';
 import { BlitPass } from './passes/BlitPass';
 import { BloomPass } from './passes/BloomPass';
+import { DebugViewPass } from './passes/DebugViewPass';
 import { DepthPrepass } from './passes/DepthPrepass';
 import { ForwardPass } from './passes/ForwardPass';
 import { FXAAPass } from './passes/FXAAPass';
@@ -61,6 +63,7 @@ interface FramePasses {
   tonemapPass: TonemapPass;
   taaPass: TAAPass;
   fxaaPass: FXAAPass;
+  debugViewPass: DebugViewPass;
   blitPass: BlitPass;
 }
 
@@ -124,6 +127,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   private readonly tonemapPass: TonemapPass;
   private readonly taaPass: TAAPass;
   private readonly fxaaPass: FXAAPass;
+  private readonly debugViewPass: DebugViewPass;
   private readonly blitPass: BlitPass;
   // The LDR image the FXAA pass reads this frame: the tonemap output, or the TAA resolve
   private fxaaSource: GPUTexture;
@@ -229,6 +233,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.forwardPass = passes.forwardPass;
     this.bloomPass = passes.bloomPass;
     this.tonemapPass = passes.tonemapPass;
+    this.debugViewPass = passes.debugViewPass;
     this.taaPass = passes.taaPass;
     this.fxaaPass = passes.fxaaPass;
     this.blitPass = passes.blitPass;
@@ -369,6 +374,13 @@ export class WebGPURenderer implements IWebGPURenderer {
       getInputTexture: () => this.fxaaSource,
       getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
+    const debugViewPass = new DebugViewPass({
+      getSceneColor: () => this.sizedTextures.sceneColor,
+      getBloomLevelView: (level) => bloomPass.getLevelView(level),
+      getDepthStencilTexture: () => this.sizedTextures.depth,
+      getLdrTexture: () => this.sizedTextures.ldr,
+      getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
+    });
     const blitPass = new BlitPass({
       getOutputView: () => this.context.getContext().getCurrentTexture().createView(),
     });
@@ -378,6 +390,7 @@ export class WebGPURenderer implements IWebGPURenderer {
       forwardPass,
       bloomPass,
       tonemapPass,
+      debugViewPass,
       taaPass,
       fxaaPass,
       blitPass,
@@ -423,7 +436,11 @@ export class WebGPURenderer implements IWebGPURenderer {
         height: canvas.height,
       },
       format: 'rgba8unorm',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      // COPY_SRC: the tonemap pass's diff debug view holds a copy of it
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT |
+        GPUTextureUsage.TEXTURE_BINDING |
+        GPUTextureUsage.COPY_SRC,
       label: 'LDR Texture',
     });
     console.log('[WebGPURenderer] Created LDR texture');
@@ -807,9 +824,12 @@ export class WebGPURenderer implements IWebGPURenderer {
     // pass sequence: depth prepass (sampleable scene depth for screen-space effects),
     // forward shading into the HDR scene-color target, bloom chain over it, tonemap
     // composite+resolve to encoded LDR, then the anti-aliasing stages the scene settings
-    // select (TAA accumulating into its history, FXAA to the swapchain) or a plain blit
+    // select (TAA accumulating into its history, FXAA to the swapchain) or a plain blit.
+    // While a debug view is selected the debug view pass presents instead of the
+    // anti-aliasing stages, and only the passes whose output it shows run.
+    const debugView = activeDebugView();
     const aaMode = sceneSettings.antiAliasing;
-    const useTaa = aaMode === 'taa' || aaMode === 'taa+fxaa';
+    const useTaa = debugView === 'off' && (aaMode === 'taa' || aaMode === 'taa+fxaa');
     const useFxaa = aaMode === 'fxaa' || aaMode === 'taa+fxaa';
 
     // TAA jitter: sub-pixel offsets in NDC, applied to every draw's projection this frame
@@ -834,8 +854,19 @@ export class WebGPURenderer implements IWebGPURenderer {
     );
     this.depthPrepass.execute(commandEncoder, frameData);
     await this.forwardPass.execute(commandEncoder, frameData);
-    this.bloomPass.execute(commandEncoder);
-    this.tonemapPass.execute(commandEncoder);
+    if (debugView === 'off' || debugView === 'diff') {
+      this.bloomPass.execute(commandEncoder);
+      this.tonemapPass.execute(commandEncoder);
+    } else if (debugView === 'bloom') {
+      this.bloomPass.execute(commandEncoder);
+    }
+
+    if (debugView !== 'off') {
+      this.taaPass.invalidateHistory();
+      this.debugViewPass.execute(commandEncoder, debugView);
+      this.device.queue.submit([commandEncoder.finish()]);
+      return;
+    }
 
     let presented: GPUTexture = this.sizedTextures.ldr;
     if (useTaa) {
