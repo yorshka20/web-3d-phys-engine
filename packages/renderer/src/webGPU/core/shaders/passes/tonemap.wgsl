@@ -1,9 +1,11 @@
 // Tonemap resolve: HDR scene-color (rgba16float, linear light) + bloom -> LDR.
 //
-// (scene + bloom x intensity) x exposure -> the game's ACES_MODIFIED curve -> manual sRGB
-// encode. The output target is a plain rgba8unorm LDR texture holding ENCODED values: the
-// FXAA pass that follows expects perceptual-domain input and passes encoded values through to
-// the swapchain untouched — hence the explicit encode here instead of an sRGB view.
+// x exposure (the game's pre-exposure, which its forward pass bakes into the stored color) ->
+// bloom composite (the game's uberpost form, on the exposed color; the bloom chain thresholded
+// the same exposed color) -> the game's ACES_MODIFIED curve -> manual sRGB encode. The output
+// target is a plain rgba8unorm LDR texture holding ENCODED
+// values: the FXAA pass that follows expects perceptual-domain input and passes encoded values
+// through to the swapchain untouched — hence the explicit encode here instead of an sRGB view.
 //
 // The curve is transcribed from the decompiled LUT builder (postprocessing/lutbuilder2d,
 // keyword TONEMAPPING_ACES_MODIFIED; hgrp-decompiled-formulas.md §12.3): the scene color goes
@@ -15,21 +17,29 @@
 // this curve. Of the game's grading stages (color filter, white balance, ACEScc contrast,
 // split toning, curves, HSV) only the color filter is reproduced, in its own position ahead of
 // the curve; the rest sit at identity by default, and `grade` below stands in for them.
+//
+// The bloom composite is the decompiled uberpost's (postprocessing/uberpost b336, keyword
+// BLOOM; formulas §15), which runs in this same place: on the linear, pre-exposed scene color,
+// ahead of the LUT that holds the game's curve. bloom_threshold.wgsl is prepended by the pass.
 
 @group(0) @binding(0) var scene_color: texture_2d<f32>;
 
 struct TonemapSettings {
-    exposure: f32,
-    bloom_intensity: f32,
-    contrast: f32,
-    saturation: f32,
+    // x = exposure (sceneSettings.exposure), y = contrast, z = saturation
+    params: vec4<f32>,
     // rgb = the color filter, a linear multiplier in AP1 ahead of the curve — the position the
     // game grades in (lutbuilder2d multiplies _ColorGradingCB_ColorFilter right after AP0->AP1,
     // before every other grading stage). Ahead of the curve it moves the mid-tones and still
     // lets a bright pixel bleach toward white, which a gain applied after the curve cannot do.
-    // w = 1 while the material debug view is on: the scene color is then stored values, passed
-    // through untouched (no bloom, no curve, no encode) so a grey level reads as the texel value
     color_filter: vec4<f32>,
+    // _BloomThreshold packing (threshold, threshold - knee, 2 knee, 0.25 / knee), the same
+    // extraction the prefilter ran, re-run here on the full-res exposed scene for the
+    // subtraction
+    bloom_threshold: vec4<f32>,
+    // x = intensity (_BloomParams.x), the lerp weight toward the bloomed scene; y = subtract
+    // (_BloomParams.z), the share of the extracted energy taken back out of the scene
+    bloom_params: vec4<f32>,
+    bloom_tint: vec4<f32>,
 }
 @group(0) @binding(1) var<uniform> tonemap_settings: TonemapSettings;
 @group(0) @binding(2) var bloom_tex: texture_2d<f32>;
@@ -91,6 +101,19 @@ fn aces_modified_tonemap(color: vec3<f32>) -> vec3<f32> {
     return clamp(mix(display, normalized, bright), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
+// The game's bloom composite: the glow is soft-limited per channel above 0.3 (a pow 0.33 fit,
+// continuous at 0.3 — the limit is skipped for the share the subtraction takes care of), the
+// energy the prefilter extracted can be taken back out of the scene so the glow replaces the
+// highlight it came from, and the intensity is the lerp weight toward that result.
+fn bloom_composite(scene: vec3<f32>, bloom: vec3<f32>) -> vec3<f32> {
+    let subtract = tonemap_settings.bloom_params.y;
+    let limited = pow(max(bloom, vec3<f32>(0.0)), vec3<f32>(0.33)) * 1.4938 - 0.7;
+    let glow = select(bloom, limited, bloom * (1.0 - subtract) > vec3<f32>(0.3));
+    let extracted = bloom_threshold(scene, tonemap_settings.bloom_threshold);
+    let bloomed = scene - extracted * subtract + glow * tonemap_settings.bloom_tint.rgb;
+    return mix(scene, bloomed, tonemap_settings.bloom_params.x);
+}
+
 fn srgb_encode(x: vec3<f32>) -> vec3<f32> {
     let lo = x * 12.92;
     let hi = 1.055 * pow(x, vec3<f32>(1.0 / 2.4)) - 0.055;
@@ -101,19 +124,16 @@ fn srgb_encode(x: vec3<f32>) -> vec3<f32> {
 // mid grey. Identity at (1, 1). Hue lives in the color filter ahead of the curve instead.
 fn grade(encoded: vec3<f32>) -> vec3<f32> {
     let luma = dot(encoded, vec3<f32>(0.2126, 0.7152, 0.0722));
-    var c = mix(vec3<f32>(luma), encoded, tonemap_settings.saturation);
-    c = (c - vec3<f32>(0.5)) * tonemap_settings.contrast + vec3<f32>(0.5);
+    var c = mix(vec3<f32>(luma), encoded, tonemap_settings.params.z);
+    c = (c - vec3<f32>(0.5)) * tonemap_settings.params.y + vec3<f32>(0.5);
     return clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let hdr = textureLoad(scene_color, vec2<i32>(position.xy), 0).rgb;
-    if tonemap_settings.color_filter.w > 0.5 {
-        return vec4<f32>(clamp(hdr, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
-    }
     let uv = position.xy / vec2<f32>(textureDimensions(scene_color));
     let bloom = textureSample(bloom_tex, bloom_sampler, uv).rgb;
-    let color = (hdr + bloom * tonemap_settings.bloom_intensity) * tonemap_settings.exposure;
-    return vec4<f32>(grade(srgb_encode(aces_modified_tonemap(color))), 1.0);
+    let scene = hdr * tonemap_settings.params.x;
+    return vec4<f32>(grade(srgb_encode(aces_modified_tonemap(bloom_composite(scene, bloom)))), 1.0);
 }

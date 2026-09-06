@@ -122,22 +122,24 @@ function addLightingWidgets(pane: Pane): void {
 }
 
 // Global linear-light exposure ahead of the ACES curve, then grading after it and the
-// anti-aliasing stages.
+// anti-aliasing stages; the bloom chain's values (the game's post volume, guess ledger A3) in
+// their own folder.
 function addPostWidgets(pane: Pane): void {
   const post = pane.addFolder({ title: 'Post', expanded: true });
-  post.addBinding(tonemapSettings, 'exposure', { min: 0.1, max: 4, step: 0.01 });
-  post.addBinding(bloomSettings, 'threshold', {
-    label: 'bloomThreshold',
-    min: 0,
-    max: 4,
-    step: 0.01,
+  post.addBinding(sceneSettings, 'exposure', { min: 0.1, max: 4, step: 0.01 });
+  const bloom = post.addFolder({ title: 'Bloom', expanded: false });
+  bloom.addBinding(bloomSettings, 'threshold', { min: 0, max: 4, step: 0.01 });
+  bloom.addBinding(bloomSettings, 'characterThreshold', { min: 0, max: 4, step: 0.01 });
+  bloom.addBinding(bloomSettings, 'characterIntensity', { min: 0, max: 4, step: 0.01 });
+  // A lerp weight that extrapolates past 1, so it scales the glow like URP's multiplier
+  bloom.addBinding(bloomSettings, 'intensity', { min: 0, max: 4, step: 0.01 });
+  bloom.addBinding(bloomSettings, 'subtract', { min: 0, max: 1, step: 0.01 });
+  bloom.addBinding(bloomSettings, 'scatter', { min: 0.05, max: 0.95, step: 0.01 });
+  const bloomState = { tint: rgb(bloomSettings.tint) };
+  bloom.addBinding(bloomState, 'tint', { color: { type: 'float' } }).on('change', (ev) => {
+    bloomSettings.tint = [ev.value.r, ev.value.g, ev.value.b];
   });
-  post.addBinding(bloomSettings, 'intensity', {
-    label: 'bloomIntensity',
-    min: 0,
-    max: 1,
-    step: 0.01,
-  });
+  bloom.addBinding(bloomSettings, 'maxIterations', { min: 1, max: 8, step: 1 });
   post.addBinding(tonemapSettings, 'contrast', { min: 0.5, max: 2, step: 0.01 });
   post.addBinding(tonemapSettings, 'saturation', { min: 0, max: 2, step: 0.01 });
   const postState = { colorFilter: rgb(tonemapSettings.colorFilter) };

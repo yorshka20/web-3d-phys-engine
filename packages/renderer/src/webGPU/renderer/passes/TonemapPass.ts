@@ -1,7 +1,8 @@
+import bloomThresholdShader from '../../core/shaders/passes/bloom_threshold.wgsl';
 import tonemapShader from '../../core/shaders/passes/tonemap.wgsl';
 import { Inject, ServiceTokens } from '../../core/decorators';
-import { isHGRPDebugViewOn } from '../sceneSettings';
-import { bloomSettings } from './BloomPass';
+import { sceneSettings } from '../sceneSettings';
+import { bloomSettings, packBloomThreshold } from './BloomPass';
 
 export interface TonemapTargets {
   getInputTexture(): GPUTexture;
@@ -12,12 +13,8 @@ export interface TonemapTargets {
 // Global tonemap controls, mutated by the calibration GUI (module-scoped like the pass
 // itself — TonemapPass is renderer-private and constructor-wired, not a DI service).
 export const tonemapSettings = {
-  // Linear-light multiplier applied before the curve: the game's pre-exposure
-  // (_ExposureWithMiscParams.y), whose value the rip does not carry. The curve is the game's
-  // ACES_MODIFIED (passes/tonemap.wgsl), middle grey 0.18 -> 0.10 display-linear; 2.0 puts the
-  // mid-tones where the previous Narkowicz curve had them at 1.0 (its 0.4 and this curve's 0.8
-  // both land near 0.54), so the lighting calibrated against that curve carries over.
-  exposure: 2.0,
+  // The exposure is sceneSettings.exposure: the game's pre-exposure of the stored scene color,
+  // applied ahead of the bloom, so it is scene state the bloom pass reads too.
   // Grading after the curve, in the encoded (perceptual) domain: contrast about mid grey,
   // saturation about luma. Identity by default.
   contrast: 1.0,
@@ -34,9 +31,12 @@ export const tonemapSettings = {
 /**
  * Tonemap Pass
  *
- * Composites the bloom chain onto the HDR scene color, applies exposure x ACES and the
- * manual sRGB encode, writing an ENCODED LDR texture that the FXAA pass consumes (FXAA
+ * Exposes the HDR scene color (sceneSettings.exposure, the game's pre-exposure), composites
+ * the bloom chain onto it the way the game's uberpost does (bloomSettings intensity /
+ * subtract / tint), applies the ACES curve and the manual sRGB encode, writing an ENCODED LDR
+ * texture that the FXAA pass consumes (FXAA
  * expects perceptual-domain input, so the encode cannot be left to an sRGB view here).
+ * Carries no debug code: the debug views are DebugViewPass, which reads this pass's output.
  * A fixed post-process pass with exactly one pipeline and no material variance, so it
  * builds its own shader module and pipeline directly instead of going through the
  * material-pipeline machinery (ShaderManager registration and semantic pipeline keys exist
@@ -50,7 +50,8 @@ export class TonemapPass {
   private bindGroupBloomView?: GPUTextureView;
   private bloomSampler?: GPUSampler;
   private settingsBuffer?: GPUBuffer;
-  private readonly settingsData = new Float32Array(8);
+  // TonemapSettings in tonemap.wgsl: five vec4s in struct order
+  private readonly settingsData = new Float32Array(20);
 
   @Inject(ServiceTokens.WEBGPU_DEVICE) private accessor device!: GPUDevice;
 
@@ -68,12 +69,14 @@ export class TonemapPass {
     const pipeline = this.ensurePipeline();
     const bindGroup = this.ensureBindGroup();
 
-    this.settingsData[0] = tonemapSettings.exposure;
-    this.settingsData[1] = bloomSettings.intensity;
-    this.settingsData[2] = tonemapSettings.contrast;
-    this.settingsData[3] = tonemapSettings.saturation;
+    this.settingsData[0] = sceneSettings.exposure;
+    this.settingsData[1] = tonemapSettings.contrast;
+    this.settingsData[2] = tonemapSettings.saturation;
     this.settingsData.set(tonemapSettings.colorFilter, 4);
-    this.settingsData[7] = isHGRPDebugViewOn() ? 1 : 0;
+    packBloomThreshold(bloomSettings.threshold, this.settingsData, 8);
+    this.settingsData[12] = bloomSettings.intensity;
+    this.settingsData[13] = bloomSettings.subtract;
+    this.settingsData.set(bloomSettings.tint, 16);
     this.device.queue.writeBuffer(this.settingsBuffer!, 0, this.settingsData);
 
     const renderPass = commandEncoder.beginRenderPass({
@@ -101,7 +104,7 @@ export class TonemapPass {
 
     const shaderModule = this.device.createShaderModule({
       label: 'tonemap_shader',
-      code: tonemapShader,
+      code: bloomThresholdShader + tonemapShader,
     });
 
     this.bloomSampler = this.device.createSampler({

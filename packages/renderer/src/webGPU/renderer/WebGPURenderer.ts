@@ -354,6 +354,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
     const bloomPass = new BloomPass({
       getInputTexture: () => this.sizedTextures.sceneColor,
+      getDepthStencilTexture: () => this.sizedTextures.depth,
     });
     const tonemapPass = new TonemapPass('rgba8unorm', {
       getInputTexture: () => this.sizedTextures.sceneColor,
@@ -396,7 +397,8 @@ export class WebGPURenderer implements IWebGPURenderer {
         height: canvas.height,
       },
       format: this.context.getDepthStencilFormat(),
-      // TEXTURE_BINDING: the TAA pass reads the depth aspect for reprojection
+      // TEXTURE_BINDING: the TAA pass reads the depth aspect for reprojection, the bloom
+      // prefilter the stencil aspect for the character mask
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       label: 'Depth Texture',
     });

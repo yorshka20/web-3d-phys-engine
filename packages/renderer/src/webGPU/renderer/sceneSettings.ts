@@ -11,6 +11,17 @@ export type AntiAliasingMode = 'off' | 'fxaa' | 'taa' | 'taa+fxaa';
 export const sceneSettings = {
   antiAliasing: 'taa' as AntiAliasingMode,
 
+  // Linear-light multiplier on the HDR scene color: the game's pre-exposure
+  // (_ExposureWithMiscParams.y), which its forward pass multiplies into every stored pixel and
+  // whose value the rip does not carry. It therefore sits AHEAD of the bloom — the bloom
+  // thresholds exposed color, as the game's prefilter reads the pre-exposed target — and the
+  // bloom and tonemap passes apply it wherever they read the stored color (equivalent to the
+  // forward pass writing it, without touching every material shader). The curve is the game's
+  // ACES_MODIFIED (passes/tonemap.wgsl), middle grey 0.18 -> 0.10 display-linear; 2.0 puts the
+  // mid-tones where the previous Narkowicz curve had them at 1.0 (its 0.4 and this curve's 0.8
+  // both land near 0.54), so the lighting calibrated against that curve carries over.
+  exposure: 2.0,
+
   // Background of the HDR scene target, in LINEAR light — it runs through exposure x ACES
   // and the sRGB encode like every shaded pixel. Default black; showcase stages set a
   // bright studio grey so the character can be compared against in-game screenshots.

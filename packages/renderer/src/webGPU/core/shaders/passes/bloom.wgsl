@@ -1,20 +1,41 @@
-// Bloom mip-chain shaders (linear-light HDR domain, before tonemap): prefilter extracts
-// over-threshold energy from the scene color into mip 0 (half res), downsample walks the
-// chain to the smallest mip, upsample tent-filters each level back up with ADDITIVE
-// blending (pipeline blend state), accumulating the widening glow in mip 0 — which the
-// tonemap pass composites. Standalone source (imported directly by BloomPass.ts, same rule
-// as tonemap.wgsl).
+// The game's bloom chain (HGRP/PostProcessing/Bloom, decompiled postprocessing/bloom/bloom/*;
+// hgrp-decompiled-formulas.md §15) — URP's Bloom with a character branch in the prefilter.
+// Linear-light HDR, ahead of the tonemap. Prefilter: full-res scene -> half-res mip 0, the
+// scene exposed first (the game's forward pass stores pre-exposed color, so its thresholds
+// see exposed values), five rotated taps thresholded (bloom_threshold.wgsl, prepended) and
+// averaged with Karis weights
+// 1 / (1 + luma) against fireflies; a pixel the character stencil groups stamped takes the
+// character path instead: a per-channel subtraction of the character threshold, scaled by the
+// character intensity. Downsample, per level: a 9-tap Gaussian at twice the source texel
+// stride (the halving step) into a scratch level, then a 5-tap bilinear Gaussian at the
+// level's own size. Upsample: each level is mix(high, low, scatter) — a blend, not an
+// accumulation — and mip 0 of the up chain is what the tonemap composites.
+// Standalone source (imported directly by BloomPass.ts, same rule as tonemap.wgsl).
 
+// The source of the step: the scene color (prefilter), the finer level (blur H), the level
+// itself (blur V), the coarser level (upsample).
 @group(0) @binding(0) var src: texture_2d<f32>;
 @group(0) @binding(1) var src_sampler: sampler;
 
 struct BloomParams {
-    threshold: f32, // HDR luminance where extraction starts
-    reserved1: f32,
-    reserved2: f32,
-    reserved3: f32,
+    // _BloomThreshold packing: (threshold, threshold - knee, 2 knee, 0.25 / knee)
+    threshold: vec4<f32>,
+    // The same packing for character pixels (_BloomCharacterThreshold); only .x is read
+    character_threshold: vec4<f32>,
+    // x = character bloom intensity (_BloomCharacterParams.x), y = scatter (_Params.x),
+    // z = exposure (sceneSettings.exposure, the pre-exposure of the stored scene color)
+    scalars: vec4<f32>,
 }
 @group(0) @binding(2) var<uniform> params: BloomParams;
+// Prefilter only: the forward pass's stencil aspect. The HGRP stencil groups stamp every
+// opaque character draw (material/hgrp hgrpStencilRole) and nothing else writes stencil, so
+// non-zero means character — the game flags the same pixels through its motion-vector
+// target's w (0.4 for characters; §15).
+@group(0) @binding(3) var character_mask: texture_2d<u32>;
+// Upsample only: the finer level the coarser one is blended toward
+@group(0) @binding(4) var src_high: texture_2d<f32>;
+
+const LUMA: vec3<f32> = vec3<f32>(0.2126729, 0.7151522, 0.0721750);
 
 struct BloomVertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -36,39 +57,73 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> BloomVertexOutput {
     return output;
 }
 
-// Luma-scaled soft extraction: keeps hue (scales the color instead of clipping channels)
+fn sample_src(uv: vec2<f32>) -> vec3<f32> {
+    return textureSampleLevel(src, src_sampler, uv, 0.0).rgb;
+}
+
+// One thresholded tap of the prefilter, on the scene or the character path of its pixel
+fn prefilter_tap(uv: vec2<f32>) -> vec3<f32> {
+    let color = sample_src(uv) * params.scalars.z;
+    let dims = vec2<i32>(textureDimensions(character_mask));
+    let texel = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), dims - vec2<i32>(1));
+    let is_character = textureLoad(character_mask, texel, 0).r != 0u;
+    let scene = bloom_threshold(color, params.threshold);
+    let character = max(color - vec3<f32>(params.character_threshold.x), vec3<f32>(0.0)) * params.scalars.x;
+    return select(scene, character, is_character);
+}
+
+// Five taps on a rotated grid one scene texel out, Karis-weighted so a single very bright
+// texel cannot dominate its neighbours
 @fragment
 fn fs_prefilter(input: BloomVertexOutput) -> @location(0) vec4<f32> {
-    let c = textureSample(src, src_sampler, input.uv).rgb;
-    let l = max(max(c.r, c.g), c.b);
-    let contribution = max(l - params.threshold, 0.0) / max(l, 0.0001);
-    return vec4<f32>(c * contribution, 1.0);
-}
-
-// 4-tap box via bilinear half-texel offsets
-@fragment
-fn fs_downsample(input: BloomVertexOutput) -> @location(0) vec4<f32> {
     let texel = 1.0 / vec2<f32>(textureDimensions(src));
-    let o = texel * 0.5;
-    let c = textureSample(src, src_sampler, input.uv + vec2<f32>(-o.x, -o.y)).rgb +
-        textureSample(src, src_sampler, input.uv + vec2<f32>(o.x, -o.y)).rgb +
-        textureSample(src, src_sampler, input.uv + vec2<f32>(-o.x, o.y)).rgb +
-        textureSample(src, src_sampler, input.uv + vec2<f32>(o.x, o.y)).rgb;
-    return vec4<f32>(c * 0.25, 1.0);
+    var offsets = array<vec2<f32>, 5>(
+        vec2<f32>(0.0, 0.0),
+        vec2<f32>(0.9, -0.4),
+        vec2<f32>(-0.9, 0.4),
+        vec2<f32>(0.4, 0.9),
+        vec2<f32>(-0.4, -0.9),
+    );
+    var sum = vec3<f32>(0.0);
+    var weight_sum = 0.0;
+    for (var i = 0; i < 5; i++) {
+        let tap = prefilter_tap(input.uv + offsets[i] * texel);
+        let weight = 1.0 / (dot(tap, LUMA) + 1.0);
+        sum += tap * weight;
+        weight_sum += weight;
+    }
+    return vec4<f32>(sum / weight_sum, 1.0);
 }
 
-// 9-tap tent (blended additively into the destination mip by the pipeline)
+// 9-tap Gaussian, horizontal, at twice the source texel stride: the source is the finer level,
+// so this is the halving step
+@fragment
+fn fs_blur_h(input: BloomVertexOutput) -> @location(0) vec4<f32> {
+    let stride = vec2<f32>(2.0 / f32(textureDimensions(src).x), 0.0);
+    var c = sample_src(input.uv) * 0.22702703;
+    c += (sample_src(input.uv - stride) + sample_src(input.uv + stride)) * 0.19459459;
+    c += (sample_src(input.uv - stride * 2.0) + sample_src(input.uv + stride * 2.0)) * 0.12162162;
+    c += (sample_src(input.uv - stride * 3.0) + sample_src(input.uv + stride * 3.0)) * 0.05405405;
+    c += (sample_src(input.uv - stride * 4.0) + sample_src(input.uv + stride * 4.0)) * 0.01621622;
+    return vec4<f32>(c, 1.0);
+}
+
+// The same 9-tap Gaussian, vertical, as 5 bilinear taps at the level's own size
+@fragment
+fn fs_blur_v(input: BloomVertexOutput) -> @location(0) vec4<f32> {
+    let texel_y = 1.0 / f32(textureDimensions(src).y);
+    let near = vec2<f32>(0.0, texel_y * 1.38461538);
+    let far = vec2<f32>(0.0, texel_y * 3.23076923);
+    var c = sample_src(input.uv) * 0.22702703;
+    c += (sample_src(input.uv - near) + sample_src(input.uv + near)) * 0.31621622;
+    c += (sample_src(input.uv - far) + sample_src(input.uv + far)) * 0.07027027;
+    return vec4<f32>(c, 1.0);
+}
+
+// The coarser level (src, bilinear) blended over the finer one (src_high) by scatter
 @fragment
 fn fs_upsample(input: BloomVertexOutput) -> @location(0) vec4<f32> {
-    let texel = 1.0 / vec2<f32>(textureDimensions(src));
-    var c = textureSample(src, src_sampler, input.uv).rgb * 4.0;
-    c += textureSample(src, src_sampler, input.uv + vec2<f32>(texel.x, 0.0)).rgb * 2.0;
-    c += textureSample(src, src_sampler, input.uv - vec2<f32>(texel.x, 0.0)).rgb * 2.0;
-    c += textureSample(src, src_sampler, input.uv + vec2<f32>(0.0, texel.y)).rgb * 2.0;
-    c += textureSample(src, src_sampler, input.uv - vec2<f32>(0.0, texel.y)).rgb * 2.0;
-    c += textureSample(src, src_sampler, input.uv + texel).rgb;
-    c += textureSample(src, src_sampler, input.uv - texel).rgb;
-    c += textureSample(src, src_sampler, input.uv + vec2<f32>(texel.x, -texel.y)).rgb;
-    c += textureSample(src, src_sampler, input.uv + vec2<f32>(-texel.x, texel.y)).rgb;
-    return vec4<f32>(c / 16.0, 1.0);
+    let high = textureSampleLevel(src_high, src_sampler, input.uv, 0.0).rgb;
+    let low = sample_src(input.uv);
+    return vec4<f32>(mix(high, low, params.scalars.y), 1.0);
 }

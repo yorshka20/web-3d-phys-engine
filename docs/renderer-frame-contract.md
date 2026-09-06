@@ -112,9 +112,11 @@ per asset (two entities sharing one PMX asset would fight); uniforms are rewritt
   sampleable depth texture (format authority `WebGPUContext.getPrepassDepthFormat`), bound to
   every HGRP pipeline as group 3 (per-frame globals) and read by the screen-space depth rim.
   The forward pass still writes its own depth attachment.
-- `webGPU/renderer/passes/BloomPass.ts` — linear-light HDR bloom over the scene-color
-  target: threshold prefilter into a half-resolution rgba16float mip chain, downsample walk,
-  additive tent upsample; mip 0 accumulates the glow the tonemap composites.
+- `webGPU/renderer/passes/BloomPass.ts` — the game's bloom chain (URP's, with a character
+  prefilter branch) over the scene-color target in linear light: Karis-weighted threshold
+  prefilter into a half-resolution rgba16float chain, separable Gaussian halving per level,
+  scatter-blended upsample; the character pixels are read off the forward pass's stencil
+  aspect (the HGRP stencil groups). Mip 0 of the up chain is what the tonemap composites.
 - `webGPU/renderer/passes/TonemapPass.ts` — composites bloom onto the HDR scene color
   (rgba16float, format authority `WebGPUContext.getSceneColorFormat`), applies exposure ×
   ACES and a manual sRGB encode, writing an encoded-LDR rgba8unorm texture for FXAA. A fixed
