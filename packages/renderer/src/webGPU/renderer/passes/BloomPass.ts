@@ -1,6 +1,6 @@
+import { Inject, ServiceTokens } from '../../core/decorators';
 import bloomShader from '../../core/shaders/passes/bloom.wgsl';
 import bloomThresholdShader from '../../core/shaders/passes/bloom_threshold.wgsl';
-import { Inject, ServiceTokens } from '../../core/decorators';
 import { sceneSettings } from '../sceneSettings';
 
 // Global bloom controls, mutated by the calibration GUI (module singleton, same rule as
@@ -23,7 +23,7 @@ export const bloomSettings = {
   // Composite (_BloomParams): x is the lerp weight from the scene toward the bloomed scene,
   // subtract the share of the extracted energy taken back out of the scene so the glow
   // replaces the highlight it came from (0 = classic additive, 1 = energy-conserving).
-  intensity: 1.0,
+  intensity: 0.3,
   subtract: 0.0,
   tint: [1.0, 1.0, 1.0] as [number, number, number],
   // Levels of the half-resolution chain, capped by the size (URP's maxIterations default)

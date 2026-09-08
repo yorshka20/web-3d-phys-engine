@@ -119,10 +119,12 @@ export function validateHGRPContract(): void {
       if (subsystem.tier !== 'static') {
         throw new Error(`HGRP contract: only a static subsystem has a WGSL hook (${subsystem.id})`);
       }
-      if (hooks.has(subsystem.wgsl.fn)) {
-        throw new Error(`HGRP contract: hook ${subsystem.wgsl.fn} declared twice`);
+      for (const { fn } of subsystem.wgsl.hooks) {
+        if (hooks.has(fn)) {
+          throw new Error(`HGRP contract: hook ${fn} declared twice`);
+        }
+        hooks.add(fn);
       }
-      hooks.add(subsystem.wgsl.fn);
     }
   }
 }

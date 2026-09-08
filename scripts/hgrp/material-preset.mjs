@@ -31,6 +31,7 @@ export function buildPreset(charDir, texDir, charName, glbMaterialNames) {
     const props = data.m_SavedProperties ?? {};
 
     const textures = {};
+    const colors = {};
     for (const [slot, env] of Object.entries(props.m_TexEnvs ?? {})) {
       const texName = env?.m_Texture?.Name;
       if (!texName) continue;
@@ -38,9 +39,16 @@ export function buildPreset(charDir, texDir, charName, glbMaterialNames) {
       if (!fs.existsSync(path.join(texDir, `${texName}.png`))) {
         console.warn(`[preset] ${name}: texture not in local set: ${texName}.png (${slot})`);
       }
+      // Tiling and offset ride along as `<slot>_ST`, the shader's own vector for them, only
+      // when they are not the identity: the engine's _ST fields default to (1, 1, 0, 0), and
+      // the hair line map (6-9x along u) and the fur base map (6x5) are the ones that differ.
+      const scale = env.m_Scale ?? { X: 1, Y: 1 };
+      const offset = env.m_Offset ?? { X: 0, Y: 0 };
+      if (scale.X !== 1 || scale.Y !== 1 || offset.X !== 0 || offset.Y !== 0) {
+        colors[`${slot}_ST`] = [scale.X, scale.Y, offset.X, offset.Y];
+      }
     }
 
-    const colors = {};
     for (const [key, c] of Object.entries(props.m_Colors ?? {})) {
       colors[key] = [c.r, c.g, c.b, c.a];
     }

@@ -145,26 +145,29 @@ export function getOrCreateHGRPMaterialBindGroupLayout(
     return existing;
   }
 
+  // The vertex stage reads the group too: the base-map tiling from the uniform and, for the
+  // fur, the direction map's length channel through the clamp sampler.
+  const stages = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
   const entries: GPUBindGroupLayoutEntry[] = [
     // Material uniforms (HGRPMaterialParams / HGRPVfxParams)
     {
       binding: 0,
-      visibility: GPUShaderStage.FRAGMENT,
+      visibility: stages,
       buffer: { type: 'uniform' },
     },
     ...hgrpTextureBindings(permutation).map((tex) => ({
       binding: tex.binding,
-      visibility: GPUShaderStage.FRAGMENT,
+      visibility: stages,
       texture: { sampleType: 'float' as GPUTextureSampleType },
     })),
     {
       binding: HGRP_SAMPLER_BINDINGS.base,
-      visibility: GPUShaderStage.FRAGMENT,
+      visibility: stages,
       sampler: { type: 'filtering' },
     },
     {
       binding: HGRP_SAMPLER_BINDINGS.ramp,
-      visibility: GPUShaderStage.FRAGMENT,
+      visibility: stages,
       sampler: { type: 'filtering' },
     },
   ];

@@ -125,11 +125,12 @@ function expectTexturesDeclared(module: ShaderModule): void {
     expect(declared.has(name), `${module.id}: ${name} is sampled but not declared`).toBe(true);
   }
   for (const subsystem of HGRP_STATIC_SUBSYSTEMS) {
-    if (!subsystem.wgsl) continue;
-    const definitions = source.match(new RegExp(`fn\\s+${subsystem.wgsl.fn}\\s*\\(`, 'g')) ?? [];
-    const referenced = new RegExp(`\\b${subsystem.wgsl.fn}\\s*\\(`).test(source);
-    if (referenced) {
-      expect(definitions.length, `${module.id}: ${subsystem.wgsl.fn} defined once`).toBe(1);
+    for (const { fn } of subsystem.wgsl?.hooks ?? []) {
+      const definitions = source.match(new RegExp(`fn\\s+${fn}\\s*\\(`, 'g')) ?? [];
+      const referenced = new RegExp(`\\b${fn}\\s*\\(`).test(source);
+      if (referenced) {
+        expect(definitions.length, `${module.id}: ${fn} defined once`).toBe(1);
+      }
     }
   }
 }
@@ -312,7 +313,7 @@ describe('HGRP texture slots: consumed by the variant or declared unimplemented'
           return (
             !!hook &&
             !!include &&
-            new RegExp(`\\b${hook.fn}\\s*\\(`).test(sources) &&
+            hook.hooks.some(({ fn }) => new RegExp(`\\b${fn}\\s*\\(`).test(sources)) &&
             new RegExp(`\\b${wgslName}\\b`).test(resolveShaderFragment(include) ?? '')
           );
         });
@@ -332,15 +333,17 @@ describe('HGRP texture slots: consumed by the variant or declared unimplemented'
     });
   }
 
-  it('every hook include, default or per variant, defines its hook exactly once', () => {
+  it('every hook include, default or per variant, defines each of its hooks exactly once', () => {
     for (const subsystem of HGRP_STATIC_SUBSYSTEMS) {
       if (!subsystem.wgsl) continue;
       const includes = new Set(VARIANTS.map((v) => hgrpSubsystemInclude(subsystem, v)!));
       for (const include of includes) {
         const source = resolveShaderFragment(include);
         expect(source, include).toBeDefined();
-        const matches = source!.match(new RegExp(`fn\\s+${subsystem.wgsl.fn}\\s*\\(`, 'g')) ?? [];
-        expect(matches.length, `${subsystem.id}: ${subsystem.wgsl.fn} in ${include}`).toBe(1);
+        for (const { fn } of subsystem.wgsl.hooks) {
+          const matches = source!.match(new RegExp(`fn\\s+${fn}\\s*\\(`, 'g')) ?? [];
+          expect(matches.length, `${subsystem.id}: ${fn} in ${include}`).toBe(1);
+        }
       }
     }
   });

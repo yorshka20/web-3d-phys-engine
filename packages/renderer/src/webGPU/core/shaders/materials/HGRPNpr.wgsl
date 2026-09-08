@@ -2,8 +2,8 @@
 // multiplier (lighting/hgrp_npr.wgsl), a GGX specular colored by the spec ramp, the split-sum
 // IBL that gives the metal zones their reflected environment, HDR emission (rolls off
 // through the tonemap shoulder), the character VFX layer (lighting/hgrp/vfx_special.wgsl),
-// and on tights the silk-stockings coverage and anisotropic lobe
-// (lighting/hgrp_silk_stockings.wgsl). The surface map (_MetallicGlossMap) supplies
+// the fur shells (lighting/hgrp/fur.wgsl: coverage, root AO, transmission lift) and on tights
+// the silk-stockings coverage and anisotropic lobe (lighting/hgrp_silk_stockings.wgsl). The surface map (_MetallicGlossMap) supplies
 // metallic, specular amount, occlusion and smoothness; without it the material's scalars
 // stand in. Group-2 bindings and the subsystem hooks come from the permutation's generated
 // fragments (material/hgrp).
@@ -18,11 +18,15 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     );
     let view_dir = normalize(mvp.camera_pos - input.world_position);
     let ndotv = clamp(dot(n, view_dir), 0.0, 1.0);
-    let surface = hgrp_metallic_gloss(input.uv0);
+    // The fur shells (formulas §6.2): the layer fraction rides in uv1.x; the root AO multiplies
+    // the surface occlusion and the transmission lift enters the ramp coordinate.
+    let fur = hgrp_fur(input.uv0, input.uv1.x, normalize(input.world_normal), n, view_dir);
+    var surface = hgrp_metallic_gloss(input.uv0);
+    surface.b = surface.b * fur.ao;
 
     // The silk coverage rewrites the albedo and the shadow color as a pair before the shade
     // blend (formulas §1.12); with _Pantyhose off it is the identity.
-    var inputs = hgrp_shade_inputs(input.uv0, n, view_dir);
+    var inputs = hgrp_shade_inputs(input.uv0, n, view_dir, fur.shade_bias);
     let silk = hgrp_silk_coverage(inputs.albedo, inputs.shadow_color, inputs.base.a, ndotv);
     inputs.albedo = silk.albedo;
     inputs.shadow_color = silk.shadow_color;
@@ -63,8 +67,9 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // silver hardware (metallic 1) it is the whole look, since a metal has no diffuse.
     let ibl = hgrp_ibl(f0, roughness, ndotv, n, view_dir, core.w2, scene_lighting.env_color.rgb);
 
+    let out_alpha = mix(core.alpha, fur.coverage, fur.alpha_weight);
     return hgrp_debug_view(
-        vec4<f32>(hgrp_bright_saturation(core.lit + spec) + emission + vfx + ibl, core.alpha),
+        vec4<f32>(hgrp_bright_saturation(core.lit + spec) + emission + vfx + ibl, out_alpha),
         input.uv0,
     );
 }

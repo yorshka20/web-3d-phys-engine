@@ -486,7 +486,7 @@ function hgrpNprFamilyIncludes(
     'math/color.wgsl',
     'bindings/hgrp_bindings.wgsl',
     hgrpGroup2BindingsFragment(permutation),
-    ...(options.vertex ? ['core/hgrp_vertex.wgsl'] : []),
+    ...(options.vertex ? ['core/hgrp_vertex.wgsl', 'core/hgrp_npr_vertex_main.wgsl'] : []),
     ...(options.shading
       ? [
           ...hgrpSubsystemIncludes(permutation),
@@ -514,6 +514,7 @@ function hgrpVfxIncludes(permutation: HGRPPermutation): string[] {
     'bindings/hgrp_bindings.wgsl',
     hgrpGroup2BindingsFragment(permutation),
     'core/hgrp_vertex.wgsl',
+    'core/hgrp_vertex_main.wgsl',
     'core/hgrp_debug.wgsl',
     hgrpDebugViewFragment(permutation),
   ];
@@ -531,6 +532,7 @@ function hgrpOverlayShadowIncludes(permutation: HGRPPermutation): string[] {
     'bindings/hgrp_bindings.wgsl',
     hgrpGroup2BindingsFragment(permutation),
     'core/hgrp_vertex.wgsl',
+    'core/hgrp_vertex_main.wgsl',
     'core/hgrp_debug.wgsl',
     hgrpDebugViewFragment(permutation),
   ];

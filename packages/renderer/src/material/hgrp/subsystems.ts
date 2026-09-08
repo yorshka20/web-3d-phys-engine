@@ -19,6 +19,8 @@ export type HGRPSubsystemId =
   | 'metallicGloss'
   | 'emission'
   | 'vfxSpecial'
+  | 'fur'
+  | 'furDye'
   | 'outline'
   | 'hairBand'
   | 'hairLines'
@@ -42,14 +44,20 @@ export type HGRPSubsystemId =
 // always bound.
 export type HGRPSubsystemTier = 'static' | 'numeric';
 
-// The WGSL side of a static subsystem: one hook function the shading core calls unconditionally.
-// The include defines it when the subsystem is on; when off, wgsl.ts generates a stub with the
-// same signature (copied from the include) returning `off`, so no branch and no texture
-// declaration remain in the compiled shader.
-export interface HGRPSubsystemHook {
-  include: string; // fragment path relative to shaders/
+// The WGSL side of a static subsystem: the hook functions the shading stages call
+// unconditionally, all defined by one include. The include defines them when the subsystem is
+// on; when off, wgsl.ts generates a stub per hook with the same signature (copied from the
+// include) returning `off`, so no branch and no texture declaration remain in the compiled
+// shader. Most subsystems have one hook; the fur has one per stage (the vertex extrusion and the
+// fragment coverage).
+export interface HGRPHookFn {
   fn: string; // hook function name
   off: string; // return expression of the off-stub; may use the hook's parameter names
+}
+
+export interface HGRPSubsystemHook {
+  include: string; // fragment path relative to shaders/
+  hooks: readonly HGRPHookFn[];
 }
 
 // A variant on which the subsystem consumes other slots, through another hook include, than
@@ -91,8 +99,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_DiffRampMap'],
     wgsl: {
       include: 'lighting/hgrp/ramp.wgsl',
-      fn: 'hgrp_ramp',
-      off: 'vec4<f32>(smoothstep(0.25, 1.0, shade))',
+      hooks: [{ fn: 'hgrp_ramp', off: 'vec4<f32>(smoothstep(0.25, 1.0, shade))' }],
     },
   },
   { id: 'shadow' },
@@ -103,10 +110,14 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_ShadowLutTex'],
     wgsl: {
       include: 'lighting/hgrp/shadow_lut.wgsl',
-      fn: 'hgrp_shadow_color',
-      off:
-        'hgrp_shadow_color_adjust(base, hgrp_material.shadow_color_brightness, ' +
-        'hgrp_material.shadow_color_saturation)',
+      hooks: [
+        {
+          fn: 'hgrp_shadow_color',
+          off:
+            'hgrp_shadow_color_adjust(base, hgrp_material.shadow_color_brightness, ' +
+            'hgrp_material.shadow_color_saturation)',
+        },
+      ],
     },
   },
   {
@@ -124,8 +135,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     },
     wgsl: {
       include: 'lighting/hgrp/normal.wgsl',
-      fn: 'hgrp_shading_normal',
-      off: 'normalize(world_normal)',
+      hooks: [{ fn: 'hgrp_shading_normal', off: 'normalize(world_normal)' }],
     },
   },
   {
@@ -135,8 +145,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_SDFLightmap', '_SDFMask'],
     wgsl: {
       include: 'lighting/hgrp/sdf.wgsl',
-      fn: 'hgrp_shade_coord',
-      off: 'vec3<f32>(shade_nl, 0.0, 1.0)',
+      hooks: [{ fn: 'hgrp_shade_coord', off: 'vec3<f32>(shade_nl, 0.0, 1.0)' }],
     },
   },
   { id: 'rim' },
@@ -145,7 +154,10 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     gate: '_UseSpecRampMap',
     tier: 'static',
     textures: ['_SpecRampMap'],
-    wgsl: { include: 'lighting/hgrp/spec.wgsl', fn: 'hgrp_spec_ramp_color', off: 'vec3<f32>(1.0)' },
+    wgsl: {
+      include: 'lighting/hgrp/spec.wgsl',
+      hooks: [{ fn: 'hgrp_spec_ramp_color', off: 'vec3<f32>(1.0)' }],
+    },
   },
   {
     id: 'metallicGloss',
@@ -154,10 +166,14 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_MetallicGlossMap'],
     wgsl: {
       include: 'lighting/hgrp/metallic_gloss.wgsl',
-      fn: 'hgrp_metallic_gloss',
-      off:
-        'vec4<f32>(hgrp_material.metallic, hgrp_material.specular, 1.0, ' +
-        'hgrp_material.smoothness)',
+      hooks: [
+        {
+          fn: 'hgrp_metallic_gloss',
+          off:
+            'vec4<f32>(hgrp_material.metallic, hgrp_material.specular, 1.0, ' +
+            'hgrp_material.smoothness)',
+        },
+      ],
     },
   },
   {
@@ -165,7 +181,10 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     gate: '_UseEmission',
     tier: 'static',
     textures: ['_EmissionMap'],
-    wgsl: { include: 'lighting/hgrp/emission.wgsl', fn: 'hgrp_emission', off: 'vec3<f32>(0.0)' },
+    wgsl: {
+      include: 'lighting/hgrp/emission.wgsl',
+      hooks: [{ fn: 'hgrp_emission', off: 'vec3<f32>(0.0)' }],
+    },
   },
   // The character VFX layer, the game's _CHARACTER_VFX_SPECIAL keyword of the standard shader
   // (hgrp-decompiled-formulas.md §6.1): an HDR flow layer added to the shaded color — the embers
@@ -178,8 +197,36 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_VFXSpecialMainTex', '_VFXSpecialBlendTex'],
     wgsl: {
       include: 'lighting/hgrp/vfx_special.wgsl',
-      fn: 'hgrp_vfx_special',
-      off: 'vec3<f32>(0.0)',
+      hooks: [{ fn: 'hgrp_vfx_special', off: 'vec3<f32>(0.0)' }],
+    },
+  },
+  // Fur (the standard shader's _CHARACTER_FUR keyword; formulas §6.2): the shells baked into the
+  // mesh get pushed out per layer in the vertex stage and cut into strands, root-shaded and
+  // lit toward the tips in the fragment stage. The noise map falls back to the Properties
+  // white when a preset sets none (Ardelia's does).
+  {
+    id: 'fur',
+    gate: '_UseCharacterFur',
+    tier: 'static',
+    textures: ['_FurDirMap', '_FurMap'],
+    wgsl: {
+      include: 'lighting/hgrp/fur.wgsl',
+      hooks: [
+        { fn: 'hgrp_fur_extrude', off: 'clip' },
+        { fn: 'hgrp_fur', off: 'HGRPFur(1.0, 0.0, 1.0, 0.0)' },
+      ],
+    },
+  },
+  // The fur's dye layer (_CHARACTER_FUR_DYE, its own keyword in the game): a screen blend of
+  // the dye map into the base color ahead of the shade blend.
+  {
+    id: 'furDye',
+    gate: '_FurDyeEnable',
+    tier: 'static',
+    textures: ['_FurDyeMap'],
+    wgsl: {
+      include: 'lighting/hgrp/fur_dye.wgsl',
+      hooks: [{ fn: 'hgrp_fur_dye', off: 'albedo' }],
     },
   },
   // Draw-list gate: the outline pass binds _OutlineMask in its own layout, so the subsystem
@@ -199,8 +246,12 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_LineMap'],
     wgsl: {
       include: 'lighting/hgrp/hair_lines.wgsl',
-      fn: 'hgrp_hair_line_pattern',
-      off: 'ceil(clamp(fract(uv0.x * hgrp_material.line_amount) - 0.5, 0.0, 1.0))',
+      hooks: [
+        {
+          fn: 'hgrp_hair_line_pattern',
+          off: 'ceil(clamp(fract(uv0.x * hgrp_material.line_amount) - 0.5, 0.0, 1.0))',
+        },
+      ],
     },
   },
   {
@@ -210,8 +261,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_SplitNormalMap'],
     wgsl: {
       include: 'lighting/hgrp/hair_split_normal.wgsl',
-      fn: 'hgrp_hair_spec_normal',
-      off: 'normalize(world_normal)',
+      hooks: [{ fn: 'hgrp_hair_spec_normal', off: 'normalize(world_normal)' }],
     },
   },
   {
@@ -221,8 +271,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_HighlightMap'],
     wgsl: {
       include: 'lighting/hgrp/skin_highlight.wgsl',
-      fn: 'hgrp_face_highlight',
-      off: 'vec3<f32>(0.0)',
+      hooks: [{ fn: 'hgrp_face_highlight', off: 'vec3<f32>(0.0)' }],
     },
   },
   { id: 'emotion', gate: '_UseEmotionMap', tier: 'static', textures: ['_EmotionMap'] },
@@ -233,8 +282,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_MatcapTex'],
     wgsl: {
       include: 'lighting/hgrp/eye_matcap.wgsl',
-      fn: 'hgrp_eye_matcap',
-      off: 'HGRPEyeMatcap(vec2<f32>(0.0), vec3<f32>(0.0))',
+      hooks: [{ fn: 'hgrp_eye_matcap', off: 'HGRPEyeMatcap(vec2<f32>(0.0), vec3<f32>(0.0))' }],
     },
   },
   { id: 'eyeHighlight', gate: '_EyeHighLight', tier: 'numeric' },
@@ -253,8 +301,7 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     textures: ['_HairBrowMask'],
     wgsl: {
       include: 'lighting/hgrp/brow_cutout.wgsl',
-      fn: 'hgrp_brow_cutout',
-      off: '1.0',
+      hooks: [{ fn: 'hgrp_brow_cutout', off: '1.0' }],
     },
   },
   { id: 'vfx', textures: ['_MainTex', '_BlendTex', '_DisturbTex1', '_MaskTex'] },

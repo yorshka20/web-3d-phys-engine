@@ -115,29 +115,30 @@ function group2BindingsWgsl(permutation: HGRPPermutation): string {
   return lines.join('\n') + '\n';
 }
 
-// Off-stub of a hook: the signature is copied from the subsystem's include, so the stub cannot
-// drift from the real function; the body returns the declared neutral value.
+// Off-stubs of a subsystem's hooks: each signature is copied from the subsystem's include, so
+// a stub cannot drift from the real function; the body returns the declared neutral value.
 export function hgrpOffStubWgsl(subsystem: HGRPSubsystem, includeSource: string): string {
   const hook = subsystem.wgsl;
   if (!hook) {
     throw new Error(`HGRP contract: subsystem ${subsystem.id} has no WGSL hook`);
   }
-  const signature = new RegExp(`fn\\s+${hook.fn}\\s*\\(([^)]*)\\)\\s*->\\s*([^{]+?)\\s*\\{`, 'g');
-  const matches = Array.from(includeSource.matchAll(signature));
-  if (matches.length !== 1) {
-    throw new Error(
-      `HGRP contract: ${hook.include} must define ${hook.fn} exactly once (found ${matches.length})`,
-    );
+  const lines = [
+    `// Generated off-stubs for the ${subsystem.id} subsystem (${subsystem.gate} off): same`,
+    `// signatures as ${hook.include}, neutral results, no texture declared or sampled.`,
+  ];
+  for (const { fn, off } of hook.hooks) {
+    const signature = new RegExp(`fn\\s+${fn}\\s*\\(([^)]*)\\)\\s*->\\s*([^{]+?)\\s*\\{`, 'g');
+    const matches = Array.from(includeSource.matchAll(signature));
+    if (matches.length !== 1) {
+      throw new Error(
+        `HGRP contract: ${hook.include} must define ${fn} exactly once (found ${matches.length})`,
+      );
+    }
+    const [, params, returnType] = matches[0];
+    lines.push(`fn ${fn}(${params}) -> ${returnType} {`, `    return ${off};`, '}');
   }
-  const [, params, returnType] = matches[0];
-  return [
-    `// Generated off-stub for the ${subsystem.id} subsystem (${subsystem.gate} off): same signature`,
-    `// as ${hook.include}, neutral result, no texture declared or sampled.`,
-    `fn ${hook.fn}(${params}) -> ${returnType} {`,
-    `    return ${hook.off};`,
-    '}',
-    '',
-  ].join('\n');
+  lines.push('');
+  return lines.join('\n');
 }
 
 // Resolve a generated fragment path to its text; undefined for paths this contract does not

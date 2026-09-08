@@ -42,6 +42,17 @@ struct HGRPEyeMatcap {
     color: vec3<f32>,
 }
 
+// The fur subsystem's fragment outputs (lighting/hgrp/fur.wgsl): the shell's coverage (its
+// alpha when the material is transparent — alpha_weight 1 selects it over the base alpha, the
+// off-stub's 0 keeps the base alpha), the root AO that multiplies the surface occlusion, and
+// the lift of the ramp coordinate toward the tips.
+struct HGRPFur {
+    coverage: f32,
+    alpha_weight: f32,
+    ao: f32,
+    shade_bias: f32,
+}
+
 // A two-channel tangent-space normal (the halves of the hair's _SplitNormalMap): z rebuilt from
 // xy before the scale is applied, as the decompiled shader does, then taken to world space.
 fn hgrp_split_normal(tbn: mat3x3<f32>, encoded: vec2<f32>, scale: f32) -> vec3<f32> {
@@ -79,19 +90,26 @@ struct HGRPShadeInputs {
 
 // Base + ramp reads for a given (already normalized) shading normal `n`. The shadow color, the
 // shade value and the ramp come from the permutation's hooks. The shadow color is graded from
-// the untinted albedo; the SDF subsystem's _SDFRimColor tint applies to the albedo the lit
-// tier and F0 read (§2).
-fn hgrp_shade_inputs(uv0: vec2<f32>, n: vec3<f32>, view_dir: vec3<f32>) -> HGRPShadeInputs {
+// the untinted albedo (after the fur dye, which recolors the base itself); the SDF subsystem's
+// _SDFRimColor tint applies to the albedo the lit tier and F0 read (§2). `nl_bias` is added to
+// n.l ahead of the ramp bias — the fur's transmission lift (§6.2); 0 elsewhere.
+fn hgrp_shade_inputs(
+    uv0: vec2<f32>,
+    n: vec3<f32>,
+    view_dir: vec3<f32>,
+    nl_bias: f32,
+) -> HGRPShadeInputs {
     let base = hgrp_base_color(uv0);
-    let ndotl = dot(n, hgrp_light_dir());
+    let base_rgb = hgrp_fur_dye(base.rgb, uv0);
+    let ndotl = clamp(dot(n, hgrp_light_dir()) + nl_bias, -1.0, 1.0);
     // §1.5: the ramp reads n.l biased by _CharacterParams11.w, clamped to [-1, 1]
     let shade_nl = clamp(ndotl + scene_lighting.light_dir.w, -1.0, 1.0);
     let shade = hgrp_shade_coord(uv0, shade_nl, n, view_dir);
     let ramp = hgrp_ramp(shade.x);
     let ramp_view = hgrp_ramp(dot(n, hgrp_cam_dir())).a;
 
-    let shadow_color = hgrp_shadow_color(base.rgb);
-    let albedo = base.rgb * mix(vec3<f32>(1.0), hgrp_material.sdf_rim_color.rgb, shade.y);
+    let shadow_color = hgrp_shadow_color(base_rgb);
+    let albedo = base_rgb * mix(vec3<f32>(1.0), hgrp_material.sdf_rim_color.rgb, shade.y);
     return HGRPShadeInputs(base, albedo, shadow_color, ramp, ramp_view, shade.z);
 }
 
@@ -133,5 +151,5 @@ fn hgrp_shade_core(
     surface: vec4<f32>,
     view_dir: vec3<f32>,
 ) -> HGRPShade {
-    return hgrp_shade_lit(hgrp_shade_inputs(uv0, n, view_dir), hemi_n, env_color, surface);
+    return hgrp_shade_lit(hgrp_shade_inputs(uv0, n, view_dir, 0.0), hemi_n, env_color, surface);
 }

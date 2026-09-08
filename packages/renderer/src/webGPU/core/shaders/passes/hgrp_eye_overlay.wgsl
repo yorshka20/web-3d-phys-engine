@@ -38,7 +38,8 @@ fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {
         output.world_bitangent = vec3<f32>(0.0, 0.0, 1.0);
     }
 
-    output.uv0 = input.texcoord_0;
+    let st = hgrp_material.base_map_st;
+    output.uv0 = input.texcoord_0 * st.xy + st.zw;
     output.uv1 = input.texcoord_1;
     output.color = input.color_0;
 

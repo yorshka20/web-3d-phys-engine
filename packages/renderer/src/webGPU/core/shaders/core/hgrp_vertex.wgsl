@@ -1,10 +1,11 @@
-// Shared vertex stage for every HGRP variant shader (glTF 26-float vertex layout). Lives in
-// one include so skeletal skinning lands here once instead of in four copies. The pass
+// Shared vertex stage body for every HGRP variant shader (glTF 26-float vertex layout). Lives
+// in one include so skeletal skinning lands here once instead of in four copies; the entry
+// point wrapping it is core/hgrp_npr_vertex_main.wgsl for the CharacterNPR shading family
+// (base-map tiling, fur extrusion) and core/hgrp_vertex_main.wgsl for the rest. The pass
 // shaders with their own vertex stage (outline, eye overlay, depth prepass) must apply the
 // same skin matrix — a hull or prepass depth left in bind pose tears away from the body.
 
-@vertex
-fn vs_main(input: GLTFVertexInput) -> GLTFVertexOutput {
+fn hgrp_vertex_output(input: GLTFVertexInput) -> GLTFVertexOutput {
     var output: GLTFVertexOutput;
 
     let skin = gltf_skin_matrix(input.joints_0, input.weights_0);

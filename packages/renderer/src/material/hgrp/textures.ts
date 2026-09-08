@@ -67,6 +67,16 @@ export const HGRP_TEXTURE_SLOTS: Readonly<Record<string, HGRPTextureSlot>> = {
   // mask whose R is the dissolve threshold and the UV warp — data, not color.
   _VFXSpecialMainTex: { srgb: false, unset: 'white' },
   _VFXSpecialBlendTex: { srgb: false, unset: 'black' },
+  // Fur. The direction map ("方向 RG / 疏密 B / 长短 A") ships as a _D texture, i.e. imported as a
+  // color texture, and the fur is authored against that: its density B averages 0.65 raw but
+  // 0.39 decoded, and only the decoded value makes the tip cutoff (0.394, sharpened to 0.63)
+  // thin the shells toward the tip instead of leaving them half covered — read raw, the shells
+  // stack into an opaque, bumpy solid. The direction xy is insensitive to the decode (it moves
+  // the noise lookup by 0.005 uv per layer); the length in A is never decoded. The strand
+  // noise is data; the dye is a color screened into the base color.
+  _FurDirMap: { srgb: true },
+  _FurMap: { srgb: false, unset: 'white' },
+  _FurDyeMap: { srgb: true },
 };
 
 // Slots each variant can bind, in binding order (3..): the texture slots the ripped presets
@@ -84,6 +94,9 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
       '_ShadowLutTex',
       '_VFXSpecialMainTex',
       '_VFXSpecialBlendTex',
+      '_FurDirMap',
+      '_FurMap',
+      '_FurDyeMap',
     ],
     CharacterNPR_Skin: [
       '_BaseMap',

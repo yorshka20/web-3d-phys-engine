@@ -80,7 +80,8 @@ fn vs_main(input: GLTFVertexInput) -> OutlineVertexOutput {
     let push = hgrp_material.outline_offset_z * HGRP_OUTLINE_OFFSET_Z_METRES * hgrp_model_scale();
     let pushed = mvp.projection_matrix * vec4<f32>(view_pos.xyz + normalize(view_pos.xyz) * push, 1.0);
     output.position = vec4<f32>(ndc_xy * pushed.w, pushed.z, pushed.w);
-    output.uv0 = input.texcoord_0;
+    let st = hgrp_material.base_map_st;
+    output.uv0 = input.texcoord_0 * st.xy + st.zw;
     output.world_normal = world_normal;
     return output;
 }

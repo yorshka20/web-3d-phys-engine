@@ -47,7 +47,8 @@ import { layoutUniformStruct } from '../../uniformStruct';
 // sdf_rim_color were appended when the hair split-normal and SDF-mask hooks landed; metallic
 // and the two _SDFRimColor off-scales with the decompiled-formula rewrite (2026-09-03); the
 // three _SilkStockings* fields with the silk-stockings transcription (2026-09-04); the
-// vfx_* block with the character VFX layer (2026-09-08).
+// vfx_* block with the character VFX layer, then the texture _ST vec4s and the fur_* block
+// (2026-09-08).
 const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   base_color: 0,
   rim_color: 4,
@@ -118,6 +119,20 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   vfx_fresnel_power: 128,
   vfx_fresnel_flip: 129,
   vfx_dissolve_offset: 130,
+  base_map_st: 132,
+  fur_map_st: 136,
+  fur_dye_map_st: 140,
+  fur_length_intensity: 144,
+  fur_ao: 145,
+  fur_cutoff_start: 146,
+  fur_cutoff_end: 147,
+  fur_edge_fade: 148,
+  fur_gravity_strength: 149,
+  fur_tt_intensity: 150,
+  fur_sharpen: 151,
+  fur_noise: 152,
+  fur_dir_map_enable: 153,
+  fur_dye_intensity: 154,
 };
 
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
@@ -210,8 +225,8 @@ describe('HGRP material contract', () => {
     expect(() => validateHGRPContract()).not.toThrow();
   });
 
-  it('keeps the HGRPMaterialParams byte layout (528 bytes)', () => {
-    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(528);
+  it('keeps the HGRPMaterialParams byte layout (624 bytes)', () => {
+    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(624);
     const actual = Object.fromEntries(
       HGRP_MATERIAL_PARAMS_LAYOUT.fields.map((f) => [f.name, f.offset / 4]),
     );
@@ -322,7 +337,7 @@ describe('HGRP material contract', () => {
     expect(new Set(Object.values(names)).size).toBe(Object.keys(names).length);
   });
 
-  it('exposes the calibration GUI schema (58 floats, 6 colors)', () => {
+  it('exposes the calibration GUI schema (70 floats, 6 colors)', () => {
     expect(HGRP_TUNABLE_FLOATS.map((d) => d.key).sort()).toEqual(
       [
         '_UseDiffRampMap',
@@ -340,6 +355,18 @@ describe('HGRP material contract', () => {
         '_VFXFresnelPower',
         '_VFXFresnelFlip',
         '_SpecialDissolveScheduleOffset',
+        '_UseCharacterFur',
+        '_FurLengthIntensity',
+        '_FurAO',
+        '_FurCutoffStart',
+        '_FurCutoffEnd',
+        '_FurEdgeFade',
+        '_FurGravityStrength',
+        '_FurTTIntensity',
+        '_FurSharpen',
+        '_FurNoise',
+        '_FurDyeEnable',
+        '_FurDyeIntensity',
         '_EnableOutline',
         '_ShadowColorBrightness',
         '_ShadowColorSaturation',
@@ -413,6 +440,8 @@ describe('permutations', () => {
       'metallicGloss',
       'emission',
       'vfxSpecial',
+      'fur',
+      'furDye',
     ]);
     expect(ids('CharacterNPR_Eye')).toEqual(['ramp', 'shadowLut', 'eyeMatcap']);
     expect(ids('CharacterNPR_Hair')).toContain('browThrough');
@@ -749,7 +778,7 @@ describe('eye layer role', () => {
 describe('packHGRPParams', () => {
   it('packs defaults when a preset omits every key', () => {
     const packed = packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, material('CharacterNPR'));
-    expect(packed).toHaveLength(132);
+    expect(packed).toHaveLength(156);
     expect(Array.from(packed.subarray(0, 8))).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_width]).toBeCloseTo(0.35);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.line_amount]).toBe(300);

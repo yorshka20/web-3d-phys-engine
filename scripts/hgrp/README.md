@@ -20,6 +20,7 @@ asset processing is not an engine concern; the engine only ever reads the output
 node scripts/hgrp/convert.mjs --src <rip-root> --chars Pelica[,Laevatian,...]
 # optional: --out <dir>     (default: packages/web-client/assets/hgrp)
 #           --no-anim       (skip the clip bake)
+#           --preset-only   (rewrite preset.json + fur layers only; no Blender, textures or clips)
 
 # Animation on its own — inspect what a rip actually carries, or override the selection:
 node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica --list
@@ -75,6 +76,18 @@ kept). anim-convert edits the GLB convert.mjs produces, so it always runs after 
 5. **Verification gate** (`convert.mjs`): re-reads the GLB with gltf-transform and fails the
    run if any primitive lacks `TEXCOORD_0`/`TANGENT`/`JOINTS_0`/`WEIGHTS_0`/`COLOR_0`, or the skin has
    no inverse bind matrices. It also prints mesh/joint/morph/material counts for eyeballing.
+6. **Fur shell layers** (`convert.mjs` `rebuildFurLayers`): the game's fur shader reads each
+   shell's layer fraction (root 0 .. tip 1) from the mesh's second UV set, which the rip's FBX
+   export dropped — every geometry carries exactly one `LayerElementUV`. The shells themselves
+   are still in the mesh (Ardelia's skirt: 19 copies of the base surface, 0.03 mm apart along
+   the normal), so for every material with `_UseCharacterFur = 1` the layer is rebuilt from the
+   geometry — vertices sharing uv0 within a millimetre form a stack, ranked along the stack's
+   normal — and written as `TEXCOORD_1.x`. The log line `[fur] ... 445 stacks x 19 layers` is
+   the check that every stack was recovered whole.
+
+Texture tiling and offset are kept: a slot whose `m_Scale`/`m_Offset` is not the identity gets a
+`<slot>_ST` entry in the preset's `colors` (the shader's own vector name), which the engine's
+`_ST` uniform fields read; identity is the default and is not written.
 
 ## Animation clips (`anim-convert.mjs`)
 

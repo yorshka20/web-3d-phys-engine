@@ -438,6 +438,85 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_SpecialDissolveScheduleOffset', 0, { min: 0, max: 2, step: 0.01 }),
       'dissolve threshold on the blend map R: 2.02 x offset - 1.01',
     ),
+    // Texture tiling / offset the preset carries for a non-identity _ST (material-preset.mjs).
+    // _BaseMap_ST is applied to uv0 once, in the vertex stage, as the game does — every other
+    // sampler of the material reads that tiled uv0 and composes its own _ST on top.
+    vec4(
+      'base_map_st',
+      'base',
+      color('_BaseMap_ST', [1, 1, 0, 0]),
+      'uv0 tiling (xy) and offset (zw) of the whole material, applied in the vertex stage',
+    ),
+    vec4(
+      'fur_map_st',
+      'fur',
+      color('_FurMap_ST', [1, 1, 0, 0]),
+      '_FurMap tiling (x, both axes) and offset (zw)',
+    ),
+    vec4(
+      'fur_dye_map_st',
+      'furDye',
+      color('_FurDyeMap_ST', [1, 1, 0, 0]),
+      '_FurDyeMap tiling (xy) and offset (zw), over the un-tiled uv0',
+    ),
+    // Fur (_UseCharacterFur; lighting/hgrp/fur.wgsl): Properties ranges; the direction-map
+    // switch is structural and stays preset-driven.
+    f32(
+      'fur_length_intensity',
+      'fur',
+      float('_FurLengthIntensity', 1, { min: 0.001, max: 6, step: 0.01 }),
+      'shell extrusion: 1 cm x layer x the direction map alpha, per unit',
+    ),
+    f32(
+      'fur_ao',
+      'fur',
+      float('_FurAO', 1, { min: 0, max: 1, step: 0.01 }),
+      'root darkening, fading out toward the tips',
+    ),
+    f32(
+      'fur_cutoff_start',
+      'fur',
+      float('_FurCutoffStart', 0, { min: 0, max: 1, step: 0.01 }),
+      'strand cutoff at the root',
+    ),
+    f32(
+      'fur_cutoff_end',
+      'fur',
+      float('_FurCutoffEnd', 1, { min: 0, max: 1, step: 0.01 }),
+      'strand cutoff at the tip',
+    ),
+    f32(
+      'fur_edge_fade',
+      'fur',
+      float('_FurEdgeFade', 0, { min: 0, max: 1, step: 0.01 }),
+      'fades the shells at grazing angles',
+    ),
+    f32(
+      'fur_gravity_strength',
+      'fur',
+      float('_FurGravityStrength', 0, { min: 0, max: 1, step: 0.01 }),
+      'bends the extrusion toward world down',
+    ),
+    f32(
+      'fur_tt_intensity',
+      'fur',
+      float('_FurTTIntensity', 0.5, { min: 0, max: 1, step: 0.01 }),
+      'transmission: lifts the ramp coordinate toward the tips',
+    ),
+    f32('fur_sharpen', 'fur', float('_FurSharpen', 0, TOGGLE), 'sqrt on the cutoff'),
+    f32(
+      'fur_noise',
+      'fur',
+      float('_FurNoise', 0, TOGGLE),
+      'per-layer UV jitter of the strands, and their backlit lift',
+    ),
+    f32('fur_dir_map_enable', 'fur', float('_FurDirMapEnable', 0)),
+    f32(
+      'fur_dye_intensity',
+      'furDye',
+      float('_FurDyeIntensity', 1, { min: 0, max: 1, step: 0.01 }),
+      'weight of the screened dye map',
+    ),
   ],
 };
 
