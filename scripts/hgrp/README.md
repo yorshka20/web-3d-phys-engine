@@ -1,128 +1,97 @@
 # HGRP offline asset conversion
 
-Converts AssetRipper-extracted Endfield character rips into engine-consumable assets.
-This is deliberately thin glue over third-party tools (Blender, sips, gltf-transform) —
-asset processing is not an engine concern; the engine only ever reads the outputs.
+Converts the character export (AnimeStudio CLI over the client data) into engine-consumable
+assets. This is deliberately thin glue over third-party tools (Blender, gltf-transform) — asset
+processing is not an engine concern; the engine only ever reads the outputs.
 
 ## Prerequisites
 
 - **Blender** on `PATH` (`brew install --cask blender`; tested with 5.2.1 LTS).
   Override the binary with `BLENDER_BIN=/path/to/blender` if needed.
-- macOS (`sips` is used for image conversion).
-- A local AssetRipper character rip laid out as `<rip-root>/<Char>/{Animator,Material,...}`
-  (e.g. `~/Downloads/Character/PC/Pelica`). The rip location is machine-local and always
-  passed as an argument — never hardcoded.
+- A local export laid out as below. Its location is machine-local and always passed as an
+  argument — never hardcoded.
+
+```
+<export-root>/
+  <actor>/
+    <actor>_uimodel.fbx    the Character Info display model: LOD0 only, materials 1:1 with
+                           preset.json, the model the artists tuned materials and lights on — used
+    <actor>_postmodel.fbx  the in-world model with its LOD chain; the only model of a few actors
+    preset.json            the material set in the engine's schema (material ground truth)
+    lighting.json          the Character Info light rig (copied through, not consumed yet)
+    textures/*.png         every texture the materials reference (real PNGs)
+    raw/                   the Unity objects behind the above, for reference
+  _global/renderpipeline.json   the HGRP volume / pipeline settings (copied through)
+```
 
 ## Usage
 
 ```bash
-# Mesh + textures + preset + animation clips, in one pass:
-node scripts/hgrp/convert.mjs --src <rip-root> --chars Pelica[,Laevatian,...]
+node scripts/hgrp/convert.mjs --src <export-root>                    # every actor
+node scripts/hgrp/convert.mjs --src <export-root> --chars ardelia,laevat
 # optional: --out <dir>     (default: packages/web-client/assets/hgrp)
-#           --no-anim       (skip the clip bake)
-#           --preset-only   (rewrite preset.json + fur layers only; no Blender, textures or clips)
-
-# Animation on its own — inspect what a rip actually carries, or override the selection:
-node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica --list
-node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica --auto
-node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica \
-     --clips A_actor_pelica_gacha_ani,A_actor_pelica_gacha_ani_loop
+#           --preset-only   (rewrite preset.json + fur layers only; no Blender, no textures)
 ```
 
-`--auto` (what convert.mjs runs) keeps every clip that drives more than a handful of node
-paths and orders them alphabetically, which puts an entrance clip ahead of its own `_loop`.
-Measured across two rips, body clips carry 704-815 curves over 323-352 node paths while
-camera tracks and event stubs carry exactly 2 curves over 1 unnamed path.
+Re-running is safe: a full run rebuilds the actor's output folder from scratch.
 
-> **`--auto` is unsound, and the clip layer as a whole is being replaced** (2026-09-03).
-> It counts node paths without asking whether those paths belong to *this* character's rig,
-> so it happily bakes another creature's clip (Wulfgard's wolf-summon clips: 229 of 279
-> curves have no matching node). Three further gaps found the same day: `m_EulerCurves` is
-> never read (a clip storing rotations that way bakes with translation only), a clip is
-> allowed to drive nodes outside the skin — including the prefab root, which carries a
-> cutscene's world placement — and the rig-root axis correction assumes exactly one rig
-> root. **Always inspect a newly baked clip before trusting it**, or pass `--no-anim`: a GLB
-> with no animation composes its bind pose correctly. The replacement is a Unity batch
-> export (Unity owns its own clip semantics), which retires `anim-clip.mjs` and
-> `anim-convert.mjs` entirely.
+## What the pipeline does, per actor
 
-Re-running is safe: outputs are overwritten in place (anim-convert replaces the GLB's
-animations rather than stacking them, so an explicit `--clips` must list every clip you want
-kept). anim-convert edits the GLB convert.mjs produces, so it always runs after it.
-
-## What the pipeline does, per character
-
-1. **`convert-fbx.py`** (run headless by the driver): imports the rigged prefab FBX found
-   under `<rip>/<Char>/Animator/` — `P_actor_*/P_actor_*.fbx` when the rip has one (Pelica),
-   otherwise `chr_<id>_<name>_postmodel/*.fbx` (Laevatian); NPC, "(1)" duplicates, `uimodel`,
-   `deco_*` and `Att_widget_*` are skipped,
-   deletes `_lod1..9` / `_shadowProxy*` meshes (lod0 is the highest-detail level and the only
-   one the engine consumes), bakes the **position-averaged normal** of every kept mesh into
-   `COLOR_0` (xyz * 0.5 + 0.5 — the `_OutlineAverageNormal` the HGRP inverted-hull outline
-   extrudes along, so the hull stays closed across hard edges and UV seams; only same-facing
-   normals are averaged so double-sided cards keep both sides), and exports a GLB with
-   tangents, skins, and morph targets enabled. The bake is written in glTF axes: the exporter
-   converts positions/normals Z-up → Y-up but leaves color attributes as they are.
-2. **Texture copy + repair** (`convert.mjs`): copies every PNG from `<rip>/<Char>/Animator/`.
-   The rip mislabels TGA files as `.png` (browsers cannot decode TGA); anything without a PNG
-   magic number is converted to real PNG via `sips`.
-3. **BaseColor embedding** (`convert.mjs`): reads each material's `_BaseMap` from the ripped
-   `Material/*.json` and embeds it as the glTF `baseColorTexture` (deduplicated — materials
-   share images), so the existing glTF/PBR path renders a textured preview before any HGRP
-   shader work.
-4. **`material-preset.mjs`**: converts the ripped Unity material JSONs into one
-   `preset.json` — the game's material ground truth with HGRP property names verbatim.
-   `_lod_` material variants are skipped.
-5. **Verification gate** (`convert.mjs`): re-reads the GLB with gltf-transform and fails the
-   run if any primitive lacks `TEXCOORD_0`/`TANGENT`/`JOINTS_0`/`WEIGHTS_0`/`COLOR_0`, or the skin has
-   no inverse bind matrices. It also prints mesh/joint/morph/material counts for eyeballing.
-6. **Fur shell layers** (`convert.mjs` `rebuildFurLayers`): the game's fur shader reads each
-   shell's layer fraction (root 0 .. tip 1) from the mesh's second UV set, which the rip's FBX
-   export dropped — every geometry carries exactly one `LayerElementUV`. The shells themselves
-   are still in the mesh (Ardelia's skirt: 19 copies of the base surface, 0.03 mm apart along
-   the normal), so for every material with `_UseCharacterFur = 1` the layer is rebuilt from the
-   geometry — vertices sharing uv0 within a millimetre form a stack, ranked along the stack's
-   normal — and written as `TEXCOORD_1.x`. The log line `[fur] ... 445 stacks x 19 layers` is
-   the check that every stack was recovered whole.
-
-Texture tiling and offset are kept: a slot whose `m_Scale`/`m_Offset` is not the identity gets a
-`<slot>_ST` entry in the preset's `colors` (the shader's own vector name), which the engine's
-`_ST` uniform fields read; identity is the default and is not written.
-
-## Animation clips (`anim-convert.mjs`)
-
-Bakes Unity `.anim` clips into the character GLB as glTF animations. `--list` first: a rip's
-clips are mostly **optimized/muscle clips whose samples AssetRipper does not export** (they
-come out as an empty curve list plus a table of CRC32 path hashes). Only Generic clips are
-usable — for Pelica that is 5 of 1324, of which the two `gacha_ani*` clips are the character's
-full-body summon entrance and its standing idle loop.
-
-What the conversion has to get right, and why:
-
-- **Path matching**: Unity clip paths (`Root/Bip001/...`) are relative to the prefab root, so
-  they equal the GLB node path minus the scene root's name. For Pelica all 352 paths resolve.
-- **Coordinate conversion**: the rig differs by a mirror through the YZ plane —
-  position `(x,y,z) -> (-x,y,z)`, rotation `(x,y,z,w) -> (x,-y,-z,w)`. Verified against the
-  bind pose, not assumed.
-- **Rig-root re-framing**: the glTF exporter parks its Z-up→Y-up rotation on the scene root, so
-  the topmost animated node gets the inverse of its parent's world rotation pre-multiplied. The
-  rotation is read out of the GLB — nothing hardcodes 90 degrees.
-- **Baking**: Unity keys carry Hermite tangents (with `∞` meaning a stepped segment), which
-  glTF cannot express, so curves are sampled at the clip's rate and reduced back to LINEAR keys
-  within a tolerance. Pelica's idle loop goes from 391k samples to 9.3k keys.
+1. **`convert-fbx.py`** (run headless by the driver): imports `<actor>_uimodel.fbx`
+   (`<actor>_postmodel.fbx` when there is no uimodel), deletes `_lod1..9` / `_shadowProxy*`
+   meshes (lod0 is the only level the engine consumes), bakes the **position-averaged normal**
+   of every kept mesh into `COLOR_0` (xyz * 0.5 + 0.5 — the `_OutlineAverageNormal` the HGRP
+   inverted-hull outline extrudes along, so the hull stays closed across hard edges and UV
+   seams; only same-facing normals are averaged so double-sided cards keep both sides), and
+   exports a GLB with tangents, skins, and morph targets enabled. The bake is written in glTF
+   axes: the exporter converts positions/normals Z-up → Y-up but leaves color attributes as
+   they are.
+2. **Texture copy** (`convert.mjs`): copies `textures/*.png`. Anything without a PNG magic
+   number is converted via `sips` (the first rip mislabeled TGA files; this export ships PNGs).
+3. **BaseColor embedding** (`convert.mjs`): embeds each material's `_BaseMap` (from preset.json)
+   as the glTF `baseColorTexture` (deduplicated — materials share images), so the generic
+   glTF/PBR path renders a textured preview.
+4. **`material-preset.mjs`**: writes the export's preset.json scoped to the materials the GLB
+   references (postmodel exports carry every LOD's `M_actor_lod_*` material), completing texture
+   tiling/offset from the Unity material objects in `raw/materials_<model>/` as
+   `colors["<slot>_ST"] = [sx, sy, ox, oy]` for non-identity transforms — the one field the
+   export does not write yet; an `_ST` the export does write is kept and checked. Everything
+   else in the file is the export's, verbatim.
+5. **Fur shell layers** (`convert.mjs` `rebuildFurLayers`): the game's fur shader reads each
+   shell's layer fraction (root 0 .. tip 1) from the mesh's second UV set, which the FBX does
+   not carry — every geometry has exactly one UV layer. The shells themselves are in the mesh
+   (Ardelia's skirt: 19 copies of the base surface), appended one after another, so for every
+   material with `_UseCharacterFur = 1` the layer is rebuilt from the vertex order: the
+   vertices sharing one uv0 point, within 2 mm of each other and with the same normal, are one
+   stack (the two faces of a thin sheet — deepfin's fins — share uv0 but not a normal), the
+   shell count is the gcd of the stack sizes, a vertex's rank by index within its stack is its
+   shell, and the shells' mean offset along the normal (26 µm per shell in the first rip,
+   0.26 µm in this export — too fine to rank by distance) confirms the order and tells root
+   from tip. The log line `[fur] ... 19 shells over 464 stacks` is the check. The attribute is
+   tagged in the primitive's extras so `--preset-only` recomputes it; a source that carries
+   `TEXCOORD_1` is left alone.
+6. **Verification gate** (`convert.mjs`): re-reads the GLB with gltf-transform and fails the
+   run if any primitive lacks `TEXCOORD_0`/`TANGENT`/`COLOR_0`, a skinned mesh lacks
+   `JOINTS_0`/`WEIGHTS_0`, or the skin has no inverse bind matrices. A mesh on a node without a
+   skin is a rigid prop (a weapon parented to a hand joint) and is listed as `rigid=`. It also
+   prints mesh/joint/morph/material counts.
 
 ## Expected output
 
 ```
-packages/web-client/assets/hgrp/<char>/   (gitignored — assets are machine-local)
-  <char>.glb      # lod0 meshes + skeleton + skins + morph targets + baseColor preview
-                  # textures (+ baked animation clips, if anim-convert.mjs was run)
-  textures/*.png  # full character texture set, real PNGs
-  preset.json     # per-material: { shader, textures(slot→file), floats, ints, colors[rgba] }
+packages/web-client/assets/hgrp/<actor>/   (gitignored — assets are machine-local)
+  <actor>.glb      # lod0 meshes + skeleton + skins + morph targets + baseColor preview textures
+  preset.json      # per material: { shader, textures(slot→file), floats, ints, colors[rgba],
+                   #   keywords, renderQueue?, disabledPasses?, tags? }
+  lighting.json    # the Character Info light rig, as exported
+  textures/*.png
+packages/web-client/assets/hgrp/_global/renderpipeline.json
 ```
 
-The GLB + preset.json are the only hand-offs the engine reads. `stages/hgrp/` imports the GLB
-via `?url`; the preset feeds the HGRP material family (Stage B of the HGRP plan).
+The GLB + preset.json are the hand-offs the engine reads: `stages/hgrp/characters.ts` derives
+the roster from the folders (`<actor>.glb` + `preset.json`); the preset feeds the HGRP material
+family. lighting.json and renderpipeline.json are carried for the stage-lighting and
+post-processing work to read.
 
 ## Known data facts
 
@@ -130,8 +99,20 @@ via `?url`; the preset feeds the HGRP material family (Stage B of the HGRP plan)
   stage's concern, not the converter's.
 - The bind pose is offset from the origin (prefab placement) — compensate in the entity
   transform, not by editing vertices.
-- The GLB may contain materials with no preset entry (shared/common materials the rip does
-  not export per-character, e.g. `M_eyewhiteshadow_common_01`) — the engine must default-fill
-  those. The preset may likewise contain materials with no mesh in the GLB.
-- FBX prefabs carry **no animation clips**; clips require a separate offline bake
-  (Unity editor re-export or Blender retarget) when animation work starts.
+- The FBX carries **no animation clips** (AnimStack 0) and **one UV set** per geometry. Clips
+  are separate client assets and need their own export path; the second UV set (fur layer
+  index, the VFX mask's UV set) is what the layer rebuild above stands in for.
+- The material objects' `m_Shader.Name` is empty in this export; preset.json is the only
+  source of the shader name.
+- A GLB material with no preset entry is default-filled by the engine (warned at load); the
+  preset may contain materials with no mesh in the GLB (scoped out here).
+
+## Animation clips (`anim-convert.mjs`, first-rip layout only)
+
+`anim-convert.mjs` / `anim-clip.mjs` bake Unity `.anim` clips from the **first** AssetRipper rip
+(`<rip>/<Char>/Animator/...`) into a GLB. That layout is not this export's, and the clip layer
+as a whole is slated for replacement by a Unity batch export (learnings animation-pipeline.md):
+`--auto` counts node paths without asking whether they belong to this character's rig,
+`m_EulerCurves` is never read, and the rig-root axis correction assumes exactly one rig root.
+Always inspect a baked clip before trusting it. A GLB with no animation composes its bind pose
+correctly.
