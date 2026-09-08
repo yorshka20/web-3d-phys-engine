@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  color,
   createDefaultHGRPMaterial,
   createHGRPMaterialFromPreset,
   HGRP_MATERIAL_PARAMS_LAYOUT,
@@ -13,6 +14,7 @@ import {
   HGRP_VFX_PARAMS_LAYOUT,
   hgrpAllTextureBindings,
   hgrpApplicableSubsystems,
+  hgrpColorParamValue,
   hgrpDebugSlotId,
   hgrpDebugViewFragment,
   hgrpGeneratedFragment,
@@ -36,7 +38,10 @@ import {
   hgrpTextureBindings,
   hgrpTextureWgslName,
   packHGRPParams,
+  unityGammaToLinear,
   validateHGRPContract,
+  vector,
+  WHITE,
 } from '..';
 import { layoutUniformStruct } from '../../uniformStruct';
 
@@ -806,16 +811,50 @@ describe('packHGRPParams', () => {
         },
       }),
     );
-    expect(Array.from(packed.subarray(0, 4)).map((v) => +v.toFixed(3))).toEqual([1, 0.5, 1, 0.8]);
+    // Stored colors are sRGB (the Unity inspector's values); the buffer holds them decoded,
+    // alpha untouched, and the hair tint multiplies after decoding like the shader's own math.
+    const g2l = unityGammaToLinear;
+    expect(Array.from(packed.subarray(0, 4)).map((v) => +v.toFixed(3))).toEqual(
+      [g2l(0.5) * g2l(2), g2l(1) * g2l(0.5), 1, 0.8].map((v) => +v.toFixed(3)),
+    );
     expect(Array.from(packed.subarray(4, 8))).toEqual([1, 1, 1, 1]);
     const sdfRim = MATERIAL_PARAMS_F32_INDEX.sdf_rim_color;
-    expect(Array.from(packed.subarray(sdfRim, sdfRim + 4)).map((v) => +v.toFixed(2))).toEqual([
-      0.65, 0.4, 0.42, 1,
-    ]);
+    expect(Array.from(packed.subarray(sdfRim, sdfRim + 4)).map((v) => +v.toFixed(3))).toEqual(
+      [g2l(0.65), g2l(0.4), g2l(0.42), 1].map((v) => +v.toFixed(3)),
+    );
     expect(packed[MATERIAL_PARAMS_F32_INDEX.alpha_cutoff]).toBeCloseTo(0.42);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_intensity]).toBe(4);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.skin_rim_off_scale]).toBeCloseTo(0.25);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.face_rim_off_scale]).toBeCloseTo(0.5);
+  });
+
+  it('decodes stored colors per the Unity color-space rule and leaves vectors and [HDR] colors alone', () => {
+    // Mathf.GammaToLinearSpace: sRGB curve below 1, pow 2.2 above it (an HDR [Gamma] tint)
+    expect(unityGammaToLinear(0.04045)).toBeCloseTo(0.04045 / 12.92, 6);
+    expect(unityGammaToLinear(0.5)).toBeCloseTo(0.214, 3);
+    expect(unityGammaToLinear(1)).toBe(1);
+    expect(unityGammaToLinear(8.47)).toBeCloseTo(Math.pow(8.47, 2.2), 6);
+    const srgb = color('_X', WHITE);
+    const hdr = color('_Y', WHITE, false, 'linear');
+    const st = vector('_Z_ST', [1, 1, 0, 0]);
+    expect(hgrpColorParamValue(srgb, [1, 0.341, 0, 0.5]).map((v) => +v.toFixed(3))).toEqual([
+      1, 0.095, 0, 0.5,
+    ]);
+    expect(hgrpColorParamValue(hdr, [2.24, 2.24, 2.24, 1])).toEqual([2.24, 2.24, 2.24, 1]);
+    expect(hgrpColorParamValue(st, [6, 1, -0.23, 0])).toEqual([6, 1, -0.23, 0]);
+    // every _ST / UV vector in the tables is linear; the eye's three [HDR] colors are linear
+    for (const struct of HGRP_PARAMS_STRUCTS) {
+      for (const field of struct.fields) {
+        for (const param of field.params) {
+          if (param.kind !== 'color') continue;
+          const isVector = /_ST$|UVSpeed|UVWeights|Vector|_VFXSpecialParam/.test(param.key);
+          const isHdr = ['_MatcapColor', '_EyeHighLightColor', '_EyeScatteringColor'].includes(
+            param.key,
+          );
+          expect(param.space, param.key).toBe(isVector || isHdr ? 'linear' : 'srgb');
+        }
+      }
+    }
   });
 
   it('round-trips every direct param through its field offset', () => {
@@ -844,10 +883,19 @@ describe('packHGRPParams', () => {
           continue;
         }
         const param = field.params[0];
-        const expected = param.kind === 'float' ? [floats[param.key]] : colors[param.key];
-        expect(
-          Array.from(packed.subarray(field.offset / 4, field.offset / 4 + expected.length)),
-        ).toEqual(expected);
+        // a color param reaches the buffer decoded per its space, a vector as stored
+        const expected =
+          param.kind === 'float'
+            ? [floats[param.key]]
+            : Array.from(hgrpColorParamValue(param, colors[param.key]));
+        const actual = Array.from(
+          packed.subarray(field.offset / 4, field.offset / 4 + expected.length),
+        );
+        // float32 in the buffer vs float64 here: a decoded HDR value (pow 2.2 of a large
+        // input) only agrees to ~7 significant digits
+        for (let k = 0; k < expected.length; k++) {
+          expect(actual[k], `${param.key}[${k}]`).toBeCloseTo(expected[k], 2);
+        }
       }
     }
   });

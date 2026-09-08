@@ -315,7 +315,8 @@ export function createHGRPMaterialFromPreset(
 // every character's texture folder (param ledger, "新证据"); the stencil gate is the shader's
 // _ShadowOverIris enum — 20 = only over the iris and brow, 4 = only over the rest of the
 // character. _BaseColor is the one value the rip does not carry: a muted cool-grey shadow
-// tint, calibrated in the GUI (guess ledger G9).
+// tint, calibrated in the GUI (guess ledger G9) — an sRGB picker value like every stored
+// color, decoded at pack time (linear 0.6 / 0.55 / 0.62).
 interface HGRPCommonShell {
   mask: string;
   shadowOverIris: 4 | 20;
@@ -326,12 +327,12 @@ export const HGRP_COMMON_SHELLS: Readonly<Record<string, HGRPCommonShell>> = {
   M_eyewhiteshadow_common_01: {
     mask: 'T_actor_common_eyeshadow_01_M.png',
     shadowOverIris: 20,
-    baseColor: [0.6, 0.55, 0.62, 1],
+    baseColor: [0.797, 0.766, 0.809, 1],
   },
   M_hairshadow_common_01: {
     mask: 'T_actor_common_hairshadow_01_M.png',
     shadowOverIris: 4,
-    baseColor: [0.6, 0.55, 0.62, 1],
+    baseColor: [0.797, 0.766, 0.809, 1],
   },
 };
 

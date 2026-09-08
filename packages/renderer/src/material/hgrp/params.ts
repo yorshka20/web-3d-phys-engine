@@ -9,6 +9,7 @@ import {
   TOGGLE,
   HGRPVec4,
   vec4,
+  vector,
   WHITE,
   ZERO4,
 } from './primitives';
@@ -40,8 +41,11 @@ const RIM_INTENSITY = float('_ColorAdjustmentRimIntensity', 0);
 // _HairAddTintColor's target region is unknown and stays unwired — see the param ledger).
 function packBaseColor(material: HGRPMaterialDescriptor): HGRPVec4 {
   const base = readHGRPParam(material, BASE_COLOR) as HGRPVec4;
-  const tint = material.colors[HAIR_BASE_TINT.key];
-  return tint ? [base[0] * tint[0], base[1] * tint[1], base[2] * tint[2], base[3]] : base;
+  if (!material.colors[HAIR_BASE_TINT.key]) {
+    return base;
+  }
+  const tint = readHGRPParam(material, HAIR_BASE_TINT) as HGRPVec4;
+  return [base[0] * tint[0], base[1] * tint[1], base[2] * tint[2], base[3]];
 }
 
 // alpha_cutoff doubles as the clip switch: 0 disables the discard in the shader.
@@ -146,17 +150,19 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_OutlineOffsetZ', 0, { min: 0, max: 1, step: 0.01 }),
       'pushes the hull 0.1 m per unit down the view ray (depth only) so inner lines recede',
     ),
-    vec4('matcap_color', 'eyeMatcap', color('_MatcapColor', WHITE, true)),
+    // The three eye colors are the shader's [HDR] properties: stored linear, read as stored
+    // (the iris matched the in-game frame that way; primitives.ts HGRPColorSpace).
+    vec4('matcap_color', 'eyeMatcap', color('_MatcapColor', WHITE, true, 'linear')),
     vec4(
       'eye_highlight_color',
       'eyeHighlight',
-      color('_EyeHighLightColor', WHITE),
+      color('_EyeHighLightColor', WHITE, false, 'linear'),
       'HDR (~2.2) albedo multiplier outside the UV disc',
     ),
     vec4(
       'eye_scattering_color',
       'eyeScatter',
-      color('_EyeScatteringColor', WHITE),
+      color('_EyeScatteringColor', WHITE, false, 'linear'),
       'HDR albedo multiplier where the base alpha is set',
     ),
     f32(
@@ -234,7 +240,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
     vec4(
       'highlight_vector',
       'skinHighlight',
-      color('_HighlightMapVector', ZERO4),
+      vector('_HighlightMapVector', ZERO4),
       'hl_M UV offset (xy)',
     ),
     // The game reads _EyeTintColor only under _CUSTOMIZE_AVATAR, which this renderer does not
@@ -319,7 +325,7 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
     vec4(
       'line_map_st',
       'hairLines',
-      color('_LineMap_ST', [1, 1, 0, 0]),
+      vector('_LineMap_ST', [1, 1, 0, 0]),
       '_LineMap tiling (xy) and offset (zw); Unity default when the preset carries none',
     ),
     // The three _SilkStockings* keys exist only in the shader version the decompile came from;
@@ -367,19 +373,19 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
     vec4(
       'vfx_special_param',
       'vfxSpecial',
-      color('_VFXSpecialParam', ZERO4),
+      vector('_VFXSpecialParam', ZERO4),
       'UV scroll per second: xy the main map, zw the blend map',
     ),
     vec4(
       'vfx_main_tex_st',
       'vfxSpecial',
-      color('_VFXSpecialMainTex_ST', [1, 1, 0, 0]),
+      vector('_VFXSpecialMainTex_ST', [1, 1, 0, 0]),
       '_VFXSpecialMainTex tiling (xy) and offset (zw)',
     ),
     vec4(
       'vfx_blend_tex_st',
       'vfxSpecial',
-      color('_VFXSpecialBlendTex_ST', [1, 1, 0, 0]),
+      vector('_VFXSpecialBlendTex_ST', [1, 1, 0, 0]),
       '_VFXSpecialBlendTex tiling (xy) and offset (zw)',
     ),
     f32(
@@ -444,19 +450,19 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
     vec4(
       'base_map_st',
       'base',
-      color('_BaseMap_ST', [1, 1, 0, 0]),
+      vector('_BaseMap_ST', [1, 1, 0, 0]),
       'uv0 tiling (xy) and offset (zw) of the whole material, applied in the vertex stage',
     ),
     vec4(
       'fur_map_st',
       'fur',
-      color('_FurMap_ST', [1, 1, 0, 0]),
+      vector('_FurMap_ST', [1, 1, 0, 0]),
       '_FurMap tiling (x, both axes) and offset (zw)',
     ),
     vec4(
       'fur_dye_map_st',
       'furDye',
-      color('_FurDyeMap_ST', [1, 1, 0, 0]),
+      vector('_FurDyeMap_ST', [1, 1, 0, 0]),
       '_FurDyeMap tiling (xy) and offset (zw), over the un-tiled uv0',
     ),
     // Fur (_UseCharacterFur; lighting/hgrp/fur.wgsl): Properties ranges; the direction-map
@@ -539,19 +545,19 @@ export const HGRP_VFX_PARAMS: HGRPParamsStruct = {
   fields: [
     vec4('tint_color', 'vfx', color('_TintColor', WHITE), 'crimson base glow, a = opacity'),
     vec4('blend_tint', 'vfx', color('_BlendTint', WHITE), 'HDR warm tint on the flow layer'),
-    vec4('main_uv_speed', 'vfx', color('_MainTexUVSpeed', ZERO4), 'xy scroll per second'),
+    vec4('main_uv_speed', 'vfx', vector('_MainTexUVSpeed', ZERO4), 'xy scroll per second'),
     vec4(
       'main_uv_weights',
       'vfx',
-      color('_MainTexUVWeights', [1, 0, 0, 0]),
+      vector('_MainTexUVWeights', [1, 0, 0, 0]),
       'which channels form the scalar',
     ),
-    vec4('blend_uv_speed', 'vfx', color('_BlendTexUVSpeed', ZERO4)),
-    vec4('blend_uv_weights', 'vfx', color('_BlendTexUVWeights', [1, 0, 0, 0])),
-    vec4('mask_uv_speed', 'vfx', color('_MaskTexUVSpeed', ZERO4)),
-    vec4('mask_uv_weights', 'vfx', color('_MaskTexUVWeights', [1, 0, 0, 0])),
-    vec4('disturb_uv_speed', 'vfx', color('_DisturbUVSpeed1', ZERO4)),
-    vec4('disturb_uv_weights', 'vfx', color('_DisturbUVWeights1', [1, 0, 0, 0])),
+    vec4('blend_uv_speed', 'vfx', vector('_BlendTexUVSpeed', ZERO4)),
+    vec4('blend_uv_weights', 'vfx', vector('_BlendTexUVWeights', [1, 0, 0, 0])),
+    vec4('mask_uv_speed', 'vfx', vector('_MaskTexUVSpeed', ZERO4)),
+    vec4('mask_uv_weights', 'vfx', vector('_MaskTexUVWeights', [1, 0, 0, 0])),
+    vec4('disturb_uv_speed', 'vfx', vector('_DisturbUVSpeed1', ZERO4)),
+    vec4('disturb_uv_weights', 'vfx', vector('_DisturbUVWeights1', [1, 0, 0, 0])),
     {
       name: 'disturb_intensity',
       type: 'vec2',
