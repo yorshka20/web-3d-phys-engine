@@ -4,7 +4,10 @@
 // apart — and each vertex carries its layer fraction, 0 at the root and 1 at the tip, in uv1.x
 // (scripts/hgrp/convert.mjs rebuilds it from the shell spacing; the rip's FBX dropped the second
 // UV set). Two hooks. The vertex stage pushes a shell out along its normal, bent toward gravity
-// by _FurGravityStrength, by _FurLengthIntensity x layer x 1 cm x the direction map's alpha.
+// by _FurGravityStrength, by _FurLengthIntensity x layer x 1 cm x the direction map's alpha —
+// a length in the asset's metres, so it takes the draw's world scale like every other HGRP
+// length (core/hgrp_transform.wgsl); the game's shader leaves it in world metres because its
+// characters are drawn at scale 1.
 // The fragment stage cuts the shell into strands — the noise map, warped by the direction map
 // and a per-layer hash, against a cutoff that grows from the root value to the tip value —
 // fades it at grazing angles and with the cube of the layer, darkens the roots and lifts the
@@ -28,7 +31,7 @@ fn hgrp_fur_extrude(
     let dir = mix(n_clip, down_clip * g + n_clip * (1.0 - g), layer * (0.5 - 0.5 * n.y));
     // The strand length lives in the direction map's alpha, read at the un-tiled uv0 clamped.
     let length = textureSampleLevel(fur_dir_map, ramp_sampler, uv0_raw, 0.0).a;
-    let push = dir * (hgrp_material.fur_length_intensity * layer * 0.01 * length);
+    let push = dir * (hgrp_material.fur_length_intensity * layer * 0.01 * length * hgrp_model_scale());
     return vec4<f32>(clip.xyz + push, clip.w);
 }
 
