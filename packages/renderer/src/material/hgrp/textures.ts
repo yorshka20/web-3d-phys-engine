@@ -30,7 +30,19 @@ import { hgrpSlotOwners } from './subsystems';
 // rgb is a color tint (its alpha, the lit weight, is unaffected by the format either way):
 // Unity imports color textures as sRGB unless told otherwise, and nothing in the shader undoes
 // that.
-export const HGRP_TEXTURE_SLOTS: Readonly<Record<string, { srgb: boolean }>> = {
+//
+// A slot's `unset` names the texture the game's shader Properties block substitutes when a
+// material leaves the slot empty (`= "white" {}` / `= "black" {}`), for the slots where that
+// stand-in is part of the subsystem's formula rather than an absence: the character VFX layer's
+// main map defaults to white (no pattern, coverage 1 — Laevatian's ember materials set only the
+// blend map) and its blend map to black (no flow, dissolve threshold never reached). A slot
+// without `unset` is required: a gate on without it leaves the subsystem off (permutation.ts).
+export interface HGRPTextureSlot {
+  srgb: boolean;
+  unset?: 'white' | 'black';
+}
+
+export const HGRP_TEXTURE_SLOTS: Readonly<Record<string, HGRPTextureSlot>> = {
   _BaseMap: { srgb: true },
   _DiffRampMap: { srgb: true },
   _BumpMap: { srgb: false },
@@ -51,6 +63,10 @@ export const HGRP_TEXTURE_SLOTS: Readonly<Record<string, { srgb: boolean }>> = {
   _BlendTex: { srgb: true },
   _DisturbTex1: { srgb: false },
   _MaskTex: { srgb: false },
+  // The character VFX layer (_EnableCharacterVFX): a pattern whose R doubles as coverage and a
+  // mask whose R is the dissolve threshold and the UV warp — data, not color.
+  _VFXSpecialMainTex: { srgb: false, unset: 'white' },
+  _VFXSpecialBlendTex: { srgb: false, unset: 'black' },
 };
 
 // Slots each variant can bind, in binding order (3..): the texture slots the ripped presets
@@ -66,6 +82,8 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
       '_MetallicGlossMap',
       '_EmissionMap',
       '_ShadowLutTex',
+      '_VFXSpecialMainTex',
+      '_VFXSpecialBlendTex',
     ],
     CharacterNPR_Skin: [
       '_BaseMap',
@@ -147,6 +165,7 @@ export interface HGRPTextureBinding {
   slot: string;
   wgslName: string;
   srgb: boolean;
+  unset?: 'white' | 'black';
 }
 
 // Every slot of a variant's table with its binding number (the all-on permutation).
@@ -156,6 +175,7 @@ export function hgrpAllTextureBindings(variant: HGRPShaderVariant): HGRPTextureB
     slot,
     wgslName: hgrpTextureWgslName(slot),
     srgb: HGRP_TEXTURE_SLOTS[slot].srgb,
+    unset: HGRP_TEXTURE_SLOTS[slot].unset,
   }));
 }
 

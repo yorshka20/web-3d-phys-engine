@@ -75,7 +75,7 @@ const CHARACTER_GAP = 0.5;
 
 // The pair the HGRP shading was calibrated against — on stage from the start so the default
 // picture is the reference one; the rest of the roster is switched on from the Stage tab.
-const DEFAULT_CHARACTER_FOLDERS = ['pelica', 'laevatian'];
+const DEFAULT_CHARACTER_FOLDERS = ['pelica', 'laevatian', 'ardelia'];
 
 // Every asset under assets/hgrp is a roster entry, so a newly converted character
 // (scripts/hgrp/convert.mjs) appears in the Stage tab without a code change. Only URLs are

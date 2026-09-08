@@ -5,7 +5,7 @@ import {
   HGRPSubsystemId,
   hgrpSubsystemTextures,
 } from './subsystems';
-import { HGRP_TEXTURE_SLOTS_BY_VARIANT } from './textures';
+import { HGRP_TEXTURE_SLOTS, HGRP_TEXTURE_SLOTS_BY_VARIANT } from './textures';
 
 // A PERMUTATION is a variant plus the static subsystems a material enables. It is resolved once
 // from the preset (descriptor.ts) and serialized into the material's customShaderId, which is
@@ -77,9 +77,10 @@ export function hgrpApplicableSubsystems(variant: HGRPShaderVariant): HGRPSubsys
   return HGRP_STATIC_SUBSYSTEMS.filter((subsystem) => hgrpSubsystemAppliesTo(subsystem, variant));
 }
 
-// A gate that is on while the preset lacks a texture the subsystem samples. The subsystem stays
-// off — sampling a placeholder would silently shade with white — and the caller reports it, so
-// the gap is visible instead of being absorbed by a default texture.
+// A gate that is on while the preset lacks a texture the subsystem samples and the slot declares
+// no stand-in (textures.ts `unset`). The subsystem stays off — sampling a placeholder would
+// silently shade with white — and the caller reports it, so the gap is visible instead of being
+// absorbed by a default texture.
 export interface HGRPDroppedSubsystem {
   subsystem: HGRPSubsystemId;
   gate: string;
@@ -92,7 +93,8 @@ export interface HGRPPermutationResolution {
 }
 
 // Resolve a material's permutation from its preset values: a static subsystem that applies to
-// the variant is enabled when its gate is 1 and every texture it consumes is present.
+// the variant is enabled when its gate is 1 and every texture it consumes is present or has a
+// declared stand-in.
 export function hgrpResolvePermutation(
   variant: HGRPShaderVariant,
   floats: Record<string, number>,
@@ -105,7 +107,7 @@ export function hgrpResolvePermutation(
       continue;
     }
     const missing = hgrpSubsystemTextures(subsystem, variant).filter(
-      (slot) => textures[slot] === undefined,
+      (slot) => textures[slot] === undefined && HGRP_TEXTURE_SLOTS[slot].unset === undefined,
     );
     if (missing.length > 0) {
       dropped.push({ subsystem: subsystem.id, gate: subsystem.gate!, missing });

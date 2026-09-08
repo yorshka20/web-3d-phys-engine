@@ -112,10 +112,10 @@ export class MaterialBinder {
     });
 
     const textureEntries: GPUBindGroupEntry[] = await Promise.all(
-      hgrpTextureBindings(material.permutation).map(async ({ binding, slot, srgb }) => {
+      hgrpTextureBindings(material.permutation).map(async ({ binding, slot, srgb, unset }) => {
         const texture = await this.getGLTFTexture(
           material.textures[slot],
-          'gltf_default_white',
+          unset === 'black' ? 'gltf_default_black' : 'gltf_default_white',
           srgb,
         );
         return { binding, resource: texture.createView() };

@@ -46,7 +46,8 @@ import { layoutUniformStruct } from '../../uniformStruct';
 // the two numeric gates (eye_highlight, use_pantyhose) stay. spec_bump_scale and
 // sdf_rim_color were appended when the hair split-normal and SDF-mask hooks landed; metallic
 // and the two _SDFRimColor off-scales with the decompiled-formula rewrite (2026-09-03); the
-// three _SilkStockings* fields with the silk-stockings transcription (2026-09-04).
+// three _SilkStockings* fields with the silk-stockings transcription (2026-09-04); the
+// vfx_* block with the character VFX layer (2026-09-08).
 const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   base_color: 0,
   rim_color: 4,
@@ -100,6 +101,23 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
   pantyhose_min_affect: 92,
   pantyhose_max_affect: 93,
   pantyhose_spec_falloff: 94,
+  vfx_color: 96,
+  vfx_blend_tint: 100,
+  vfx_fresnel_color: 104,
+  vfx_special_param: 108,
+  vfx_main_tex_st: 112,
+  vfx_blend_tex_st: 116,
+  vfx_color_intensity: 120,
+  vfx_color_alpha: 121,
+  vfx_main_uv_set: 122,
+  vfx_main_tex_as_alpha: 123,
+  vfx_blend_r_disturb: 124,
+  vfx_fresnel_use_normal_map: 125,
+  vfx_fresnel_bias: 126,
+  vfx_fresnel_affect_opacity: 127,
+  vfx_fresnel_power: 128,
+  vfx_fresnel_flip: 129,
+  vfx_dissolve_offset: 130,
 };
 
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
@@ -192,8 +210,8 @@ describe('HGRP material contract', () => {
     expect(() => validateHGRPContract()).not.toThrow();
   });
 
-  it('keeps the HGRPMaterialParams byte layout (384 bytes)', () => {
-    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(384);
+  it('keeps the HGRPMaterialParams byte layout (528 bytes)', () => {
+    expect(HGRP_MATERIAL_PARAMS_LAYOUT.byteSize).toBe(528);
     const actual = Object.fromEntries(
       HGRP_MATERIAL_PARAMS_LAYOUT.fields.map((f) => [f.name, f.offset / 4]),
     );
@@ -304,7 +322,7 @@ describe('HGRP material contract', () => {
     expect(new Set(Object.values(names)).size).toBe(Object.keys(names).length);
   });
 
-  it('exposes the calibration GUI schema (50 floats, 6 colors)', () => {
+  it('exposes the calibration GUI schema (58 floats, 6 colors)', () => {
     expect(HGRP_TUNABLE_FLOATS.map((d) => d.key).sort()).toEqual(
       [
         '_UseDiffRampMap',
@@ -314,6 +332,14 @@ describe('HGRP material contract', () => {
         '_UseSpecRampMap',
         '_UseMetallicGlossMap',
         '_UseEmission',
+        '_EnableCharacterVFX',
+        '_VFXColorIntensity',
+        '_VFXColorAlpha',
+        '_VFXFresnelBias',
+        '_VFXFresnelAffectOpacity',
+        '_VFXFresnelPower',
+        '_VFXFresnelFlip',
+        '_SpecialDissolveScheduleOffset',
         '_EnableOutline',
         '_ShadowColorBrightness',
         '_ShadowColorSaturation',
@@ -386,6 +412,7 @@ describe('permutations', () => {
       'spec',
       'metallicGloss',
       'emission',
+      'vfxSpecial',
     ]);
     expect(ids('CharacterNPR_Eye')).toEqual(['ramp', 'shadowLut', 'eyeMatcap']);
     expect(ids('CharacterNPR_Hair')).toContain('browThrough');
@@ -404,6 +431,22 @@ describe('permutations', () => {
     );
     expect(permutation.enabled).toEqual(['ramp', 'shadowLut', 'normal']);
     expect(dropped).toEqual([]);
+  });
+
+  it('keeps a subsystem on when the only textures missing are slots with a declared stand-in', () => {
+    // The game's Properties defaults: Laevatian's ember materials set the blend map only, the
+    // main map falls back to white (no pattern, coverage 1) and binds the default white texture.
+    const { permutation, dropped } = hgrpResolvePermutation(
+      'CharacterNPR',
+      { _EnableCharacterVFX: 1 },
+      { _BaseMap: 'b', _VFXSpecialBlendTex: 'm' },
+    );
+    expect(permutation.enabled).toEqual(['vfxSpecial']);
+    expect(dropped).toEqual([]);
+    const bindings = hgrpTextureBindings(permutation);
+    expect(bindings.find((tex) => tex.slot === '_VFXSpecialMainTex')?.unset).toBe('white');
+    expect(bindings.find((tex) => tex.slot === '_VFXSpecialBlendTex')?.unset).toBe('black');
+    expect(bindings.find((tex) => tex.slot === '_BaseMap')?.unset).toBeUndefined();
   });
 
   it('leaves a subsystem off, and reports it, when its gate is on but a texture is missing', () => {
@@ -706,7 +749,7 @@ describe('eye layer role', () => {
 describe('packHGRPParams', () => {
   it('packs defaults when a preset omits every key', () => {
     const packed = packHGRPParams(HGRP_MATERIAL_PARAMS_LAYOUT, material('CharacterNPR'));
-    expect(packed).toHaveLength(96);
+    expect(packed).toHaveLength(132);
     expect(Array.from(packed.subarray(0, 8))).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.rim_width]).toBeCloseTo(0.35);
     expect(packed[MATERIAL_PARAMS_F32_INDEX.line_amount]).toBe(300);

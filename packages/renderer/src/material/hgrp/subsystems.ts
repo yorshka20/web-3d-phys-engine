@@ -18,6 +18,7 @@ export type HGRPSubsystemId =
   | 'spec'
   | 'metallicGloss'
   | 'emission'
+  | 'vfxSpecial'
   | 'outline'
   | 'hairBand'
   | 'hairLines'
@@ -165,6 +166,21 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     tier: 'static',
     textures: ['_EmissionMap'],
     wgsl: { include: 'lighting/hgrp/emission.wgsl', fn: 'hgrp_emission', off: 'vec3<f32>(0.0)' },
+  },
+  // The character VFX layer, the game's _CHARACTER_VFX_SPECIAL keyword of the standard shader
+  // (hgrp-decompiled-formulas.md §6.1): an HDR flow layer added to the shaded color — the embers
+  // along Laevatian's cloth edges, the fissure glow through Ardelia's fur. Distinct from `vfx`
+  // below, which is the stand-alone CharacterNPR_VFX effect material.
+  {
+    id: 'vfxSpecial',
+    gate: '_EnableCharacterVFX',
+    tier: 'static',
+    textures: ['_VFXSpecialMainTex', '_VFXSpecialBlendTex'],
+    wgsl: {
+      include: 'lighting/hgrp/vfx_special.wgsl',
+      fn: 'hgrp_vfx_special',
+      off: 'vec3<f32>(0.0)',
+    },
   },
   // Draw-list gate: the outline pass binds _OutlineMask in its own layout, so the subsystem
   // shapes no variant's shader and stays out of the permutation (permutation.ts).

@@ -677,6 +677,15 @@ export class WebGPURenderer implements IWebGPURenderer {
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
 
+    // Create default black texture (a mask slot left empty: no coverage)
+    this.textureManager.createTexture('gltf_default_black', {
+      id: 'gltf_default_black',
+      width: 1,
+      height: 1,
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+
     // Create default normal texture (neutral normal: 0.5, 0.5, 1.0)
     this.textureManager.createTexture('gltf_default_normal', {
       id: 'gltf_default_normal',
@@ -733,6 +742,17 @@ export class WebGPURenderer implements IWebGPURenderer {
       this.device.queue.writeTexture(
         { texture: whiteTexture },
         whiteData,
+        { bytesPerRow: 4 },
+        { width: 1, height: 1 },
+      );
+    }
+
+    // Upload black texture data (0, 0, 0, 1)
+    const blackTexture = this.textureManager.getTexture('gltf_default_black');
+    if (blackTexture) {
+      this.device.queue.writeTexture(
+        { texture: blackTexture },
+        new Uint8Array([0, 0, 0, 255]),
         { bytesPerRow: 4 },
         { width: 1, height: 1 },
       );

@@ -1,8 +1,9 @@
 // HGRP/CharacterNPR (cloth / general): normal-mapped shade blend under the NPR lighting
 // multiplier (lighting/hgrp_npr.wgsl), a GGX specular colored by the spec ramp, the split-sum
 // IBL that gives the metal zones their reflected environment, HDR emission (rolls off
-// through the tonemap shoulder), and on tights the silk-stockings coverage and anisotropic
-// lobe (lighting/hgrp_silk_stockings.wgsl). The surface map (_MetallicGlossMap) supplies
+// through the tonemap shoulder), the character VFX layer (lighting/hgrp/vfx_special.wgsl),
+// and on tights the silk-stockings coverage and anisotropic lobe
+// (lighting/hgrp_silk_stockings.wgsl). The surface map (_MetallicGlossMap) supplies
 // metallic, specular amount, occlusion and smoothness; without it the material's scalars
 // stand in. Group-2 bindings and the subsystem hooks come from the permutation's generated
 // fragments (material/hgrp).
@@ -56,13 +57,14 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         ((hgrp_spec_term(d, alpha, ndotv) + silk_lobe) * hgrp_shade_spec(core.w2)) * core.light;
 
     let emission = hgrp_emission(input.uv0);
+    let vfx = hgrp_vfx_special(input.uv0, input.uv1, normalize(input.world_normal), n, view_dir);
 
     // Environment reflection (formulas §1.10) for every material through its F0: on the
     // silver hardware (metallic 1) it is the whole look, since a metal has no diffuse.
     let ibl = hgrp_ibl(f0, roughness, ndotv, n, view_dir, core.w2, scene_lighting.env_color.rgb);
 
     return hgrp_debug_view(
-        vec4<f32>(hgrp_bright_saturation(core.lit + spec) + emission + ibl, core.alpha),
+        vec4<f32>(hgrp_bright_saturation(core.lit + spec) + emission + vfx + ibl, core.alpha),
         input.uv0,
     );
 }

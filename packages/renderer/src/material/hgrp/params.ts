@@ -342,6 +342,102 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
       float('_SilkStockingsSpecularFalloff', 0.8, { min: 0, max: 1, step: 0.01 }),
       'how much the sheerness cancels the anisotropy',
     ),
+    // The character VFX layer (_EnableCharacterVFX; lighting/hgrp/vfx_special.wgsl). The three
+    // colors are HDR in the presets (Laevatian's blend tint 8.5, Ardelia's tint x intensity
+    // 64.6), so they stay preset-driven, as do the structural switches (UV set, alpha source,
+    // warp, fresnel normal); the calibration scalars carry the shader's Properties ranges.
+    vec4(
+      'vfx_color',
+      'vfxSpecial',
+      color('_VFXColor', WHITE),
+      'rgb x intensity is the layer tint, a x alpha its coverage',
+    ),
+    vec4(
+      'vfx_blend_tint',
+      'vfxSpecial',
+      color('_VFXBlendTint', WHITE),
+      'HDR tint of the blend map flow; a scales its coverage',
+    ),
+    vec4(
+      'vfx_fresnel_color',
+      'vfxSpecial',
+      color('_VFXFresnelColor', WHITE),
+      'rgb the fresnel and dissolved-edge color, a the fresnel weight',
+    ),
+    vec4(
+      'vfx_special_param',
+      'vfxSpecial',
+      color('_VFXSpecialParam', ZERO4),
+      'UV scroll per second: xy the main map, zw the blend map',
+    ),
+    vec4(
+      'vfx_main_tex_st',
+      'vfxSpecial',
+      color('_VFXSpecialMainTex_ST', [1, 1, 0, 0]),
+      '_VFXSpecialMainTex tiling (xy) and offset (zw)',
+    ),
+    vec4(
+      'vfx_blend_tex_st',
+      'vfxSpecial',
+      color('_VFXSpecialBlendTex_ST', [1, 1, 0, 0]),
+      '_VFXSpecialBlendTex tiling (xy) and offset (zw)',
+    ),
+    f32(
+      'vfx_color_intensity',
+      'vfxSpecial',
+      float('_VFXColorIntensity', 1, { min: 1, max: 100, step: 0.1 }),
+    ),
+    f32(
+      'vfx_color_alpha',
+      'vfxSpecial',
+      float('_VFXColorAlpha', 1, { min: 0, max: 10, step: 0.01 }),
+    ),
+    f32(
+      'vfx_main_uv_set',
+      'vfxSpecial',
+      float('_VFXMainUVSet', 0),
+      '0 = uv0, 1 = the second UV set; the polar / screen modes (2, 3) are not reproduced',
+    ),
+    f32(
+      'vfx_main_tex_as_alpha',
+      'vfxSpecial',
+      float('_UseVFXMainTexAsAlpha', 0),
+      'the main map is coverage only (its R); the tint alone colors the layer',
+    ),
+    f32(
+      'vfx_blend_r_disturb',
+      'vfxSpecial',
+      float('_VFXSpecialBlendTexRForDisturb', 1),
+      'how far the blend map R warps the main map UV',
+    ),
+    f32('vfx_fresnel_use_normal_map', 'vfxSpecial', float('_VFXFresnelUseNormalMap', 0)),
+    f32(
+      'vfx_fresnel_bias',
+      'vfxSpecial',
+      float('_VFXFresnelBias', 0, { min: -1, max: 2, step: 0.01 }),
+    ),
+    f32(
+      'vfx_fresnel_affect_opacity',
+      'vfxSpecial',
+      float('_VFXFresnelAffectOpacity', 1, { min: 0, max: 1, step: 0.01 }),
+    ),
+    f32(
+      'vfx_fresnel_power',
+      'vfxSpecial',
+      float('_VFXFresnelPower', 1, { min: 1, max: 100, step: 0.1 }),
+    ),
+    f32(
+      'vfx_fresnel_flip',
+      'vfxSpecial',
+      float('_VFXFresnelFlip', 0.001, { min: 0, max: 1, step: 0.001 }),
+      '0 = the layer follows the edges, 1 = the facing surface',
+    ),
+    f32(
+      'vfx_dissolve_offset',
+      'vfxSpecial',
+      float('_SpecialDissolveScheduleOffset', 0, { min: 0, max: 2, step: 0.01 }),
+      'dissolve threshold on the blend map R: 2.02 x offset - 1.01',
+    ),
   ],
 };
 
