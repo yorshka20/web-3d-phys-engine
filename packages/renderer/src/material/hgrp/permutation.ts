@@ -77,6 +77,18 @@ export function hgrpApplicableSubsystems(variant: HGRPShaderVariant): HGRPSubsys
   return HGRP_STATIC_SUBSYSTEMS.filter((subsystem) => hgrpSubsystemAppliesTo(subsystem, variant));
 }
 
+// The slots a subsystem samples on a variant that a material neither supplies nor has a
+// stand-in for (textures.ts `unset`).
+export function hgrpSubsystemMissingTextures(
+  subsystem: HGRPSubsystem,
+  variant: HGRPShaderVariant,
+  textures: Record<string, string>,
+): string[] {
+  return hgrpSubsystemTextures(subsystem, variant).filter(
+    (slot) => textures[slot] === undefined && HGRP_TEXTURE_SLOTS[slot].unset === undefined,
+  );
+}
+
 // A gate that is on while the preset lacks a texture the subsystem samples and the slot declares
 // no stand-in (textures.ts `unset`). The subsystem stays off — sampling a placeholder would
 // silently shade with white — and the caller reports it, so the gap is visible instead of being
@@ -106,9 +118,7 @@ export function hgrpResolvePermutation(
     if (floats[subsystem.gate!] !== 1) {
       continue;
     }
-    const missing = hgrpSubsystemTextures(subsystem, variant).filter(
-      (slot) => textures[slot] === undefined && HGRP_TEXTURE_SLOTS[slot].unset === undefined,
-    );
+    const missing = hgrpSubsystemMissingTextures(subsystem, variant, textures);
     if (missing.length > 0) {
       dropped.push({ subsystem: subsystem.id, gate: subsystem.gate!, missing });
     } else {

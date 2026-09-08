@@ -21,6 +21,7 @@ import {
   hgrpGroup2BindingsFragment,
   hgrpHairYieldRef,
   HGRPMaterialDescriptor,
+  hgrpMaterialTunables,
   hgrpOffStubFragment,
   hgrpOffStubWgsl,
   hgrpParamsLayoutForVariant,
@@ -428,9 +429,86 @@ describe('HGRP material contract', () => {
       ].sort(),
     );
     const lineAmount = HGRP_TUNABLE_FLOATS.find((d) => d.key === '_LineAmount')!;
-    expect(lineAmount).toEqual({ key: '_LineAmount', default: 300, min: 0, max: 600, step: 1 });
+    expect(lineAmount).toEqual({
+      key: '_LineAmount',
+      subsystem: 'hairLines',
+      default: 300,
+      min: 0,
+      max: 600,
+      step: 1,
+    });
     const gate = HGRP_TUNABLE_FLOATS.find((d) => d.key === '_UseBumpMap')!;
-    expect(gate).toEqual({ key: '_UseBumpMap', default: 0, min: 0, max: 1, step: 1 });
+    expect(gate).toEqual({
+      key: '_UseBumpMap',
+      subsystem: 'normal',
+      gate: true,
+      default: 0,
+      min: 0,
+      max: 1,
+      step: 1,
+    });
+  });
+});
+
+describe('material tunables (the calibration GUI filter)', () => {
+  const keys = (m: HGRPMaterialDescriptor) => ({
+    floats: hgrpMaterialTunables(m).floats.map((d) => d.key),
+    colors: hgrpMaterialTunables(m).colors.map((d) => d.key),
+  });
+
+  it("shows a static subsystem's params only while its permutation carries it", () => {
+    const m = material('CharacterNPR', {
+      textures: { _BaseMap: 'b', _FurDirMap: 'd' },
+      floats: { _UseCharacterFur: 0, _FurLengthIntensity: 1.78, _FurCutoffEnd: 0.394 },
+    });
+    hgrpRefreshPermutation(m);
+    expect(keys(m).floats).toEqual(['_UseCharacterFur']);
+    m.floats._UseCharacterFur = 1;
+    hgrpRefreshPermutation(m);
+    expect(keys(m).floats).toEqual(['_UseCharacterFur', '_FurLengthIntensity', '_FurCutoffEnd']);
+  });
+
+  it('offers a static gate only where flipping it can take effect', () => {
+    // The normal map has no stand-in: without _BumpMap the gate would resolve to nothing.
+    const noMap = material('CharacterNPR', { floats: { _UseBumpMap: 0, _BumpScale: 1 } });
+    hgrpRefreshPermutation(noMap);
+    expect(keys(noMap).floats).toEqual([]);
+    const withMap = material('CharacterNPR', {
+      textures: { _BumpMap: 'n' },
+      floats: { _UseBumpMap: 0, _BumpScale: 1 },
+    });
+    hgrpRefreshPermutation(withMap);
+    expect(keys(withMap).floats).toEqual(['_UseBumpMap']);
+    // The fur does not apply to the hair variant at all: neither gate nor params.
+    const hair = material('CharacterNPR_Hair', {
+      textures: { _FurDirMap: 'd' },
+      floats: { _UseCharacterFur: 1, _FurLengthIntensity: 1 },
+    });
+    hgrpRefreshPermutation(hair);
+    expect(keys(hair).floats).toEqual([]);
+  });
+
+  it('reads a draw-list gate and a numeric gate off the preset value', () => {
+    const m = material('CharacterNPR', {
+      floats: { _EnableOutline: 0, _OutlineWidth: 1, _Pantyhose: 0, _PantyhoseSpecularInt: 5 },
+      colors: { _BaseColor: [1, 1, 1, 1], _PantyhoseColor: [0, 0, 0, 1] },
+    });
+    expect(keys(m)).toEqual({ floats: ['_EnableOutline', '_Pantyhose'], colors: ['_BaseColor'] });
+    m.floats._EnableOutline = 1;
+    m.floats._Pantyhose = 1;
+    expect(keys(m)).toEqual({
+      floats: ['_EnableOutline', '_OutlineWidth', '_Pantyhose', '_PantyhoseSpecularInt'],
+      colors: ['_BaseColor', '_PantyhoseColor'],
+    });
+  });
+
+  it('never shows a key the preset lacks', () => {
+    const m = material('CharacterNPR', {
+      textures: { _FurDirMap: 'd' },
+      floats: { _UseCharacterFur: 1 },
+    });
+    hgrpRefreshPermutation(m);
+    expect(keys(m)).toEqual({ floats: ['_UseCharacterFur'], colors: [] });
   });
 });
 

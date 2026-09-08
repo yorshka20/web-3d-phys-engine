@@ -4,13 +4,14 @@ import {
   HGRP_SHADING_SCHEMA_VERSION,
   HGRP_TUNABLE_COLORS,
   HGRP_TUNABLE_FLOATS,
+  hgrpMaterialTunables,
   hgrpOptionalLayerFlag,
   hgrpRefreshPermutation,
   HGRPCharacterFlags,
   HGRPMaterialDescriptor,
 } from '@renderer/material/hgrp';
 import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
-import { FolderApi, Pane } from 'tweakpane';
+import { BladeApi, FolderApi, Pane } from 'tweakpane';
 import {
   applyHGRPPlacement,
   hgrpStage,
@@ -172,11 +173,12 @@ function importState(onLoaded: (imported: HGRPShadingState) => void): void {
  * character, localStorage key included, so two characters are calibrated independently).
  * Anything shared by the whole scene lives in the Stage tab instead.
  *
- * Only the parameters a material actually declares get a widget. The preset's own key set
- * is the reflection: the binder falls back to a default for an absent key, so drawing a
- * slider for it would invite calibrating a value the material never carries — and the VFX
- * variant, whose vocabulary is disjoint from the CharacterNPR family's, would otherwise
- * show a full set of controls that do nothing.
+ * Only the parameters a material's shader reads get a widget (hgrpMaterialTunables): the key
+ * has to be in the preset, and a subsystem's parameters appear only while that subsystem is
+ * on for the material — the rip serializes every property of the shader, so the key set alone
+ * would hand every cloth material a full set of fur sliders and nobody could tell which
+ * material's fur is the skirt's. A subsystem's gate stays where flipping it can take effect,
+ * and flipping it rebuilds the material's widgets.
  */
 export function createHGRPCharacterTab(): DebugTab {
   return {
@@ -433,64 +435,72 @@ function addMaterialWidgets(
         }
       };
 
-      // Widget value objects mirror the descriptors; syncers pull descriptor -> widget after a
-      // bulk apply (import/reset), then one section.refresh() repaints everything. A material
-      // folder that was never expanded has neither widgets nor a syncer — it reads the
-      // descriptors when it is finally built, which is the same value a syncer would have put
-      // there.
+      // Widget value objects mirror the descriptors; after a bulk apply (import/reset) each built
+      // material folder rebuilds its widgets from the descriptors — a bulk apply can flip gates,
+      // which changes which widgets the material has at all. A material folder that was never
+      // expanded has no widgets and no syncer — it reads the descriptors when it is finally
+      // built.
       const syncers: (() => void)[] = [];
 
       for (const material of materials) {
-        const floatDefs = HGRP_TUNABLE_FLOATS.filter((def) => def.key in material.floats);
-        const colorDefs = HGRP_TUNABLE_COLORS.filter((def) => def.key in material.colors);
-        if (floatDefs.length === 0 && colorDefs.length === 0) {
+        const initial = hgrpMaterialTunables(material);
+        if (initial.floats.length === 0 && initial.colors.length === 0) {
           continue;
         }
 
         const title = `${material.materialName} · ${material.variant.replace('CharacterNPR', 'NPR')}`;
         const key = `hgrp:${character.assetId}:material:${material.materialName}`;
         lazyFolder(section, { title, key }, (materialFolder) => {
-          const floatValues: Record<string, number> = {};
-          for (const def of floatDefs) {
-            floatValues[def.key] = material.floats[def.key] ?? def.default;
-            materialFolder
-              .addBinding(floatValues, def.key, {
-                label: def.key.slice(1),
-                min: def.min,
-                max: def.max,
-                step: def.step,
-              })
-              .on('change', (ev) => {
-                material.floats[def.key] = ev.value as number;
-                hgrpRefreshPermutation(material);
-              });
-          }
-          syncers.push(() => {
+          // The widget set follows the material's enabled subsystems, so a gate flip rebuilds it
+          // — once the change event has finished dispatching on the widget about to go.
+          let blades: BladeApi[] = [];
+          const build = () => {
+            for (const blade of blades) {
+              blade.dispose();
+            }
+            blades = [];
+            const { floats: floatDefs, colors: colorDefs } = hgrpMaterialTunables(material);
+
+            const floatValues: Record<string, number> = {};
             for (const def of floatDefs) {
               floatValues[def.key] = material.floats[def.key] ?? def.default;
+              blades.push(
+                materialFolder
+                  .addBinding(floatValues, def.key, {
+                    label: def.key.slice(1),
+                    min: def.min,
+                    max: def.max,
+                    step: def.step,
+                  })
+                  .on('change', (ev) => {
+                    material.floats[def.key] = ev.value as number;
+                    if (def.gate) {
+                      hgrpRefreshPermutation(material);
+                      queueMicrotask(build);
+                    }
+                  }),
+              );
             }
-          });
 
-          const colorValues: Record<string, { r: number; g: number; b: number; a: number }> = {};
-          for (const def of colorDefs) {
-            const current = material.colors[def.key] ?? def.default;
-            colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
-            materialFolder
-              .addBinding(colorValues, def.key, {
-                label: def.key.slice(1),
-                color: { type: 'float' },
-              })
-              .on('change', (ev) => {
-                const c = ev.value as { r: number; g: number; b: number; a: number };
-                material.colors[def.key] = [c.r, c.g, c.b, c.a];
-              });
-          }
-          syncers.push(() => {
+            const colorValues: Record<string, { r: number; g: number; b: number; a: number }> = {};
             for (const def of colorDefs) {
               const current = material.colors[def.key] ?? def.default;
               colorValues[def.key] = { r: current[0], g: current[1], b: current[2], a: current[3] };
+              blades.push(
+                materialFolder
+                  .addBinding(colorValues, def.key, {
+                    label: def.key.slice(1),
+                    color: { type: 'float' },
+                  })
+                  .on('change', (ev) => {
+                    const c = ev.value as { r: number; g: number; b: number; a: number };
+                    material.colors[def.key] = [c.r, c.g, c.b, c.a];
+                  }),
+              );
             }
-          });
+          };
+          build();
+          syncers.push(build);
         });
       }
 
@@ -498,7 +508,6 @@ function addMaterialWidgets(
         for (const sync of syncers) {
           sync();
         }
-        section.refresh();
       };
 
       section.addButton({ title: 'Save overrides' }).on('click', () => persist());
