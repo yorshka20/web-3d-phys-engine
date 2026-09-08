@@ -1028,7 +1028,7 @@ export class PipelineManager {
     return {
       format: this.context.getDepthStencilFormat(),
       depthWriteEnabled: gpuKey.depthWrite,
-      depthCompare: 'less',
+      depthCompare: gpuKey.depthCompare,
       ...hgrpStencilState(gpuKey.stencil),
     };
   }
@@ -1172,6 +1172,7 @@ export class PipelineManager {
         topology: 'triangle-list',
         depthWrite: false,
         depthTest: false,
+        depthCompare: 'less',
         vertexAttributes: 0,
       } as GpuPipelineKey);
 

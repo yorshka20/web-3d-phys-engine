@@ -7,7 +7,14 @@
 // by _FurGravityStrength, by _FurLengthIntensity x layer x 1 cm x the direction map's alpha —
 // a length in the asset's metres, so it takes the draw's world scale like every other HGRP
 // length (core/hgrp_transform.wgsl); the game's shader leaves it in world metres because its
-// characters are drawn at scale 1.
+// characters are drawn at scale 1. The push moves the shell on screen only: the game adds the
+// clip-space offset to xyz and leaves w alone, and under its reversed-Z projection the z row
+// is scaled by near/far, so a shell's depth stays that of the root surface (to within a few
+// depth ulps toward the camera) — a shirt over the skirt covers the fur exactly as it covers
+// the skirt. Under this renderer's standard-Z projection the same z offset lands at ~far/near
+// times its true size and put the shells metres in front of every garment; keeping z and w
+// at the root's is the picture the game draws. The shells then pass one another by draw
+// order, which is why the material's _ZTest (LessEqual) reaches the pipeline.
 // The fragment stage cuts the shell into strands — the noise map, warped by the direction map
 // and a per-layer hash, against a cutoff that grows from the root value to the tip value —
 // fades it at grazing angles and with the cube of the layer, darkens the roots and lifts the
@@ -32,7 +39,7 @@ fn hgrp_fur_extrude(
     // The strand length lives in the direction map's alpha, read at the un-tiled uv0 clamped.
     let length = textureSampleLevel(fur_dir_map, ramp_sampler, uv0_raw, 0.0).a;
     let push = dir * (hgrp_material.fur_length_intensity * layer * 0.01 * length * hgrp_model_scale());
-    return vec4<f32>(clip.xyz + push, clip.w);
+    return vec4<f32>(clip.xy + push.xy, clip.zw);
 }
 
 fn hgrp_fur_hash(layer: f32) -> f32 {

@@ -89,6 +89,12 @@ export interface SemanticPipelineKey {
   // value the game's forward pass binds — its inspector toggle _TransparentDepthWrite usually
   // sets it, but the fur shells override it). Only meaningful when alphaMode is 'blend'.
   transparentDepthWrite: boolean;
+  // Depth test of a blend material: its own ZTest state (_ZTest, a Unity CompareFunction). The
+  // game's transparent materials carry LessEqual, which the fur shells need: pushed in clip xy
+  // only, they sit at the root surface's depth and pass over one another by draw order. Opaque
+  // materials keep 'less' — their Equal pairs with a prepass this renderer does not reuse
+  // (DepthPrepass). Only meaningful when alphaMode is 'blend'.
+  transparentDepthCompare: GPUCompareFunction;
   // How a blend material combines with the framebuffer (material/types.ts): straight alpha,
   // premultiplied (HGRP's effect shaders ask for One/OneMinusSrcAlpha — rendered as straight
   // they darken by a second factor of alpha) or multiply (the overlay-shadow shells). Only
@@ -133,6 +139,7 @@ export interface GpuPipelineKey {
   topology: 'triangle-list' | 'line-list';
   depthWrite: boolean;
   depthTest: boolean;
+  depthCompare: GPUCompareFunction;
   stencil: HGRPStencilRole;
 
   // Shader compilation parameters
@@ -275,6 +282,29 @@ export interface ComputePipelineCreationOptions {
   bindGroupLayouts?: GPUBindGroupLayout[];
 }
 
+function materialFloat(material: MaterialPipelineFacts, key: string): number | undefined {
+  return 'floats' in material
+    ? (material as { floats: Record<string, number> }).floats[key]
+    : undefined;
+}
+
+// Unity's CompareFunction enum, the value space of a material's _ZTest. 'less' stands in for
+// Disabled and for a material that carries no _ZTest (a non-Unity blend material).
+const UNITY_COMPARE_FUNCTION: Record<number, GPUCompareFunction> = {
+  1: 'never',
+  2: 'less',
+  3: 'equal',
+  4: 'less-equal',
+  5: 'greater',
+  6: 'not-equal',
+  7: 'greater-equal',
+  8: 'always',
+};
+
+function unityCompareFunction(value: number | undefined): GPUCompareFunction {
+  return (value !== undefined && UNITY_COMPARE_FUNCTION[value]) || 'less';
+}
+
 /**
  * Generate semantic pipeline key from material and geometry data
  * High-level semantic characteristics for ECS system
@@ -289,10 +319,11 @@ export function generateSemanticPipelineKey(
     alphaMode: material.alphaMode || 'opaque',
     doubleSided: material.doubleSided || false,
     transparentDepthWrite:
-      material.alphaMode === 'blend' &&
-      ('floats' in material
-        ? (material as { floats: Record<string, number> }).floats._ZWrite === 1
-        : false),
+      material.alphaMode === 'blend' && materialFloat(material, '_ZWrite') === 1,
+    transparentDepthCompare:
+      material.alphaMode === 'blend'
+        ? unityCompareFunction(materialFloat(material, '_ZTest'))
+        : 'less',
     blendMode: material.alphaMode === 'blend' ? (material.blendMode ?? 'straight') : 'straight',
     stencil:
       material.materialType === 'hgrp'
@@ -316,6 +347,7 @@ export function generateSemanticCacheKey(key: SemanticPipelineKey): string {
     key.alphaMode,
     key.doubleSided,
     key.transparentDepthWrite,
+    key.transparentDepthCompare,
     key.blendMode,
     key.stencil,
     key.vertexFormat,
@@ -337,6 +369,7 @@ export function generateGpuCacheKey(key: GpuPipelineKey): string {
     key.topology,
     key.depthWrite,
     key.depthTest,
+    key.depthCompare,
     key.stencil,
     key.vertexAttributes,
     defines,
@@ -355,6 +388,7 @@ export function convertToGpuPipelineKey(semanticKey: SemanticPipelineKey): GpuPi
     topology: determineTopology(semanticKey),
     depthWrite: determineDepthWrite(semanticKey),
     depthTest: determineDepthTest(semanticKey),
+    depthCompare: semanticKey.alphaMode === 'blend' ? semanticKey.transparentDepthCompare : 'less',
     stencil: semanticKey.stencil,
     vertexAttributes: semanticKey.vertexAttributes ?? determineVertexAttributes(semanticKey),
     shaderDefines: generateShaderDefines(semanticKey),
