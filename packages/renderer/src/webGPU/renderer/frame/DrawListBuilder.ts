@@ -76,8 +76,8 @@ export interface DrawLists {
    * Inverted-hull outline draws of the blend materials with `_EnableOutline`, encoded after
    * the transparent walk for the reason above: encoded any earlier, the shell would pass the
    * depth test across the whole silhouette and fill it with outline color instead of ringing
-   * it. What puts a blend material's depth in the buffer in time is `_TransparentDepthWrite`,
-   * which every material reaching this list carries.
+   * it. What puts a blend material's depth in the buffer in time is its own ZWrite state
+   * (`_ZWrite`), which every material reaching this list carries.
    */
   transparentOutline: DrawItem[];
   /**

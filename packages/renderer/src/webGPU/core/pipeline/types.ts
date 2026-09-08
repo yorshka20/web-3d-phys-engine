@@ -85,8 +85,9 @@ export interface SemanticPipelineKey {
   // Material characteristics (business layer concerns)
   alphaMode: AlphaMode;
   doubleSided: boolean;
-  // Blend materials that still write depth (_TransparentDepthWrite — the game's transparent
-  // cloth/hair self-occludes; only meaningful when alphaMode is 'blend')
+  // Blend materials that still write depth: the material's own ZWrite state (_ZWrite, the
+  // value the game's forward pass binds — its inspector toggle _TransparentDepthWrite usually
+  // sets it, but the fur shells override it). Only meaningful when alphaMode is 'blend'.
   transparentDepthWrite: boolean;
   // How a blend material combines with the framebuffer (material/types.ts): straight alpha,
   // premultiplied (HGRP's effect shaders ask for One/OneMinusSrcAlpha — rendered as straight
@@ -290,7 +291,7 @@ export function generateSemanticPipelineKey(
     transparentDepthWrite:
       material.alphaMode === 'blend' &&
       ('floats' in material
-        ? (material as { floats: Record<string, number> }).floats._TransparentDepthWrite === 1
+        ? (material as { floats: Record<string, number> }).floats._ZWrite === 1
         : false),
     blendMode: material.alphaMode === 'blend' ? (material.blendMode ?? 'straight') : 'straight',
     stencil:
