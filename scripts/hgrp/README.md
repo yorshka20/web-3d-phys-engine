@@ -114,6 +114,9 @@ post-processing work to read.
 
 ## Animation clips (`anim-convert.mjs`) — external clip files
 
+The clip file contract for anyone producing clips (format, node-path rule, coordinate frames,
+delivery routes, validation with `scripts/hgrp/clip-check.mjs`) is `docs/hgrp-clip-format.md`.
+
 Clips are **not** baked into the model. `anim-convert.mjs` writes one glTF file per clip to
 `<actor>/clips/<clip>.glb`: the character's node hierarchy copied from `<actor>.glb` with meshes,
 skins, materials and textures stripped, plus that one animation. The engine discovers
