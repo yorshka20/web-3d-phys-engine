@@ -1,9 +1,19 @@
 /**
- * Bake Unity `.anim` clips into the character GLB as glTF animations (Stage F6).
+ * Bake Unity `.anim` clips into glTF clip files beside the character GLB (Stage F6).
  *
  *   node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica \
- *        --clips A_actor_pelica_gacha_ani_loop[,...]
+ *        --clips A_actor_pelica_gacha_ani_loop[,...] [--actor pelica]
  *   node scripts/hgrp/anim-convert.mjs --src <rip-root> --char Pelica --list
+ *
+ * Output: <out>/<actor>/clips/<clip>.glb — one glTF document per clip holding the character's
+ * node hierarchy (copied from <actor>.glb, meshes and skins stripped) and that one animation.
+ * The engine joins a clip onto the model by node path at load time
+ * (renderer/assets/gltfAnimations.ts), so the model glb is never rewritten for a clip and a
+ * model rebuild (convert.mjs) leaves the clips folder alone. Re-baking a clip overwrites its file.
+ *
+ * `--char` names the clip source folder in the rip (`<rip-root>/<Char>/AnimationClip`);
+ * `--actor` names the output character folder when it differs from the lower-cased `--char`
+ * (the 2026-09 export's short ids: `Laevatian` -> `laevat`).
  *
  * Runs separately from convert.mjs: clip selection is a per-character judgement call, and
  * most of a rip's clips carry no curve data at all (see anim-clip.mjs).
@@ -16,7 +26,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MathUtils, NodeIO } from '@gltf-transform/core';
+import { MathUtils, NodeIO, PropertyType } from '@gltf-transform/core';
 import { evaluateComponent, findCurveClips, parseAnimClip } from './anim-clip.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -80,6 +90,7 @@ function parseArgs(argv) {
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--src') args.src = argv[++i];
     else if (argv[i] === '--char') args.char = argv[++i];
+    else if (argv[i] === '--actor') args.actor = argv[++i];
     else if (argv[i] === '--clips') args.clips = argv[++i].split(',');
     else if (argv[i] === '--out') args.out = argv[++i];
     else if (argv[i] === '--fps') args.fps = Number.parseFloat(argv[++i]);
@@ -89,12 +100,44 @@ function parseArgs(argv) {
   if (!args.src || !args.char) {
     console.error(
       'Usage: node scripts/hgrp/anim-convert.mjs --src <rip-root> --char <Char> ' +
-        '(--list | --auto | --clips <name>[,<name>...]) [--out <dir>] [--fps <n>]',
+        '(--list | --auto | --clips <name>[,<name>...]) [--actor <folder>] [--out <dir>] [--fps <n>]',
     );
     process.exit(1);
   }
   args.out = args.out || path.join(repoRoot, 'packages/web-client/assets/hgrp');
+  args.actor = args.actor || args.char.toLowerCase();
   return args;
+}
+
+// Reduce a character document to the node hierarchy a clip needs: meshes, skins, materials,
+// textures and the accessors only they referenced go; nodes, scene and world transforms stay
+// (the rig-root re-framing reads a parent's world rotation off them).
+function stripToSkeleton(doc) {
+  const root = doc.getRoot();
+  // dispose() does not cascade: a mesh's primitives and morph targets outlive it and keep
+  // their accessors referenced, so they go first.
+  for (const mesh of root.listMeshes()) {
+    for (const primitive of mesh.listPrimitives()) {
+      for (const target of primitive.listTargets()) target.dispose();
+      primitive.dispose();
+    }
+  }
+  for (const list of [
+    root.listAnimations(),
+    root.listMeshes(),
+    root.listSkins(),
+    root.listMaterials(),
+    root.listTextures(),
+    root.listCameras(),
+  ]) {
+    for (const property of list) property.dispose();
+  }
+  for (const accessor of root.listAccessors()) {
+    const referenced = accessor
+      .listParents()
+      .some((parent) => parent.propertyType !== PropertyType.ROOT);
+    if (!referenced) accessor.dispose();
+  }
 }
 
 /** glb node paths carry the prefab root that Unity clip paths are relative to. */
@@ -328,33 +371,16 @@ async function main() {
     process.exit(1);
   }
 
-  const charDir = path.join(args.out, args.char.toLowerCase());
-  const glbPath = path.join(charDir, `${args.char.toLowerCase()}.glb`);
+  const charDir = path.join(args.out, args.actor);
+  const glbPath = path.join(charDir, `${args.actor}.glb`);
   if (!fs.existsSync(glbPath)) {
     console.error(`[anim-convert] No GLB at ${glbPath} — run convert.mjs first`);
     process.exit(1);
   }
+  const clipsDir = path.join(charDir, 'clips');
+  fs.mkdirSync(clipsDir, { recursive: true });
 
   const io = new NodeIO();
-  const doc = await io.read(glbPath);
-  const root = doc.getRoot();
-
-  // Re-running must replace, not stack, previously baked clips
-  for (const existing of root.listAnimations()) existing.dispose();
-
-  const buffer = root.listBuffers()[0] ?? doc.createBuffer();
-  const index = buildNodeIndex(root);
-  const scene = root.getDefaultScene() ?? root.listScenes()[0];
-  const sceneRoots = scene.listChildren();
-  if (sceneRoots.length !== 1) {
-    console.error(
-      `[anim-convert] Expected one scene root (Unity clip paths are relative to the prefab ` +
-        `root), found ${sceneRoots.length}`,
-    );
-    process.exit(1);
-  }
-  const prefix = `${sceneRoots[0].getName()}/`;
-
   for (const name of args.clips) {
     const file = path.join(clipDir, name.endsWith('.anim') ? name : `${name}.anim`);
     if (!fs.existsSync(file)) {
@@ -371,6 +397,24 @@ async function main() {
       process.exit(1);
     }
 
+    // Each clip file starts from the model's own hierarchy, so its node paths and world
+    // rotations are exactly the ones the engine will join it onto.
+    const doc = await io.read(glbPath);
+    stripToSkeleton(doc);
+    const root = doc.getRoot();
+    const buffer = root.listBuffers()[0] ?? doc.createBuffer();
+    const index = buildNodeIndex(root);
+    const scene = root.getDefaultScene() ?? root.listScenes()[0];
+    const sceneRoots = scene.listChildren();
+    if (sceneRoots.length !== 1) {
+      console.error(
+        `[anim-convert] Expected one scene root (Unity clip paths are relative to the prefab ` +
+          `root), found ${sceneRoots.length}`,
+      );
+      process.exit(1);
+    }
+    const prefix = `${sceneRoots[0].getName()}/`;
+
     const fps = args.fps || clip.sampleRate;
     const result = bakeClip(doc, buffer, index, prefix, clip, fps);
     console.log(
@@ -384,14 +428,15 @@ async function main() {
           `(first: ${result.unmatched[0]})`,
       );
     }
-  }
 
-  await io.write(glbPath, doc);
-  const bytes = fs.statSync(glbPath).size;
-  console.log(
-    `[anim-convert] Wrote ${glbPath} (${(bytes / 1024 / 1024).toFixed(1)} MB, ` +
-      `${root.listAnimations().length} animation(s))`,
-  );
+    const clipPath = path.join(clipsDir, `${clip.name}.glb`);
+    await io.write(clipPath, doc);
+    const bytes = fs.statSync(clipPath).size;
+    console.log(
+      `[anim-convert] Wrote ${clipPath} (${(bytes / 1024 / 1024).toFixed(1)} MB, ` +
+        `${root.listNodes().length} nodes, ${root.listMeshes().length} meshes)`,
+    );
+  }
 }
 
 main().catch((error) => {

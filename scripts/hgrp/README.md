@@ -112,10 +112,28 @@ post-processing work to read.
 - A GLB material with no preset entry is default-filled by the engine (warned at load); the
   preset may contain materials with no mesh in the GLB (scoped out here).
 
-## Animation clips (`anim-convert.mjs`, first-rip layout only)
+## Animation clips (`anim-convert.mjs`) — external clip files
 
-`anim-convert.mjs` / `anim-clip.mjs` bake Unity `.anim` clips from the **first** AssetRipper rip
-(`<rip>/<Char>/Animator/...`) into a GLB. That layout is not this export's, and the clip layer
+Clips are **not** baked into the model. `anim-convert.mjs` writes one glTF file per clip to
+`<actor>/clips/<clip>.glb`: the character's node hierarchy copied from `<actor>.glb` with meshes,
+skins, materials and textures stripped, plus that one animation. The engine discovers
+`assets/hgrp/*/clips/*.glb` next to the model and joins each clip onto the loaded model by node
+path below the scene root (`renderer/assets/gltfAnimations.ts`), so the model glb is never
+rewritten for a clip, `convert.mjs` leaves `clips/` alone when it rebuilds a character, and a clip
+exported later under another prefab name still matches. Files attach in name order (an entrance
+clip precedes its own `_loop`).
+
+```bash
+node scripts/hgrp/anim-convert.mjs --src ~/Downloads/Character/PC --char Pelica \
+     --clips A_actor_pelica_gacha_ani,A_actor_pelica_gacha_ani_loop        # -> pelica/clips/*.glb
+node scripts/hgrp/anim-convert.mjs --src <rip> --char Laevatian --actor laevat --list
+```
+
+`--char` is the clip source folder in the rip (`<rip>/<Char>/AnimationClip`), `--actor` the
+output character folder when it is not the lower-cased `--char`.
+
+`anim-convert.mjs` / `anim-clip.mjs` read Unity `.anim` clips from the **first** AssetRipper rip
+(`<rip>/<Char>/AnimationClip/`). The 2026-09 export carries no clips at all, and the clip layer
 as a whole is slated for replacement by a Unity batch export (learnings animation-pipeline.md):
 `--auto` counts node paths without asking whether they belong to this character's rig,
 `m_EulerCurves` is never read, and the rig-root axis correction assumes exactly one rig root.

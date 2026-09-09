@@ -1,7 +1,6 @@
 import { GeometryData, VertexFormat } from '../../geometry/GeometryFactory';
+import { attachGLTFClips, convertGLTFAnimations } from '../../assets/gltfAnimations';
 import {
-  GLTFAnimation,
-  GLTFAnimationSampler,
   GLTFMaterial,
   GLTFMesh,
   GLTFMeshInstance,
@@ -441,6 +440,35 @@ export class AssetLoader {
   }
 
   /**
+   * Attach a rigged model's clip files: each URL is a glTF document carrying the character's
+   * node hierarchy and its animations (scripts/hgrp/anim-convert.mjs writes one per clip),
+   * joined onto the model by node path — the model glb itself never has to be rewritten for
+   * a clip. Files attach in name order, so an entrance clip precedes its own `_loop`, the
+   * stage's clip 0 / clip 1 convention.
+   */
+  static async loadGLTFClips(assetId: string, clipUrls: Record<string, string>): Promise<void> {
+    const model = assetRegistry.getAssetDescriptor<'gltf'>(assetId)?.rawData as
+      | GLTFModel
+      | undefined;
+    if (!model) {
+      throw new Error(`[AssetLoader] ${assetId} is not a loaded glTF model`);
+    }
+    const io = new WebIO();
+    for (const name of Object.keys(clipUrls).sort()) {
+      const doc = await io.read(clipUrls[name]);
+      const { attached, droppedChannels } = attachGLTFClips(model, doc);
+      if (attached.length === 0) {
+        console.warn(`[AssetLoader] ${assetId}: clip file ${name} carries no animation`);
+      }
+      if (droppedChannels > 0) {
+        console.warn(
+          `[AssetLoader] ${assetId}: clip ${name} has ${droppedChannels} channels on nodes the model lacks`,
+        );
+      }
+    }
+  }
+
+  /**
    * Extract one document-level GLTF material and load its embedded textures
    */
   private static async extractMaterial(
@@ -553,44 +581,7 @@ export class AssetLoader {
       ),
     }));
 
-    const animations: GLTFAnimation[] = sourceAnimations.map((animation) => {
-      const sourceSamplers = animation.listSamplers();
-      const samplerIndices = new Map(sourceSamplers.map((sampler, i) => [sampler, i]));
-      let duration = 0;
-
-      const samplers: GLTFAnimationSampler[] = sourceSamplers.map((sampler) => {
-        const input = new Float32Array((sampler.getInput()?.getArray() as ArrayLike<number>) ?? []);
-        duration = Math.max(duration, input[input.length - 1] ?? 0);
-        return {
-          input,
-          output: new Float32Array((sampler.getOutput()?.getArray() as ArrayLike<number>) ?? []),
-          interpolation: (sampler.getInterpolation() ??
-            'LINEAR') as GLTFAnimationSampler['interpolation'],
-        };
-      });
-
-      return {
-        name: animation.getName(),
-        // A channel with no target node or an unresolvable sampler is legal-but-inert glTF;
-        // dropping it here keeps the sampling loop free of null checks.
-        channels: animation
-          .listChannels()
-          .map((channel) => {
-            const node = channel.getTargetNode();
-            const sampler = channel.getSampler();
-            const path = channel.getTargetPath();
-            if (!node || !sampler || !path) return undefined;
-            return {
-              node: nodeIndices.get(node)!,
-              path: path as 'translation' | 'rotation' | 'scale' | 'weights',
-              sampler: samplerIndices.get(sampler)!,
-            };
-          })
-          .filter((channel) => channel !== undefined),
-        samplers,
-        duration,
-      };
-    });
+    const { animations } = convertGLTFAnimations(sourceAnimations, (node) => nodeIndices.get(node));
 
     return { nodes, roots, skins, animations };
   }

@@ -39,6 +39,8 @@ interface HGRPCharacterSource {
   modelUrl: string;
   presetUrl: string;
   textureUrls: Record<string, string>;
+  // clip name -> served URL of its glTF file (assets/hgrp/<folder>/clips/<clip>.glb)
+  clipUrls: Record<string, string>;
 }
 
 export interface HGRPStageCharacter {
@@ -100,6 +102,15 @@ const TEXTURE_URLS = import.meta.glob('../../../assets/hgrp/*/textures/*.png', {
   import: 'default',
 }) as Record<string, string>;
 
+// A character's clips live beside its model, one glTF file per clip (scripts/hgrp/
+// anim-convert.mjs), and are joined onto the model by node path when it loads — the model glb
+// is never rewritten for a clip, and a model rebuild leaves the clips in place.
+const CLIP_URLS = import.meta.glob('../../../assets/hgrp/*/clips/*.glb', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
 function folderOf(path: string): string {
   return path.replace(/^.*\/assets\/hgrp\//, '').split('/')[0];
 }
@@ -116,6 +127,19 @@ function readRoster(): HGRPStageCharacter[] {
     textureUrlsByFolder.set(folder, urls);
   }
 
+  const clipUrlsByFolder = new Map<string, Record<string, string>>();
+  for (const [path, url] of Object.entries(CLIP_URLS)) {
+    const folder = folderOf(path);
+    const urls = clipUrlsByFolder.get(folder) ?? {};
+    urls[
+      path
+        .split('/')
+        .pop()!
+        .replace(/\.glb$/, '')
+    ] = url;
+    clipUrlsByFolder.set(folder, urls);
+  }
+
   const roster: { folder: string; character: HGRPStageCharacter }[] = [];
   for (const [path, modelUrl] of Object.entries(MODEL_URLS)) {
     const folder = folderOf(path);
@@ -130,7 +154,12 @@ function readRoster(): HGRPStageCharacter[] {
       character: {
         assetId: `hgrp_${folder}${isWidget ? '_widget' : ''}`,
         label: isWidget ? `${folder}-widget` : folder,
-        source: { modelUrl, presetUrl, textureUrls: textureUrlsByFolder.get(folder) ?? {} },
+        source: {
+          modelUrl,
+          presetUrl,
+          textureUrls: textureUrlsByFolder.get(folder) ?? {},
+          clipUrls: clipUrlsByFolder.get(folder) ?? {},
+        },
         entity: undefined,
         visible: DEFAULT_CHARACTER_FOLDERS.includes(folder),
         anchor: [0, 0, 0],
@@ -278,6 +307,9 @@ export function loadHGRPCharacter(world: World, character: HGRPStageCharacter): 
       | undefined;
     if (!model) {
       throw new Error(`[hgrp] ${character.assetId} loaded but is not in the asset registry`);
+    }
+    if (Object.keys(character.source.clipUrls).length > 0) {
+      await AssetLoader.loadGLTFClips(character.assetId, character.source.clipUrls);
     }
     const { min, max } = modelBounds(model);
     character.anchor = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];

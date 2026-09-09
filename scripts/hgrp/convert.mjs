@@ -35,8 +35,8 @@
  * textures — for a re-exported material set.
  *
  * Output: packages/web-client/assets/hgrp/<actor>/{<actor>.glb, preset.json, lighting.json,
- * textures/}.
- * A full run rebuilds a character's output folder from scratch, so nothing stale survives.
+ * textures/}. A full run rebuilds a character's output folder from scratch, so nothing stale
+ * survives — except clips/, which anim-convert.mjs owns and the engine joins onto the model.
  * The rip root is machine-local and always passed as an argument. The FBX carries no clips;
  * anim-convert.mjs is a separate path.
  */
@@ -101,6 +101,17 @@ function readExportMaterials(actorDir, kind) {
   const rawDir = path.join(actorDir, 'raw', `materials_${kind}`);
   const raw = fs.existsSync(rawDir) ? readRawMaterials(rawDir) : new Map();
   return { exported, raw };
+}
+
+// A full run rebuilds the character folder from scratch, except `clips/`: the clip files come
+// from another source (anim-convert.mjs, a clip export) and join the model by node path, so a
+// model rebuild must not cost them.
+function resetActorDir(outDir) {
+  fs.mkdirSync(outDir, { recursive: true });
+  for (const entry of fs.readdirSync(outDir)) {
+    if (entry === 'clips') continue;
+    fs.rmSync(path.join(outDir, entry), { recursive: true, force: true });
+  }
 }
 
 function runBlender(fbx, glbPath) {
@@ -466,8 +477,7 @@ for (const actor of actors) {
     console.log(
       `[convert] fbx: ${fbx} (${Object.keys(materials.exported.materials).length} materials in the export)`,
     );
-    fs.rmSync(outDir, { recursive: true, force: true });
-    fs.mkdirSync(outDir, { recursive: true });
+    resetActorDir(outDir);
 
     const blenderError = runBlender(fbx, glbPath);
     if (blenderError !== undefined) {
