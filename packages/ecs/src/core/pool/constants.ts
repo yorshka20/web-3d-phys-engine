@@ -21,6 +21,7 @@ import {
   PMXMeshComponent,
   RenderComponent,
   ShapeComponent,
+  SkeletonComponent,
   SoundEffectComponent,
   SpiralMovementComponent,
   StateComponent,
@@ -79,4 +80,5 @@ export const ComponentPoolList: ComponentConstructor<IComponent>[] = [
   Input3DComponent,
   ActiveCameraTag,
   PMXMeshComponent,
+  SkeletonComponent,
 ];
