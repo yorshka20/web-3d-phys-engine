@@ -407,6 +407,10 @@ fallbacks / caches / special-case handling.
 
 ### How to Collaborate with the User
 
+- **Report as you go during long tasks** (user, 2026-09-09: “遇到什么问题请说出来，别一直一声不吭”):
+  when a step fails, a finding changes the plan, or a batch is going to take a while, say so in
+  a short message at that moment — do not work silently for many tool calls and surface
+  everything at the end.
 - Before proposing a fix, **present the root-cause diagnosis first**, then explain how the fix
   eliminates it; let the user review "whether the diagnosis is right", not just "whether the code
   is right".

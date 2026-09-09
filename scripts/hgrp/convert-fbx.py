@@ -5,8 +5,9 @@ Usage (driven by convert.mjs):
 
 Reads the FBX as metres whatever its header claims, strips LOD1-3 and shadow-proxy meshes
 (the engine only consumes lod0), bakes the position-averaged normal every kept mesh needs
-for the inverted-hull outline into its COLOR_0, and exports with tangents/skins/morph
-targets on, which the HGRP pipeline requires.
+for the inverted-hull outline into its COLOR_0, records which of the source's UV sets each
+mesh carries, and exports with tangents/skins/morph targets on, which the HGRP pipeline
+requires.
 """
 
 import re
@@ -63,6 +64,26 @@ def bake_smooth_normals(mesh):
         )
     mesh.color_attributes.active_color = attribute
     mesh.color_attributes.render_color_index = mesh.color_attributes.find(SMOOTH_NORMAL_ATTRIBUTE)
+
+# The export names a mesh's UV layers after the Unity channel they came from — UV0, UV1, UV2 —
+# and a mesh carries only the channels it has, so the layer list has gaps (most meshes are
+# UV0 + UV2). Blender keeps the layers in that order and the glTF exporter numbers them
+# TEXCOORD_0, TEXCOORD_1, ... by position, which would hand the engine UV2's data as
+# TEXCOORD_1, the set the HGRP shaders read the fur layer and the VFX mask from. The channel
+# indices are written on the mesh (glTF mesh extras) so convert.mjs can put each set back at
+# TEXCOORD_<channel>.
+UV_SETS_PROPERTY = "hgrpUvSets"
+
+
+def record_uv_sets(mesh):
+    channels = []
+    for layer in mesh.uv_layers:
+        match = re.fullmatch(r"UV(\d+)", layer.name)
+        if not match:
+            raise ValueError(f"{mesh.name}: UV layer {layer.name!r} is not named after a Unity channel")
+        channels.append(int(match.group(1)))
+    mesh[UV_SETS_PROPERTY] = channels
+    return channels
 
 # The game's characters are authored in metres (a body stands 1.5-1.8 units tall, Bip001
 # sits at 0.95), and that is the unit the engine's HGRP length constants assume. The FBX
@@ -173,9 +194,10 @@ for mesh in meshes:
     shape_keys = len(mesh.data.shape_keys.key_blocks) - 1 if mesh.data.shape_keys else 0
     materials = [slot.material.name if slot.material else "None" for slot in mesh.material_slots]
     bake_smooth_normals(mesh.data)
+    uv_sets = record_uv_sets(mesh.data)
     print(
         f"[convert] keep {mesh.name}: verts={len(mesh.data.vertices)}"
-        f" shapekeys={shape_keys} mats={materials} smoothNormals=COLOR_0"
+        f" shapekeys={shape_keys} mats={materials} smoothNormals=COLOR_0 uvSets={uv_sets}"
     )
 
 bpy.ops.export_scene.gltf(
@@ -191,5 +213,7 @@ bpy.ops.export_scene.gltf(
     export_vertex_color="ACTIVE",
     export_all_vertex_colors=False,
     export_active_vertex_color_when_no_material=True,
+    # Mesh custom properties (the UV channel record) travel as glTF extras
+    export_extras=True,
 )
 print(f"[convert] exported {out_path}")

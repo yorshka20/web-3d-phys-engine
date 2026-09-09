@@ -32,6 +32,7 @@
     "@vitest/ui": "3.2.4",
     "@webgpu/types": "^0.1.64",
     "fs-extra": "^11.3.0",
+    "gl-matrix": "3.4.4",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "jsdom": "^25.0.1",

@@ -17,28 +17,39 @@
  *                                                does not write yet (texture tiling, see
  *                                                material-preset.mjs)
  *   <rip-root>/<actor>/lighting.json            the Character Info light rig (copied through)
+ *   <rip-root>/<actor>/clips/<clip>.fbx         one animation clip each: the skeleton and one
+ *                                                take, no meshes (clips/manifest.json lists
+ *                                                every clip requested and what became of it)
+ *   <rip-root>/_common/<bodyType>/clips/*.fbx   clip sets shared by body type, baked on one
+ *                                                actor's rig (the manifest's `animator`)
  *   <rip-root>/_global/renderpipeline.json      the HGRP volume / pipeline settings (copied)
  *
  * Per character:
- *   1. Blender headless FBX -> GLB (scripts/hgrp/convert-fbx.py)
+ *   1. Blender headless FBX -> GLB (scripts/hgrp/convert-fbx.py), then each UV set moved to
+ *      TEXCOORD_<Unity channel> (slotUvSets)
  *   2. copy the character's texture PNGs
  *   3. embed each material's _BaseMap as the glTF baseColorTexture, so the existing glTF/PBR
  *      path renders a textured preview
  *   4. write preset.json: the export's, scoped to the GLB's materials and completed with the
  *      texture tiling (material-preset.mjs)
- *   5. rebuild the fur shells' layer fraction into TEXCOORD_1 (see rebuildFurLayers)
+ *   5. rebuild the fur shells' layer fraction into TEXCOORD_1 where the source has no UV1
+ *      (see rebuildFurLayers)
  *   6. verify the GLB with gltf-transform: skin/joints/IBM, per-primitive TEXCOORD_0/TANGENT/
  *      COLOR_0 (plus JOINTS_0/WEIGHTS_0 on skinned meshes; a rigid weapon has none), morph
  *      targets — fails loudly.
+ *   7. clips: every clips/<clip>.fbx evaluated and baked onto the character glb's skeleton
+ *      (clip-glb.mjs, no Blender involved) as clips/<clip>.glb; the engine joins them onto
+ *      the model by node path.
+ * Then the _common body-type clip sets, baked on the actor their manifest names.
  *
  * --preset-only rewrites preset.json (and the fur layers) without touching Blender or
- * textures — for a re-exported material set.
+ * textures — for a re-exported material set. --clips-only rebakes the clips of the selected
+ * characters (and the _common sets) against the already converted models.
  *
  * Output: packages/web-client/assets/hgrp/<actor>/{<actor>.glb, preset.json, lighting.json,
- * textures/}. A full run rebuilds a character's output folder from scratch, so nothing stale
- * survives — except clips/, which anim-convert.mjs owns and the engine joins onto the model.
- * The rip root is machine-local and always passed as an argument. The FBX carries no clips;
- * anim-convert.mjs is a separate path.
+ * textures/, clips/} and assets/hgrp/_common/<bodyType>/clips/. A full run rebuilds a
+ * character's output folder from scratch, so nothing stale survives. The rip root is
+ * machine-local and always passed as an argument.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -46,6 +57,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
+import { readBindPose, writeClipGlb } from './clip-glb.mjs';
 import { completePreset, readRawMaterials } from './material-preset.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -58,10 +70,12 @@ function parseArgs(argv) {
     else if (argv[i] === '--chars') args.chars = argv[++i].split(',');
     else if (argv[i] === '--out') args.out = argv[++i];
     else if (argv[i] === '--preset-only') args.presetOnly = true;
+    else if (argv[i] === '--clips-only') args.clipsOnly = true;
   }
   if (!args.src) {
     console.error(
-      'Usage: node scripts/hgrp/convert.mjs --src <rip-root> [--chars ardelia[,...]] [--preset-only]',
+      'Usage: node scripts/hgrp/convert.mjs --src <rip-root> [--chars ardelia[,...]] ' +
+        '[--preset-only | --clips-only]',
     );
     process.exit(1);
   }
@@ -103,15 +117,9 @@ function readExportMaterials(actorDir, kind) {
   return { exported, raw };
 }
 
-// A full run rebuilds the character folder from scratch, except `clips/`: the clip files come
-// from another source (anim-convert.mjs, a clip export) and join the model by node path, so a
-// model rebuild must not cost them.
-function resetActorDir(outDir) {
+function resetDir(outDir) {
+  fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
-  for (const entry of fs.readdirSync(outDir)) {
-    if (entry === 'clips') continue;
-    fs.rmSync(path.join(outDir, entry), { recursive: true, force: true });
-  }
 }
 
 function runBlender(fbx, glbPath) {
@@ -197,6 +205,50 @@ async function embedBaseColor(glbPath, exported, texDir) {
   }
   await io.write(glbPath, doc);
   return { assigned, materialNames };
+}
+
+// The export names a mesh's UV layers after the Unity channel they came from and a mesh has
+// only the channels it uses (most are UV0 + UV2: the fur layer / VFX mask set, UV1, is rare),
+// so Blender's exporter — which numbers TEXCOORD_n by layer position — would hand the engine
+// UV2's data as TEXCOORD_1. convert-fbx.py records the channel list on the mesh
+// (`hgrpUvSets`, as glTF mesh extras) and each set is moved back to TEXCOORD_<channel> here;
+// a channel the mesh lacks stays absent, which the loader reads as zeros — the same value a
+// missing vertex stream has in Unity.
+const UV_SETS_EXTRA = 'hgrpUvSets';
+
+async function slotUvSets(glbPath) {
+  const io = new NodeIO();
+  const doc = await io.read(glbPath);
+  const report = [];
+  let changed = false;
+  for (const mesh of doc.getRoot().listMeshes()) {
+    const { [UV_SETS_EXTRA]: channels, ...extras } = mesh.getExtras();
+    if (!Array.isArray(channels)) {
+      throw new Error(
+        `${mesh.getName()}: no ${UV_SETS_EXTRA} record — convert-fbx.py did not write it`,
+      );
+    }
+    for (const prim of mesh.listPrimitives()) {
+      const sets = channels.map((channel, i) => [channel, prim.getAttribute(`TEXCOORD_${i}`)]);
+      if (sets.some(([, accessor]) => !accessor)) {
+        throw new Error(
+          `${mesh.getName()}: ${channels.length} UV channels recorded but fewer TEXCOORD sets exported`,
+        );
+      }
+      for (let i = 0; i < channels.length; i++) prim.setAttribute(`TEXCOORD_${i}`, null);
+      for (const [channel, accessor] of sets) prim.setAttribute(`TEXCOORD_${channel}`, accessor);
+      if (channels.some((channel, i) => channel !== i)) changed = true;
+    }
+    mesh.setExtras(extras);
+    changed = true;
+    if (channels.some((channel, i) => channel !== i)) {
+      report.push(
+        `${mesh.getName()}: UV${channels.join('/UV')} -> TEXCOORD_${channels.join('/TEXCOORD_')}`,
+      );
+    }
+  }
+  if (changed) await io.write(glbPath, doc);
+  return report;
 }
 
 async function readMaterialNames(glbPath) {
@@ -351,6 +403,109 @@ async function rebuildFurLayers(glbPath, preset) {
   return report;
 }
 
+// The clips the export wrote for one folder: the manifest names the rig they were baked on
+// (`animator`, the prefab root's name) and lists every requested clip with its outcome; only
+// `ok` rows have a file.
+function readClipManifest(clipDir) {
+  const manifestPath = path.join(clipDir, 'manifest.json');
+  if (!fs.existsSync(manifestPath)) return undefined;
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const clips = (manifest.clips ?? [])
+    .filter((row) => row.status === 'ok' && row.file)
+    .map((row) => ({ name: row.name, fbx: path.join(clipDir, row.file) }))
+    .filter((row) => fs.existsSync(row.fbx));
+  const skipped = (manifest.clips ?? []).filter((row) => row.status !== 'ok').length;
+  return { animator: manifest.animator, clips, skipped };
+}
+
+// The character folder a manifest's animator was baked on: `chr_0023_antal_uimodel` -> `antal`.
+function actorOfAnimator(animator) {
+  return /^chr_\d+_(.+?)_(?:uimodel|postmodel)$/.exec(animator ?? '')?.[1];
+}
+
+/**
+ * Bake every clip of `clipDir` onto the character whose glb and FBX are given, writing
+ * `<outClipsDir>/<clip>.glb`. The output folder is rebuilt from scratch.
+ */
+async function convertClips(clipDir, modelGlbPath, modelFbxPath, outClipsDir, label) {
+  const manifest = readClipManifest(clipDir);
+  if (!manifest) {
+    console.log(`[clips] ${label}: no clips/manifest.json, nothing to convert`);
+    return true;
+  }
+  if (!fs.existsSync(modelGlbPath)) {
+    console.error(`[clips] ${label}: model ${modelGlbPath} missing — convert the character first`);
+    return false;
+  }
+  resetDir(outClipsDir);
+  if (manifest.clips.length === 0) {
+    console.log(`[clips] ${label}: 0 clips exported (${manifest.skipped} skipped by the export)`);
+    return true;
+  }
+  const t0 = Date.now();
+  const bindPose = await readBindPose(modelFbxPath, modelGlbPath);
+  let ok = true;
+  for (const clip of manifest.clips) {
+    try {
+      const report = await writeClipGlb(
+        modelGlbPath,
+        bindPose,
+        clip.fbx,
+        path.join(outClipsDir, `${clip.name}.glb`),
+        { name: clip.name, animatorName: manifest.animator },
+      );
+      const drops =
+        report.unmatched.length > 0
+          ? ` (${report.unmatched.length} driven nodes not on the model, first ${report.unmatched[0]})`
+          : '';
+      console.log(
+        `[clips] ${label}/${clip.name}: ${report.duration.toFixed(2)}s @ ${report.fps} fps, ` +
+          `${report.driven} joints, ${report.channels} channels, ${report.keys} keys${drops}`,
+      );
+    } catch (error) {
+      ok = false;
+      console.error(
+        `[clips] ${label}/${clip.name}: FAILED ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+  console.log(
+    `[clips] ${label}: ${manifest.clips.length} clips in ${((Date.now() - t0) / 1000).toFixed(0)}s ` +
+      `(${manifest.skipped} skipped by the export; bind pose from ${bindPose.skinned} skinned bones)`,
+  );
+  return ok;
+}
+
+// The shared body-type clip sets: each folder's manifest names the actor whose rig it was
+// baked on, and the clips land beside the characters under _common/<bodyType>/clips.
+async function convertCommonClips(src, out) {
+  const commonDir = path.join(src, '_common');
+  if (!fs.existsSync(commonDir)) return true;
+  let ok = true;
+  for (const bodyType of fs.readdirSync(commonDir).sort()) {
+    const clipDir = path.join(commonDir, bodyType, 'clips');
+    if (!fs.existsSync(clipDir)) continue;
+    const manifest = readClipManifest(clipDir);
+    const actor = actorOfAnimator(manifest?.animator);
+    if (!actor) {
+      console.error(
+        `[clips] _common/${bodyType}: manifest names no actor rig (${manifest?.animator})`,
+      );
+      ok = false;
+      continue;
+    }
+    const converted = await convertClips(
+      clipDir,
+      path.join(out, actor, `${actor}.glb`),
+      findActorFbx(path.join(src, actor), actor).fbx,
+      path.join(out, '_common', bodyType, 'clips'),
+      `_common/${bodyType} (on ${actor})`,
+    );
+    ok = ok && converted;
+  }
+  return ok;
+}
+
 async function verifyGlb(glbPath) {
   const doc = await new NodeIO().read(glbPath);
   const root = doc.getRoot();
@@ -430,7 +585,7 @@ async function verifyGlb(glbPath) {
   return problems;
 }
 
-const { src, chars, out, presetOnly } = parseArgs(process.argv);
+const { src, chars, out, presetOnly, clipsOnly } = parseArgs(process.argv);
 const actors = chars.length > 0 ? chars : listActors(src);
 let failed = false;
 
@@ -463,6 +618,7 @@ for (const actor of actors) {
   const outDir = path.join(out, actor);
   const glbPath = path.join(outDir, `${actor}.glb`);
   const texDir = path.join(outDir, 'textures');
+  const clipsDir = path.join(outDir, 'clips');
   console.log(`\n=== ${actor} ===`);
 
   try {
@@ -473,11 +629,16 @@ for (const actor of actors) {
       await writePreset(materials, texDir, glbPath, outDir);
       continue;
     }
+    if (clipsOnly) {
+      const ok = await convertClips(path.join(actorDir, 'clips'), glbPath, fbx, clipsDir, actor);
+      failed = failed || !ok;
+      continue;
+    }
 
     console.log(
       `[convert] fbx: ${fbx} (${Object.keys(materials.exported.materials).length} materials in the export)`,
     );
-    resetActorDir(outDir);
+    resetDir(outDir);
 
     const blenderError = runBlender(fbx, glbPath);
     if (blenderError !== undefined) {
@@ -485,6 +646,7 @@ for (const actor of actors) {
       failed = true;
       continue;
     }
+    for (const line of await slotUvSets(glbPath)) console.log(`[uv] ${line}`);
 
     const { copied, converted } = copyTextures(path.join(actorDir, 'textures'), texDir);
     console.log(
@@ -508,10 +670,18 @@ for (const actor of actors) {
     } else {
       console.log('[verify] OK');
     }
+
+    const clipsOk = await convertClips(path.join(actorDir, 'clips'), glbPath, fbx, clipsDir, actor);
+    failed = failed || !clipsOk;
   } catch (error) {
     console.error(`[convert] ${actor}: ${error instanceof Error ? error.message : error}`);
     failed = true;
   }
+}
+
+if (!presetOnly && (chars.length === 0 || clipsOnly)) {
+  const commonOk = await convertCommonClips(src, out);
+  failed = failed || !commonOk;
 }
 
 process.exit(failed ? 1 : 0);

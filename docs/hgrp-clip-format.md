@@ -2,8 +2,8 @@
 
 How an animation clip reaches the engine, written for whoever produces clips (an export tool,
 an agent driving Unity) rather than for the renderer. The engine side is
-`packages/renderer/src/assets/gltfAnimations.ts`; the current producer is
-`scripts/hgrp/anim-convert.mjs`; the golden reference is
+`packages/renderer/src/assets/gltfAnimations.ts`; the producer is `scripts/hgrp/convert.mjs`
+(`clip-glb.mjs`), which bakes the export's clip FBX files; the golden reference is
 `packages/web-client/assets/hgrp/pelica/clips/A_actor_pelica_gacha_ani.glb`.
 
 ## 1. What a clip file is
@@ -22,17 +22,20 @@ Placement and naming:
 
 ```
 packages/web-client/assets/hgrp/<actor>/clips/<clipName>.glb
+packages/web-client/assets/hgrp/_common/<bodyType>/clips/<clipName>.glb
 ```
 
 `<actor>` is the export's character id (`pelica`, `laevat`, `ardelia`, …), `<clipName>` the
-Unity AnimationClip name (`A_actor_pelica_gacha_ani`). The web client discovers every file
-matching `assets/hgrp/*/clips/*.glb` at build time; nothing has to be registered. The model glb
-is never modified for a clip, and a model rebuild leaves `clips/` in place.
+Unity AnimationClip name (`A_actor_pelica_gacha_ani`); the `_common` folders hold the sets
+shared by body type, baked on one actor's rig. The web client discovers every file matching
+those patterns at build time; nothing has to be registered. The model glb is never modified for
+a clip.
 
 Every clip on the stage is one **pool**: a character lists the clips in its own folder first
-(bare name; `A_actor_pelica_gacha_ani` sorts before its `_loop`), then every other character's
-as `<actor>/<clipName>`. A clip baked against one rig plays on any rig through the shared
-`Bip001` bone chain; bones the target rig lacks are dropped.
+(bare name; `A_actor_pelica_gacha_ani` sorts before its `_loop`), then the body-type sets and
+every other character's as `<folder>/<clipName>`. A clip's file is fetched and joined the first
+time it is selected, not when the character loads. A clip baked against one rig plays on any
+rig through the shared `Bip001` bone chain; bones the target rig lacks are dropped.
 
 ## 2. Animation data
 
@@ -40,7 +43,7 @@ as `<actor>/<clipName>`. A clip baked against one rig plays on any rig through t
 | --- | --- |
 | Channels | `translation` (VEC3, metres), `rotation` (VEC4 quaternion x y z w), `scale` (VEC3). No `weights`. |
 | Interpolation | `LINEAR` or `STEP`. `CUBICSPLINE` is accepted but nothing produces it. |
-| Time | Sampler input in **seconds** from 0, float32, strictly increasing. Sample at the clip's native rate (30 or 60 fps) and reduce keys if you like; the golden clip is 60 fps reduced to ~0.7 keys per channel-frame. |
+| Time | Sampler input in **seconds** from 0, float32, strictly increasing. Sample at the clip's native rate (30 or 60 fps) and reduce keys if you like; the golden clip is 60 fps reduced to ~0.1 keys per channel-frame. |
 | Coverage | Every driven bone gets its channels; undriven bones simply keep the rest pose stored in the clip's nodes (which must equal the model's, §3). |
 | Root motion | Keep it. `Bip001` (pelvis) translation is animated; the scene root is not. |
 | Count | One animation per file. A file with several is accepted (they attach as `<name>#i`) but is not the convention. |
@@ -72,43 +75,49 @@ Rules:
   undriven nodes from the clip file's nodes, and a missing node breaks the paths of everything
   below it.
 - Duplicate bone names inside one rig (Pelica's weapon decos each carry a `Root` / `Root_M`)
-  were renamed `Root.001` / `Root_M.001` by Blender on the model side. A clip that does not
-  drive those bones need not reproduce the renaming.
+  were renamed `Root.001` / `Root_M.001` by Blender on the model side. The bake matches by
+  hierarchy path with that suffix stripped, so a clip keeps the plain names; a clip written as
+  glTF directly (route B) has to use the model glb's names.
 
 ## 4. Coordinate frames — the part that is easy to get wrong
 
 The model glb was produced by Blender (FBX import → glTF export). Blender parks the Z-up → Y-up
-conversion as a **+90° rotation about X on the scene root node** and leaves every node below it
-in the FBX import frame. Unity's rig and this glTF also differ by a **mirror through the YZ
-plane**. A clip's channel values must land in the *same node-local frames as the model glb*, or
-the character folds in half.
+conversion as a **+90° rotation about X on the scene root node** and builds every joint's frame
+from the skin clusters' bind matrices, re-oriented per bone. Unity's rig and this glTF also
+differ by a **mirror through the YZ plane**. A clip's channel values must land in the *same
+node-local frames as the model glb*, or the character folds in half.
 
 Two ways to guarantee that:
 
-**Route A — FBX through the engine's own converter (recommended).** Export the clip from Unity as
-an FBX containing the character's skeleton and that one animation take (baked keys, no IK or
-constraints left live), with the **same exporter and settings that produced the model FBX**, and
-drop it at `out/<actor>/clips/<clipName>.fbx`. The engine's converter (`scripts/hgrp/`) imports
-it with the same Blender step as the model — same unit handling, same axis conversion, same
-node naming — strips meshes and skins, and writes the `.glb`. Frames match by construction and no
-hand-written axis math is involved. Requirements for the FBX:
+**Route A — an FBX clip through `convert.mjs` (recommended, what the export does).** Write the
+clip as an FBX holding the character's node hierarchy and one animation take, and put it at
+`<export-root>/<actor>/clips/<clipName>.fbx` with an `ok` row (`name`, `file`) in
+`clips/manifest.json`, whose `animator` names the prefab root node. `convert.mjs` evaluates the
+FBX itself (`fbx-anim.mjs`), takes the bind pose from the **character FBX's skin clusters**, and
+re-expresses every driven node in the glb's joint frames — no axis math on the producer's side.
+Requirements for the FBX:
 
-- one animation take per file (several are fine, they become several clip files);
-- keys baked at 30 or 60 fps; no unbaked constraints, no muscle/humanoid retargeting layers;
-- the full skeleton as in the model FBX; meshes may be present (they are stripped) or absent;
-- units: declare metres (`UnitScaleFactor` 100 over metre geometry) — the converter cancels the
-  declared unit anyway and reads one FBX unit as one metre (the 2026-09 export declared
-  centimetres over metre geometry; see `scripts/hgrp/README.md`).
+- the same exporter conventions as the character FBX: Y-up, `UnitScaleFactor` 100 over metre
+  geometry, the same mirror, the same node names;
+- node transforms as plain `Lcl Translation` / `Lcl Rotation` (Euler XYZ, degrees) /
+  `Lcl Scaling` — no pivots, pre-/post-rotations or other rotation orders;
+- one animation take; keys at 30 or 60 fps. Sparse keys are accepted — rotation is interpolated
+  as quaternions between them — but the faithful way is to bake every frame, since the source
+  curves' tangents are lost in an FBX Euler curve;
+- the full skeleton, meshes optional (nothing in the file but nodes and curves is read).
 
 **Route B — glTF written directly.** Only if the tool already speaks glTF. Then the file must
 reproduce the model glb's node hierarchy *and rest TRS* (copy them from the model glb, or from
-the golden clip), and channel values must be expressed in those node frames. In practice that
-means applying, to every Unity local TRS, the mirror `translation (x, y, z) -> (-x, y, z)`,
-`rotation (x, y, z, w) -> (x, -y, -z, w)`, scale unchanged, and driving `Root` with the constant
-rotation `(-0.7071, 0, 0, 0.7071)` (the inverse of the scene root's +90° X) so the Unity frame
-lines up under it — exactly what the golden clip does (`Root` channels: rotation
-`(-0.7071, 0, 0, 0.7071)`, translation `(0, 0, 0)`; `Bip001` first translation key
-`(-0.028, 0.925, -0.811)` metres). Validate against the golden clip (§5) before trusting it.
+the golden clip), and channel values must be expressed in those node frames. The joint frames
+are Blender's, not Unity's, so a value cannot be copied over from a Unity local TRS: either
+re-express world transforms through the glb's rest the way `clip-glb.mjs` does, or take the
+first producer's shortcut — the mirror `translation (x, y, z) -> (-x, y, z)`,
+`rotation (x, y, z, w) -> (x, -y, -z, w)`, scale unchanged, applied to every Unity local TRS,
+with `Root` driven by the constant rotation `(-0.7071, 0, 0, 0.7071)` (the inverse of the scene
+root's +90° X) so that the Unity frames line up under it and every joint below is keyed in
+those frames. Either way, validate against the golden clip (§5): the world positions of
+`Bip001`, `Bip001_Head` and the hands must agree to millimetres at t = 0
+(`Bip001` at `(-0.028, 0.925, -0.811)` m).
 
 ## 5. Validation
 
@@ -122,7 +131,8 @@ holds no animation, drives nodes the model does not have (beyond what a foreign 
 lacks), or whose evaluated pose is not a standing character — at t = 0 the pelvis (`Bip001`)
 must be 0.6–1.3 m above the ground and the head above the pelvis, which catches a wrong axis or
 mirror at once. A clean report on the golden clip reads
-`450 nodes, 0 meshes, 1 animation, 704 channels, 704 matched, 0 dropped`.
+`450 nodes, 0 meshes, 1 animation, 704 channels, 704 matched, 0 dropped` with `Bip001` at
+`(-0.028, 0.925, -0.811)`.
 
 In the browser, the character's **Animation** folder lists the clip; the pelvis stays at hip
 height, feet on the ground, hands where the game puts them.
