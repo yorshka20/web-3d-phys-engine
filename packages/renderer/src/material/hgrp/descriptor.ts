@@ -28,6 +28,13 @@ export interface HGRPPresetMaterial {
   floats: Record<string, number>;
   ints: Record<string, number>;
   colors: Record<string, number[]>; // rgba tuples
+  // The material object's own render state as the export carries it: the shader keywords the
+  // game compiles in, its custom render queue, the passes it disables and its tag map. Carried
+  // for the record — the engine derives the same facts from the gates and _SurfaceType.
+  keywords?: string[];
+  renderQueue?: number;
+  disabledPasses?: string[];
+  tags?: Record<string, string>;
 }
 
 // Per-character switches that decide whether an optional material layer is drawn at all.
@@ -280,9 +287,13 @@ export function createHGRPMaterialFromPreset(
   // back-face culling). Cutout has TWO gates in HGRP: _AlphaClip and _EnableAlphaTest
   // (Pelica's cloth_01 uses only the latter — audited 2026-09-01, all-materials _AlphaClip
   // is 0). The glb's own alphaMode/doubleSided are export artifacts of the FBX->glTF
-  // conversion — the preset is authoritative.
-  const alphaMode: AlphaMode =
-    floats._SurfaceType === 1
+  // conversion — the preset is authoritative. The overlay-shadow shells are the exception:
+  // their shader fixes Blend Zero SrcColor and the transparent queue itself, so a shell
+  // material carries neither _SurfaceType nor blend factors.
+  const overlayShadow = variant === 'CharacterNPR_OverlayShadow';
+  const alphaMode: AlphaMode = overlayShadow
+    ? 'blend'
+    : floats._SurfaceType === 1
       ? 'blend'
       : floats._AlphaClip === 1 || floats._EnableAlphaTest === 1
         ? 'mask'
@@ -300,7 +311,7 @@ export function createHGRPMaterialFromPreset(
     alphaMode,
     alphaCutoff: floats._AlphaClipThreshold ?? 0.5,
     doubleSided: floats._Cull === 0,
-    blendMode: hgrpBlendMode(floats),
+    blendMode: overlayShadow ? 'multiply' : hgrpBlendMode(floats),
     eyeLayer: hgrpEyeLayer(variant, floats),
     permutation: { variant, enabled: [] },
     enabled: gateFlag === undefined || flags[gateFlag] === true,
@@ -309,9 +320,10 @@ export function createHGRPMaterialFromPreset(
   return material;
 }
 
-// The shared shadow shells every character's glb carries under these material names, whose
-// ripped material JSON does not exist (common materials): what the game's OverlayShadow
-// shader would read for them. The masks are the two 32x32 vertical R-gradients that ship in
+// The shared shadow shells every character's glb carries under these material names, for a
+// preset that lacks them (the first rip exported no common materials; the 2026-09 export
+// carries them, and a preset entry always wins): what the game's OverlayShadow shader would
+// read for them. The masks are the two 32x32 vertical R-gradients that ship in
 // every character's texture folder (param ledger, "新证据"); the stencil gate is the shader's
 // _ShadowOverIris enum — 20 = only over the iris and brow, 4 = only over the rest of the
 // character. _BaseColor is the one value the rip does not carry: a muted cool-grey shadow

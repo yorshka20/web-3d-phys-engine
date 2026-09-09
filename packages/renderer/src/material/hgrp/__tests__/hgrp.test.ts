@@ -641,27 +641,29 @@ describe('permutations', () => {
     warn.mockRestore();
   });
 
-  it('fills the known shadow shells as multiply OverlayShadow materials when their mask is present', () => {
-    const shell = createDefaultHGRPMaterial(
+  it("gives a preset OverlayShadow shell the shader's own multiply blend and its stencil gate", () => {
+    const shell = createHGRPMaterialFromPreset(
       'c',
       'M_eyewhiteshadow_common_01',
-      (filename) => filename === 'T_actor_common_eyeshadow_01_M.png',
+      preset(
+        'HGRP/CharacterNPR_OverlayShadow',
+        { _UseGrayAsAlpha: 1, _ShadowOverIris: 4 },
+        { _BaseMap: 'T_actor_common_eyeshadow_01_M.png' },
+      ),
     );
     expect(shell.variant).toBe('CharacterNPR_OverlayShadow');
     expect(shell.customShaderId).toBe('hgrp_overlay_shadow_shader');
     expect(shell.textures._BaseMap).toBe('hgrp_c_T_actor_common_eyeshadow_01_M.png');
-    expect(shell.floats).toEqual({ _UseGrayAsAlpha: 1, _ShadowOverIris: 20 });
     expect(shell.alphaMode).toBe('blend');
     expect(shell.blendMode).toBe('multiply');
     expect(hgrpStencilRole(shell)).toBe('gate');
-    expect(hgrpStencilRef(shell)).toBe(20);
-
-    const hairShadow = createDefaultHGRPMaterial('c', 'M_hairshadow_common_01', () => true);
-    expect(hgrpStencilRef(hairShadow)).toBe(4);
-
-    // Without the mask on disk the shell falls back to the generic translucent fill
-    const noMask = createDefaultHGRPMaterial('c', 'M_hairshadow_common_01');
-    expect(noMask.variant).toBe('CharacterNPR');
+    expect(hgrpStencilRef(shell)).toBe(4);
+    const iris = createHGRPMaterialFromPreset(
+      'c',
+      'M_eyeshadow_common_03',
+      preset('HGRP/CharacterNPR_OverlayShadow', { _ShadowOverIris: 20 }, {}),
+    );
+    expect(hgrpStencilRef(iris)).toBe(20);
   });
 
   it('assigns the stencil groups of the game prepass: eye stamps 52, body and hair 36, blend none; the under-brow strands yield with _HairStencilRef', () => {
