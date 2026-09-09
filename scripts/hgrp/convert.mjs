@@ -197,13 +197,13 @@ async function readMaterialNames(glbPath) {
 }
 
 // The fur shells are baked into the mesh: N copies of the base surface stacked along the
-// normal a hair's breadth apart (Ardelia's skirt: 19 copies of 497 vertices — 26 µm steps in
-// the first rip, 0.26 µm in the 2026-09 export, float32-quantization territory where the
-// spacing can no longer tell the shells apart). The game's fur shader reads each shell's layer
-// fraction — 0 at the root, 1 at the tip — from the mesh's second UV set, which the FBX does not
-// carry. What the mesh does carry is its construction: the shells are appended one after
-// another, so among the vertices that share one uv0 point — one stack — the vertex order is the
-// shell order. The shells of one stack are copies — same position to within microns, the
+// normal a hair's breadth apart (Ardelia's skirt: 19 copies of 497 vertices, 26 µm steps —
+// in both rips once the FBX is read in metres; read at the 2026-09 export's declared
+// centimetres they looked 0.26 µm apart, see convert-fbx.py). The game's fur shader reads each
+// shell's layer fraction — 0 at the root, 1 at the tip — from the mesh's second UV set, which
+// the FBX does not carry. What the mesh does carry is its construction: the shells are appended
+// one after another, so among the vertices that share one uv0 point — one stack — the vertex
+// order is the shell order, which needs no spacing to be resolved at all. The shells of one stack are copies — same position to within microns, the
 // same normal — while the two faces of a thin two-sided sheet (deepfin's fins: front and back
 // 0.35 mm apart, normals opposed, shells interleaved) and mirrored parts share uv0 without
 // being one stack, so a uv0 group is split by position and normal before it is read as a
@@ -352,6 +352,34 @@ async function verifyGlb(glbPath) {
     if (!skin.getInverseBindMatrices()) problems.push(`skin ${skin.getName()}: no IBM`);
   }
 
+  // Units: the game's characters are metres tall and the exporter parks only its Z-up to
+  // Y-up rotation on the scene root, never a scale. An FBX read at a wrong unit fails both
+  // (convert-fbx.py reads UnitScaleFactor and cancels it; this is the check that it did).
+  const scene = root.getDefaultScene() ?? root.listScenes()[0];
+  for (const node of scene?.listChildren() ?? []) {
+    const scale = node.getScale();
+    if (scale.some((v) => Math.abs(v - 1) > 1e-3)) {
+      problems.push(`scene root ${node.getName()} is scaled [${scale.map((v) => v.toFixed(4))}]`);
+    }
+  }
+  let minY = Infinity;
+  let maxY = -Infinity;
+  const p = [0, 0, 0];
+  for (const mesh of meshes) {
+    for (const prim of mesh.listPrimitives()) {
+      const position = prim.getAttribute('POSITION');
+      for (let i = 0; i < position.getCount(); i++) {
+        position.getElement(i, p);
+        if (p[1] < minY) minY = p[1];
+        if (p[1] > maxY) maxY = p[1];
+      }
+    }
+  }
+  const height = maxY - minY;
+  if (!(height > 0.3 && height < 8)) {
+    problems.push(`model height ${height.toFixed(4)} m is not a character's — check the FBX unit`);
+  }
+
   // A mesh on a node without a skin is rigid — a weapon parented to a hand joint — and carries
   // no JOINTS_0/WEIGHTS_0 by design; the engine draws it in its node's frame.
   const skinnedMeshes = new Set();
@@ -379,6 +407,7 @@ async function verifyGlb(glbPath) {
     `[verify] meshes=${meshes.length} skins=${skins.length}` +
       ` joints=${skins[0]?.listJoints().length ?? 0}` +
       ` materials=${root.listMaterials().length} morphTargets=${morphTargets}` +
+      ` height=${height.toFixed(3)}m` +
       (rigid.length > 0 ? ` rigid=${rigid.join(',')}` : ''),
   );
   console.log(

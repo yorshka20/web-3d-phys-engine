@@ -38,7 +38,12 @@ Re-running is safe: a full run rebuilds the actor's output folder from scratch.
 ## What the pipeline does, per actor
 
 1. **`convert-fbx.py`** (run headless by the driver): imports `<actor>_uimodel.fbx`
-   (`<actor>_postmodel.fbx` when there is no uimodel), deletes `_lod1..9` / `_shadowProxy*`
+   (`<actor>_postmodel.fbx` when there is no uimodel) **as metres whatever the header says** —
+   the script reads the FBX `UnitScaleFactor` and cancels it through `global_scale`, because the
+   geometry is metre-scale in every rip while the declaration is not (100 in the first rip, 1 =
+   centimetres in the 2026-09 export, which read as declared made every character a hundredth
+   its size; `verifyGlb` now fails a model whose height is not a character's or whose scene
+   root is scaled) — then deletes `_lod1..9` / `_shadowProxy*`
    meshes (lod0 is the only level the engine consumes), bakes the **position-averaged normal**
    of every kept mesh into `COLOR_0` (xyz * 0.5 + 0.5 — the `_OutlineAverageNormal` the HGRP
    inverted-hull outline extrudes along, so the hull stays closed across hard edges and UV
