@@ -120,8 +120,10 @@ skins, materials and textures stripped, plus that one animation. The engine disc
 `assets/hgrp/*/clips/*.glb` next to the model and joins each clip onto the loaded model by node
 path below the scene root (`renderer/assets/gltfAnimations.ts`), so the model glb is never
 rewritten for a clip, `convert.mjs` leaves `clips/` alone when it rebuilds a character, and a clip
-exported later under another prefab name still matches. Files attach in name order (an entrance
-clip precedes its own `_loop`).
+exported later under another prefab name still matches. Every clip on the stage is one pool: a
+character lists its own clips first (an entrance clip precedes its own `_loop`), then every other
+character's as `<folder>/<clip>`, playable on any rig through the shared Bip001 chain; a character
+with no clips of its own starts paused in bind pose.
 
 ```bash
 node scripts/hgrp/anim-convert.mjs --src ~/Downloads/Character/PC --char Pelica \

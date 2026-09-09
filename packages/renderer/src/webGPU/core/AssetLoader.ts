@@ -440,13 +440,18 @@ export class AssetLoader {
   }
 
   /**
-   * Attach a rigged model's clip files: each URL is a glTF document carrying the character's
-   * node hierarchy and its animations (scripts/hgrp/anim-convert.mjs writes one per clip),
-   * joined onto the model by node path — the model glb itself never has to be rewritten for
-   * a clip. Files attach in name order, so an entrance clip precedes its own `_loop`, the
-   * stage's clip 0 / clip 1 convention.
+   * Attach clip files to a rigged model, in the order given: each URL is a glTF document
+   * carrying a character's node hierarchy and its animations (scripts/hgrp/anim-convert.mjs
+   * writes one per clip), joined onto the model by node path — the model glb itself never has
+   * to be rewritten for a clip. The attached clips take the entry's name, which is how a
+   * clip baked against another character is told apart in the list; a clip that is not the
+   * model's own is expected to name bones it lacks, so only an own clip's dropped channels
+   * are worth a warning.
    */
-  static async loadGLTFClips(assetId: string, clipUrls: Record<string, string>): Promise<void> {
+  static async loadGLTFClips(
+    assetId: string,
+    clips: readonly { name: string; url: string; own?: boolean }[],
+  ): Promise<void> {
     const model = assetRegistry.getAssetDescriptor<'gltf'>(assetId)?.rawData as
       | GLTFModel
       | undefined;
@@ -454,15 +459,19 @@ export class AssetLoader {
       throw new Error(`[AssetLoader] ${assetId} is not a loaded glTF model`);
     }
     const io = new WebIO();
-    for (const name of Object.keys(clipUrls).sort()) {
-      const doc = await io.read(clipUrls[name]);
+    for (const entry of clips) {
+      const doc = await io.read(entry.url);
       const { attached, droppedChannels } = attachGLTFClips(model, doc);
+      attached.forEach((clip, i) => {
+        clip.name = attached.length === 1 ? entry.name : `${entry.name}#${i}`;
+      });
       if (attached.length === 0) {
-        console.warn(`[AssetLoader] ${assetId}: clip file ${name} carries no animation`);
+        console.warn(`[AssetLoader] ${assetId}: clip file ${entry.name} carries no animation`);
       }
       if (droppedChannels > 0) {
-        console.warn(
-          `[AssetLoader] ${assetId}: clip ${name} has ${droppedChannels} channels on nodes the model lacks`,
+        const report = entry.own === false ? console.log : console.warn;
+        report(
+          `[AssetLoader] ${assetId}: clip ${entry.name} drives ${droppedChannels} channels on nodes the model lacks`,
         );
       }
     }

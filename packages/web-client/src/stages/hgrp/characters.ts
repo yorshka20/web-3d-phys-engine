@@ -35,12 +35,21 @@ import { quat, vec3 } from 'gl-matrix';
 // The shaders read the draw's world scale off the model matrix (core/hgrp_transform.wgsl), so
 // no shading constant needs retuning when these change.
 
+// One clip file of the pool (assets/hgrp/<folder>/clips/<clip>.glb) as one character sees it:
+// `own` for the clips in its own folder, listed first under their bare name; every other
+// character's clips follow as `<folder>/<clip>`, so a rig can be driven by any clip on the
+// stage (matched by node path — the shared Bip001 chain moves, the rest holds its pose).
+export interface HGRPClipSource {
+  name: string;
+  url: string;
+  own: boolean;
+}
+
 interface HGRPCharacterSource {
   modelUrl: string;
   presetUrl: string;
   textureUrls: Record<string, string>;
-  // clip name -> served URL of its glTF file (assets/hgrp/<folder>/clips/<clip>.glb)
-  clipUrls: Record<string, string>;
+  clips: readonly HGRPClipSource[];
 }
 
 export interface HGRPStageCharacter {
@@ -102,9 +111,10 @@ const TEXTURE_URLS = import.meta.glob('../../../assets/hgrp/*/textures/*.png', {
   import: 'default',
 }) as Record<string, string>;
 
-// A character's clips live beside its model, one glTF file per clip (scripts/hgrp/
-// anim-convert.mjs), and are joined onto the model by node path when it loads — the model glb
-// is never rewritten for a clip, and a model rebuild leaves the clips in place.
+// Clips live beside the model they were baked against, one glTF file per clip (scripts/hgrp/
+// anim-convert.mjs), and are joined onto a model by node path when it loads — the model glb
+// is never rewritten for a clip, and a model rebuild leaves the clips in place. Every clip on
+// the stage is one pool: a character lists its own first, then everyone else's.
 const CLIP_URLS = import.meta.glob('../../../assets/hgrp/*/clips/*.glb', {
   eager: true,
   query: '?url',
@@ -127,18 +137,24 @@ function readRoster(): HGRPStageCharacter[] {
     textureUrlsByFolder.set(folder, urls);
   }
 
-  const clipUrlsByFolder = new Map<string, Record<string, string>>();
-  for (const [path, url] of Object.entries(CLIP_URLS)) {
-    const folder = folderOf(path);
-    const urls = clipUrlsByFolder.get(folder) ?? {};
-    urls[
-      path
+  const clipPool = Object.entries(CLIP_URLS)
+    .map(([path, url]) => ({
+      folder: folderOf(path),
+      clip: path
         .split('/')
         .pop()!
-        .replace(/\.glb$/, '')
-    ] = url;
-    clipUrlsByFolder.set(folder, urls);
-  }
+        .replace(/\.glb$/, ''),
+      url,
+    }))
+    .sort((a, b) => a.folder.localeCompare(b.folder) || a.clip.localeCompare(b.clip));
+  const clipsFor = (folder: string): HGRPClipSource[] => [
+    ...clipPool
+      .filter((entry) => entry.folder === folder)
+      .map((entry) => ({ name: entry.clip, url: entry.url, own: true })),
+    ...clipPool
+      .filter((entry) => entry.folder !== folder)
+      .map((entry) => ({ name: `${entry.folder}/${entry.clip}`, url: entry.url, own: false })),
+  ];
 
   const roster: { folder: string; character: HGRPStageCharacter }[] = [];
   for (const [path, modelUrl] of Object.entries(MODEL_URLS)) {
@@ -158,7 +174,7 @@ function readRoster(): HGRPStageCharacter[] {
           modelUrl,
           presetUrl,
           textureUrls: textureUrlsByFolder.get(folder) ?? {},
-          clipUrls: clipUrlsByFolder.get(folder) ?? {},
+          clips: clipsFor(folder),
         },
         entity: undefined,
         visible: DEFAULT_CHARACTER_FOLDERS.includes(folder),
@@ -268,9 +284,12 @@ function createCharacterEntity(world: World, character: HGRPStageCharacter): Ent
     new URLSearchParams(window.location.search).get('clip') ?? '0',
     10,
   );
+  // A character without clips of its own starts paused in its bind pose: the pool still
+  // offers it every other character's clip, but only when the user asks for one.
   entity.addComponent(
     world.createComponent(SkeletonComponent, {
       clipIndex: Number.isNaN(requestedClip) ? 0 : requestedClip,
+      playing: character.source.clips.some((clip) => clip.own),
     }),
   );
 
@@ -308,8 +327,8 @@ export function loadHGRPCharacter(world: World, character: HGRPStageCharacter): 
     if (!model) {
       throw new Error(`[hgrp] ${character.assetId} loaded but is not in the asset registry`);
     }
-    if (Object.keys(character.source.clipUrls).length > 0) {
-      await AssetLoader.loadGLTFClips(character.assetId, character.source.clipUrls);
+    if (character.source.clips.length > 0) {
+      await AssetLoader.loadGLTFClips(character.assetId, character.source.clips);
     }
     const { min, max } = modelBounds(model);
     character.anchor = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
