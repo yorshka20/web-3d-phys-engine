@@ -216,17 +216,20 @@ scripts through Node's TypeScript type stripping, so there is one implementation
 24 human bones' world matrices to the same bake as the FBX curves' nodes, and writes the clip
 into the same `clips/<clip>.glb`. `index.json` marks those rows `humanoid: true`;
 `avatar.json` is copied beside the model after its node paths are checked against the glb.
-Formulas, the export's data contract and its known defect (the muscle tracks are misnamed;
-`humanoid.mjs` reads them back by position) are in `docs/hgrp-humanoid-animation.md`.
+Formulas and the export's data contract are in `docs/hgrp-humanoid-animation.md`; the reader
+asserts each curve's `curveIndex` and refuses a sidecar from before the exporter's naming fix.
 
-Two facts the bake depends on: the export's FBX world is Unity's mirrored in x, and the
-**model** FBX's node defaults are the prefab's T-pose while a **clip** FBX's defaults are the
-A-pose the meshes were bound in — the per-bone frame change from the Avatar's frames to the
-FBX's is read off the model FBX (`readBindPose` returns it as `restByPath`).
+Two facts the bake depends on: the export's FBX world is Unity's mirrored in x, exactly (the
+node frames too, so a solved pose is mirrored and nothing else — `humanoidRigCheck` verifies
+that per character against the **model** FBX's node defaults, the prefab's T-pose; a **clip**
+FBX's defaults are the A-pose the meshes were bound in); and a curve the clip does not key takes
+the character's default pose, the bind pose read back into muscle space (`readBindPose`
+supplies both poses, as `restByPath` and `byPath`).
 
 ```bash
-node scripts/hgrp/humanoid-check.mjs ~/Downloads/out_humanoid/yvonne              # every clip
-node scripts/hgrp/humanoid-check.mjs ~/Downloads/out_humanoid/yvonne A_actor_yvonne_battle_loop
+node scripts/hgrp/humanoid-check.mjs ~/Downloads/out_humanoid/yvonne \
+     ~/Downloads/out/yvonne/yvonne_uimodel.fbx packages/web-client/assets/hgrp/yvonne/yvonne.glb \
+     [A_actor_yvonne_battle_loop ...]
 ```
 
 reports, per clip, how far the solved hands and feet are from the clip's own IK goals: ~0.1 mm

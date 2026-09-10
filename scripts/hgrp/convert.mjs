@@ -69,7 +69,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
 import { glbPathsBelow, readBindPose, writeClipGlb } from './clip-glb.mjs';
-import { Humanoid, readHumanoidSidecar } from './humanoid.mjs';
+import { Humanoid, humanoidRigCheck, readHumanoidSidecar } from './humanoid.mjs';
 import { completePreset, readRawMaterials } from './material-preset.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -497,6 +497,14 @@ async function convertClips(clipDir, humanoidDir, modelGlbPath, modelFbxPath, ou
   }
   const t0 = Date.now();
   const bindPose = await readBindPose(modelFbxPath, modelGlbPath);
+  const humanoidRig = avatar
+    ? humanoidRigCheck(avatar.rig, bindPose.restByPath, bindPose.byPath)
+    : undefined;
+  if (humanoidRig && humanoidRig.hipsOffset > 1e-4) {
+    console.log(
+      `[clips] ${label}: the Avatar's T-pose hips sit ${(humanoidRig.hipsOffset * 1000).toFixed(1)} mm from the prefab's (placed by the clips' root, not by the T-pose)`,
+    );
+  }
   let ok = true;
   const index = [];
   for (const clip of clips) {
@@ -505,6 +513,7 @@ async function convertClips(clipDir, humanoidDir, modelGlbPath, modelFbxPath, ou
         ? {
             rig: avatar.rig,
             sidecar: readHumanoidSidecar(JSON.parse(fs.readFileSync(clip.sidecar, 'utf8'))),
+            defaults: humanoidRig.defaults,
           }
         : undefined;
       const report = await writeClipGlb(

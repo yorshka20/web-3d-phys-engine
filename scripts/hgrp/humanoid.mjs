@@ -6,8 +6,8 @@
  *
  * The solver itself is the engine's (packages/renderer/src/assets/humanoid/humanoid.ts) — one
  * implementation, imported here through Node's TypeScript type stripping. What this module
- * adds is export-specific: the sidecar's track naming and the frame change from Unity's space
- * to the export's FBX space.
+ * adds is export-specific: reading the sidecar, the character's default pose for the curves a
+ * clip leaves out, and the mirror from Unity's space into the export's FBX space.
  */
 
 import { mat4, quat, vec3 } from 'gl-matrix';
@@ -15,45 +15,49 @@ import * as Humanoid from '../../packages/renderer/src/assets/humanoid/humanoid.
 
 export { Humanoid };
 
-// HumanTrait.MuscleName order, 95 entries: the 55 body muscles then 40 finger muscles. The
-// export names its tracks with this table.
-const FINGER_MUSCLES = [];
-for (const hand of ['LeftHand', 'RightHand']) {
-  for (const finger of ['Thumb', 'Index', 'Middle', 'Ring', 'Little']) {
-    FINGER_MUSCLES.push(
-      `${hand}.${finger}.1 Stretched`,
-      `${hand}.${finger}.Spread`,
-      `${hand}.${finger}.2 Stretched`,
-      `${hand}.${finger}.3 Stretched`,
-    );
+// The sidecar's humanoid curve index space (the export README tabulates it): what index each
+// curve the solver reads must carry. Asserting it catches a mislabelled export — the batch
+// before 2026-09-10 numbered the muscles straight through and misnamed everything after the
+// left leg — rather than trusting the names.
+const GOAL_SLOTS = { LeftFoot: 14, RightFoot: 21, LeftHand: 28, RightHand: 35 };
+const EXPECTED_INDEX = new Map();
+for (const [i, c] of ['x', 'y', 'z'].entries()) EXPECTED_INDEX.set(`RootT.${c}`, 7 + i);
+for (const [i, c] of ['x', 'y', 'z', 'w'].entries()) EXPECTED_INDEX.set(`RootQ.${c}`, 10 + i);
+for (const [goal, base] of Object.entries(GOAL_SLOTS)) {
+  for (const [i, c] of ['x', 'y', 'z'].entries()) EXPECTED_INDEX.set(`${goal}T.${c}`, base + i);
+  for (const [i, c] of ['x', 'y', 'z', 'w'].entries())
+    EXPECTED_INDEX.set(`${goal}Q.${c}`, base + 3 + i);
+}
+{
+  // body 21, left leg 8, a translation-DoF triple, right leg 8, another triple, left arm 9, right arm 9
+  let slot = 42;
+  for (let m = 0; m < Humanoid.MUSCLE_COUNT; m++) {
+    if (m === 29 || m === 37) slot += 3;
+    EXPECTED_INDEX.set(Humanoid.MUSCLES[m], slot++);
   }
 }
-export const EXPORT_MUSCLE_NAMES = [...Humanoid.MUSCLES, ...FINGER_MUSCLES];
-
-// What the export's muscle slots actually hold (measured on the 2026-09 export, verified by
-// inverting the model's bind pose into muscle space and by the clips' own IK goals): the
-// clip's tracks run body (21), left leg (8), LeftUpperLeg translation DoF (3), right leg (8),
-// RightUpperLeg translation DoF (3), left arm (9), right arm (9). The exporter named slot i
-// with EXPORT_MUSCLE_NAMES[i], which is right up to the left leg and then shifted — the right
-// leg by three, both arms by six, the right arm landing under finger names. The clip data is
-// complete; only the names are off, so the slots are read back by position. Remove this table
-// once the exporter names tracks from the clip's own binding constant.
-const EXPORT_SLOT_MEANING = [];
-for (let dof = 0; dof <= 28; dof++) EXPORT_SLOT_MEANING.push({ dof });
-for (let c = 0; c < 3; c++) EXPORT_SLOT_MEANING.push({ tdof: 'LeftUpperLeg', c });
-for (let dof = 29; dof <= 36; dof++) EXPORT_SLOT_MEANING.push({ dof });
-for (let c = 0; c < 3; c++) EXPORT_SLOT_MEANING.push({ tdof: 'RightUpperLeg', c });
-for (let dof = 37; dof <= 54; dof++) EXPORT_SLOT_MEANING.push({ dof });
 
 /**
- * A clip sidecar as dense per-frame arrays: `muscles` (55 per frame, MUSCLES order), `rootT`
- * (3), `rootQ` (4), `goals[name].t/q`, `tdof` (3 per frame per bone). Times run from
- * `start` at `sampleRate`.
+ * A clip sidecar as dense per-frame arrays: `muscles` (55 per frame, MUSCLES order),
+ * `rootT` (3), `rootQ` (4), `goals[name].t/q`, with `musclePresent`, `rootPresent` and
+ * `goalPresent` saying which of them the clip actually keys — the others read 0 here and take
+ * the character's default pose in the driver. Times run from `start` at `sampleRate`.
  */
 export function readHumanoidSidecar(json) {
   const frames = json.frameCount;
   if (!(frames > 0) || !(json.sampleRate > 0) || !json.curves) {
     throw new Error(`${json.name}: sidecar has no frames`);
+  }
+  if (!json.curveIndex) {
+    throw new Error(
+      `${json.name}: sidecar predates the export's curve-naming fix (no curveIndex) — re-export it`,
+    );
+  }
+  for (const [name, index] of EXPECTED_INDEX) {
+    const actual = json.curveIndex[name];
+    if (actual !== undefined && actual !== index) {
+      throw new Error(`${json.name}: curve ${name} is at index ${actual}, expected ${index}`);
+    }
   }
   const zeros = new Array(frames).fill(0);
   const curve = (key) => {
@@ -72,21 +76,20 @@ export function readHumanoidSidecar(json) {
     for (let f = 0; f < frames; f++) for (let i = 0; i < n; i++) out[f * n + i] = parts[i][f];
     return out;
   };
+  const present = (key) => json.curves[key] !== undefined;
   const muscles = new Float64Array(frames * Humanoid.MUSCLE_COUNT);
-  const tdof = {
-    LeftUpperLeg: new Float64Array(frames * 3),
-    RightUpperLeg: new Float64Array(frames * 3),
-  };
-  EXPORT_SLOT_MEANING.forEach((meaning, slot) => {
-    const values = curve(EXPORT_MUSCLE_NAMES[slot]);
-    for (let f = 0; f < frames; f++) {
-      if (meaning.dof !== undefined) muscles[f * Humanoid.MUSCLE_COUNT + meaning.dof] = values[f];
-      else tdof[meaning.tdof][f * 3 + meaning.c] = values[f];
-    }
+  const musclePresent = new Uint8Array(Humanoid.MUSCLE_COUNT);
+  Humanoid.MUSCLES.forEach((name, m) => {
+    if (!present(name)) return;
+    musclePresent[m] = 1;
+    const values = json.curves[name];
+    for (let f = 0; f < frames; f++) muscles[f * Humanoid.MUSCLE_COUNT + m] = values[f];
   });
   const goals = {};
+  const goalPresent = {};
   for (const goal of Humanoid.HUMANOID_GOALS) {
     goals[goal] = { t: vector(`${goal}T`, 3), q: vector(`${goal}Q`, 4) };
+    goalPresent[goal] = present(`${goal}T.x`) && present(`${goal}Q.w`);
   }
   return {
     name: json.name,
@@ -95,24 +98,19 @@ export function readHumanoidSidecar(json) {
     start: json.startTime ?? 0,
     rootT: vector('RootT', 3),
     rootQ: vector('RootQ', 4),
+    rootPresent: present('RootT.x') && present('RootQ.w'),
     goals,
+    goalPresent,
     muscles,
-    tdof,
+    musclePresent,
     settings: json.settings ?? {},
   };
 }
 
-/** The clip's root transform at a frame, as the solver takes it. */
-export function sidecarRoot(sidecar, frame) {
-  return {
-    translation: sidecar.rootT.subarray(frame * 3, frame * 3 + 3),
-    rotation: quat.normalize(quat.create(), sidecar.rootQ.subarray(frame * 4, frame * 4 + 4)),
-  };
-}
-
 // The export's FBX world is Unity's mirrored in x: positions negate x, rotations are
-// conjugated by the mirror. A proper rotation stays proper under conjugation, which is why
-// the FBX still reads as a plain hierarchy.
+// conjugated by the mirror (a proper rotation stays proper, which is why the FBX still reads
+// as a plain hierarchy). Nothing else differs per node — the FBX node frames are exactly the
+// mirrored Unity frames — so this one conjugation carries a solved pose into the FBX.
 const MIRROR_X = mat4.fromScaling(mat4.create(), [-1, 1, 1]);
 function mirrored(out, world) {
   mat4.multiply(out, MIRROR_X, world);
@@ -120,55 +118,104 @@ function mirrored(out, world) {
 }
 
 /**
- * Drive the Avatar's nodes of a clip FBX from a humanoid sidecar. `clipNodesByPath` maps node
- * paths below the animator root to the FBX hierarchy nodes (fbx-anim.mjs); `tPoseByPath` is
- * the character FBX's node-default world matrix per path — the prefab's T-pose, the one pose
- * known in both the FBX's and the Avatar's frames (a clip FBX's own defaults are the A-pose
- * the meshes were bound in, so they cannot serve).
+ * Check that a character FBX is the Avatar's skeleton mirrored, and read the character's
+ * default pose in muscle space. `tPoseByPath` is the FBX's node-default world matrix per path
+ * (the prefab's T-pose), `bindByPath` the skin clusters' bind world matrices (readBindPose) —
+ * the pose Unity's Animator starts from and the value a curve the clip does not key keeps.
  *
- * Beyond the mirror, each FBX node frame differs from the Unity node frame of the same bone
- * by a fixed rotation (the exporter re-expresses some bones, the spine chain and legs by a
- * half turn). That per-node change is read off the T-pose and applied to every solved frame:
- * W_fbx(n) = M · W_unity(n) · G(n) · M with G(n) = U_T(n)⁻¹ · M · W_fbxT(n) · M.
+ * Every node's rotation must match the Avatar's T-pose once mirrored, and every bone's local
+ * offset from its parent too; the hips may sit millimetres from the prefab's (the Avatar's
+ * skeleton pose is Unity's, the prefab's is the model's) — the solver places them from the
+ * clip's root anyway, so that offset is reported, not applied.
  */
-export function createHumanoidDriver(rig, sidecar, clipNodesByPath, tPoseByPath) {
-  const nodeIds = [];
-  const frameChange = [];
+export function humanoidRigCheck(rig, tPoseByPath, bindByPath) {
+  const n = rig.nodes.length;
   const tPose = Humanoid.composeRigWorld(
     rig,
     Humanoid.setTPose(rig, Humanoid.createHumanoidPose(rig)),
-    new Float64Array(rig.nodes.length * 16),
+    new Float64Array(n * 16),
   );
-  const mirroredRest = mat4.create();
-  const unityRest = mat4.create();
-  let maxOffset = 0;
+  const bindWorlds = new Float64Array(n * 16);
+  const rest = mat4.create();
+  const parentRest = mat4.create();
+  const local = mat4.create();
+  const q = quat.create();
+  const avatarQ = quat.create();
+  const avatarT = vec3.create();
+  const t = vec3.create();
+  let hipsOffset = 0;
   rig.nodes.forEach((node, i) => {
+    const fbxRest = tPoseByPath.get(node.path);
+    const fbxBind = bindByPath.get(node.path);
+    if (!fbxRest || !fbxBind)
+      throw new Error(`the character FBX has no node ${node.path} for the Avatar`);
+    mirrored(rest, fbxRest);
+    mat4.getRotation(q, rest);
+    mat4.getRotation(avatarQ, tPose.subarray(i * 16, i * 16 + 16));
+    const angle =
+      (2 *
+        Math.acos(
+          Math.min(1, Math.abs(quat.dot(quat.normalize(q, q), quat.normalize(avatarQ, avatarQ)))),
+        ) *
+        180) /
+      Math.PI;
+    if (angle > 0.05) {
+      throw new Error(
+        `${node.path}: the FBX node frame is ${angle.toFixed(2)}° from the Avatar's (mirrored) — the FBX is not the Avatar's skeleton mirrored in x`,
+      );
+    }
+    if (node.parent >= 0) {
+      mirrored(parentRest, tPoseByPath.get(rig.nodes[node.parent].path));
+      mat4.multiply(local, mat4.invert(local, parentRest), rest);
+      mat4.getTranslation(t, local);
+      const offset = vec3.distance(t, node.translation);
+      if (i === rig.bones[0]) hipsOffset = offset;
+      else if (offset > 1e-3) {
+        throw new Error(
+          `${node.path}: the FBX rest offset from its parent is ${(offset * 1000).toFixed(1)} mm from the Avatar's T-pose`,
+        );
+      }
+    }
+    mirrored(bindWorlds.subarray(i * 16, i * 16 + 16), fbxBind);
+  });
+  return {
+    hipsOffset,
+    defaults: {
+      muscles: Humanoid.musclesFromWorld(new Float64Array(Humanoid.MUSCLE_COUNT), rig, bindWorlds),
+      root: Humanoid.rootFromWorld(rig, bindWorlds),
+    },
+  };
+}
+
+/** One frame's solver inputs, absent curves filled from the character's default pose. */
+export function frameInputs(sidecar, defaults, frame, musclesOut) {
+  const base = frame * Humanoid.MUSCLE_COUNT;
+  for (let m = 0; m < Humanoid.MUSCLE_COUNT; m++) {
+    musclesOut[m] = sidecar.musclePresent[m] ? sidecar.muscles[base + m] : defaults.muscles[m];
+  }
+  const root = sidecar.rootPresent
+    ? {
+        translation: sidecar.rootT.subarray(frame * 3, frame * 3 + 3),
+        rotation: quat.normalize(quat.create(), sidecar.rootQ.subarray(frame * 4, frame * 4 + 4)),
+      }
+    : defaults.root;
+  return { muscles: musclesOut, root };
+}
+
+/**
+ * Drive the Avatar's nodes of a clip FBX from a humanoid sidecar. `clipNodesByPath` maps node
+ * paths below the animator root to the FBX hierarchy nodes (fbx-anim.mjs); `defaults` is the
+ * character's default pose (humanoidRigCheck).
+ */
+export function createHumanoidDriver(rig, sidecar, clipNodesByPath, defaults) {
+  const nodeIds = rig.nodes.map((node) => {
     const clipNode = clipNodesByPath.get(node.path);
     if (!clipNode) throw new Error(`the clip has no node ${node.path} for the Avatar`);
-    nodeIds.push(clipNode.id);
-    const rest = tPoseByPath.get(node.path);
-    if (!rest) throw new Error(`the character FBX has no node ${node.path} for the Avatar`);
-    mirrored(mirroredRest, rest);
-    mat4.copy(unityRest, tPose.subarray(i * 16, i * 16 + 16));
-    // Both are the T-pose: the mirrored FBX position must equal the Avatar's
-    maxOffset = Math.max(
-      maxOffset,
-      vec3.distance(
-        mat4.getTranslation(vec3.create(), mirroredRest),
-        mat4.getTranslation(vec3.create(), unityRest),
-      ),
-    );
-    const change = mat4.invert(mat4.create(), unityRest);
-    frameChange.push(mat4.multiply(change, change, mirroredRest));
+    return clipNode.id;
   });
-  if (maxOffset > 1e-3) {
-    throw new Error(
-      `the character FBX's default pose is not the Avatar's T-pose (${(maxOffset * 1000).toFixed(1)} mm apart)`,
-    );
-  }
   const pose = Humanoid.createHumanoidPose(rig);
   const worlds = new Float64Array(rig.nodes.length * 16);
-  const scratch = mat4.create();
+  const muscles = new Float64Array(Humanoid.MUSCLE_COUNT);
   return {
     frames: sidecar.frames,
     fps: sidecar.sampleRate,
@@ -176,18 +223,11 @@ export function createHumanoidDriver(rig, sidecar, clipNodesByPath, tPoseByPath)
     nodeIds: new Set(nodeIds),
     /** id -> world matrix (FBX frames) of every Avatar node at `frame`. */
     worldsAt(frame) {
-      Humanoid.solveHumanoidPose(
-        rig,
-        sidecar.muscles,
-        frame * Humanoid.MUSCLE_COUNT,
-        sidecarRoot(sidecar, frame),
-        pose,
-        worlds,
-      );
+      const input = frameInputs(sidecar, defaults, frame, muscles);
+      Humanoid.solveHumanoidPose(rig, input.muscles, 0, input.root, pose, worlds);
       const out = new Map();
       for (let i = 0; i < nodeIds.length; i++) {
-        mat4.multiply(scratch, worlds.subarray(i * 16, i * 16 + 16), frameChange[i]);
-        out.set(nodeIds[i], mirrored(mat4.create(), scratch));
+        out.set(nodeIds[i], mirrored(mat4.create(), worlds.subarray(i * 16, i * 16 + 16)));
       }
       return out;
     },
@@ -278,28 +318,34 @@ export function rigidFit(source, target) {
  * How far the solved hands and feet are from the clip's own IK goals, per frame: `absolute`
  * with the hips placed by the body transform, `fitted` after the best rigid transform (what is
  * left is the muscle solve alone). Goals the source baked on another rig sit centimetres off
- * every frame; a clip authored on this rig reads ~0.1 mm fitted.
+ * every frame; a clip authored on this rig reads ~0.1 mm fitted. Goals the clip does not key
+ * are left out; `defaults` (humanoidRigCheck) fills the curves it does not key.
  */
-export function goalResiduals(rig, sidecar) {
+export function goalResiduals(rig, sidecar, defaults) {
   const pose = Humanoid.createHumanoidPose(rig);
   const worlds = new Float64Array(rig.nodes.length * 16);
+  const muscles = new Float64Array(Humanoid.MUSCLE_COUNT);
+  const goals = Humanoid.HUMANOID_GOALS.filter((g) => sidecar.goalPresent[g]);
   const absolute = new Float64Array(sidecar.frames);
   const fitted = new Float64Array(sidecar.frames);
   for (let f = 0; f < sidecar.frames; f++) {
-    const root = sidecarRoot(sidecar, f);
-    Humanoid.solveHumanoidPose(rig, sidecar.muscles, f * Humanoid.MUSCLE_COUNT, root, pose, worlds);
-    const solved = Humanoid.HUMANOID_GOALS.map((g) =>
-      Humanoid.goalPosition(vec3.create(), rig, worlds, g),
-    );
-    const stored = Humanoid.HUMANOID_GOALS.map((g) =>
+    const input = frameInputs(sidecar, defaults, f, muscles);
+    Humanoid.solveHumanoidPose(rig, input.muscles, 0, input.root, pose, worlds);
+    if (goals.length === 0) continue;
+    const solved = goals.map((g) => Humanoid.goalPosition(vec3.create(), rig, worlds, g));
+    const stored = goals.map((g) =>
       Humanoid.clipGoalToRootSpace(
         vec3.create(),
         rig,
-        root,
+        input.root,
         sidecar.goals[g].t.subarray(f * 3, f * 3 + 3),
       ),
     );
     absolute[f] = Math.max(...solved.map((p, i) => vec3.distance(p, stored[i])));
+    if (goals.length < 3) {
+      fitted[f] = absolute[f];
+      continue;
+    }
     const { R, t } = rigidFit(solved, stored);
     fitted[f] = Math.max(
       ...solved.map((p, i) =>
@@ -310,5 +356,5 @@ export function goalResiduals(rig, sidecar) {
       ),
     );
   }
-  return { absolute, fitted };
+  return { absolute, fitted, goals };
 }

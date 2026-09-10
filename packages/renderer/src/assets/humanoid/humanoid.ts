@@ -302,9 +302,26 @@ export function zyRollToQuat(out: quat, v: vec3): quat {
   return quat.normalize(out, out);
 }
 
+/** Inverse of zyRollToQuat: the chart's coordinates of a unit quaternion. */
+export function zyRollFromQuat(out: vec3, q: quat): vec3 {
+  const w = q[3] === 0 ? Number.EPSILON : q[3];
+  const x = q[0] / w;
+  const y = q[1] / w;
+  const z = q[2] / w;
+  const d = 1 + x * x;
+  return vec3.set(out, x, (y - x * z) / d, (z + x * y) / d);
+}
+
+/** Inverse of limitProject; an axis with a zero limit has no muscle and reads 0. */
+export function limitUnproject(axes: HumanoidAxes, angle: number, axis: number): number {
+  if (angle > 0) return axes.limitMax[axis] === 0 ? 0 : angle / axes.limitMax[axis];
+  return axes.limitMin[axis] === 0 ? 0 : -angle / axes.limitMin[axis];
+}
+
 const scratchZyRoll = vec3.create();
 const scratchSwing = quat.create();
 const scratchPostInverse = quat.create();
+const scratchPreInverse = quat.create();
 
 /** Local rotation of a bone from its three muscle values (x, y, z order of its axes). */
 export function rotationFromMuscles(out: quat, axes: HumanoidAxes, muscles: vec3): quat {
@@ -315,6 +332,62 @@ export function rotationFromMuscles(out: quat, axes: HumanoidAxes, muscles: vec3
   quat.multiply(out, axes.preQ, scratchSwing);
   quat.multiply(out, out, quat.conjugate(scratchPostInverse, axes.postQ));
   return quat.normalize(out, out);
+}
+
+/**
+ * The three muscle values that produce a bone's local rotation (the inverse of
+ * rotationFromMuscles): how Unity reads a posed skeleton back into muscle space, and how a
+ * character's default pose is expressed for the curves a clip leaves out.
+ */
+export function musclesFromRotation(out: vec3, axes: HumanoidAxes, rotation: quat): vec3 {
+  quat.multiply(scratchSwing, quat.conjugate(scratchPreInverse, axes.preQ), rotation);
+  quat.multiply(scratchSwing, scratchSwing, axes.postQ);
+  if (scratchSwing[3] < 0) quat.scale(scratchSwing, scratchSwing, -1);
+  zyRollFromQuat(scratchZyRoll, scratchSwing);
+  for (let i = 0; i < 3; i++) {
+    out[i] = limitUnproject(axes, 2 * Math.atan(scratchZyRoll[i]) * axes.sgn[i], i);
+  }
+  return out;
+}
+
+const scratchParentInv = quat.create();
+const scratchLocalQ = quat.create();
+const scratchMuscleTriple = vec3.create();
+
+/**
+ * Express a posed rig's human bones as the 55 muscle values (MUSCLES order) that reproduce
+ * their local rotations; axes without a muscle are skipped.
+ */
+export function musclesFromWorld(
+  out: Float64Array,
+  rig: HumanoidRig,
+  worlds: Float64Array,
+): Float64Array {
+  out.fill(0);
+  for (let bone = 0; bone < HUMAN_BONE_COUNT; bone++) {
+    const index = rig.bones[bone];
+    if (index < 0) continue;
+    const axes = rig.nodes[index].axes;
+    const map = BONE_MUSCLES[bone];
+    if (!axes || (map[0] < 0 && map[1] < 0 && map[2] < 0)) continue;
+    mat4.getRotation(
+      scratchLocalQ,
+      worlds.subarray(index * 16, index * 16 + 16) as unknown as mat4,
+    );
+    const parent = rig.nodes[index].parent;
+    if (parent >= 0) {
+      mat4.getRotation(
+        scratchParentInv,
+        worlds.subarray(parent * 16, parent * 16 + 16) as unknown as mat4,
+      );
+      quat.conjugate(scratchParentInv, quat.normalize(scratchParentInv, scratchParentInv));
+      quat.multiply(scratchLocalQ, scratchParentInv, scratchLocalQ);
+    }
+    quat.normalize(scratchLocalQ, scratchLocalQ);
+    musclesFromRotation(scratchMuscleTriple, axes, scratchLocalQ);
+    for (let c = 0; c < 3; c++) if (map[c] >= 0) out[map[c]] = scratchMuscleTriple[c];
+  }
+  return out;
 }
 
 export function createHumanoidPose(rig: HumanoidRig): HumanoidPose {
@@ -510,6 +583,18 @@ export function bodyTransform(
   vec3.sub(outTranslation, outTranslation, ref.centre);
   vec3.add(outTranslation, outTranslation, rig.rootTranslation);
   bodyOrientation(outRotation, rig, worlds);
+}
+
+/**
+ * A posed rig's body transform as a clip stores it (translation divided by the rig's scale):
+ * the root a clip without root curves falls back to, taken from the character's default pose.
+ */
+export function rootFromWorld(rig: HumanoidRig, worlds: Float64Array): HumanoidRoot {
+  const translation = vec3.create();
+  const rotation = quat.create();
+  bodyTransform(translation, rotation, rig, worlds);
+  vec3.scale(translation, translation, 1 / rig.scale);
+  return { translation, rotation };
 }
 
 const scratchBodyT = vec3.create();

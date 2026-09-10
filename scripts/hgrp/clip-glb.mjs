@@ -20,8 +20,8 @@
  * animation named after the clip, keys reduced to what LINEAR interpolation cannot reproduce.
  *
  * A humanoid clip's body is not in its FBX curves: the human bones come from the muscle
- * solver (humanoid.mjs), as world matrices in the FBX's frames per frame, and take the place of
- * the FBX evaluation for those nodes; their secondary children compose under them.
+ * solver (humanoid.mjs), as world matrices mirrored into the FBX's space per frame, and take
+ * the place of the FBX evaluation for those nodes; their secondary children compose under them.
  */
 
 import { NodeIO, PropertyType } from '@gltf-transform/core';
@@ -286,8 +286,9 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
  * its meshes and gains one animation. `bindPose` is readBindPose() of the character FBX.
  * `animatorName` names the clip node that corresponds to the model's prefab root (the export's
  * manifest calls it the animator); when absent, the clip node named like the model's scene
- * root is used. `humanoid` — `{ rig, sidecar }` from humanoid.mjs — drives the Avatar's bones
- * from the clip's muscle curves; the timeline is then the sidecar's frame grid.
+ * root is used. `humanoid` — `{ rig, sidecar, defaults }` from humanoid.mjs (`defaults` is
+ * humanoidRigCheck() of the character) — drives the Avatar's bones from the clip's muscle
+ * curves; the timeline is then the sidecar's frame grid.
  */
 export function bakeClipOntoModel(
   modelDoc,
@@ -336,7 +337,7 @@ export function bakeClipOntoModel(
     throw new Error(`the clip has no node named ${[...wanted].join(' or ')} to join on`);
   }
   const driver = humanoid
-    ? createHumanoidDriver(humanoid.rig, humanoid.sidecar, clipPaths, bindPose.restByPath)
+    ? createHumanoidDriver(humanoid.rig, humanoid.sidecar, clipPaths, humanoid.defaults)
     : undefined;
   const isDriven = (clipNode) =>
     evaluator.driven.has(clipNode.id) || (driver?.nodeIds.has(clipNode.id) ?? false);

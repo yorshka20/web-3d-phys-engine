@@ -10,6 +10,7 @@ import {
   HUMAN_BONES,
   HumanoidAxes,
   limitProject,
+  musclesFromRotation,
   parseAvatar,
   rotationFromMuscles,
   setTPose,
@@ -61,6 +62,30 @@ describe('muscle space', () => {
     expect(
       Math.abs(quat.dot(m, quat.setAxisAngle(quat.create(), [0, 0, 1], -deg(25)))),
     ).toBeCloseTo(1, 6);
+  });
+
+  it('reads muscles back from a rotation it produced, whatever the frames and signs', () => {
+    const axes: HumanoidAxes = {
+      ...plainAxes,
+      preQ: quat.setAxisAngle(quat.create(), [0.3, 0.8, -0.5], deg(130)),
+      postQ: quat.setAxisAngle(quat.create(), [-0.6, 0.2, 0.7], deg(-75)),
+      sgn: vec3.fromValues(-1, 1, -1),
+    };
+    quat.normalize(axes.preQ, axes.preQ);
+    quat.normalize(axes.postQ, axes.postQ);
+    for (const muscles of [
+      [0.3, -0.7, 0.55],
+      [-0.9, 0.2, -0.1],
+      [1.3, 0.6, -0.8],
+    ]) {
+      const q = rotationFromMuscles(
+        quat.create(),
+        axes,
+        vec3.fromValues(...(muscles as [number, number, number])),
+      );
+      const back = musclesFromRotation(vec3.create(), axes, q);
+      for (let i = 0; i < 3; i++) expect(back[i]).toBeCloseTo(muscles[i], 6);
+    }
   });
 
   it('wraps the swing in the pre/post frames: zero muscles give preQ · postQ⁻¹', () => {

@@ -73,11 +73,11 @@ pose. `scripts/hgrp/humanoid-check.mjs <humanoid-root>/<actor>` solves every cli
 per clip, the largest distance between the solved hands and feet and the stored goals — after
 the best rigid fit (the muscle solve alone) and absolute (hips placed by the body transform).
 
-On yvonne's 48 clips (2026-09-10): 33 clips read ≤ 0.1 mm fitted on every frame; the rest
-(the `*_additive` loops, `battle_hit_whack_*`, `battle_skill_ult`, a few frames of the
-`attack` and `ult` clips) sit millimetres to centimetres off on every frame or in a burst,
-which is the source data — goals baked on another rig, or IK targets that leave the pose
-during a jump. Unity shows the muscle pose for those as well; the goals only feed IK.
+On yvonne's 48 clips 33, and on pelica's 151 clips 144, read ≤ 0.1 mm fitted on every frame
+(2026-09-10); the rest (the `*_additive` loops, `battle_hit_whack_*`, `battle_skill_ult`, a
+few frames of the `attack` and `ult` clips) sit millimetres to centimetres off on every frame
+or in a burst, which is the source data — goals baked on another rig, or IK targets that leave
+the pose during a jump. Unity shows the muscle pose for those as well; the goals only feed IK.
 Absolute residuals are 3–10 mm: the body-position rule above is exact for long bones and
 approximate for the torso and leaves (§6).
 
@@ -98,9 +98,19 @@ _common/<bodyType>/…                    the same for the shared sets
 ```
 
 Everything is in Unity's space, verbatim, **except the FBX, whose world is Unity's mirrored in
-x** (the export's handedness conversion; the model FBX and glb share it). The converter maps the
-solved pose into the FBX's frames through the model FBX's node defaults, which are the prefab's
-T-pose in FBX frames (a clip FBX's own defaults are the A-pose the meshes were bound in).
+x** (the export's handedness conversion; the model FBX and glb share it). The FBX node frames
+are exactly the mirrored Unity frames — nothing else differs per node — so the converter mirrors
+the solved pose and nothing more. It checks that per character against the model FBX's node
+defaults, the prefab's T-pose: every node's rotation and every bone's offset from its parent
+must equal the Avatar's T-pose once mirrored; only the hips may differ (pelica's sit 2.2 mm from
+the prefab's — the Avatar's skeleton pose is Unity's, the prefab's the model's, and the solver
+places the hips from the clip's root anyway). A clip FBX's own defaults are the A-pose the
+meshes were bound in, not a T-pose.
+
+A clip only carries the curves it animates (the `lookat_body_*` clips drop the root, both foot
+goals and every leg curve). A curve the clip does not key takes the character's **default
+pose** — the model's bind pose expressed in muscle space, and its body transform for the root —
+which is what Unity's Animator does with the pose the character started in.
 
 ### 3.1 `avatar.json`
 
@@ -124,15 +134,13 @@ by body type (the `girl` rigs all read 0.9917).
 `RootT/Q.*`, `<Goal>T/Q.*`, the 95 `HumanTrait.MuscleName` strings, `SpineTDOF.*`,
 `ChestTDOF.*`.
 
-**Known defect — the muscle keys are misnamed** (2026-09-10). The clip's tracks run: body
-muscles (21), left leg (8), LeftUpperLeg TDoF (3), right leg (8), RightUpperLeg TDoF (3), left
-arm (9), right arm (9). The exporter names track *i* with the *i*-th entry of the dense
-143-slot table (`HumanTrait.MuscleName` order followed by TDoF), so from the right leg on the
-names are shifted by three, from the left arm by six, and the right arm lands under
-`LeftHand.Thumb.*` / `LeftHand.Index.*`. Every value is present. The converter reads the slots
-back by position (`EXPORT_SLOT_MEANING` in `scripts/hgrp/humanoid.mjs`); the fix belongs in
-the exporter — name tracks from the clip's own `m_ClipBindingConstant` — after which that table
-goes. The `t_pose` clip is the A-pose the meshes were bound in, not a T-pose.
+`curveIndex` gives each curve's index in the clip's own humanoid index space (Motion 0–6, Root
+7–13, goals 14–41, body muscles 42–62, left leg 63–70, LeftUpperLeg TDoF 71–73, right leg
+74–81, RightUpperLeg TDoF 82–84, left arm 85–93, right arm 94–102, fingers 103–142). The
+converter asserts the indices of every curve it reads and refuses a sidecar without the field:
+the batch exported before 2026-09-10 numbered the muscles straight through and had every name
+from the right leg on wrong. The `t_pose` clip is the A-pose the meshes were bound in, not a
+T-pose.
 
 ## 4. Engine-side format
 
@@ -163,17 +171,19 @@ runtime — the same file then plays on every character:
 
 The referenced samplers are ordinary animation samplers no channel targets; a viewer that
 ignores the extension still plays the secondary channels. Engine touch points: `HumanoidRig`
-loaded from `avatar.json` beside the model (its `preQ`/`postQ` re-based into the glb's joint
-frames by the converter, so the runtime solve writes glb-frame TRS directly), a `HumanoidClip`
-beside `GLTFAnimation`, and a muscle → TRS stage in `SkeletalAnimationSystem.applyClip` that
-fills the same translation/rotation buffers the generic path fills.
+loaded from `avatar.json` beside the model, with the per-joint change from Unity's frames to
+the glb's (the x mirror, and the Blender bone re-orientation the generic bake already measures
+per joint) written by the converter so the runtime solve ends in glb-frame TRS; a
+`HumanoidClip` beside `GLTFAnimation`; and a muscle → TRS stage in
+`SkeletalAnimationSystem.applyClip` that fills the same translation/rotation buffers the
+generic path fills.
 
 ## 5. Semantics
 
 - **Units and frames.** Muscles are unit-free. `RootT` and the goal translations are in the
   Avatar's normalized units: multiply by `scale` for metres. The solved pose is in the prefab
   root's space; the converter mirrors it into the export's FBX space (x negated, rotations
-  conjugated by the mirror, plus a per-bone frame change read off the T-pose).
+  conjugated by the mirror).
 - **Retargeting**: a humanoid clip selected on character B is solved with B's Avatar; the
   muscle values, root and goals are B-independent and `RootT · scale_B` places B's body.
 - **Root motion**: the body transform is applied absolutely — a clip that travels moves the
@@ -193,6 +203,6 @@ fills the same translation/rotation buffers the generic path fills.
    measurement to refine against.
 2. **Root motion**: applying `settings` (`keepOriginalPositionXZ` etc.) the way the game's
    Animator does, so looping locomotion stays in place.
-3. **Exporter naming** (§3.2): fix at the source, then delete the slot table.
-4. **Other characters and the `_common` sets**: the converter handles any folder with an
-   `avatar.json`; only yvonne has been run and checked.
+3. **Other characters and the `_common` sets**: the converter handles any folder with an
+   `avatar.json`; yvonne and pelica have been run and checked, the rest await the re-export
+   with `curveIndex`.
