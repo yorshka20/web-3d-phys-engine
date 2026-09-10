@@ -303,6 +303,8 @@ function sampleQuaternion(track, time, out) {
 /**
  * An evaluator for the clip: `driven` are the node ids the animation keys; `worldAt(time)`
  * returns id -> world matrix for every node (undriven nodes at their rest transform).
+ * `worldAt(time, overrides)` takes id -> world matrix for nodes posed by something other than
+ * the FBX curves (a humanoid clip's muscle-solved body); their children compose under them.
  */
 export function fbxClipEvaluator(tree) {
   const { nodes, roots } = fbxHierarchy(tree);
@@ -328,11 +330,17 @@ export function fbxClipEvaluator(tree) {
       quaternionFromEulerXYZ(quat.create(), node.rotation),
     ]),
   );
-  function worldAt(time) {
+  function worldAt(time, overrides) {
     const worlds = new Map();
     const stack = [...roots];
     while (stack.length > 0) {
       const node = stack.pop();
+      const override = overrides?.get(node.id);
+      if (override) {
+        worlds.set(node.id, mat4.clone(override));
+        for (const child of node.children) stack.push(child);
+        continue;
+      }
       const track = tracks.get(node.id);
       if (track?.translation) sampleVector(track.translation, node.translation, time, t);
       else vec3.copy(t, node.translation);

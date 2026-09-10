@@ -33,14 +33,17 @@ processing is not an engine concern; the engine only ever reads the outputs.
 
 ```bash
 node scripts/hgrp/convert.mjs --src <export-root>                    # every actor + _common
-node scripts/hgrp/convert.mjs --src <export-root> --chars ardelia,laevat
-# optional: --out <dir>     (default: packages/web-client/assets/hgrp)
-#           --preset-only   (rewrite preset.json + fur layers only; no Blender, no textures)
-#           --clips-only    (rebake the clips only, against the converted models)
+node scripts/hgrp/convert.mjs --src <export-root> --chars ardelia,laevat   # these actors only, no _common
+node scripts/hgrp/convert.mjs --src <export-root> --humanoid-src <humanoid-root> --chars yvonne --clips-only
+# optional: --out <dir>          (default: packages/web-client/assets/hgrp)
+#           --humanoid-src <dir> (the export's out_humanoid/ tree: avatar.json + muscle clips, see below)
+#           --preset-only        (rewrite preset.json + fur layers only; no Blender, no textures)
+#           --clips-only         (rebake the clips only, against the converted models)
 ```
 
 Re-running is safe: a full run rebuilds the actor's output folder from scratch. A character
-takes about a minute (Blender), its 30-odd clips about 15 s more.
+takes about a minute (Blender), its 30-odd clips about 15 s more; yvonne's 75 clips including
+48 humanoid ones take 25 s.
 
 ## What the pipeline does, per actor
 
@@ -107,7 +110,8 @@ packages/web-client/assets/hgrp/<actor>/   (gitignored — assets are machine-lo
   lighting.json    # the Character Info light rig, as exported
   textures/*.png
   clips/<clip>.glb # one animation each, on the character's skeleton (no meshes)
-  clips/index.json # per clip: name, duration, fps, joints, drivesBody (keys the body's root joint)
+  clips/index.json # per clip: name, duration, fps, joints, drivesBody (keys the body's root joint), humanoid
+  avatar.json      # the Unity Avatar's human description, when the actor has humanoid clips
 packages/web-client/assets/hgrp/_common/<bodyType>/clips/<clip>.glb (+ index.json)
 packages/web-client/assets/hgrp/_global/renderpipeline.json
 ```
@@ -200,10 +204,36 @@ node scripts/hgrp/clip-check.mjs packages/web-client/assets/hgrp/pelica/pelica.g
      packages/web-client/assets/hgrp/pelica/clips/*.glb          # standing pose, paths, no meshes
 ```
 
-What the export does not deliver (the manifest says so per clip): **humanoid** clips — 3654
-of 4663 requested, everything in the `battle`, `customized`, `3c` (locomotion) and most
-`interact` categories — store the core skeleton as Unity muscle values and need either a Unity
-bake or a muscle-space solver (learnings animation-pipeline.md); `no_keyframes` rows are
-camera-only clips. The body-type sets under `_common/` come with the rig they were baked on but
-without a character → body-type table, so they are offered to every character like any other
-foreign clip.
+## Humanoid clips (`humanoid.mjs`) — the body solved from muscle curves
+
+3654 of the 4663 requested clips (everything in `battle`, `customized`, `3c` locomotion, most
+`interact`) are Unity Humanoid clips: their FBX only carries the secondary bones, the body is
+55 muscle values per frame that need the character's Avatar. The export writes them to a
+separate tree (`out_humanoid/<actor>/avatar.json`, `clips/<clip>.humanoid.json` beside the
+clip FBX); passed as `--humanoid-src`, the converter solves the body per frame
+(`packages/renderer/src/assets/humanoid/humanoid.ts` — the engine's solver, imported into the
+scripts through Node's TypeScript type stripping, so there is one implementation), hands the
+24 human bones' world matrices to the same bake as the FBX curves' nodes, and writes the clip
+into the same `clips/<clip>.glb`. `index.json` marks those rows `humanoid: true`;
+`avatar.json` is copied beside the model after its node paths are checked against the glb.
+Formulas, the export's data contract and its known defect (the muscle tracks are misnamed;
+`humanoid.mjs` reads them back by position) are in `docs/hgrp-humanoid-animation.md`.
+
+Two facts the bake depends on: the export's FBX world is Unity's mirrored in x, and the
+**model** FBX's node defaults are the prefab's T-pose while a **clip** FBX's defaults are the
+A-pose the meshes were bound in — the per-bone frame change from the Avatar's frames to the
+FBX's is read off the model FBX (`readBindPose` returns it as `restByPath`).
+
+```bash
+node scripts/hgrp/humanoid-check.mjs ~/Downloads/out_humanoid/yvonne              # every clip
+node scripts/hgrp/humanoid-check.mjs ~/Downloads/out_humanoid/yvonne A_actor_yvonne_battle_loop
+```
+
+reports, per clip, how far the solved hands and feet are from the clip's own IK goals: ~0.1 mm
+after a rigid fit on a clip authored for this rig; centimetres on every frame when the goals
+were baked on another rig (the `*_additive` loops), a burst of frames when the source's IK
+targets left the pose (jumps). Neither changes the bake — the muscles are the pose.
+
+The body-type sets under `_common/` come with the rig they were baked on but without a
+character → body-type table, so they are offered to every character like any other foreign
+clip; `no_keyframes` rows in a manifest are camera-only clips.

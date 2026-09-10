@@ -18,6 +18,10 @@
  * local TRS. A node the clip does not drive composes to its rest transform by construction.
  * The output is the model's node hierarchy (meshes, skins, materials stripped) plus one
  * animation named after the clip, keys reduced to what LINEAR interpolation cannot reproduce.
+ *
+ * A humanoid clip's body is not in its FBX curves: the human bones come from the muscle
+ * solver (humanoid.mjs), as world matrices in the FBX's frames per frame, and take the place of
+ * the FBX evaluation for those nodes; their secondary children compose under them.
  */
 
 import { NodeIO, PropertyType } from '@gltf-transform/core';
@@ -26,10 +30,12 @@ import {
   fbxClipEvaluator,
   fbxHierarchy,
   fbxPathsBelow,
+  fbxRestWorlds,
   fbxTimeline,
   quaternionFromEulerXYZ,
 } from './fbx-anim.mjs';
 import { fbxClusterBinds, readFbx } from './fbx-read.mjs';
+import { createHumanoidDriver } from './humanoid.mjs';
 
 // Key-reduction tolerances, per component. Rotation is in quaternion units, translation and
 // scale in the asset's metres.
@@ -147,7 +153,7 @@ function plainName(node) {
 }
 
 // glb node -> name path below `top`, and the reverse map
-function glbPathsBelow(top) {
+export function glbPathsBelow(top) {
   const byNode = new Map();
   const byPath = new Map();
   const visit = (node, prefix) => {
@@ -261,7 +267,18 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
   }
   const byPath = new Map();
   for (const [path, node] of fbxPaths) byPath.set(path, worlds.get(node.id));
-  return { rootName: hierarchy.roots[0].name, byPath, skinned, nodes: hierarchy.nodes.size };
+  // The node defaults themselves — the prefab's T-pose — keyed the same way; a humanoid
+  // bake relates the Avatar's frames to the FBX's through them (humanoid.mjs).
+  const defaults = fbxRestWorlds(hierarchy);
+  const restByPath = new Map();
+  for (const [path, node] of fbxPaths) restByPath.set(path, defaults.get(node.id));
+  return {
+    rootName: hierarchy.roots[0].name,
+    byPath,
+    restByPath,
+    skinned,
+    nodes: hierarchy.nodes.size,
+  };
 }
 
 /**
@@ -269,9 +286,15 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
  * its meshes and gains one animation. `bindPose` is readBindPose() of the character FBX.
  * `animatorName` names the clip node that corresponds to the model's prefab root (the export's
  * manifest calls it the animator); when absent, the clip node named like the model's scene
- * root is used.
+ * root is used. `humanoid` — `{ rig, sidecar }` from humanoid.mjs — drives the Avatar's bones
+ * from the clip's muscle curves; the timeline is then the sidecar's frame grid.
  */
-export function bakeClipOntoModel(modelDoc, clipFbxPath, bindPose, { name, animatorName } = {}) {
+export function bakeClipOntoModel(
+  modelDoc,
+  clipFbxPath,
+  bindPose,
+  { name, animatorName, humanoid } = {},
+) {
   const bodyRoot = skinBodyRoot(modelDoc);
   stripToSkeleton(modelDoc);
   const modelRoot = modelDoc.getRoot();
@@ -312,6 +335,11 @@ export function bakeClipOntoModel(modelDoc, clipFbxPath, bindPose, { name, anima
   if (!clipTop) {
     throw new Error(`the clip has no node named ${[...wanted].join(' or ')} to join on`);
   }
+  const driver = humanoid
+    ? createHumanoidDriver(humanoid.rig, humanoid.sidecar, clipPaths, bindPose.restByPath)
+    : undefined;
+  const isDriven = (clipNode) =>
+    evaluator.driven.has(clipNode.id) || (driver?.nodeIds.has(clipNode.id) ?? false);
 
   // Per matched joint: the clip node driving it and the fixed frame offset D(n)
   const matched = new Map();
@@ -319,7 +347,7 @@ export function bakeClipOntoModel(modelDoc, clipFbxPath, bindPose, { name, anima
   let unposed = 0;
   for (const [path, clipNode] of clipPaths) {
     const modelNode = modelPaths.byPath.get(path);
-    const driven = evaluator.driven.has(clipNode.id);
+    const driven = isDriven(clipNode);
     if (!modelNode) {
       if (driven) unmatched.push(path);
       continue;
@@ -343,9 +371,18 @@ export function bakeClipOntoModel(modelDoc, clipFbxPath, bindPose, { name, anima
     );
   }
 
-  const frameCount = Math.round((timeline.stop - timeline.start) * timeline.fps) + 1;
+  // A humanoid clip is sampled on its sidecar's grid: the FBX curves only cover the secondary
+  // bones and may end before the body does.
+  const grid = driver
+    ? { start: driver.start, fps: driver.fps, frameCount: driver.frames }
+    : {
+        start: timeline.start,
+        fps: timeline.fps,
+        frameCount: Math.round((timeline.stop - timeline.start) * timeline.fps) + 1,
+      };
+  const frameCount = grid.frameCount;
   const times = Float32Array.from({ length: frameCount }, (_, i) =>
-    Math.min(timeline.start + i / timeline.fps, timeline.stop),
+    driver ? grid.start + i / grid.fps : Math.min(grid.start + i / grid.fps, timeline.stop),
   );
   const out = new Map(
     [...matched.keys()].map((node) => [
@@ -373,7 +410,7 @@ export function bakeClipOntoModel(modelDoc, clipFbxPath, bindPose, { name, anima
   const r = quat.create();
   const s = vec3.create();
   for (let frame = 0; frame < frameCount; frame++) {
-    const clipWorlds = evaluator.worldAt(times[frame]);
+    const clipWorlds = evaluator.worldAt(times[frame], driver?.worldsAt(frame));
     const worlds = new Map();
     for (const node of order) {
       const parent = modelParents.get(node);
@@ -462,8 +499,9 @@ export function bakeClipOntoModel(modelDoc, clipFbxPath, bindPose, { name, anima
   return {
     name: animation.getName(),
     duration: times[frameCount - 1],
-    fps: timeline.fps,
+    fps: grid.fps,
     frames: frameCount,
+    humanoid: driver !== undefined,
     driven: matched.size,
     drivesBody: bodyRoot !== undefined && matched.has(bodyRoot),
     channels,

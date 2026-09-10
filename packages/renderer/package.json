@@ -2,6 +2,7 @@
   "name": "@web-3d-phys-engine/renderer",
   "version": "0.1.0",
   "description": "Renderer implementation for Web 3D Phys Engine.",
+  "type": "module",
   "main": "src/index.ts",
   "scripts": {
     "lint": "eslint src --ext .ts,.tsx",
