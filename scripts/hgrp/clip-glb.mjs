@@ -109,6 +109,37 @@ export function reduceKeys(times, values, stride, tolerance) {
   return { times: outTimes, values: outValues };
 }
 
+// The joint the body hangs from: of the skinned joints, the one with the most skinned joints
+// below it (the pelvis of a biped — `Bip001` on these rigs, found without naming it). A clip
+// that keys it moves the body; one that does not is an overlay for secondary bones — cloth,
+// hair, sleeves — which the export ships as short fragments meant to be layered, and which
+// played alone leave the body in bind pose with its cloth flung a metre away.
+function skinBodyRoot(doc) {
+  const skinned = new Set();
+  for (const skin of doc.getRoot().listSkins())
+    for (const joint of skin.listJoints()) skinned.add(joint);
+  let best;
+  let bestCount = -1;
+  const count = (node) => {
+    let n = 0;
+    const stack = [...node.listChildren()];
+    while (stack.length > 0) {
+      const child = stack.pop();
+      if (skinned.has(child)) n++;
+      stack.push(...child.listChildren());
+    }
+    return n;
+  };
+  for (const joint of skinned) {
+    const n = count(joint);
+    if (n > bestCount) {
+      bestCount = n;
+      best = joint;
+    }
+  }
+  return best;
+}
+
 // Blender suffixes a duplicate name with .001, .002, ...; the FBX keeps the plain name and
 // tells the nodes apart by their place in the hierarchy, which the path does too.
 function plainName(node) {
@@ -241,6 +272,7 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
  * root is used.
  */
 export function bakeClipOntoModel(modelDoc, clipFbxPath, bindPose, { name, animatorName } = {}) {
+  const bodyRoot = skinBodyRoot(modelDoc);
   stripToSkeleton(modelDoc);
   const modelRoot = modelDoc.getRoot();
   const scene = modelRoot.getDefaultScene() ?? modelRoot.listScenes()[0];
@@ -433,6 +465,7 @@ export function bakeClipOntoModel(modelDoc, clipFbxPath, bindPose, { name, anima
     fps: timeline.fps,
     frames: frameCount,
     driven: matched.size,
+    drivesBody: bodyRoot !== undefined && matched.has(bodyRoot),
     channels,
     keys,
     unmatched,

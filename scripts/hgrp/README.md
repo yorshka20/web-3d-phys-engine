@@ -107,7 +107,8 @@ packages/web-client/assets/hgrp/<actor>/   (gitignored — assets are machine-lo
   lighting.json    # the Character Info light rig, as exported
   textures/*.png
   clips/<clip>.glb # one animation each, on the character's skeleton (no meshes)
-packages/web-client/assets/hgrp/_common/<bodyType>/clips/<clip>.glb
+  clips/index.json # per clip: name, duration, fps, joints, drivesBody (keys the body's root joint)
+packages/web-client/assets/hgrp/_common/<bodyType>/clips/<clip>.glb (+ index.json)
 packages/web-client/assets/hgrp/_global/renderpipeline.json
 ```
 
@@ -187,6 +188,12 @@ How a clip FBX is read (`fbx-read.mjs`, `fbx-anim.mjs`; no Blender involved):
 - A clip node the model lacks is reported (`driven nodes not on the model`); duplicate bone
   names (Pelica's weapon decos each have a `Root`) are matched by hierarchy path, with Blender's
   `.001` renaming stripped.
+- `clips/index.json` records per clip what the engine wants to know before fetching it: the
+  duration and `drivesBody` — whether the clip keys the body's root joint (the skinned joint
+  with the most skinned joints below it, `Bip001` on these rigs). The export ships overlay
+  fragments (`cloth_ik_l`, `cloth_openclose`, `hair_yaw_*`: 0.17 s, secondary bones only) that
+  played alone leave the body in bind pose with the cloth flung a metre away; the engine starts
+  a character on its first body clip and lists the overlays as such.
 
 ```bash
 node scripts/hgrp/clip-check.mjs packages/web-client/assets/hgrp/pelica/pelica.glb \

@@ -38,8 +38,9 @@
  *      COLOR_0 (plus JOINTS_0/WEIGHTS_0 on skinned meshes; a rigid weapon has none), morph
  *      targets — fails loudly.
  *   7. clips: every clips/<clip>.fbx evaluated and baked onto the character glb's skeleton
- *      (clip-glb.mjs, no Blender involved) as clips/<clip>.glb; the engine joins them onto
- *      the model by node path.
+ *      (clip-glb.mjs, no Blender involved) as clips/<clip>.glb, plus clips/index.json (name,
+ *      duration, whether the clip moves the body); the engine joins them onto the model by
+ *      node path.
  * Then the _common body-type clip sets, baked on the actor their manifest names.
  *
  * --preset-only rewrites preset.json (and the fur layers) without touching Blender or
@@ -445,6 +446,7 @@ async function convertClips(clipDir, modelGlbPath, modelFbxPath, outClipsDir, la
   const t0 = Date.now();
   const bindPose = await readBindPose(modelFbxPath, modelGlbPath);
   let ok = true;
+  const index = [];
   for (const clip of manifest.clips) {
     try {
       const report = await writeClipGlb(
@@ -454,13 +456,22 @@ async function convertClips(clipDir, modelGlbPath, modelFbxPath, outClipsDir, la
         path.join(outClipsDir, `${clip.name}.glb`),
         { name: clip.name, animatorName: manifest.animator },
       );
+      index.push({
+        name: clip.name,
+        file: `${clip.name}.glb`,
+        duration: Number(report.duration.toFixed(4)),
+        fps: report.fps,
+        joints: report.driven,
+        drivesBody: report.drivesBody,
+      });
       const drops =
         report.unmatched.length > 0
           ? ` (${report.unmatched.length} driven nodes not on the model, first ${report.unmatched[0]})`
           : '';
       console.log(
         `[clips] ${label}/${clip.name}: ${report.duration.toFixed(2)}s @ ${report.fps} fps, ` +
-          `${report.driven} joints, ${report.channels} channels, ${report.keys} keys${drops}`,
+          `${report.driven} joints${report.drivesBody ? '' : ' (overlay: body not driven)'}, ` +
+          `${report.channels} channels, ${report.keys} keys${drops}`,
       );
     } catch (error) {
       ok = false;
@@ -469,9 +480,14 @@ async function convertClips(clipDir, modelGlbPath, modelFbxPath, outClipsDir, la
       );
     }
   }
+  // What the engine needs to know about a clip before fetching it: how long it is and whether
+  // it moves the body (the default clip must; an overlay fragment played alone flings the cloth)
+  index.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  fs.writeFileSync(path.join(outClipsDir, 'index.json'), JSON.stringify({ clips: index }, null, 2));
   console.log(
     `[clips] ${label}: ${manifest.clips.length} clips in ${((Date.now() - t0) / 1000).toFixed(0)}s ` +
-      `(${manifest.skipped} skipped by the export; bind pose from ${bindPose.skinned} skinned bones)`,
+      `(${index.filter((c) => c.drivesBody).length} move the body; ${manifest.skipped} skipped by the ` +
+      `export; bind pose from ${bindPose.skinned} skinned bones)`,
   );
   return ok;
 }

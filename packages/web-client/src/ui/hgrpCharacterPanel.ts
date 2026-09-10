@@ -14,6 +14,7 @@ import { assetRegistry } from '@renderer/webGPU/core/AssetRegistry';
 import { BladeApi, FolderApi, Pane } from 'tweakpane';
 import {
   applyHGRPPlacement,
+  ensureHGRPClip,
   hgrpStage,
   HGRPStageCharacter,
   onHGRPStageChange,
@@ -323,8 +324,8 @@ function addTransformWidgets(folder: FolderApi, character: HGRPStageCharacter): 
   );
 }
 
-// The clips a character can play come from its glTF document (converted Unity clips,
-// scripts/hgrp/anim-convert.mjs); a model without clips gets no playback widgets.
+// The clips already joined onto a character's glTF document — animation indices are what
+// SkeletonComponent.clipIndex addresses.
 function animationClips(assetId: string): GLTFAnimation[] {
   const model = assetRegistry.getAssetDescriptor<'gltf'>(assetId)?.rawData as GLTFModel | undefined;
   return model?.animations ?? [];
@@ -332,6 +333,8 @@ function animationClips(assetId: string): GLTFAnimation[] {
 
 // Playback widgets bind straight to the entity's SkeletonComponent, which
 // SkeletalAnimationSystem reads every frame, so writing the field is the whole update.
+// The clip list is the stage's whole pool (characters.ts), most of it not fetched yet:
+// picking an entry attaches it first (ensureHGRPClip), then points clipIndex at it.
 // The per-frame scrub repaint is handed to `registerScrub` when the folder is built, which
 // is not necessarily now — a folder the user left collapsed builds on its next expand.
 function addAnimationWidgets(
@@ -342,8 +345,8 @@ function addAnimationWidgets(
   const skeleton = character.entity?.getComponent<SkeletonComponent>(
     SkeletonComponent.componentName,
   );
-  const clips = animationClips(character.assetId);
-  if (!skeleton || clips.length === 0) {
+  const pool = character.source.clips;
+  if (!skeleton || pool.length === 0) {
     return;
   }
 
@@ -351,17 +354,27 @@ function addAnimationWidgets(
     folder,
     { title: 'Animation', key: `hgrp:${character.assetId}:animation`, expanded: true },
     (animation) => {
+      const selection = {
+        clip: animationClips(character.assetId)[skeleton.clipIndex]?.name ?? '',
+      };
       const options = Object.fromEntries(
-        clips.map((clip, index) => [
-          `${index}: ${clip.name} (${clip.duration.toFixed(2)}s)`,
-          index,
+        pool.map((clip) => [
+          clip.duration === undefined
+            ? clip.name
+            : `${clip.name} (${clip.duration.toFixed(2)}s${clip.drivesBody ? '' : ', overlay'})`,
+          clip.name,
         ]),
       );
-      animation.addBinding(skeleton, 'clipIndex', { label: 'clip', options }).on('change', (ev) => {
-        if (ev.last) {
-          skeleton.time = 0;
-          rebuildScrub();
-        }
+      animation.addBinding(selection, 'clip', { label: 'clip', options }).on('change', (ev) => {
+        if (!ev.last) return;
+        void ensureHGRPClip(character, ev.value).then(
+          (index) => {
+            skeleton.clipIndex = index;
+            skeleton.time = 0;
+            rebuildScrub();
+          },
+          (error) => console.error(error),
+        );
       });
       animation.addBinding(skeleton, 'playing');
       animation.addBinding(skeleton, 'loop');
@@ -371,7 +384,7 @@ function addAnimationWidgets(
       // duration (tweakpane bindings take their range at creation).
       let scrub = addScrub();
       function addScrub() {
-        const duration = clips[skeleton!.clipIndex]?.duration ?? 0;
+        const duration = animationClips(character.assetId)[skeleton!.clipIndex]?.duration ?? 0;
         return animation.addBinding(skeleton!, 'time', {
           min: 0,
           max: Math.max(duration, 0.001),

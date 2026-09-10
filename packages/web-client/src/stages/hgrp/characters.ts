@@ -36,13 +36,22 @@ import { quat, vec3 } from 'gl-matrix';
 // no shading constant needs retuning when these change.
 
 // One clip file of the pool (assets/hgrp/<folder>/clips/<clip>.glb) as one character sees it:
-// `own` for the clips in its own folder, listed first under their bare name; every other
-// character's clips follow as `<folder>/<clip>`, so a rig can be driven by any clip on the
-// stage (matched by node path — the shared Bip001 chain moves, the rest holds its pose).
+// `own` for the clips in its own folder, listed first under their bare name; the body-type
+// sets (`_common/<bodyType>/<clip>`) and every other character's clips (`<folder>/<clip>`)
+// follow, so a rig can be driven by any clip on the stage (matched by node path — the shared
+// Bip001 chain moves, the rest holds its pose). The pool is a catalogue: a clip's file is
+// fetched and joined onto the model the first time it is asked for (ensureHGRPClip), never
+// up front — with a thousand clips on the stage, eager loading would cost each character
+// gigabytes.
 export interface HGRPClipSource {
   name: string;
   url: string;
   own: boolean;
+  // From the folder's clips/index.json (scripts/hgrp/convert.mjs): seconds, and whether the
+  // clip keys the body's root joint. An overlay that only moves cloth or hair is still in the
+  // pool, but never the clip a character starts with.
+  duration?: number;
+  drivesBody: boolean;
 }
 
 interface HGRPCharacterSource {
@@ -111,18 +120,47 @@ const TEXTURE_URLS = import.meta.glob('../../../assets/hgrp/*/textures/*.png', {
   import: 'default',
 }) as Record<string, string>;
 
-// Clips live beside the model they were baked against, one glTF file per clip (scripts/hgrp/
-// anim-convert.mjs), and are joined onto a model by node path when it loads — the model glb
-// is never rewritten for a clip, and a model rebuild leaves the clips in place. Every clip on
-// the stage is one pool: a character lists its own first, then everyone else's.
-const CLIP_URLS = import.meta.glob('../../../assets/hgrp/*/clips/*.glb', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-}) as Record<string, string>;
+// Clips live beside the model they were baked against, one glTF file per clip
+// (scripts/hgrp/convert.mjs, from the export's clip FBX files), and are joined onto a model
+// by node path when first selected — the model glb is never rewritten for a clip. Every clip
+// on the stage is one pool: a character lists its own first, then the shared body-type sets,
+// then everyone else's.
+const CLIP_URLS = {
+  ...(import.meta.glob('../../../assets/hgrp/*/clips/*.glb', {
+    eager: true,
+    query: '?url',
+    import: 'default',
+  }) as Record<string, string>),
+  ...(import.meta.glob('../../../assets/hgrp/_common/*/clips/*.glb', {
+    eager: true,
+    query: '?url',
+    import: 'default',
+  }) as Record<string, string>),
+};
+
+// The converter's per-folder clip index: what the engine knows about a clip before fetching it
+interface HGRPClipIndex {
+  clips: { name: string; duration: number; drivesBody: boolean }[];
+}
+
+const CLIP_INDEXES = {
+  ...(import.meta.glob('../../../assets/hgrp/*/clips/index.json', {
+    eager: true,
+    import: 'default',
+  }) as Record<string, HGRPClipIndex>),
+  ...(import.meta.glob('../../../assets/hgrp/_common/*/clips/index.json', {
+    eager: true,
+    import: 'default',
+  }) as Record<string, HGRPClipIndex>),
+};
 
 function folderOf(path: string): string {
   return path.replace(/^.*\/assets\/hgrp\//, '').split('/')[0];
+}
+
+// The folder a clip belongs to: a character's (`pelica`) or a body-type set's (`_common/boy`)
+function clipFolderOf(path: string): string {
+  return path.replace(/^.*\/assets\/hgrp\//, '').replace(/\/clips\/.*$/, '');
 }
 
 // A character folder holds `<folder>.glb` and, for the few characters that carry a prop
@@ -137,23 +175,31 @@ function readRoster(): HGRPStageCharacter[] {
     textureUrlsByFolder.set(folder, urls);
   }
 
+  const clipInfo = new Map<string, HGRPClipIndex['clips'][number]>();
+  for (const [path, index] of Object.entries(CLIP_INDEXES)) {
+    const folder = clipFolderOf(path);
+    for (const clip of index.clips) clipInfo.set(`${folder}/${clip.name}`, clip);
+  }
   const clipPool = Object.entries(CLIP_URLS)
-    .map(([path, url]) => ({
-      folder: folderOf(path),
-      clip: path
+    .map(([path, url]) => {
+      const folder = clipFolderOf(path);
+      const clip = path
         .split('/')
         .pop()!
-        .replace(/\.glb$/, ''),
-      url,
-    }))
+        .replace(/\.glb$/, '');
+      const info = clipInfo.get(`${folder}/${clip}`);
+      return { folder, clip, url, duration: info?.duration, drivesBody: info?.drivesBody ?? true };
+    })
     .sort((a, b) => a.folder.localeCompare(b.folder) || a.clip.localeCompare(b.clip));
+  const shared = (entry: { folder: string }) => (entry.folder.startsWith('_') ? 0 : 1);
   const clipsFor = (folder: string): HGRPClipSource[] => [
     ...clipPool
       .filter((entry) => entry.folder === folder)
-      .map((entry) => ({ name: entry.clip, url: entry.url, own: true })),
+      .map((entry) => ({ ...entry, name: entry.clip, own: true })),
     ...clipPool
       .filter((entry) => entry.folder !== folder)
-      .map((entry) => ({ name: `${entry.folder}/${entry.clip}`, url: entry.url, own: false })),
+      .sort((a, b) => shared(a) - shared(b))
+      .map((entry) => ({ ...entry, name: `${entry.folder}/${entry.clip}`, own: false })),
   ];
 
   const roster: { folder: string; character: HGRPStageCharacter }[] = [];
@@ -276,20 +322,14 @@ function createCharacterEntity(world: World, character: HGRPStageCharacter): Ent
     }),
   );
 
-  // The rig is posed every render tick by SkeletalAnimationSystem. Pelica's clip 0 is the
-  // summon entrance and clip 1 its standing idle loop (scripts/hgrp/anim-convert.mjs);
-  // `?clip=` picks between them for look comparison against in-game footage of the same
-  // animation. A model with no converted clips composes its bind pose instead.
-  const requestedClip = Number.parseInt(
-    new URLSearchParams(window.location.search).get('clip') ?? '0',
-    10,
-  );
-  // A character without clips of its own starts paused in its bind pose: the pool still
-  // offers it every other character's clip, but only when the user asks for one.
+  // The rig is posed every render tick by SkeletalAnimationSystem. The one clip attached at
+  // load (loadHGRPCharacter) is animation 0; a character without clips of its own starts
+  // paused in its bind pose — the pool still offers it every other character's clip, but
+  // only when the user asks for one.
   entity.addComponent(
     world.createComponent(SkeletonComponent, {
-      clipIndex: Number.isNaN(requestedClip) ? 0 : requestedClip,
-      playing: character.source.clips.some((clip) => clip.own),
+      clipIndex: 0,
+      playing: character.source.clips.some((clip) => clip.own && clip.drivesBody),
     }),
   );
 
@@ -327,24 +367,75 @@ export function loadHGRPCharacter(world: World, character: HGRPStageCharacter): 
     if (!model) {
       throw new Error(`[hgrp] ${character.assetId} loaded but is not in the asset registry`);
     }
-    if (character.source.clips.length > 0) {
-      await AssetLoader.loadGLTFClips(character.assetId, character.source.clips);
+    // One own clip comes with the model so the character moves as soon as it is on stage: the
+    // first (alphabetical) own clip that moves the body — an overlay fragment that only keys
+    // cloth or hair would leave the body in bind pose with the cloth flung a metre away.
+    // `?clip=<n>` picks the n-th own clip instead, for look comparison against in-game footage.
+    const own = character.source.clips.filter((clip) => clip.own);
+    const requested = Number.parseInt(
+      new URLSearchParams(window.location.search).get('clip') ?? '',
+      10,
+    );
+    const first = Number.isNaN(requested)
+      ? own.find((clip) => clip.drivesBody)
+      : (own[requested] ?? own.find((clip) => clip.drivesBody));
+    if (first) {
+      await AssetLoader.loadGLTFClips(character.assetId, [first]);
     }
     const { min, max } = modelBounds(model);
     character.anchor = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
     character.width = max[0] - min[0];
     character.entity = createCharacterEntity(world, character);
 
-    const clips = model.animations ?? [];
-    if (clips.length > 0) {
-      console.log(
-        `[hgrp] ${character.label} clips: ${clips
-          .map((clip, i) => `${i}:${clip.name} (${clip.duration.toFixed(2)}s)`)
-          .join(', ')}`,
-      );
-    }
+    console.log(
+      `[hgrp] ${character.label}: ${own.length} own clips, ${character.source.clips.length} in the pool` +
+        (first ? `, playing ${first.name}` : ', bind pose'),
+    );
   })();
   loading.set(character.assetId, load);
+  return load;
+}
+
+// Attaching a clip is a fetch plus a join, so a clip is attached once per character however
+// often the panel asks for it, and two asks in flight share the same load.
+const attaching = new Map<string, Promise<number>>();
+
+/**
+ * Index of `clipName` (an HGRPClipSource name) in the character's attached animations,
+ * fetching and joining the clip file first when it is not attached yet.
+ */
+export function ensureHGRPClip(character: HGRPStageCharacter, clipName: string): Promise<number> {
+  const model = assetRegistry.getAssetDescriptor<'gltf'>(character.assetId)?.rawData as
+    | GLTFModel
+    | undefined;
+  if (!model) {
+    return Promise.reject(new Error(`[hgrp] ${character.assetId} is not loaded`));
+  }
+  const attached = (model.animations ?? []).findIndex((clip) => clip.name === clipName);
+  if (attached >= 0) {
+    return Promise.resolve(attached);
+  }
+  const key = `${character.assetId}\n${clipName}`;
+  const inFlight = attaching.get(key);
+  if (inFlight) {
+    return inFlight;
+  }
+  const source = character.source.clips.find((clip) => clip.name === clipName);
+  if (!source) {
+    return Promise.reject(new Error(`[hgrp] ${clipName} is not in the clip pool`));
+  }
+  const load = AssetLoader.loadGLTFClips(character.assetId, [source])
+    .then(() => {
+      const index = (model.animations ?? []).findIndex((clip) => clip.name === clipName);
+      if (index < 0) {
+        throw new Error(`[hgrp] clip ${clipName} attached no animation`);
+      }
+      return index;
+    })
+    .finally(() => {
+      attaching.delete(key);
+    });
+  attaching.set(key, load);
   return load;
 }
 

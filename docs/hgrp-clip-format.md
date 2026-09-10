@@ -27,9 +27,11 @@ packages/web-client/assets/hgrp/_common/<bodyType>/clips/<clipName>.glb
 
 `<actor>` is the export's character id (`pelica`, `laevat`, `ardelia`, …), `<clipName>` the
 Unity AnimationClip name (`A_actor_pelica_gacha_ani`); the `_common` folders hold the sets
-shared by body type, baked on one actor's rig. The web client discovers every file matching
-those patterns at build time; nothing has to be registered. The model glb is never modified for
-a clip.
+shared by body type, baked on one actor's rig. Beside the files, `clips/index.json` lists each
+clip's `name`, `duration`, `fps`, `joints` and `drivesBody` (whether it keys the body's root
+joint; an overlay that only moves cloth or hair is never a character's starting clip). The web
+client discovers every file matching those patterns at build time; nothing has to be
+registered. The model glb is never modified for a clip.
 
 Every clip on the stage is one **pool**: a character lists the clips in its own folder first
 (bare name; `A_actor_pelica_gacha_ani` sorts before its `_loop`), then the body-type sets and
@@ -136,3 +138,12 @@ mirror at once. A clean report on the golden clip reads
 
 In the browser, the character's **Animation** folder lists the clip; the pelvis stays at hip
 height, feet on the ground, hands where the game puts them.
+
+## 6. Humanoid clips
+
+Clips the client authored as Unity Humanoid (muscle curves, no body transforms) are not
+covered by this contract: they need the character's Avatar and a solver. The plan and the data
+the export has to deliver for them (`avatar.json`, `<clip>.humanoid.json` beside the usual clip
+FBX) are in `docs/hgrp-humanoid-animation.md`; the engine-side result is this same glb
+container with an `HGRP_humanoid` extension on the animation.
+
