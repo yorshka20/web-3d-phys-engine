@@ -1,15 +1,13 @@
 import { GeometryData, VertexFormat } from '../../geometry/GeometryFactory';
-import { attachGLTFClips, convertGLTFAnimations } from '../../assets/gltfAnimations';
+import { attachGLTFClips, extractGLTFRig } from '../../assets/gltfAnimations';
 import {
   GLTFMaterial,
   GLTFMesh,
   GLTFMeshInstance,
   GLTFModel,
-  GLTFNode,
   GLTF_DEFAULT_MATERIAL,
   GLTFPrimitive,
   GLTFPrimitiveMaterial,
-  GLTFSkin,
 } from '../../assets/GltfModel';
 import { PMXModel } from '../../assets/PMXModel';
 import {
@@ -332,7 +330,7 @@ export class AssetLoader {
         instances.push({ meshIndex, worldMatrix, skinIndex });
       }
 
-      const rig = this.extractGLTFRig(doc);
+      const rig = extractGLTFRig(doc);
 
       // Materials that shade in a joint's frame (the HGRP face shader, in the head's) learn
       // their joint from the skin they are drawn with.
@@ -553,46 +551,6 @@ export class AssetLoader {
       console.error(`[AssetLoader] Failed to load texture from blob:`, error);
       throw error;
     }
-  }
-
-  /**
-   * Extract the posing data a static load throws away: the node hierarchy (kept as local TRS
-   * so animation channels can drive t/r/s independently), the skins' joint lists and inverse
-   * bind matrices, and the animation clips. Returns nothing for a document with neither a
-   * skin nor an animation, so static models keep their flattened-instance representation.
-   */
-  private static extractGLTFRig(doc: Document): Partial<GLTFModel> {
-    const root = doc.getRoot();
-    const sourceSkins = root.listSkins();
-    const sourceAnimations = root.listAnimations();
-    if (sourceSkins.length === 0 && sourceAnimations.length === 0) {
-      return {};
-    }
-
-    const sourceNodes = root.listNodes();
-    const nodeIndices = new Map<Node, number>(sourceNodes.map((node, i) => [node, i]));
-
-    const nodes: GLTFNode[] = sourceNodes.map((node) => ({
-      name: node.getName(),
-      translation: [...node.getTranslation()] as [number, number, number],
-      rotation: [...node.getRotation()] as [number, number, number, number],
-      scale: [...node.getScale()] as [number, number, number],
-      children: node.listChildren().map((child) => nodeIndices.get(child)!),
-    }));
-
-    const scene = root.getDefaultScene() ?? root.listScenes()[0];
-    const roots = (scene?.listChildren() ?? []).map((node) => nodeIndices.get(node)!);
-
-    const skins: GLTFSkin[] = sourceSkins.map((skin) => ({
-      joints: skin.listJoints().map((joint) => nodeIndices.get(joint)!),
-      inverseBindMatrices: new Float32Array(
-        (skin.getInverseBindMatrices()?.getArray() as ArrayLike<number>) ?? [],
-      ),
-    }));
-
-    const { animations } = convertGLTFAnimations(sourceAnimations, (node) => nodeIndices.get(node));
-
-    return { nodes, roots, skins, animations };
   }
 
   /**

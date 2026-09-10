@@ -2,6 +2,8 @@ import { AlphaMode, BaseMaterial } from '../material/types';
 import { HGRPMaterialDescriptor } from '../material/hgrp';
 import { mat4 } from 'gl-matrix';
 import { GeometryData } from '../geometry/GeometryFactory';
+import type { HumanoidModelBinding } from './humanoid/binding';
+import type { GLTFHumanoidClip } from './humanoid/clip';
 
 // A glTF document material converted for rendering: either the standard PBR family or an
 // externally-joined family (HGRP presets keyed by material name).
@@ -89,6 +91,9 @@ export interface GLTFModel {
   roots?: number[]; // default-scene root node indices
   animations?: GLTFAnimation[];
   skins?: GLTFSkin[];
+  // The character's Unity Avatar bound to this hierarchy (attachHumanoidRig), which lets a
+  // humanoid clip's muscle curves be solved into this skeleton's joints at play time.
+  humanoid?: HumanoidModelBinding;
 }
 
 // A node keeps its local transform as TRS rather than a matrix: animation channels drive
@@ -125,4 +130,7 @@ export interface GLTFAnimation {
   // instead of being inlined per channel.
   samplers: GLTFAnimationSampler[];
   duration: number; // seconds, max sampler input
+  // A Unity humanoid clip's body: muscle/root/goal curves as channel-less samplers (from the
+  // animation's extras.HGRP_humanoid), solved against the model's Avatar when played.
+  humanoid?: GLTFHumanoidClip;
 }

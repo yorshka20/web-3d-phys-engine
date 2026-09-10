@@ -2,12 +2,10 @@ import { Mesh3DComponent, SkeletonComponent } from '@ecs/components';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { System } from '@ecs/core/ecs/System';
 import { Entity } from '@ecs/core/ecs/Entity';
-import {
-  GLTFAnimation,
-  GLTFAnimationSampler,
-  GLTFModel,
-  GLTFNode,
-} from '@renderer/assets/GltfModel';
+import { GLTFAnimation, GLTFModel, GLTFNode } from '@renderer/assets/GltfModel';
+import { sampleGLTFSampler } from '@renderer/assets/gltfAnimations';
+import { poseHumanoidClip } from '@renderer/assets/humanoid/binding';
+import { sampleHumanoidParameters } from '@renderer/assets/humanoid/clip';
 import { mat4, quat, vec3 } from 'gl-matrix';
 
 /**
@@ -19,12 +17,20 @@ import { mat4, quat, vec3 } from 'gl-matrix';
  *
  * The palette (worldMatrix(joint) * inverseBindMatrix) is the whole output — the renderer
  * uploads it verbatim, and the shader's linear-blend skinning is the only other half.
+ *
+ * A clip's channels write local TRS by node. A humanoid clip (GLTFAnimation.humanoid) has no
+ * channels for the body: its muscle curves are solved against the model's Avatar
+ * (GLTFModel.humanoid, attachHumanoidRig) into the same buffers first, so the clip's own
+ * channels — the secondary bones — compose under the solved body, and a bone keyed both ways
+ * takes the channel.
  */
 export class SkeletalAnimationSystem extends System {
   private readonly scratchLocal = mat4.create();
   private readonly scratchTranslation = vec3.create();
   private readonly scratchRotation = quat.create();
   private readonly scratchScale = vec3.create();
+  // Models a humanoid clip was asked to play on without an Avatar to solve it against; warned once
+  private readonly unboundModels = new WeakSet<GLTFModel>();
 
   constructor() {
     super('SkeletalAnimationSystem', SystemPriorities.ANIMATION, 'render');
@@ -51,7 +57,7 @@ export class SkeletalAnimationSystem extends System {
           clip,
           skeleton.loop,
         );
-        this.applyClip(skeleton, clip);
+        this.applyClip(skeleton, clip, model);
       }
 
       this.composeWorldMatrices(skeleton, model.nodes, model.roots);
@@ -104,7 +110,26 @@ export class SkeletalAnimationSystem extends System {
     return wrapped < 0 ? wrapped + clip.duration : wrapped;
   }
 
-  private applyClip(skeleton: SkeletonComponent, clip: GLTFAnimation): void {
+  private applyClip(skeleton: SkeletonComponent, clip: GLTFAnimation, model: GLTFModel): void {
+    if (clip.humanoid) {
+      if (model.humanoid) {
+        poseHumanoidClip(
+          model.humanoid,
+          clip.humanoid,
+          skeleton.time,
+          skeleton.translations!,
+          skeleton.rotations!,
+        );
+      } else if (!this.unboundModels.has(model)) {
+        this.unboundModels.add(model);
+        console.warn(
+          `[SkeletalAnimationSystem] humanoid clip ${clip.name} plays on a model without an Avatar binding: only its secondary bones move`,
+        );
+      }
+      sampleHumanoidParameters(clip.humanoid, skeleton.time, skeleton.parameters);
+    } else if (skeleton.parameters.size > 0) {
+      skeleton.parameters.clear();
+    }
     for (const channel of clip.channels) {
       const sampler = clip.samplers[channel.sampler];
       if (!sampler || channel.path === 'weights') {
@@ -119,7 +144,7 @@ export class SkeletalAnimationSystem extends System {
             ? skeleton.translations!
             : skeleton.scales!;
 
-      this.sample(
+      sampleGLTFSampler(
         sampler,
         skeleton.time,
         stride,
@@ -127,132 +152,6 @@ export class SkeletalAnimationSystem extends System {
         target,
         channel.node * stride,
       );
-    }
-  }
-
-  /**
-   * Write one interpolated keyframe value into `out` at `outOffset`. Quaternions slerp; the
-   * rest lerp. CUBICSPLINE output packs (inTangent, value, outTangent) per key.
-   */
-  private sample(
-    sampler: GLTFAnimationSampler,
-    time: number,
-    stride: number,
-    isQuaternion: boolean,
-    out: Float32Array,
-    outOffset: number,
-  ): void {
-    const { input, output, interpolation } = sampler;
-    const keyCount = input.length;
-    if (keyCount === 0) {
-      return;
-    }
-
-    const valueStride = interpolation === 'CUBICSPLINE' ? stride * 3 : stride;
-    const valueOffset = interpolation === 'CUBICSPLINE' ? stride : 0;
-
-    if (keyCount === 1 || time <= input[0]) {
-      out.set(output.subarray(valueOffset, valueOffset + stride), outOffset);
-      return;
-    }
-    if (time >= input[keyCount - 1]) {
-      const base = (keyCount - 1) * valueStride + valueOffset;
-      out.set(output.subarray(base, base + stride), outOffset);
-      return;
-    }
-
-    const next = this.findKeyframe(input, time);
-    const prev = next - 1;
-    const span = input[next] - input[prev];
-    const t = span > 0 ? (time - input[prev]) / span : 0;
-
-    const a = prev * valueStride + valueOffset;
-    const b = next * valueStride + valueOffset;
-
-    if (interpolation === 'STEP') {
-      out.set(output.subarray(a, a + stride), outOffset);
-      return;
-    }
-
-    if (interpolation === 'CUBICSPLINE') {
-      this.cubicSpline(output, prev, next, valueStride, stride, span, t, out, outOffset);
-    } else if (isQuaternion) {
-      quat.slerp(
-        this.scratchRotation,
-        [output[a], output[a + 1], output[a + 2], output[a + 3]],
-        [output[b], output[b + 1], output[b + 2], output[b + 3]],
-        t,
-      );
-      out.set(this.scratchRotation, outOffset);
-    } else {
-      for (let i = 0; i < stride; i++) {
-        out[outOffset + i] = output[a + i] + (output[b + i] - output[a + i]) * t;
-      }
-    }
-
-    if (isQuaternion) {
-      this.normalizeQuaternion(out, outOffset);
-    }
-  }
-
-  /** Index of the first keyframe strictly after `time`; callers guarantee one exists. */
-  private findKeyframe(input: Float32Array, time: number): number {
-    let low = 0;
-    let high = input.length - 1;
-    while (low < high) {
-      const mid = (low + high) >> 1;
-      if (input[mid] <= time) {
-        low = mid + 1;
-      } else {
-        high = mid;
-      }
-    }
-    return low;
-  }
-
-  private cubicSpline(
-    output: Float32Array,
-    prev: number,
-    next: number,
-    valueStride: number,
-    stride: number,
-    span: number,
-    t: number,
-    out: Float32Array,
-    outOffset: number,
-  ): void {
-    const t2 = t * t;
-    const t3 = t2 * t;
-    const h00 = 2 * t3 - 3 * t2 + 1;
-    const h10 = t3 - 2 * t2 + t;
-    const h01 = -2 * t3 + 3 * t2;
-    const h11 = t3 - t2;
-
-    const prevValue = prev * valueStride + stride;
-    const prevOutTangent = prev * valueStride + stride * 2;
-    const nextInTangent = next * valueStride;
-    const nextValue = next * valueStride + stride;
-
-    for (let i = 0; i < stride; i++) {
-      out[outOffset + i] =
-        h00 * output[prevValue + i] +
-        h10 * span * output[prevOutTangent + i] +
-        h01 * output[nextValue + i] +
-        h11 * span * output[nextInTangent + i];
-    }
-  }
-
-  private normalizeQuaternion(out: Float32Array, offset: number): void {
-    const x = out[offset];
-    const y = out[offset + 1];
-    const z = out[offset + 2];
-    const w = out[offset + 3];
-    const length = Math.hypot(x, y, z, w);
-    if (length > 0) {
-      out[offset] = x / length;
-      out[offset + 1] = y / length;
-      out[offset + 2] = z / length;
-      out[offset + 3] = w / length;
     }
   }
 

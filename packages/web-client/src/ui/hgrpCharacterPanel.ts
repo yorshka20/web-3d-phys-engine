@@ -17,7 +17,6 @@ import {
   ensureHGRPClip,
   hgrpStage,
   HGRPStageCharacter,
-  hgrpWeaponInstances,
   onHGRPStageChange,
   resetHGRPPlacement,
   setHGRPWeaponVisible,
@@ -285,9 +284,9 @@ function addCharacterFolder(
       expanded,
     },
     (folder) => {
-      // The game shows a character's weapon per situation (a clip's WeaponHide curve, the
-      // photo mode's own rule); the stage has no such state, so the choice is the user's.
-      if (hgrpWeaponInstances(character).length > 0) {
+      // The user's switch for the weapon; a clip's WeaponHide parameter hides it on top of
+      // this, the way the game does per clip (weaponHide.ts)
+      if (character.weaponInstances.length > 0) {
         folder
           .addBinding(character, 'weaponVisible', { label: 'weapon' })
           .on('change', (ev) => setHGRPWeaponVisible(character, ev.value));

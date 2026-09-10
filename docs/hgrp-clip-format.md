@@ -140,14 +140,24 @@ mirror at once. A clean report on the golden clip reads
 In the browser, the character's **Animation** folder lists the clip; the pelvis stays at hip
 height, feet on the ground, hands where the game puts them.
 
+A clip node the curves leave alone is held at the **model's bind pose** while the FBX is
+evaluated, never at the clip file's own node default: the glb composes an undriven node to its
+rest, which is that bind pose, and a driven child's local transform is only right when both
+sides agree on the parent. The export's clip FBX files leave a humanoid clip's whole body
+undriven and park it in a pose 100°+ away from the bind (the twist helpers, fingers and hair
+under it came out that far off before this rule; the leg meshes read as S-shaped).
+
 ## 6. Humanoid clips
 
 Clips the client authored as Unity Humanoid (muscle curves, no body transforms) reach this
-same format: the converter solves the body against the character's Avatar and writes the human
-bones' channels next to the secondary bones' from the clip FBX, so nothing downstream tells the
-two apart except the `humanoid` flag in `index.json`. The export delivers `avatar.json` and
-`<clip>.humanoid.json` beside the usual clip FBX; the solver, its validation against the
-clips' own IK goals, and the planned runtime form (`HGRP_humanoid` extension, engine-side
-solve) are in `docs/hgrp-humanoid-animation.md`. The Avatar is copied to
-`assets/hgrp/<actor>/avatar.json`.
+same format with one addition: the body is not in the channels — only the secondary bones' from
+the clip FBX are — but in samplers no channel targets, named from the animation's
+`extras.HGRP_humanoid` (muscles, root, IK goals, Animator parameters), which the engine solves
+against the Avatar of whichever character plays the clip. `index.json` marks the row
+`"humanoid": true`. The export delivers `avatar.json` and `<clip>.humanoid.json` beside the
+usual clip FBX; the converter puts the Avatar and its binding to the glb
+(`avatar.json`, `avatar.binding.json`) beside the model. The extras and binding schemas, the
+solver, and its validation against the clips' own IK goals are in
+`docs/hgrp-humanoid-animation.md` §4. A viewer that ignores the extras plays the secondary
+bones alone.
 

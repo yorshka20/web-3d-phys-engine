@@ -30,6 +30,7 @@ export enum SystemPriorities {
   DAMAGE_TEXT = 8000, // Render damage text
   STATE_EFFECT = 8001, // Process state effects
   ANIMATION = 8002, // Process animation
+  ANIMATION_DRIVEN = 8003, // React to what the clips wrote this frame (animator parameters)
   RENDER = 9999, // Final rendering
 }
 

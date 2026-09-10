@@ -29,7 +29,8 @@
  *   <humanoid-root>/<actor>/clips/<clip>.humanoid.json + <clip>.fbx
  *                                                per humanoid clip: the muscle curves, and the
  *                                                secondary bones' transform curves
- *   <humanoid-root>/_common/<bodyType>/clips/   the same for the shared sets
+ *   <humanoid-root>/_common/<bodyType>/clips/   the same for the shared sets, solved against
+ *                                                the Avatar of the actor their manifest names
  *
  * Per character:
  *   1. Blender headless FBX -> GLB (scripts/hgrp/convert-fbx.py), then each UV set moved to
@@ -50,8 +51,9 @@
  *      node path. Humanoid clips are baked into the same files with their body solved from
  *      the muscle curves against the actor's Avatar (humanoid.mjs), and avatar.json is copied
  *      beside the model once its node paths are checked against the glb.
- * Then the _common body-type clip sets, baked on the actor their manifest names — only when
- * no --chars filter is given.
+ * Then the _common body-type clip sets, baked on the actor their manifest names (and, for
+ * their humanoid clips, solved against that actor's Avatar) — only when no --chars filter is
+ * given.
  *
  * --preset-only rewrites preset.json (and the fur layers) without touching Blender or
  * textures — for a re-exported material set. --clips-only rebakes the clips of the selected
@@ -69,7 +71,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
 import { glbPathsBelow, readBindPose, writeClipGlb } from './clip-glb.mjs';
-import { Humanoid, humanoidRigCheck, readHumanoidSidecar } from './humanoid.mjs';
+import {
+  actorOfAnimator,
+  avatarBinding,
+  describeOffsets,
+  Humanoid,
+  humanoidAvatarPath,
+  humanoidRigCheck,
+  readHumanoidSidecar,
+} from './humanoid.mjs';
 import { completePreset, readRawMaterials } from './material-preset.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -435,11 +445,12 @@ function readClipManifest(clipDir) {
   return { animator: manifest.animator, clips, skipped };
 }
 
-// The Avatar the humanoid clips of a folder are solved against: read, and every skeleton
-// node path checked to exist on the model glb (the engine joins by the same paths).
+// The Avatar the humanoid clips of a folder are solved against (humanoidAvatarPath): read, and
+// every skeleton node path checked to exist on the model glb (the engine joins by the same
+// paths).
 async function readAvatarFor(humanoidDir, modelGlbPath) {
-  const avatarPath = path.join(humanoidDir, 'avatar.json');
-  if (!fs.existsSync(avatarPath)) return undefined;
+  const avatarPath = humanoidAvatarPath(humanoidDir);
+  if (!avatarPath || !fs.existsSync(avatarPath)) return undefined;
   const rig = Humanoid.parseAvatar(JSON.parse(fs.readFileSync(avatarPath, 'utf8')));
   const doc = await new NodeIO().read(modelGlbPath);
   const root = doc.getRoot();
@@ -454,16 +465,13 @@ async function readAvatarFor(humanoidDir, modelGlbPath) {
   return { rig, avatarPath };
 }
 
-// The character folder a manifest's animator was baked on: `chr_0023_antal_uimodel` -> `antal`.
-function actorOfAnimator(animator) {
-  return /^chr_\d+_(.+?)_(?:uimodel|postmodel)$/.exec(animator ?? '')?.[1];
-}
-
 /**
  * Bake every clip of `clipDir` (generic FBX clips) and of `humanoidDir` (humanoid sidecar +
- * FBX pairs, solved against that folder's avatar.json) onto the character whose glb and FBX
- * are given, writing `<outClipsDir>/<clip>.glb`. The output folder is rebuilt from scratch;
- * the Avatar is copied to `<outClipsDir>/../avatar.json`.
+ * FBX pairs, checked against the folder's Avatar — humanoidAvatarPath) onto the character
+ * whose glb and FBX are given, writing `<outClipsDir>/<clip>.glb`. The output folder is
+ * rebuilt from scratch. Returns `ok`, and for a folder with humanoid clips `avatar`: the
+ * Avatar's path and its binding to the glb (avatarBinding), for the caller to write beside
+ * the character's model.
  */
 async function convertClips(clipDir, humanoidDir, modelGlbPath, modelFbxPath, outClipsDir, label) {
   const manifest = readClipManifest(clipDir);
@@ -472,18 +480,17 @@ async function convertClips(clipDir, humanoidDir, modelGlbPath, modelFbxPath, ou
     : undefined;
   if (!manifest && !humanoidManifest) {
     console.log(`[clips] ${label}: no clips/manifest.json, nothing to convert`);
-    return true;
+    return { ok: true };
   }
   if (!fs.existsSync(modelGlbPath)) {
     console.error(`[clips] ${label}: model ${modelGlbPath} missing — convert the character first`);
-    return false;
+    return { ok: false };
   }
   resetDir(outClipsDir);
   const avatar = humanoidManifest ? await readAvatarFor(humanoidDir, modelGlbPath) : undefined;
   if (humanoidManifest && !avatar) {
-    throw new Error(`${humanoidDir} has humanoid clips but no avatar.json`);
+    throw new Error(`${humanoidDir} has humanoid clips but no Avatar to solve them against`);
   }
-  if (avatar) fs.copyFileSync(avatar.avatarPath, path.join(outClipsDir, '..', 'avatar.json'));
   const clips = [
     ...(manifest?.clips ?? []).map((clip) => ({ ...clip, animator: manifest.animator })),
     ...(humanoidManifest?.clips ?? [])
@@ -493,16 +500,17 @@ async function convertClips(clipDir, humanoidDir, modelGlbPath, modelFbxPath, ou
   const skipped = (manifest?.skipped ?? 0) + (humanoidManifest?.skipped ?? 0);
   if (clips.length === 0) {
     console.log(`[clips] ${label}: 0 clips exported (${skipped} skipped by the export)`);
-    return true;
+    return { ok: true };
   }
   const t0 = Date.now();
   const bindPose = await readBindPose(modelFbxPath, modelGlbPath);
   const humanoidRig = avatar
     ? humanoidRigCheck(avatar.rig, bindPose.restByPath, bindPose.byPath)
     : undefined;
-  if (humanoidRig && humanoidRig.hipsOffset > 1e-4) {
+  if (humanoidRig && humanoidRig.offsets.length > 0) {
     console.log(
-      `[clips] ${label}: the Avatar's T-pose hips sit ${(humanoidRig.hipsOffset * 1000).toFixed(1)} mm from the prefab's (placed by the clips' root, not by the T-pose)`,
+      `[clips] ${label}: the prefab's joint offsets differ from the Avatar's T-pose at ` +
+        `${describeOffsets(humanoidRig.offsets)} (the prefab's are used; the hips are placed by the clips' root)`,
     );
   }
   let ok = true;
@@ -513,7 +521,6 @@ async function convertClips(clipDir, humanoidDir, modelGlbPath, modelFbxPath, ou
         ? {
             rig: avatar.rig,
             sidecar: readHumanoidSidecar(JSON.parse(fs.readFileSync(clip.sidecar, 'utf8'))),
-            defaults: humanoidRig.defaults,
           }
         : undefined;
       const report = await writeClipGlb(
@@ -557,7 +564,12 @@ async function convertClips(clipDir, humanoidDir, modelGlbPath, modelFbxPath, ou
       `(${index.filter((c) => c.drivesBody).length} move the body, ${index.filter((c) => c.humanoid).length} ` +
       `humanoid; ${skipped} skipped by the export; bind pose from ${bindPose.skinned} skinned bones)`,
   );
-  return ok;
+  return {
+    ok,
+    avatar: avatar
+      ? { path: avatar.avatarPath, binding: avatarBinding(avatar.rig, humanoidRig, bindPose) }
+      : undefined,
+  };
 }
 
 // The shared body-type clip sets: each folder's manifest names the actor whose rig it was
@@ -596,7 +608,7 @@ async function convertCommonClips(src, humanoidSrc, out) {
       path.join(out, '_common', bodyType, 'clips'),
       `_common/${bodyType} (on ${actor})`,
     );
-    ok = ok && converted;
+    ok = ok && converted.ok;
   }
   return ok;
 }
@@ -686,6 +698,13 @@ const humanoidDirOf = (actor) => {
   const dir = humanoidSrc ? path.join(humanoidSrc, actor) : undefined;
   return dir && fs.existsSync(path.join(dir, 'clips', 'manifest.json')) ? dir : undefined;
 };
+// The character's Avatar (verbatim) and its binding to the glb go beside the model, once
+// convertClips has checked the Avatar against the glb and measured the binding
+function writeAvatar(avatar, outDir) {
+  if (!avatar) return;
+  fs.copyFileSync(avatar.path, path.join(outDir, 'avatar.json'));
+  fs.writeFileSync(path.join(outDir, 'avatar.binding.json'), JSON.stringify(avatar.binding));
+}
 const actors = chars.length > 0 ? chars : listActors(src);
 let failed = false;
 
@@ -730,7 +749,7 @@ for (const actor of actors) {
       continue;
     }
     if (clipsOnly) {
-      const ok = await convertClips(
+      const clips = await convertClips(
         path.join(actorDir, 'clips'),
         humanoidDirOf(actor),
         glbPath,
@@ -738,7 +757,8 @@ for (const actor of actors) {
         clipsDir,
         actor,
       );
-      failed = failed || !ok;
+      writeAvatar(clips.avatar, outDir);
+      failed = failed || !clips.ok;
       continue;
     }
 
@@ -778,7 +798,7 @@ for (const actor of actors) {
       console.log('[verify] OK');
     }
 
-    const clipsOk = await convertClips(
+    const clips = await convertClips(
       path.join(actorDir, 'clips'),
       humanoidDirOf(actor),
       glbPath,
@@ -786,7 +806,8 @@ for (const actor of actors) {
       clipsDir,
       actor,
     );
-    failed = failed || !clipsOk;
+    writeAvatar(clips.avatar, outDir);
+    failed = failed || !clips.ok;
   } catch (error) {
     console.error(`[convert] ${actor}: ${error instanceof Error ? error.message : error}`);
     failed = true;

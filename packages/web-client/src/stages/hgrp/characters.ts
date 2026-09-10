@@ -8,6 +8,7 @@ import {
 } from '@ecs';
 import { AssetLoader, assetRegistry } from '@renderer';
 import { GLTFModel } from '@renderer/assets/GltfModel';
+import { attachHumanoidRig } from '@renderer/assets/humanoid/binding';
 import { HGRPCharacterFlags, HGRPPreset } from '@renderer/material/hgrp';
 import { quat, vec3 } from 'gl-matrix';
 
@@ -59,6 +60,10 @@ interface HGRPCharacterSource {
   presetUrl: string;
   textureUrls: Record<string, string>;
   clips: readonly HGRPClipSource[];
+  // The character's Unity Avatar and the converter's binding of it to the glb, for the
+  // characters that have humanoid clips (scripts/hgrp/convert.mjs --humanoid-src)
+  avatarUrl?: string;
+  avatarBindingUrl?: string;
 }
 
 export interface HGRPStageCharacter {
@@ -78,10 +83,13 @@ export interface HGRPStageCharacter {
   offset: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: number;
-  // Whether the weapon meshes rigged into the character document are drawn. The game decides
-  // this per situation (a clip's WeaponHide curve, the photo mode's own rule); the stage has no
-  // such state, so it is a switch the user flips.
+  // Whether the weapon meshes rigged into the character document are drawn, as far as the user
+  // is concerned: a clip's WeaponHide parameter hides them on top of this (weaponHide.ts), the
+  // way the game does per clip; the photo mode's own rule has no counterpart here.
   weaponVisible: boolean;
+  // Mesh instances of the weapon (`S_wpn_*`), as WebGPU3DRenderComponent addresses them; known
+  // once the model is loaded
+  weaponInstances: readonly number[];
 }
 
 export const hgrpStage = {
@@ -119,6 +127,20 @@ const PRESET_URLS = import.meta.glob('../../../assets/hgrp/*/preset.json', {
 }) as Record<string, string>;
 
 const TEXTURE_URLS = import.meta.glob('../../../assets/hgrp/*/textures/*.png', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
+// A character with humanoid clips carries its Avatar (the export's avatar.json, verbatim) and
+// the converter's binding of it to the glb; both are fetched with the model, never inlined.
+const AVATAR_URLS = import.meta.glob('../../../assets/hgrp/*/avatar.json', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
+const AVATAR_BINDING_URLS = import.meta.glob('../../../assets/hgrp/*/avatar.binding.json', {
   eager: true,
   query: '?url',
   import: 'default',
@@ -225,6 +247,9 @@ function readRoster(): HGRPStageCharacter[] {
           presetUrl,
           textureUrls: textureUrlsByFolder.get(folder) ?? {},
           clips: clipsFor(folder),
+          avatarUrl: AVATAR_URLS[`../../../assets/hgrp/${folder}/avatar.json`],
+          avatarBindingUrl:
+            AVATAR_BINDING_URLS[`../../../assets/hgrp/${folder}/avatar.binding.json`],
         },
         entity: undefined,
         visible: DEFAULT_CHARACTER_FOLDERS.includes(folder),
@@ -235,6 +260,7 @@ function readRoster(): HGRPStageCharacter[] {
         rotation: { x: 0, y: 0, z: 0 },
         scale: 1,
         weaponVisible: true,
+        weaponInstances: [],
       },
     });
   }
@@ -351,23 +377,28 @@ function createCharacterEntity(world: World, character: HGRPStageCharacter): Ent
 // The export names a weapon's meshes `S_wpn_*` (a pen, a staff, a bow), rigged into the
 // character document on the hand sockets or the IK weapon targets; every other mesh is the
 // character. Instance indices, as WebGPU3DRenderComponent addresses them.
-export function hgrpWeaponInstances(character: HGRPStageCharacter): number[] {
-  const model = assetRegistry.getAssetDescriptor<'gltf'>(character.assetId)?.rawData as
-    | GLTFModel
-    | undefined;
-  if (!model) return [];
+function weaponInstancesOf(model: GLTFModel): number[] {
   return model.instances.flatMap((instance, index) =>
     /^S_wpn_/i.test(model.meshes[instance.meshIndex].name) ? [index] : [],
   );
 }
 
-function applyHGRPWeaponVisibility(character: HGRPStageCharacter, entity: Entity): void {
+/**
+ * Draw or hide the character's weapon instances: shown only when the user's switch is on and
+ * the playing clip does not hide it (`clipHides`, the WeaponHide parameter — weaponHide.ts).
+ */
+export function applyHGRPWeaponVisibility(
+  character: HGRPStageCharacter,
+  entity: Entity,
+  clipHides = false,
+): void {
   const render = entity.getComponent<WebGPU3DRenderComponent>(
     WebGPU3DRenderComponent.componentName,
   );
   if (!render) return;
-  for (const index of hgrpWeaponInstances(character)) {
-    render.setInstanceVisible(index, character.weaponVisible);
+  const visible = character.weaponVisible && !clipHides;
+  for (const index of character.weaponInstances) {
+    render.setInstanceVisible(index, visible);
   }
 }
 
@@ -413,17 +444,33 @@ export function loadHGRPCharacter(world: World, character: HGRPStageCharacter): 
     const first = Number.isNaN(requested)
       ? own.find((clip) => clip.drivesBody)
       : (own[requested] ?? own.find((clip) => clip.drivesBody));
+    // The Avatar binds before any clip is attached: a humanoid clip's body is solved against
+    // it at play time, on this character or any other with an Avatar (Unity's retargeting).
+    const { avatarUrl, avatarBindingUrl } = character.source;
+    if (avatarUrl && avatarBindingUrl) {
+      const [avatar, binding] = await Promise.all([
+        fetch(avatarUrl).then((response) => response.json()),
+        fetch(avatarBindingUrl).then((response) => response.json()),
+      ]);
+      attachHumanoidRig(model, avatar, binding);
+    } else if (avatarUrl || avatarBindingUrl) {
+      console.warn(
+        `[hgrp] ${character.label}: avatar.json and avatar.binding.json must both be present; humanoid clips will not move the body`,
+      );
+    }
     if (first) {
       await AssetLoader.loadGLTFClips(character.assetId, [first]);
     }
     const { min, max } = modelBounds(model);
     character.anchor = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
     character.width = max[0] - min[0];
+    character.weaponInstances = weaponInstancesOf(model);
     character.entity = createCharacterEntity(world, character);
 
     console.log(
       `[hgrp] ${character.label}: ${own.length} own clips, ${character.source.clips.length} in the pool` +
-        (first ? `, playing ${first.name}` : ', bind pose'),
+        (first ? `, playing ${first.name}` : ', bind pose') +
+        (model.humanoid ? `, Avatar ${model.humanoid.rig.name}` : ''),
     );
   })();
   loading.set(character.assetId, load);

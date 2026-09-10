@@ -19,9 +19,10 @@
  * The output is the model's node hierarchy (meshes, skins, materials stripped) plus one
  * animation named after the clip, keys reduced to what LINEAR interpolation cannot reproduce.
  *
- * A humanoid clip's body is not in its FBX curves: the human bones come from the muscle
- * solver (humanoid.mjs), as world matrices mirrored into the FBX's space per frame, and take
- * the place of the FBX evaluation for those nodes; their secondary children compose under them.
+ * A humanoid clip's body is not in its FBX curves and is not baked here either: its muscle,
+ * root, goal and parameter curves ship in the same glb as channel-less samplers named from the
+ * animation's `extras.HGRP_humanoid` (writeHumanoidExtras), and the engine solves them against
+ * whichever character plays the clip. The FBX curves still bake the secondary bones.
  */
 
 import { NodeIO, PropertyType } from '@gltf-transform/core';
@@ -35,7 +36,7 @@ import {
   quaternionFromEulerXYZ,
 } from './fbx-anim.mjs';
 import { fbxClusterBinds, readFbx } from './fbx-read.mjs';
-import { createHumanoidDriver } from './humanoid.mjs';
+import { Humanoid } from './humanoid.mjs';
 
 // Key-reduction tolerances, per component. Rotation is in quaternion units, translation and
 // scale in the asset's metres.
@@ -267,15 +268,20 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
   }
   const byPath = new Map();
   for (const [path, node] of fbxPaths) byPath.set(path, worlds.get(node.id));
-  // The node defaults themselves — the prefab's T-pose — keyed the same way; a humanoid
-  // bake relates the Avatar's frames to the FBX's through them (humanoid.mjs).
+  // The node defaults themselves — the prefab's T-pose — keyed the same way; the humanoid
+  // path relates the Avatar's skeleton to the FBX's through them (humanoid.mjs).
   const defaults = fbxRestWorlds(hierarchy);
   const restByPath = new Map();
   for (const [path, node] of fbxPaths) restByPath.set(path, defaults.get(node.id));
+  // The glb's rest world matrices by the same paths: with `byPath`, the per-joint frame change
+  // the bake applies and the Avatar binding ships
+  const glbRestByPath = new Map();
+  for (const [path, node] of glbPaths.byPath) glbRestByPath.set(path, glbRest.get(node));
   return {
     rootName: hierarchy.roots[0].name,
     byPath,
     restByPath,
+    glbRestByPath,
     skinned,
     nodes: hierarchy.nodes.size,
   };
@@ -286,9 +292,11 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
  * its meshes and gains one animation. `bindPose` is readBindPose() of the character FBX.
  * `animatorName` names the clip node that corresponds to the model's prefab root (the export's
  * manifest calls it the animator); when absent, the clip node named like the model's scene
- * root is used. `humanoid` — `{ rig, sidecar, defaults }` from humanoid.mjs (`defaults` is
- * humanoidRigCheck() of the character) — drives the Avatar's bones from the clip's muscle
- * curves; the timeline is then the sidecar's frame grid.
+ * root is used. `humanoid` — `{ rig, sidecar }` from humanoid.mjs — makes it a humanoid clip:
+ * the body stays out of the channels and the sidecar's muscle, root, goal and parameter curves
+ * ship as channel-less samplers referenced from the animation's `extras.HGRP_humanoid`
+ * (docs/hgrp-humanoid-animation.md §4), solved by the engine against the character the clip
+ * plays on; the timeline is then the sidecar's frame grid.
  */
 export function bakeClipOntoModel(
   modelDoc,
@@ -336,15 +344,17 @@ export function bakeClipOntoModel(
   if (!clipTop) {
     throw new Error(`the clip has no node named ${[...wanted].join(' or ')} to join on`);
   }
-  const driver = humanoid
-    ? createHumanoidDriver(humanoid.rig, humanoid.sidecar, clipPaths, humanoid.defaults)
-    : undefined;
-  const isDriven = (clipNode) =>
-    evaluator.driven.has(clipNode.id) || (driver?.nodeIds.has(clipNode.id) ?? false);
+  const isDriven = (clipNode) => evaluator.driven.has(clipNode.id);
 
-  // Per matched joint: the clip node driving it and the fixed frame offset D(n)
+  // Per matched joint: the clip node driving it and the fixed frame offset D(n). A clip node
+  // the curves leave alone is held at the model's bind pose while the FBX is evaluated, not at
+  // the clip file's own default: the glb composes such a node to its rest, which is that bind
+  // pose, and a driven child's local transform is only right if both sides agree on the
+  // parent. A humanoid clip's FBX leaves the whole body undriven (the muscles pose it at play
+  // time), so the twist helpers, fingers and hair under it depend on this.
   const matched = new Map();
   const unmatched = [];
+  const restOverrides = new Map();
   let unposed = 0;
   for (const [path, clipNode] of clipPaths) {
     const modelNode = modelPaths.byPath.get(path);
@@ -353,8 +363,11 @@ export function bakeClipOntoModel(
       if (driven) unmatched.push(path);
       continue;
     }
-    if (!driven) continue;
     const pose = bindPose.byPath.get(path);
+    if (!driven) {
+      if (pose) restOverrides.set(clipNode.id, pose);
+      continue;
+    }
     if (!pose) {
       unposed++;
       continue;
@@ -374,8 +387,9 @@ export function bakeClipOntoModel(
 
   // A humanoid clip is sampled on its sidecar's grid: the FBX curves only cover the secondary
   // bones and may end before the body does.
-  const grid = driver
-    ? { start: driver.start, fps: driver.fps, frameCount: driver.frames }
+  const sidecar = humanoid?.sidecar;
+  const grid = sidecar
+    ? { start: sidecar.start, fps: sidecar.sampleRate, frameCount: sidecar.frames }
     : {
         start: timeline.start,
         fps: timeline.fps,
@@ -383,7 +397,7 @@ export function bakeClipOntoModel(
       };
   const frameCount = grid.frameCount;
   const times = Float32Array.from({ length: frameCount }, (_, i) =>
-    driver ? grid.start + i / grid.fps : Math.min(grid.start + i / grid.fps, timeline.stop),
+    sidecar ? grid.start + i / grid.fps : Math.min(grid.start + i / grid.fps, timeline.stop),
   );
   const out = new Map(
     [...matched.keys()].map((node) => [
@@ -411,7 +425,7 @@ export function bakeClipOntoModel(
   const r = quat.create();
   const s = vec3.create();
   for (let frame = 0; frame < frameCount; frame++) {
-    const clipWorlds = evaluator.worldAt(times[frame], driver?.worldsAt(frame));
+    const clipWorlds = evaluator.worldAt(times[frame], restOverrides);
     const worlds = new Map();
     for (const node of order) {
       const parent = modelParents.get(node);
@@ -496,20 +510,109 @@ export function bakeClipOntoModel(
       keys += reduced.times.length;
     }
   }
+  if (humanoid) {
+    keys += writeHumanoidExtras(modelDoc, animation, buffer, humanoid.rig, sidecar, times);
+  }
 
   return {
     name: animation.getName(),
     duration: times[frameCount - 1],
     fps: grid.fps,
     frames: frameCount,
-    humanoid: driver !== undefined,
+    humanoid: humanoid !== undefined,
     driven: matched.size,
-    drivesBody: bodyRoot !== undefined && matched.has(bodyRoot),
+    // A humanoid clip moves the body through its muscles even when no channel keys a joint
+    drivesBody: humanoid !== undefined || (bodyRoot !== undefined && matched.has(bodyRoot)),
     channels,
     keys,
     unmatched,
     clipTop: clipTop.name,
   };
+}
+
+// Muscle values are unit-free (a fraction of the axis' limit, ~90° at 1), the root and goal
+// translations normalized metres, so 1e-4 keeps everything well under a tenth of a degree
+const HUMANOID_TOLERANCE = 1e-4;
+
+/**
+ * Ship the sidecar's body curves in the animation as samplers no channel targets — the
+ * muscles (SCALAR), the root and the four goals (VEC3 + VEC4, normalized as the clip stores
+ * them), the Animator parameters (SCALAR) — and name them from `extras.HGRP_humanoid` by
+ * sampler index. Curves the clip does not key are left out: the engine fills them from the
+ * character's default pose. Returns the number of keys written.
+ */
+function writeHumanoidExtras(doc, animation, buffer, rig, sidecar, times) {
+  let keys = 0;
+  const addSampler = (label, values, stride, type, tolerance) => {
+    const reduced = reduceKeys(times, values, stride, tolerance);
+    const input = doc
+      .createAccessor(`${animation.getName()}_${label}_in`)
+      .setArray(reduced.times)
+      .setType('SCALAR')
+      .setBuffer(buffer);
+    const output = doc
+      .createAccessor(`${animation.getName()}_${label}_out`)
+      .setArray(reduced.values)
+      .setType(type)
+      .setBuffer(buffer);
+    const sampler = doc
+      .createAnimationSampler()
+      .setInput(input)
+      .setOutput(output)
+      .setInterpolation('LINEAR');
+    animation.addSampler(sampler);
+    keys += reduced.times.length;
+    return animation.listSamplers().indexOf(sampler);
+  };
+  const column = (source, stride, offset) => {
+    const out = new Float32Array(sidecar.frames);
+    for (let f = 0; f < sidecar.frames; f++) out[f] = source[f * stride + offset];
+    return out;
+  };
+  const pair = (label, t, q) => ({
+    translation: addSampler(`${label}T`, Float32Array.from(t), 3, 'VEC3', HUMANOID_TOLERANCE),
+    rotation: addSampler(`${label}Q`, Float32Array.from(q), 4, 'VEC4', TOLERANCE.rotation),
+  });
+  const extras = {
+    avatar: rig.name,
+    sampleRate: sidecar.sampleRate,
+    settings: sidecar.settings,
+    muscles: {},
+    goals: {},
+    parameters: [],
+  };
+  if (sidecar.rootPresent) extras.root = pair('Root', sidecar.rootT, sidecar.rootQ);
+  for (const goal of Humanoid.HUMANOID_GOALS) {
+    if (sidecar.goalPresent[goal]) {
+      extras.goals[goal] = pair(goal, sidecar.goals[goal].t, sidecar.goals[goal].q);
+    }
+  }
+  Humanoid.MUSCLES.forEach((name, m) => {
+    if (!sidecar.musclePresent[m]) return;
+    extras.muscles[name] = addSampler(
+      `muscle${m}`,
+      column(sidecar.muscles, Humanoid.MUSCLE_COUNT, m),
+      1,
+      'SCALAR',
+      HUMANOID_TOLERANCE,
+    );
+  });
+  for (const parameter of sidecar.parameters) {
+    const entry = {
+      hash: parameter.hash,
+      sampler: addSampler(
+        `param${parameter.hash}`,
+        parameter.values,
+        1,
+        'SCALAR',
+        HUMANOID_TOLERANCE,
+      ),
+    };
+    if (parameter.name) entry.name = parameter.name;
+    extras.parameters.push(entry);
+  }
+  animation.setExtras({ HGRP_humanoid: extras });
+  return keys;
 }
 
 /** Read the model glb, bake the clip FBX onto it, write `outPath`; returns the bake report. */

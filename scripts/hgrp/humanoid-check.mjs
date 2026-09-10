@@ -13,14 +13,23 @@
  * changes how the clip is baked: the muscles are the pose, the goals are for IK.
  *
  * The character FBX and glb supply the default pose a clip's missing curves fall back to
- * (readBindPose). Exit code 1 when a clip cannot be solved: a stale sidecar without
- * `curveIndex`, a curve at an unexpected index, an Avatar node the FBX lacks.
+ * (readBindPose). A shared set (`<humanoid-root>/_common/<bodyType>`) is checked against the
+ * Avatar of the actor its manifest names; pass that actor's FBX and glb. Exit code 1 when a
+ * clip cannot be solved: a stale sidecar without `curveIndex`, a curve at an unexpected index,
+ * an Avatar node the FBX lacks, a node frame that is not the Avatar's mirrored.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { readBindPose } from './clip-glb.mjs';
-import { goalResiduals, Humanoid, humanoidRigCheck, readHumanoidSidecar } from './humanoid.mjs';
+import {
+  describeOffsets,
+  goalResiduals,
+  Humanoid,
+  humanoidAvatarPath,
+  humanoidRigCheck,
+  readHumanoidSidecar,
+} from './humanoid.mjs';
 
 const [actorDir, modelFbx, modelGlb, ...only] = process.argv.slice(2);
 if (!actorDir || !modelFbx || !modelGlb) {
@@ -29,9 +38,9 @@ if (!actorDir || !modelFbx || !modelGlb) {
   );
   process.exit(1);
 }
-const avatarPath = path.join(actorDir, 'avatar.json');
-if (!fs.existsSync(avatarPath)) {
-  console.error(`${actorDir}: no avatar.json`);
+const avatarPath = humanoidAvatarPath(actorDir);
+if (!avatarPath || !fs.existsSync(avatarPath)) {
+  console.error(`${actorDir}: no avatar.json, and no manifest naming an actor whose Avatar to use`);
   process.exit(1);
 }
 const rig = Humanoid.parseAvatar(JSON.parse(fs.readFileSync(avatarPath, 'utf8')));
@@ -42,6 +51,9 @@ console.log(
     `${[...rig.bones].filter((i) => i >= 0).length}/${Humanoid.HUMAN_BONE_COUNT} human bones; ` +
     `default pose root at ${[...frames.defaults.root.translation].map((x) => (x * rig.scale).toFixed(3)).join(', ')} m`,
 );
+if (frames.offsets.length > 0) {
+  console.log(`prefab joint offsets from the Avatar's T-pose: ${describeOffsets(frames.offsets)}`);
+}
 
 const clipDir = path.join(actorDir, 'clips');
 const files = fs

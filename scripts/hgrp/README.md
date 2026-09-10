@@ -110,8 +110,11 @@ packages/web-client/assets/hgrp/<actor>/   (gitignored — assets are machine-lo
   lighting.json    # the Character Info light rig, as exported
   textures/*.png
   clips/<clip>.glb # one animation each, on the character's skeleton (no meshes)
-  clips/index.json # per clip: name, duration, fps, joints, drivesBody (keys the body's root joint), humanoid
+  clips/index.json # per clip: name, duration, fps, joints, drivesBody (moves the body), humanoid
+                   #   (the body rides as muscle curves the engine solves, not as channels)
   avatar.json      # the Unity Avatar's human description, when the actor has humanoid clips
+  avatar.binding.json  # the Avatar bound to this glb: per joint frame change + prefab local
+                   #   transform, default pose in muscle space (docs/hgrp-humanoid-animation.md §4)
 packages/web-client/assets/hgrp/_common/<bodyType>/clips/<clip>.glb (+ index.json)
 packages/web-client/assets/hgrp/_global/renderpipeline.json
 ```
@@ -191,7 +194,9 @@ How a clip FBX is read (`fbx-read.mjs`, `fbx-anim.mjs`; no Blender involved):
   interpolation cannot reproduce (rotation 1e-3, translation 1e-4).
 - A clip node the model lacks is reported (`driven nodes not on the model`); duplicate bone
   names (Pelica's weapon decos each have a `Root`) are matched by hierarchy path, with Blender's
-  `.001` renaming stripped.
+  `.001` renaming stripped. A clip node the curves leave alone is evaluated at the model's bind
+  pose, not the clip file's own default (the two differ by 100°+ on a humanoid clip's undriven
+  body), so a driven child's local transform agrees with the glb's rest parent.
 - `clips/index.json` records per clip what the engine wants to know before fetching it: the
   duration and `drivesBody` — whether the clip keys the body's root joint (the skinned joint
   with the most skinned joints below it, `Bip001` on these rigs). The export ships overlay
@@ -210,21 +215,30 @@ node scripts/hgrp/clip-check.mjs packages/web-client/assets/hgrp/pelica/pelica.g
 `interact`) are Unity Humanoid clips: their FBX only carries the secondary bones, the body is
 55 muscle values per frame that need the character's Avatar. The export writes them to a
 separate tree (`out_humanoid/<actor>/avatar.json`, `clips/<clip>.humanoid.json` beside the
-clip FBX); passed as `--humanoid-src`, the converter solves the body per frame
-(`packages/renderer/src/assets/humanoid/humanoid.ts` — the engine's solver, imported into the
-scripts through Node's TypeScript type stripping, so there is one implementation), hands the
-24 human bones' world matrices to the same bake as the FBX curves' nodes, and writes the clip
-into the same `clips/<clip>.glb`. `index.json` marks those rows `humanoid: true`;
-`avatar.json` is copied beside the model after its node paths are checked against the glb.
-Formulas and the export's data contract are in `docs/hgrp-humanoid-animation.md`; the reader
-asserts each curve's `curveIndex` and refuses a sidecar from before the exporter's naming fix.
+clip FBX); passed as `--humanoid-src`, the converter bakes the FBX's secondary bones as usual
+and ships the sidecar's muscle, root, goal and Animator-parameter curves in the same
+`clips/<clip>.glb` as channel-less samplers named from the animation's `extras.HGRP_humanoid`
+— the engine solves them at play time against the character the clip plays on, which is what
+lets one clip file play on every character (`packages/renderer/src/assets/humanoid/`, the
+solver the scripts import for their checks through Node's TypeScript type stripping, so there
+is one implementation). `index.json` marks those rows `humanoid: true`; `avatar.json` is copied
+beside the model after its node paths are checked against the glb, with `avatar.binding.json`
+(the per-joint frame change and the prefab's local transforms the engine writes the solved
+pose through, plus the bind pose in muscle space). Formulas, the export's data contract and
+both schemas are in `docs/hgrp-humanoid-animation.md`; the reader asserts each curve's
+`curveIndex` and refuses a sidecar from before the exporter's naming fix.
 
-Two facts the bake depends on: the export's FBX world is Unity's mirrored in x, exactly (the
-node frames too, so a solved pose is mirrored and nothing else — `humanoidRigCheck` verifies
-that per character against the **model** FBX's node defaults, the prefab's T-pose; a **clip**
-FBX's defaults are the A-pose the meshes were bound in); and a curve the clip does not key takes
-the character's default pose, the bind pose read back into muscle space (`readBindPose`
-supplies both poses, as `restByPath` and `byPath`).
+Two facts the binding depends on: the export's FBX world is Unity's mirrored in x, exactly
+(the node frames too, so a solved pose is mirrored and nothing else — `humanoidRigCheck`
+verifies that per character against the **model** FBX's node defaults, the prefab's T-pose,
+and reads the prefab's own local transforms from them: like Unity's Animator, the engine writes
+the solved rotations and the hips' transform onto the prefab's hierarchy and keeps its
+translations, so where the prefab's offsets differ from the Avatar's skeleton — the hips by up
+to 3 cm, the pelvis by up to 3 mm — the prefab wins and the difference is only logged; a
+**clip** FBX's defaults are the A-pose the meshes were bound in); and a curve the clip does not
+key takes the character's default pose, the bind pose read back into muscle space
+(`readBindPose` supplies both poses, as `restByPath` and `byPath`, and the glb's rest as
+`glbRestByPath` for the frame change).
 
 ```bash
 node scripts/hgrp/humanoid-check.mjs ~/Downloads/out_humanoid/yvonne \
@@ -237,6 +251,9 @@ after a rigid fit on a clip authored for this rig; centimetres on every frame wh
 were baked on another rig (the `*_additive` loops), a burst of frames when the source's IK
 targets left the pose (jumps). Neither changes the bake — the muscles are the pose.
 
-The body-type sets under `_common/` come with the rig they were baked on but without a
-character → body-type table, so they are offered to every character like any other foreign
-clip; `no_keyframes` rows in a manifest are camera-only clips.
+The body-type sets under `_common/` come with the rig they were baked on (the manifest's
+`animator`; their humanoid clips are solved against that actor's Avatar, `humanoidAvatarPath`)
+but without a character → body-type table, so they are offered to every character like any
+other foreign clip; `no_keyframes` rows in a manifest are camera-only clips. To check a shared
+set, pass its folder with the rig actor's FBX and glb:
+`humanoid-check.mjs ~/Downloads/out_humanoid/_common/loli ~/Downloads/out/typhoea/typhoea_uimodel.fbx packages/web-client/assets/hgrp/typhoea/typhoea.glb`.

@@ -38,6 +38,11 @@ export class SkeletonComponent extends Component {
   // Uploaded verbatim as the skinning storage buffer.
   palettes: Float32Array[] = [];
 
+  // The Animator float parameters a humanoid clip carries, sampled at the current time, by
+  // name (`WeaponHide`, `FootIKWeight`, …; `#<hash>` for an unnamed one). Rewritten every
+  // frame the clip is applied: a clip without a parameter leaves it absent.
+  readonly parameters = new Map<string, number>();
+
   constructor(props: SkeletonComponentProps = {}) {
     super(SkeletonComponent.componentName);
     this.clipIndex = props.clipIndex ?? 0;
@@ -62,5 +67,6 @@ export class SkeletonComponent extends Component {
     this.scales = undefined;
     this.worldMatrices = undefined;
     this.palettes = [];
+    this.parameters.clear();
   }
 }

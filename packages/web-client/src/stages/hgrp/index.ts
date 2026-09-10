@@ -5,6 +5,7 @@ import { registerDebugTab } from '../../ui/debugPanel';
 import { createHGRPCharacterTab } from '../../ui/hgrpCharacterPanel';
 import { createHGRPStageTab } from '../../ui/hgrpStagePanel';
 import { hgrpStage, loadHGRPCharacter, relayoutHGRPStage, resetHGRPStage } from './characters';
+import { HGRPWeaponHideSystem } from './weaponHide';
 
 // Stage B: the converted HGRP characters render through the HGRP material family — materials
 // joined from preset.json by glb material name. The roster, the lazy per-character load and
@@ -21,6 +22,7 @@ export async function createHGRPStage(world: World) {
   // and the Stage tab switches the rest of the roster on.
   registerDebugTab(createHGRPCharacterTab());
   registerDebugTab(createHGRPStageTab(world));
+  world.addSystem(new HGRPWeaponHideSystem());
 
   for (const character of hgrpStage.characters) {
     if (character.visible) {

@@ -1,15 +1,18 @@
 /**
  * Humanoid clips in the converter: the export's `avatar.json` and `<clip>.humanoid.json`
- * (docs/hgrp-humanoid-animation.md §3) → per-frame world matrices of the human bones in the
- * clip FBX's frames, so clip-glb.mjs can bake them like any driven node while the FBX curves
- * keep driving the secondary bones.
+ * (docs/hgrp-humanoid-animation.md §3). The body is not baked: clip-glb.mjs ships the muscle
+ * curves in the clip glb and the engine solves them against the character it plays on; what
+ * the converter contributes is the character's binding of its Avatar to the glb
+ * (avatarBinding → avatar.binding.json), and the checks that the export's FBX is the Avatar's
+ * skeleton mirrored in x.
  *
  * The solver itself is the engine's (packages/renderer/src/assets/humanoid/humanoid.ts) — one
- * implementation, imported here through Node's TypeScript type stripping. What this module
- * adds is export-specific: reading the sidecar, the character's default pose for the curves a
- * clip leaves out, and the mirror from Unity's space into the export's FBX space.
+ * implementation, imported here through Node's TypeScript type stripping — and is run here
+ * only to validate the clips against their own IK goals (goalResiduals, humanoid-check.mjs).
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { mat4, quat, vec3 } from 'gl-matrix';
 import * as Humanoid from '../../packages/renderer/src/assets/humanoid/humanoid.ts';
 
@@ -37,11 +40,40 @@ for (const [goal, base] of Object.entries(GOAL_SLOTS)) {
   }
 }
 
+// Animator float parameters ride in the sidecar's `otherCurves` under CRC32(name); these four
+// are the ones the roster's 68 hashes could be named (Unity's Animator.StringToHash is CRC32).
+const PARAMETER_NAMES = new Map([
+  [2765131272, 'WeaponHide'],
+  [345227111, 'RootMotionWeight'],
+  [729379380, 'FootIKWeight'],
+  [1624416957, 'ClothRightLeft'],
+]);
+
+/** The character folder a manifest's animator was baked on: `chr_0023_antal_uimodel` -> `antal`. */
+export function actorOfAnimator(animator) {
+  return /^chr_\d+_(.+?)_(?:uimodel|postmodel)$/.exec(animator ?? '')?.[1];
+}
+
+/**
+ * The avatar.json the humanoid clips of a folder are solved against: the folder's own for a
+ * character, and for a shared set (`_common/<bodyType>`, which ships none) the Avatar of the
+ * actor its manifest names as the animator, `<humanoid-root>/<actor>/avatar.json`.
+ */
+export function humanoidAvatarPath(folder) {
+  const own = path.join(folder, 'avatar.json');
+  if (fs.existsSync(own)) return own;
+  const manifestPath = path.join(folder, 'clips', 'manifest.json');
+  if (!fs.existsSync(manifestPath)) return undefined;
+  const actor = actorOfAnimator(JSON.parse(fs.readFileSync(manifestPath, 'utf8')).animator);
+  return actor ? path.join(folder, '..', '..', actor, 'avatar.json') : undefined;
+}
+
 /**
  * A clip sidecar as dense per-frame arrays: `muscles` (55 per frame, MUSCLES order),
  * `rootT` (3), `rootQ` (4), `goals[name].t/q`, with `musclePresent`, `rootPresent` and
  * `goalPresent` saying which of them the clip actually keys — the others read 0 here and take
- * the character's default pose in the driver. Times run from `start` at `sampleRate`.
+ * the character's default pose where the clip is solved. `parameters` are the Animator float
+ * curves (`hash`, `name` when known, `values`). Times run from `start` at `sampleRate`.
  */
 export function readHumanoidSidecar(json) {
   const frames = json.frameCount;
@@ -91,6 +123,20 @@ export function readHumanoidSidecar(json) {
     goals[goal] = { t: vector(`${goal}T`, 3), q: vector(`${goal}Q`, 4) };
     goalPresent[goal] = present(`${goal}T.x`) && present(`${goal}Q.w`);
   }
+  const parameters = (json.otherCurves ?? [])
+    .filter((curve) => curve.typeID === 'Animator' && Array.isArray(curve.values))
+    .map((curve) => {
+      if (curve.values.length !== frames) {
+        throw new Error(
+          `${json.name}: parameter ${curve.attribute} has ${curve.values.length} values for ${frames} frames`,
+        );
+      }
+      return {
+        hash: curve.attribute,
+        name: PARAMETER_NAMES.get(curve.attribute),
+        values: Float32Array.from(curve.values),
+      };
+    });
   return {
     name: json.name,
     frames,
@@ -103,6 +149,7 @@ export function readHumanoidSidecar(json) {
     goalPresent,
     muscles,
     musclePresent,
+    parameters,
     settings: json.settings ?? {},
   };
 }
@@ -118,15 +165,21 @@ function mirrored(out, world) {
 }
 
 /**
- * Check that a character FBX is the Avatar's skeleton mirrored, and read the character's
- * default pose in muscle space. `tPoseByPath` is the FBX's node-default world matrix per path
- * (the prefab's T-pose), `bindByPath` the skin clusters' bind world matrices (readBindPose) —
- * the pose Unity's Animator starts from and the value a curve the clip does not key keeps.
+ * Relate a character FBX to the Avatar and read what the bake needs from it: `tPoseByPath` is
+ * the FBX's node-default world matrix per path (the prefab's T-pose), `bindByPath` the skin
+ * clusters' bind world matrices (readBindPose).
  *
- * Every node's rotation must match the Avatar's T-pose once mirrored, and every bone's local
- * offset from its parent too; the hips may sit millimetres from the prefab's (the Avatar's
- * skeleton pose is Unity's, the prefab's is the model's) — the solver places them from the
- * clip's root anyway, so that offset is reported, not applied.
+ * The FBX must be the Avatar's skeleton mirrored in x: every node's rotation has to match the
+ * Avatar's T-pose once mirrored, or the solved rotations would land in the wrong frames. The
+ * translations need not: Unity's Animator writes the human bones' rotations and the hips'
+ * transform onto the prefab's hierarchy and leaves every other local transform as the prefab
+ * has it, so `locals` returns the prefab's local TRS per Avatar node (Unity space) for the
+ * driver to compose the solved rotations with. Where the prefab's offsets differ from the
+ * Avatar's T-pose — the hips by up to 3 cm, the pelvis by up to 3 mm on half the roster — the
+ * difference is reported as `offsets`, not applied.
+ *
+ * `defaults` is the character's default pose in muscle space, from the bind pose: what Unity's
+ * Animator starts from and the value a curve the clip does not key keeps.
  */
 export function humanoidRigCheck(rig, tPoseByPath, bindByPath) {
   const n = rig.nodes.length;
@@ -141,9 +194,13 @@ export function humanoidRigCheck(rig, tPoseByPath, bindByPath) {
   const local = mat4.create();
   const q = quat.create();
   const avatarQ = quat.create();
-  const avatarT = vec3.create();
   const t = vec3.create();
-  let hipsOffset = 0;
+  const offsets = [];
+  const locals = rig.nodes.map(() => ({
+    translation: vec3.create(),
+    rotation: quat.create(),
+    scale: vec3.create(),
+  }));
   rig.nodes.forEach((node, i) => {
     const fbxRest = tPoseByPath.get(node.path);
     const fbxBind = bindByPath.get(node.path);
@@ -167,24 +224,35 @@ export function humanoidRigCheck(rig, tPoseByPath, bindByPath) {
     if (node.parent >= 0) {
       mirrored(parentRest, tPoseByPath.get(rig.nodes[node.parent].path));
       mat4.multiply(local, mat4.invert(local, parentRest), rest);
+    } else {
+      mat4.copy(local, rest);
+    }
+    mat4.getTranslation(locals[i].translation, local);
+    quat.normalize(locals[i].rotation, mat4.getRotation(locals[i].rotation, local));
+    mat4.getScaling(locals[i].scale, local);
+    if (node.parent >= 0) {
       mat4.getTranslation(t, local);
       const offset = vec3.distance(t, node.translation);
-      if (i === rig.bones[0]) hipsOffset = offset;
-      else if (offset > 1e-3) {
-        throw new Error(
-          `${node.path}: the FBX rest offset from its parent is ${(offset * 1000).toFixed(1)} mm from the Avatar's T-pose`,
-        );
-      }
+      if (offset > 1e-4) offsets.push({ path: node.path, offset });
     }
     mirrored(bindWorlds.subarray(i * 16, i * 16 + 16), fbxBind);
   });
   return {
-    hipsOffset,
+    offsets,
+    locals,
     defaults: {
       muscles: Humanoid.musclesFromWorld(new Float64Array(Humanoid.MUSCLE_COUNT), rig, bindWorlds),
       root: Humanoid.rootFromWorld(rig, bindWorlds),
     },
   };
+}
+
+/** The `offsets` of humanoidRigCheck as one line for a log, empty when there are none. */
+export function describeOffsets(offsets) {
+  if (offsets.length === 0) return '';
+  return offsets
+    .map(({ path, offset }) => `${path.split('/').pop()} ${(offset * 1000).toFixed(1)} mm`)
+    .join(', ');
 }
 
 /** One frame's solver inputs, absent curves filled from the character's default pose. */
@@ -203,33 +271,55 @@ export function frameInputs(sidecar, defaults, frame, musclesOut) {
 }
 
 /**
- * Drive the Avatar's nodes of a clip FBX from a humanoid sidecar. `clipNodesByPath` maps node
- * paths below the animator root to the FBX hierarchy nodes (fbx-anim.mjs); `defaults` is the
- * character's default pose (humanoidRigCheck).
+ * The character's `avatar.binding.json`: what the engine needs to write a pose solved on the
+ * Avatar's skeleton into this glb (renderer/assets/humanoid/binding.ts). Per Avatar node, the
+ * fixed change from the bone's FBX frame to the glb's bone frame — `bind⁻¹ · rest`, the same
+ * offset the generic bake applies to every driven joint — and the prefab's local transform in
+ * Unity space (humanoidRigCheck's `locals`: what the engine writes for the translations, and
+ * for the rotation of a node no muscle drives); plus the character's default pose in muscle
+ * space for the curves a clip lacks. `bindPose` is readBindPose() of the character.
  */
-export function createHumanoidDriver(rig, sidecar, clipNodesByPath, defaults) {
-  const nodeIds = rig.nodes.map((node) => {
-    const clipNode = clipNodesByPath.get(node.path);
-    if (!clipNode) throw new Error(`the clip has no node ${node.path} for the Avatar`);
-    return clipNode.id;
+export function avatarBinding(rig, check, bindPose) {
+  const frame = mat4.create();
+  const inverseBind = mat4.create();
+  const scale = vec3.create();
+  const rotation = quat.create();
+  const translation = vec3.create();
+  const nodes = rig.nodes.map((node, i) => {
+    const bind = bindPose.byPath.get(node.path);
+    const rest = bindPose.glbRestByPath.get(node.path);
+    if (!bind || !rest) throw new Error(`the model has no node ${node.path} for the Avatar`);
+    mat4.multiply(frame, mat4.invert(inverseBind, bind), rest);
+    mat4.getScaling(scale, frame);
+    if (
+      Math.abs(scale[0] - 1) > 1e-3 ||
+      Math.abs(scale[1] - 1) > 1e-3 ||
+      Math.abs(scale[2] - 1) > 1e-3
+    ) {
+      throw new Error(
+        `${node.path}: the glb's bone frame is scaled against the FBX's (${scale.join(', ')})`,
+      );
+    }
+    quat.normalize(rotation, mat4.getRotation(rotation, frame));
+    mat4.getTranslation(translation, frame);
+    return {
+      path: node.path,
+      frame: { rotation: [...rotation], translation: [...translation] },
+      local: {
+        rotation: [...check.locals[i].rotation],
+        translation: [...check.locals[i].translation],
+      },
+    };
   });
-  const pose = Humanoid.createHumanoidPose(rig);
-  const worlds = new Float64Array(rig.nodes.length * 16);
-  const muscles = new Float64Array(Humanoid.MUSCLE_COUNT);
   return {
-    frames: sidecar.frames,
-    fps: sidecar.sampleRate,
-    start: sidecar.start,
-    nodeIds: new Set(nodeIds),
-    /** id -> world matrix (FBX frames) of every Avatar node at `frame`. */
-    worldsAt(frame) {
-      const input = frameInputs(sidecar, defaults, frame, muscles);
-      Humanoid.solveHumanoidPose(rig, input.muscles, 0, input.root, pose, worlds);
-      const out = new Map();
-      for (let i = 0; i < nodeIds.length; i++) {
-        out.set(nodeIds[i], mirrored(mat4.create(), worlds.subarray(i * 16, i * 16 + 16)));
-      }
-      return out;
+    avatar: rig.name,
+    nodes,
+    defaults: {
+      muscles: [...check.defaults.muscles],
+      root: {
+        translation: [...check.defaults.root.translation],
+        rotation: [...check.defaults.root.rotation],
+      },
     },
   };
 }
@@ -319,7 +409,7 @@ export function rigidFit(source, target) {
  * with the hips placed by the body transform, `fitted` after the best rigid transform (what is
  * left is the muscle solve alone). Goals the source baked on another rig sit centimetres off
  * every frame; a clip authored on this rig reads ~0.1 mm fitted. Goals the clip does not key
- * are left out; `defaults` (humanoidRigCheck) fills the curves it does not key.
+ * are left out; `defaults` (humanoidRigCheck's) fills the curves it does not key.
  */
 export function goalResiduals(rig, sidecar, defaults) {
   const pose = Humanoid.createHumanoidPose(rig);
