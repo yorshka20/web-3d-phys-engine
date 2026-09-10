@@ -471,15 +471,21 @@ function addMaterialWidgets(
         const title = `${material.materialName} · ${material.variant.replace('CharacterNPR', 'NPR')}`;
         const key = `hgrp:${character.assetId}:material:${material.materialName}`;
         lazyFolder(section, { title, key }, (materialFolder) => {
-          // The widget set follows the material's enabled subsystems, so a gate flip rebuilds it
-          // — once the change event has finished dispatching on the widget about to go.
+          // The widget set follows the material's enabled subsystems, so a gate flip rebuilds
+          // it. The GATE widgets are built once here and never disposed, for two reasons: a
+          // subsystem's gate is reachable or not by variant and textures alone, so the set
+          // cannot change; and disposing the control the pointer is on is what produced NaN —
+          // tweakpane keeps tracking the drag on a detached slider, whose zero-width bounding
+          // rect turns the position into a division by zero. A gate is a boolean anyway
+          // (_UseXxx is 0 or 1), so it is a checkbox rather than a 0..1 slider.
           let blades: BladeApi[] = [];
           const build = () => {
             for (const blade of blades) {
               blade.dispose();
             }
             blades = [];
-            const { floats: floatDefs, colors: colorDefs } = hgrpMaterialTunables(material);
+            const { floats: allFloats, colors: colorDefs } = hgrpMaterialTunables(material);
+            const floatDefs = allFloats.filter((def) => !def.gate);
 
             const floatValues: Record<string, number> = {};
             for (const def of floatDefs) {
@@ -494,10 +500,6 @@ function addMaterialWidgets(
                   })
                   .on('change', (ev) => {
                     material.floats[def.key] = ev.value as number;
-                    if (def.gate) {
-                      hgrpRefreshPermutation(material);
-                      queueMicrotask(build);
-                    }
                   }),
               );
             }
@@ -519,8 +521,32 @@ function addMaterialWidgets(
               );
             }
           };
+
+          // The gates, above the parameters they switch on: one checkbox each, built once.
+          const gateDefs = initial.floats.filter((def) => def.gate);
+          const gateValues: Record<string, boolean> = {};
+          const readGates = () => {
+            for (const def of gateDefs) {
+              gateValues[def.key] = (material.floats[def.key] ?? def.default) >= 0.5;
+            }
+          };
+          readGates();
+          for (const def of gateDefs) {
+            materialFolder
+              .addBinding(gateValues, def.key, { label: def.key.slice(1) })
+              .on('change', (ev) => {
+                material.floats[def.key] = ev.value ? 1 : 0;
+                hgrpRefreshPermutation(material);
+                build();
+              });
+          }
+
           build();
-          syncers.push(build);
+          syncers.push(() => {
+            readGates();
+            build();
+            materialFolder.refresh();
+          });
         });
       }
 
