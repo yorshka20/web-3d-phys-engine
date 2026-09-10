@@ -14,6 +14,9 @@ export interface GLTFPrimitive {
 }
 
 export interface GLTFMesh {
+  // The document mesh's name: the one handle a consumer has to tell a character's parts apart
+  // (the export names weapon meshes `S_wpn_*`), since primitives carry no identity of their own.
+  name: string;
   primitives: GLTFPrimitive[];
 }
 // A glTF primitive may legally reference no material (glTF 2.0 §3.7.2.1), in which case the

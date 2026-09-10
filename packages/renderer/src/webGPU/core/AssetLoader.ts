@@ -320,7 +320,7 @@ export class AssetLoader {
             primitives.push({ geometry, material });
           }
           meshIndex = meshes.length;
-          meshes.push({ primitives });
+          meshes.push({ name: mesh.getName(), primitives });
           meshIndices.set(mesh, meshIndex);
         }
 

@@ -78,6 +78,10 @@ export interface HGRPStageCharacter {
   offset: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: number;
+  // Whether the weapon meshes rigged into the character document are drawn. The game decides
+  // this per situation (a clip's WeaponHide curve, the photo mode's own rule); the stage has no
+  // such state, so it is a switch the user flips.
+  weaponVisible: boolean;
 }
 
 export const hgrpStage = {
@@ -230,6 +234,7 @@ function readRoster(): HGRPStageCharacter[] {
         offset: { x: 0, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: 1,
+        weaponVisible: true,
       },
     });
   }
@@ -339,7 +344,36 @@ function createCharacterEntity(world: World, character: HGRPStageCharacter): Ent
   );
 
   world.addEntity(entity);
+  applyHGRPWeaponVisibility(character, entity);
   return entity;
+}
+
+// The export names a weapon's meshes `S_wpn_*` (a pen, a staff, a bow), rigged into the
+// character document on the hand sockets or the IK weapon targets; every other mesh is the
+// character. Instance indices, as WebGPU3DRenderComponent addresses them.
+export function hgrpWeaponInstances(character: HGRPStageCharacter): number[] {
+  const model = assetRegistry.getAssetDescriptor<'gltf'>(character.assetId)?.rawData as
+    | GLTFModel
+    | undefined;
+  if (!model) return [];
+  return model.instances.flatMap((instance, index) =>
+    /^S_wpn_/i.test(model.meshes[instance.meshIndex].name) ? [index] : [],
+  );
+}
+
+function applyHGRPWeaponVisibility(character: HGRPStageCharacter, entity: Entity): void {
+  const render = entity.getComponent<WebGPU3DRenderComponent>(
+    WebGPU3DRenderComponent.componentName,
+  );
+  if (!render) return;
+  for (const index of hgrpWeaponInstances(character)) {
+    render.setInstanceVisible(index, character.weaponVisible);
+  }
+}
+
+export function setHGRPWeaponVisible(character: HGRPStageCharacter, visible: boolean): void {
+  character.weaponVisible = visible;
+  if (character.entity) applyHGRPWeaponVisibility(character, character.entity);
 }
 
 // Concurrent switch-ons of the same character (a double click, or the stage's own default

@@ -38,6 +38,11 @@ export class WebGPU3DRenderComponent extends Component {
   // Core rendering properties
   private material: WebGPUMaterialDescriptor;
   private visible: boolean;
+  // Mesh instances of the entity's glTF document that are not drawn, by instance index. A
+  // character document carries its props (a weapon rigged onto a hand socket) as mesh
+  // instances of its own, and the game shows or hides those per situation; hiding them is a
+  // property of this entity's rendering, not of the shared asset.
+  private hiddenInstances = new Set<number>();
   private castShadow: boolean;
   private receiveShadow: boolean;
   private layer: number;
@@ -468,6 +473,16 @@ export class WebGPU3DRenderComponent extends Component {
     this.visible = visible;
   }
 
+  /** Whether mesh instance `index` of the entity's glTF document is drawn. */
+  isInstanceVisible(index: number): boolean {
+    return !this.hiddenInstances.has(index);
+  }
+
+  setInstanceVisible(index: number, visible: boolean): void {
+    if (visible) this.hiddenInstances.delete(index);
+    else this.hiddenInstances.add(index);
+  }
+
   /**
    * Check if casts shadows
    */
@@ -510,6 +525,7 @@ export class WebGPU3DRenderComponent extends Component {
     super.reset();
 
     this.visible = true;
+    this.hiddenInstances.clear();
     this.castShadow = true;
     this.receiveShadow = true;
     this.layer = 0;

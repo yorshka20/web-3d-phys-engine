@@ -28,6 +28,7 @@ separate table no Avatar of this project fills). A humanoid clip keys, per frame
 | `MotionT/Q` | 3 + 4 | the root motion Unity derives from the body transform per the clip's settings |
 | TDoF | 3 per bone | translation degrees of freedom; the export's clips carry them for the upper legs, the Avatars have `hasTDoF` false and ignore them |
 | generic | any | ordinary transform curves for bones outside the human rig: hair, cloth, twist helpers, IK markers, weapon sockets — the clip FBX |
+| Animator parameters | 0–10 | float curves the game's scripts read, keyed by `CRC32(name)` in the sidecar's `otherCurves`: `WeaponHide` (2765131272; 1 in the `blown_start`, `interact_touch_*`, `interact_bomb_start`, `interact_nefarp2_grab` clips — the game hides the weapon per clip through it), `RootMotionWeight` (345227111), `FootIKWeight` (729379380), `ClothRightLeft` (1624416957); the rest are unnamed |
 
 The solver, every formula pinned against the export's data (§2):
 
@@ -164,10 +165,14 @@ runtime — the same file then plays on every character:
     "root":  { "translation": 3, "rotation": 4 },            // animation.samplers indices
     "goals": { "LeftFoot": { "translation": 5, "rotation": 6 }, "RightFoot": { ... },
                "LeftHand": { ... }, "RightHand": { ... } },
-    "muscles": [ { "name": "Spine Front-Back", "sampler": 7 }, ... ]    // SCALAR samplers
+    "muscles": [ { "name": "Spine Front-Back", "sampler": 7 }, ... ],   // SCALAR samplers
+    "parameters": [ { "name": "WeaponHide", "hash": 2765131272, "sampler": 62 }, ... ]
   }
 }
 ```
+
+The Animator parameter curves ride along so the engine can act on the ones it understands
+(`WeaponHide` ≥ 0.5 hides the character's weapon meshes, `S_wpn_*`, for the frame).
 
 The referenced samplers are ordinary animation samplers no channel targets; a viewer that
 ignores the extension still plays the secondary channels. Engine touch points: `HumanoidRig`

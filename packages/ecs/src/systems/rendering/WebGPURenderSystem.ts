@@ -339,6 +339,7 @@ export class WebGPURenderSystem extends System {
     // per-instance transform slot — primitives of one instance share it (same matrices).
     const renderData: RenderData[] = [];
     gltfModel.instances.forEach((instance, instanceIndex) => {
+      if (!renderComponent.isInstanceVisible(instanceIndex)) return;
       const worldMatrix = mat4.create();
       mat4.multiply(worldMatrix, entityWorldMatrix, instance.worldMatrix);
       const normalMatrix = this.calculateNormalMatrix(worldMatrix as Float32Array);

@@ -17,8 +17,10 @@ import {
   ensureHGRPClip,
   hgrpStage,
   HGRPStageCharacter,
+  hgrpWeaponInstances,
   onHGRPStageChange,
   resetHGRPPlacement,
+  setHGRPWeaponVisible,
 } from '../stages/hgrp/characters';
 import type { DebugTab } from './debugPanel';
 import { lazyFolder } from './lazyFolder';
@@ -283,6 +285,13 @@ function addCharacterFolder(
       expanded,
     },
     (folder) => {
+      // The game shows a character's weapon per situation (a clip's WeaponHide curve, the
+      // photo mode's own rule); the stage has no such state, so the choice is the user's.
+      if (hgrpWeaponInstances(character).length > 0) {
+        folder
+          .addBinding(character, 'weaponVisible', { label: 'weapon' })
+          .on('change', (ev) => setHGRPWeaponVisible(character, ev.value));
+      }
       addTransformWidgets(folder, character);
       addAnimationWidgets(folder, character, registerScrub);
       if (materials.length > 0) {
