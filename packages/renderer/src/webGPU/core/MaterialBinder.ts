@@ -341,14 +341,13 @@ export class MaterialBinder {
   ): Promise<GPUTexture> {
     const format: GPUTextureFormat = srgb ? 'rgba8unorm-srgb' : 'rgba8unorm';
     if (textureId) {
-      // First check if GPU texture already exists in TextureManager
-      let texture = this.textureManager.getTexture(textureId);
+      // A GPU texture's format is fixed when it is created, and the ripped materials do assign
+      // one image to a color slot on one material and a data slot on another (Typhoea's
+      // cloth_06 _E map). So the GPU cache id carries the role while the decoded ImageBitmap in
+      // the AssetRegistry stays shared: one upload per role, each sampled as its slot means it.
+      const gpuId = srgb ? `${textureId}:srgb` : textureId;
+      let texture = this.textureManager.getTexture(gpuId);
       if (texture) {
-        if (texture.format !== format) {
-          console.warn(
-            `[MaterialBinder] Texture ${textureId} already created as ${texture.format}, requested ${format} — one image is used in both color and data roles`,
-          );
-        }
         return texture;
       }
 
@@ -359,8 +358,8 @@ export class MaterialBinder {
           // Create GPU texture from AssetRegistry data
           const textureData = textureAsset.rawData;
           if (textureData instanceof ImageBitmap) {
-            texture = this.textureManager.createTexture(textureId, {
-              id: textureId,
+            texture = this.textureManager.createTexture(gpuId, {
+              id: gpuId,
               width: textureData.width,
               height: textureData.height,
               format,
@@ -371,7 +370,7 @@ export class MaterialBinder {
               initialData: textureData,
             });
 
-            console.log(`[MaterialBinder] Created GPU texture from AssetRegistry: ${textureId}`);
+            console.log(`[MaterialBinder] Created GPU texture from AssetRegistry: ${gpuId}`);
             return texture;
           }
         } catch (error) {
