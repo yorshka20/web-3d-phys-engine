@@ -14,7 +14,8 @@ import { mat3, mat4, quat, vec3 } from 'gl-matrix';
  * Everything here is in Unity's own space (left-handed, +y up, the export's Avatar values
  * verbatim). The formulas are a reconstruction, pinned against the export's data
  * (docs/hgrp-humanoid-animation.md §1): the T-pose clip's muscles equal the bind pose inverted
- * through them, and the solved hands and feet land on the clips' own IK goals to 0.2 mm.
+ * through them, and the solved hands and feet land on the clips' own IK goals to 0.1 mm after
+ * a rigid fit, millimetres in absolute terms (the body-position rule, §6 there).
  */
 
 /** The 25 human bones in Mecanim's internal order — the order the Avatar's bone tables use. */
@@ -516,10 +517,11 @@ const scratchB = vec3.create();
 const scratchM3 = mat3.create();
 
 /**
- * The body orientation of a pose: up is the line from the hip joints' midpoint to the
+ * The orientation frame of a pose: up is the line from the hip joints' midpoint to the
  * shoulder joints' midpoint, the left-right axis the sum of the right-minus-left upper-leg and
  * upper-arm vectors (Unity's "average of the lower and upper body orientation"), projected onto
- * the plane perpendicular to up. Measured: 0.1° from the stored body rotation.
+ * the plane perpendicular to up. The body rotation a clip stores is this frame relative to the
+ * T-pose's (bodyTransform); the T-pose's own frame is the Avatar's `rootX` rotation.
  */
 export function bodyOrientation(out: quat, rig: HumanoidRig, worlds: Float64Array): quat {
   const b = (name: HumanBone) => rig.bones[HUMAN_BONES.indexOf(name)];
@@ -553,8 +555,14 @@ export function bodyOrientation(out: quat, rig: HumanoidRig, worlds: Float64Arra
   return quat.normalize(out, out);
 }
 
-const scratchTPose = new WeakMap<HumanoidRig, { worlds: Float64Array; centre: vec3 }>();
-function tPoseReference(rig: HumanoidRig): { worlds: Float64Array; centre: vec3 } {
+interface TPoseReference {
+  worlds: Float64Array;
+  centre: vec3;
+  /** Inverse of the T-pose's orientation frame. */
+  orientationInverse: quat;
+}
+const scratchTPose = new WeakMap<HumanoidRig, TPoseReference>();
+function tPoseReference(rig: HumanoidRig): TPoseReference {
   let ref = scratchTPose.get(rig);
   if (!ref) {
     const worlds = composeRigWorld(
@@ -562,15 +570,25 @@ function tPoseReference(rig: HumanoidRig): { worlds: Float64Array; centre: vec3 
       setTPose(rig, createHumanoidPose(rig)),
       new Float64Array(rig.nodes.length * 16),
     );
-    ref = { worlds, centre: massCentre(vec3.create(), rig, worlds) };
+    const orientation = bodyOrientation(quat.create(), rig, worlds);
+    ref = {
+      worlds,
+      centre: massCentre(vec3.create(), rig, worlds),
+      orientationInverse: quat.conjugate(quat.create(), orientation),
+    };
     scratchTPose.set(rig, ref);
   }
   return ref;
 }
 
 /**
- * The body transform of a pose in the rig's root space, metres: the Avatar's T-pose root
- * displaced by the mass centre's movement from the T-pose, oriented by bodyOrientation.
+ * The body transform of a pose in the rig's root space, metres, both parts measured from the
+ * T-pose: the Avatar's T-pose root displaced by the mass centre's movement, and the orientation
+ * frame with the T-pose's frame undone in body space (`frame(pose) · frame(tPose)⁻¹`), so the
+ * T-pose reads as identity. The frame's tilt is a property of the rig — 0.08° on the girl
+ * skeletons, 2.2° on the loli ones, 3° on lifeng — and applying it in body space is what the
+ * clips' own IK goals single out: with the tilt left in, the solved hands and feet sit a
+ * constant angle off around the body's x axis on every frame, whatever way the body faces.
  */
 export function bodyTransform(
   outTranslation: vec3,
@@ -583,6 +601,8 @@ export function bodyTransform(
   vec3.sub(outTranslation, outTranslation, ref.centre);
   vec3.add(outTranslation, outTranslation, rig.rootTranslation);
   bodyOrientation(outRotation, rig, worlds);
+  quat.multiply(outRotation, outRotation, ref.orientationInverse);
+  quat.normalize(outRotation, outRotation);
 }
 
 /**

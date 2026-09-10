@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  bodyOrientation,
   bodyTransform,
   composeRigWorld,
   createHumanoidPose,
@@ -110,14 +111,21 @@ describe.skipIf(!existsSync(avatarPath))('yvonne avatar', () => {
     expect(rig.masses.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 5);
   });
 
-  it('reproduces the stored T-pose body transform from the T-pose itself', () => {
+  it('reads the T-pose as the stored root position with identity rotation', () => {
     const pose = setTPose(rig, createHumanoidPose(rig));
     const worlds = composeRigWorld(rig, pose, new Float64Array(rig.nodes.length * 16));
     const t = vec3.create();
     const q = quat.create();
     bodyTransform(t, q, rig, worlds);
     expect(vec3.distance(t, rig.rootTranslation)).toBeLessThan(1e-6);
-    expect(Math.abs(quat.dot(q, rig.rootRotation))).toBeGreaterThan(Math.cos(deg(0.05)));
+    expect(Math.abs(q[3])).toBeGreaterThan(Math.cos(deg(0.005)));
+  });
+
+  it("stores the T-pose's orientation frame as rootX", () => {
+    const pose = setTPose(rig, createHumanoidPose(rig));
+    const worlds = composeRigWorld(rig, pose, new Float64Array(rig.nodes.length * 16));
+    const frame = bodyOrientation(quat.create(), rig, worlds);
+    expect(Math.abs(quat.dot(frame, rig.rootRotation))).toBeGreaterThan(Math.cos(deg(0.05)));
   });
 
   it('puts the T-pose hands at arm length and the foot goals on the ground', () => {
