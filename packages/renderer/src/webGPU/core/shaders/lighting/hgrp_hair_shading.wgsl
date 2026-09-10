@@ -115,5 +115,22 @@ fn hgrp_shade_hair(input: GLTFVertexOutput) -> vec4<f32> {
         mix(hgrp_material.line_saturation, 1.0, line_dark),
     );
 
-    return vec4<f32>(hgrp_bright_saturation(diffuse + spec), core.alpha);
+    let color = hgrp_punctual_lights(
+        hgrp_bright_saturation(diffuse + spec),
+        HGRPPunctualInputs(
+            input.world_position,
+            n,
+            normalize(input.world_normal),
+            view_dir,
+            clamp(dot(n, view_dir), 0.0, 1.0),
+            core.col,
+            core.albedo_d,
+            core.shadow_d,
+            f0,
+            hgrp_ggx_alpha(1.0 - surface.a),
+            1.0 - surface.a,
+            0.0,
+        ),
+    );
+    return vec4<f32>(color, core.alpha);
 }

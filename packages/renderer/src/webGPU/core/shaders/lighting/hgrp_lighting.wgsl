@@ -30,6 +30,13 @@ fn hgrp_cam_dir() -> vec3<f32> {
 // renderer's root bone, the head, so the shadow turns with the head (guess ledger D5). The
 // palette entry maps bind-pose model space to posed model space, so the bind-pose axes come
 // out as the posed head's axes.
+// The draw's own origin in world space. The additional lights' shadow stand-in reads the
+// direction out of it (b451: `normalize(posWS - objectOrigin)`), so a light near the body does
+// not light its far side.
+fn hgrp_object_origin() -> vec3<f32> {
+    return mvp.model_matrix[3].xyz;
+}
+
 fn hgrp_object_to_world() -> mat3x3<f32> {
     let model = mat3x3<f32>(
         mvp.model_matrix[0].xyz,
@@ -93,6 +100,10 @@ fn hgrp_shadow_color_adjust(base: vec3<f32>, brightness: f32, saturation: f32) -
 struct HGRPBlend {
     col: vec3<f32>,
     w2: f32,
+    // The two diffuse tiers the blend interpolates, kept because the additional-light formulas
+    // read them directly rather than the blended result (lighting/hgrp_punctual.wgsl)
+    albedo_d: vec3<f32>,
+    shadow_d: vec3<f32>,
 }
 
 // col' (§1.7), the shade blend. w2 = min(ao, ramp.a) is the lit weight: the ramp's alpha
@@ -121,7 +132,7 @@ fn hgrp_shade_blend(
     let chroma = max(ramp.r, max(ramp.g, ramp.b)) - min(ramp.r, min(ramp.g, ramp.b));
     let tinted = col * mix(vec3<f32>(1.0), ramp.rgb, chroma);
     let normalized = tinted * clamp(hgrp_luma(col) / max(hgrp_luma(tinted), 0.001), 0.0, 1.5);
-    return HGRPBlend(normalized, w2);
+    return HGRPBlend(normalized, w2, albedo_d, shadow_color * kd);
 }
 
 // Saturation lift of the bright range (§1.11), applied to diffuse + specular before the

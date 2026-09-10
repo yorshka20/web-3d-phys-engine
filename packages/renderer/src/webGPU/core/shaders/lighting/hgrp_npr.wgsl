@@ -72,6 +72,11 @@ struct HGRPShade {
     alpha: f32,
     w2: f32,
     spec_gate: f32,
+    // The shade blend before light(N) and its two diffuse tiers: what the additional-light
+    // formulas read (lighting/hgrp_punctual.wgsl), each light supplying its own light(N).
+    col: vec3<f32>,
+    albedo_d: vec3<f32>,
+    shadow_d: vec3<f32>,
 }
 
 // The texture-driven half of the shading core, everything the shade blend reads: the base
@@ -138,6 +143,9 @@ fn hgrp_shade_lit(
         inputs.base.a,
         blend.w2,
         inputs.spec_gate,
+        blend.col,
+        blend.albedo_d,
+        blend.shadow_d,
     );
 }
 

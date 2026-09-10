@@ -3,6 +3,7 @@ import { bloomSettings } from '@renderer/webGPU/renderer/passes/BloomPass';
 import { taaSettings } from '@renderer/webGPU/renderer/passes/TAAPass';
 import { requestFrameHold } from '@renderer/webGPU/renderer/passes/DebugViewPass';
 import { tonemapSettings } from '@renderer/webGPU/renderer/passes/TonemapPass';
+import { activeSceneLightCount, sceneLights } from '@renderer/webGPU/renderer/sceneLights';
 import {
   DEBUG_VIEW_MODES,
   HGRP_DEBUG_CHANNELS,
@@ -15,7 +16,9 @@ import {
   hgrpStage,
   setHGRPCharacterVisible,
 } from '../stages/hgrp/characters';
+import { hgrpLightRig } from '../stages/hgrp/lightRig';
 import type { DebugTab } from './debugPanel';
+import { lazyFolder } from './lazyFolder';
 
 // The Stage tab: what the whole scene shares — who stands on it, how big the layout is, the
 // lighting and backdrop it is lit by, and the post chain it is graded through. Everything
@@ -133,6 +136,34 @@ function addLightingWidgets(pane: Pane): void {
     .on('change', (ev) => {
       sceneSettings.clearColor = [ev.value.r, ev.value.g, ev.value.b];
     });
+
+  addLightRigWidgets(lighting);
+}
+
+// The characters' own light rigs (stages/hgrp/lightRig.ts): the game's per-character Character
+// Info lights, which shade through four "character light type" formulas rather than as physical
+// lights. Off by default — the conversion from a Unity light's `intensity` to the radiance the
+// game's C# side writes into its light buffer did not come with the rip, so the rig's level is
+// the one open value (the per-light colors, ranges, cones and type parameters are all data).
+function addLightRigWidgets(parent: ReturnType<Pane['addFolder']>): void {
+  lazyFolder(parent, { title: 'Character light rig', key: 'hgrp-light-rig' }, (folder) => {
+    const readout = {
+      get lights() {
+        return `${activeSceneLightCount()} / ${hgrpLightRig.loaded}`;
+      },
+    };
+    folder.addBinding(sceneLights, 'enabled', { label: 'rig' });
+    folder.addBinding(sceneLights, 'intensityScale', { min: 0, max: 2, step: 0.01 });
+    folder.addBinding(readout, 'lights', { readonly: true });
+    // One switch per character-light type, so the four formulas can be told apart on screen:
+    // rim lights are the loud ones (12 per character at intensity 12-18) and the fog type does
+    // not light at all — it lerps the whole pixel toward its color.
+    folder.addBinding(sceneLights.types, 'diffuse');
+    folder.addBinding(sceneLights.types, 'ramp');
+    folder.addBinding(sceneLights.types, 'specular');
+    folder.addBinding(sceneLights.types, 'rim');
+    folder.addBinding(sceneLights.types, 'fog');
+  });
 }
 
 // Global linear-light exposure ahead of the ACES curve, then grading after it and the

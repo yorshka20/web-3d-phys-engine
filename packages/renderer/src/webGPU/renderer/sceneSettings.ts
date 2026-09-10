@@ -156,7 +156,10 @@ export const HGRP_CHARACTER_GLOBALS = {
 // SceneLighting uniform block (core/uniforms.wgsl): seven vec4s in struct order.
 export const SCENE_LIGHTING_BYTE_SIZE = 112;
 
-export function packSceneLighting(out: Float32Array = new Float32Array(28)): Float32Array {
+export function packSceneLighting(
+  out: Float32Array = new Float32Array(28),
+  lightCount = 0,
+): Float32Array {
   const g = HGRP_CHARACTER_GLOBALS;
   const [dx, dy, dz] = sceneSettings.lightDirection;
   const len = Math.hypot(dx, dy, dz) || 1;
@@ -169,6 +172,9 @@ export function packSceneLighting(out: Float32Array = new Float32Array(28)): Flo
   out.set(sceneSettings.ambientColor, 12);
   out.set(g.hemiAxis, 16);
   out.set(g.hemiParams, 20);
-  out.set([sceneSettings.envGradient, sceneSettings.envRadiance, sceneSettings.exposure, 0], 24);
+  out.set(
+    [sceneSettings.envGradient, sceneSettings.envRadiance, sceneSettings.exposure, lightCount],
+    24,
+  );
   return out;
 }

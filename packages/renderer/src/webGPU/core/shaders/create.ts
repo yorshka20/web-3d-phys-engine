@@ -491,6 +491,7 @@ function hgrpNprFamilyIncludes(
       ? [
           ...hgrpSubsystemIncludes(permutation),
           'lighting/hgrp_lighting.wgsl',
+          'lighting/hgrp_punctual.wgsl',
           'lighting/hgrp_npr.wgsl',
           ...(permutation.variant === 'CharacterNPR_Eye' ? ['lighting/hgrp_eye_shading.wgsl'] : []),
           ...(permutation.variant === 'CharacterNPR_Hair'

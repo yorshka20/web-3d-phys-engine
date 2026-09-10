@@ -46,8 +46,25 @@ struct SceneLighting {
     hemi_params: vec4<f32>,
     // Cubemap stand-in (sceneSettings.envGradient / envRadiance): x up/down contrast of the
     // hemisphere, y its radiance; z the scene exposure the post pass multiplies in
-    // (sceneSettings.exposure), for a material that must come out as authored regardless
+    // (sceneSettings.exposure), for a material that must come out as authored regardless;
+    // w the number of lights the punctual light buffer holds (renderer/sceneLights.ts)
     env_stand_in: vec4<f32>,
+}
+
+// One light of the character light rig, as renderer/sceneLights.ts packs it — the game's
+// `_LightDataBuffer_PunctualLightData` in our own field order (its layout is a packed
+// half-float affair the rip's C# side owns). `npr_type` selects one of the four character-light
+// formulas and `npr_params` is that type's parameter row; the meanings are in sceneLights.ts.
+struct HGRPPunctualLight {
+    // xyz: world position; w: range, beyond which the light is skipped
+    position_range: vec4<f32>,
+    // rgb: linear color x intensity; w: the falloff exponent (< 0 selects the URP curve)
+    color_falloff: vec4<f32>,
+    // xyz: the direction a spot light shines; w: cos of its outer angle
+    spot_dir_cos_outer: vec4<f32>,
+    // x: 1 / (cos inner - cos outer); y: npr type; z: specular multiplier; w: 1 for a spot
+    spot_scale_type: vec4<f32>,
+    npr_params: vec4<f32>,
 }
 
 // Material debug view (renderer/sceneSettings.ts packHGRPDebugView): x = texture slot id

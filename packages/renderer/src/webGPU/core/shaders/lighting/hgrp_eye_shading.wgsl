@@ -55,5 +55,24 @@ fn hgrp_shade_eye(
     let light = hgrp_light(hgrp_horizontal(n_shade), scene_lighting.env_color.rgb, blend.w2);
 
     let color = light * blend.col + matcap.color * (light * hgrp_shade_spec(blend.w2));
-    return vec4<f32>(hgrp_bright_saturation(color), base.a);
+    // The rig's lights reach the iris too; the eye has no GGX lobe of its own, so they add no
+    // highlight (a zero specular color) and the matcap stays the only reflection.
+    let lit = hgrp_punctual_lights(
+        hgrp_bright_saturation(color),
+        HGRPPunctualInputs(
+            world_position,
+            n_shade,
+            n,
+            view_dir,
+            clamp(dot(n_shade, view_dir), 0.0, 1.0),
+            blend.col,
+            blend.albedo_d,
+            blend.shadow_d,
+            vec3<f32>(0.0),
+            hgrp_ggx_alpha(1.0),
+            1.0,
+            0.0,
+        ),
+    );
+    return vec4<f32>(lit, base.a);
 }

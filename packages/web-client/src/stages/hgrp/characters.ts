@@ -12,6 +12,8 @@ import { attachHumanoidRig } from '@renderer/assets/humanoid/binding';
 import { HGRPCharacterFlags, HGRPPreset } from '@renderer/material/hgrp';
 import { quat, vec3 } from 'gl-matrix';
 
+import { loadHGRPLightRig } from './lightRig';
+
 // The HGRP stage roster: which characters exist, which of them are on stage, and where they
 // stand. A character's assets are only fetched when it is first switched on, because one
 // character costs 200-350 MB of decoded texture data that is held for the session — loading
@@ -64,6 +66,9 @@ interface HGRPCharacterSource {
   // characters that have humanoid clips (scripts/hgrp/convert.mjs --humanoid-src)
   avatarUrl?: string;
   avatarBindingUrl?: string;
+  // The Character Info light rig (lightRig.ts); three characters have no Character Info
+  // prefab in the client build and therefore no rig
+  lightingUrl?: string;
 }
 
 export interface HGRPStageCharacter {
@@ -135,6 +140,12 @@ const TEXTURE_URLS = import.meta.glob('../../../assets/hgrp/*/textures/*.png', {
 // A character with humanoid clips carries its Avatar (the export's avatar.json, verbatim) and
 // the converter's binding of it to the glb; both are fetched with the model, never inlined.
 const AVATAR_URLS = import.meta.glob('../../../assets/hgrp/*/avatar.json', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
+const LIGHTING_URLS = import.meta.glob('../../../assets/hgrp/*/lighting.json', {
   eager: true,
   query: '?url',
   import: 'default',
@@ -250,6 +261,7 @@ function readRoster(): HGRPStageCharacter[] {
           avatarUrl: AVATAR_URLS[`../../../assets/hgrp/${folder}/avatar.json`],
           avatarBindingUrl:
             AVATAR_BINDING_URLS[`../../../assets/hgrp/${folder}/avatar.binding.json`],
+          lightingUrl: LIGHTING_URLS[`../../../assets/hgrp/${folder}/lighting.json`],
         },
         entity: undefined,
         visible: DEFAULT_CHARACTER_FOLDERS.includes(folder),
@@ -464,6 +476,8 @@ export function loadHGRPCharacter(world: World, character: HGRPStageCharacter): 
     const { min, max } = modelBounds(model);
     character.anchor = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
     character.width = max[0] - min[0];
+    // After the anchor: the light rig's ground origin is placed on the model's feet
+    await loadHGRPLightRig(character);
     character.weaponInstances = weaponInstancesOf(model);
     character.entity = createCharacterEntity(world, character);
 

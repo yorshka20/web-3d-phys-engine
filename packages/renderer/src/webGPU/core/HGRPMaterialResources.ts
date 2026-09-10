@@ -49,6 +49,14 @@ export function getOrCreateHGRPFrameBindGroupLayout(
         visibility: GPUShaderStage.FRAGMENT,
         buffer: { type: 'uniform' },
       },
+      {
+        // The character light rig (renderer/sceneLights.ts): a stage's per-character Character
+        // Info lights, walked by the shading's additional-light loop. A storage buffer because
+        // the rig runs to a few hundred lights across the roster.
+        binding: 3,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: { type: 'read-only-storage' },
+      },
     ],
     label: HGRP_FRAME_BIND_GROUP_LAYOUT_ID,
   });

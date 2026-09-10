@@ -67,9 +67,25 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // silver hardware (metallic 1) it is the whole look, since a metal has no diffuse.
     let ibl = hgrp_ibl(f0, roughness, ndotv, n, view_dir, core.w2, scene_lighting.env_color.rgb);
 
-    let out_alpha = mix(core.alpha, fur.coverage, fur.alpha_weight);
-    return hgrp_debug_view(
-        vec4<f32>(hgrp_bright_saturation(core.lit + spec) + emission + vfx + ibl, out_alpha),
-        input.uv0,
+    // The character light rig closes the pixel, as the game's loop does (formulas §1.11)
+    let color = hgrp_punctual_lights(
+        hgrp_bright_saturation(core.lit + spec) + emission + vfx + ibl,
+        HGRPPunctualInputs(
+            input.world_position,
+            n,
+            normalize(input.world_normal),
+            view_dir,
+            ndotv,
+            core.col,
+            core.albedo_d,
+            core.shadow_d,
+            f0 * rs,
+            alpha,
+            roughness,
+            metallic,
+        ),
     );
+
+    let out_alpha = mix(core.alpha, fur.coverage, fur.alpha_weight);
+    return hgrp_debug_view(vec4<f32>(color, out_alpha), input.uv0);
 }

@@ -10,6 +10,12 @@ import { GPUResourceCoordinator } from '../core/GPUResourceCoordinator';
 import { InstanceManager } from '../core/InstanceManager';
 import { getOrCreateHGRPFrameBindGroupLayout } from '../core/HGRPMaterialResources';
 import {
+  SCENE_LIGHT_BYTE_SIZE,
+  SCENE_LIGHT_CAPACITY,
+  SCENE_LIGHT_FLOATS,
+  packSceneLights,
+} from './sceneLights';
+import {
   HGRP_DEBUG_VIEW_BYTE_SIZE,
   SCENE_LIGHTING_BYTE_SIZE,
   activeDebugView,
@@ -140,6 +146,10 @@ export class WebGPURenderer implements IWebGPURenderer {
   // Material debug view selector (group 3 binding 2)
   private debugViewBuffer?: GPUBuffer;
   private readonly debugViewData = new Float32Array(HGRP_DEBUG_VIEW_BYTE_SIZE / 4);
+  // Character light rig (group 3 binding 3): the active lights of sceneLights, rewritten every
+  // frame; the count travels in the SceneLighting uniform
+  private punctualLightBuffer?: GPUBuffer;
+  private readonly punctualLightData = new Float32Array(SCENE_LIGHT_CAPACITY * SCENE_LIGHT_FLOATS);
 
   // batch rendering
   private readonly renderBatches: Map<string, RenderBatch>;
@@ -862,10 +872,21 @@ export class WebGPURenderer implements IWebGPURenderer {
       (2 * jitterY) / canvas.height,
     );
 
+    // The light rig first: its count is what the SceneLighting uniform carries to the shading.
+    const lightCount = packSceneLights(this.punctualLightData);
+    if (lightCount > 0) {
+      this.device.queue.writeBuffer(
+        this.getPunctualLightBuffer(),
+        0,
+        this.punctualLightData,
+        0,
+        lightCount * SCENE_LIGHT_FLOATS,
+      );
+    }
     this.device.queue.writeBuffer(
       this.getSceneLightingBuffer(),
       0,
-      packSceneLighting(this.sceneLightingData),
+      packSceneLighting(this.sceneLightingData, lightCount),
     );
     this.device.queue.writeBuffer(
       this.getDebugViewBuffer(),
@@ -923,6 +944,7 @@ export class WebGPURenderer implements IWebGPURenderer {
           { binding: 0, resource: this.sizedTextures.prepassDepth.createView() },
           { binding: 1, resource: { buffer: this.getSceneLightingBuffer() } },
           { binding: 2, resource: { buffer: this.getDebugViewBuffer() } },
+          { binding: 3, resource: { buffer: this.getPunctualLightBuffer() } },
         ],
       });
       this.hgrpFrameBindGroupTexture = this.sizedTextures.prepassDepth;
@@ -939,6 +961,19 @@ export class WebGPURenderer implements IWebGPURenderer {
       });
     }
     return this.debugViewBuffer;
+  }
+
+  // Allocated at its capacity once: the bind group is cached across frames, so the buffer's
+  // size cannot follow the rig's length.
+  private getPunctualLightBuffer(): GPUBuffer {
+    if (!this.punctualLightBuffer) {
+      this.punctualLightBuffer = this.device.createBuffer({
+        label: 'hgrpPunctualLights',
+        size: SCENE_LIGHT_CAPACITY * SCENE_LIGHT_BYTE_SIZE,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+    }
+    return this.punctualLightBuffer;
   }
 
   private getSceneLightingBuffer(): GPUBuffer {

@@ -19,3 +19,7 @@
 @group(3) @binding(0) var scene_depth: texture_depth_2d;
 @group(3) @binding(1) var<uniform> scene_lighting: SceneLighting;
 @group(3) @binding(2) var<uniform> hgrp_debug: HGRPDebugView;
+// The character light rig (renderer/sceneLights.ts). The buffer is allocated at its capacity
+// and only the first scene_lighting.env_stand_in.w entries hold this frame's lights, so the
+// count comes from the uniform rather than from arrayLength.
+@group(3) @binding(3) var<storage, read> punctual_lights: array<HGRPPunctualLight>;

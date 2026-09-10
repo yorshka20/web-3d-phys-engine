@@ -5,6 +5,7 @@ import { registerDebugTab } from '../../ui/debugPanel';
 import { createHGRPCharacterTab } from '../../ui/hgrpCharacterPanel';
 import { createHGRPStageTab } from '../../ui/hgrpStagePanel';
 import { hgrpStage, loadHGRPCharacter, relayoutHGRPStage, resetHGRPStage } from './characters';
+import { HGRPLightRigSystem } from './lightRig';
 import { HGRPWeaponHideSystem } from './weaponHide';
 
 // Stage B: the converted HGRP characters render through the HGRP material family — materials
@@ -23,6 +24,7 @@ export async function createHGRPStage(world: World) {
   registerDebugTab(createHGRPCharacterTab());
   registerDebugTab(createHGRPStageTab(world));
   world.addSystem(new HGRPWeaponHideSystem());
+  world.addSystem(new HGRPLightRigSystem());
 
   for (const character of hgrpStage.characters) {
     if (character.visible) {

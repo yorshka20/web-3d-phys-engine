@@ -17,16 +17,16 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.uv0,
     );
     let view_dir = normalize(mvp.camera_pos - input.world_position);
-    // No surface map on skin: the hook's off-stub yields the material's scalars
+    let inputs = hgrp_shade_inputs(input.uv0, n, view_dir, 0.0);
+    // No surface map on skin: the hook's off-stub yields the material's scalars, so the
+    // lighting ceiling stays 1. The decompiled skin variants put _BaseMap.a where cloth has
+    // _MetallicGlossMap.b (b96: ao = base.a x screen shadow), but the ripped D maps' alpha is
+    // NOT that input: it is authoring leftover (Yvonne's is 0 over 41% of the body mesh,
+    // Pelica's a two-level region mask, both with a uniform light albedo underneath), and the
+    // game shows no shadow on forward-facing bare skin — its texture importer drops the alpha,
+    // so the shader reads 1. Learnings hgrp-decompiled-formulas.md §2.
     let surface = hgrp_metallic_gloss(input.uv0);
-    let core = hgrp_shade_core(
-        input.uv0,
-        n,
-        hgrp_horizontal(n),
-        scene_lighting.env_color.rgb,
-        surface,
-        view_dir,
-    );
+    let core = hgrp_shade_lit(inputs, hgrp_horizontal(n), scene_lighting.env_color.rgb, surface);
 
     // Specular slot (formulas §2): F0 = lerp(0.04 x _Specular x SDF mask G, albedo, _Metallic),
     // no spec ramp; the nose highlight is added into the same slot so it is lit like a highlight.
@@ -41,9 +41,23 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         (hgrp_shade_spec(core.w2)) * core.light;
 
     let emission = hgrp_emission(input.uv0);
-
-    return hgrp_debug_view(
-        vec4<f32>(hgrp_bright_saturation(core.lit + spec) + emission, core.alpha),
-        input.uv0,
+    let color = hgrp_punctual_lights(
+        hgrp_bright_saturation(core.lit + spec) + emission,
+        HGRPPunctualInputs(
+            input.world_position,
+            n,
+            normalize(input.world_normal),
+            view_dir,
+            ndotv,
+            core.col,
+            core.albedo_d,
+            core.shadow_d,
+            f0,
+            alpha,
+            roughness,
+            surface.r,
+        ),
     );
+
+    return hgrp_debug_view(vec4<f32>(color, core.alpha), input.uv0);
 }
