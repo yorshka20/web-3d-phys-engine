@@ -2,6 +2,7 @@ import type { HGRPShaderVariant } from './descriptor';
 import {
   HGRP_SUBSYSTEMS,
   HGRPSubsystem,
+  hgrpSubsystem,
   HGRPSubsystemId,
   hgrpSubsystemTextures,
 } from './subsystems';
@@ -75,6 +76,25 @@ export function hgrpSubsystemAppliesTo(
 
 export function hgrpApplicableSubsystems(variant: HGRPShaderVariant): HGRPSubsystem[] {
   return HGRP_STATIC_SUBSYSTEMS.filter((subsystem) => hgrpSubsystemAppliesTo(subsystem, variant));
+}
+
+/**
+ * Whether a draw-list subsystem's gate is on for a material: the material's shader must carry
+ * the pass that reads the gate (subsystems.ts `drawList.variants`) and the preset must set it.
+ * The one place the draw lists and the calibration GUI ask, so a gate never routes a material
+ * into a pass its shader does not have.
+ */
+export function hgrpDrawListGateOn(
+  material: { variant: HGRPShaderVariant; floats: Record<string, number> },
+  id: HGRPSubsystemId,
+): boolean {
+  const subsystem = hgrpSubsystem(id);
+  if (!subsystem.drawList || !subsystem.gate) {
+    throw new Error(`HGRP contract: ${id} is not a draw-list subsystem`);
+  }
+  return (
+    subsystem.drawList.variants.includes(material.variant) && material.floats[subsystem.gate] === 1
+  );
 }
 
 // The slots a subsystem samples on a variant that a material neither supplies nor has a

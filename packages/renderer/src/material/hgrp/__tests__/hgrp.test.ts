@@ -144,27 +144,51 @@ const MATERIAL_PARAMS_F32_INDEX: Record<string, number> = {
 const VFX_PARAMS_F32_INDEX: Record<string, number> = {
   tint_color: 0,
   blend_tint: 4,
-  main_uv_speed: 8,
-  main_uv_weights: 12,
-  blend_uv_speed: 16,
-  blend_uv_weights: 20,
-  mask_uv_speed: 24,
-  mask_uv_weights: 28,
-  disturb_uv_speed: 32,
-  disturb_uv_weights: 36,
-  disturb_intensity: 40,
-  tint_intensity: 42,
-  tint_alpha: 43,
-  use_blend: 44,
-  use_disturb: 45,
-  use_mask: 46,
-  use_main_as_alpha: 47,
-  use_mask_as_alpha: 48,
-  main_use_disturb: 49,
-  blend_use_disturb: 50,
-  mask_use_disturb: 51,
-  exp_intensity: 52,
-  exp_threshold: 53,
+  fresnel_color: 8,
+  main_uv_speed: 12,
+  main_uv_weights: 16,
+  main_uv_rotate: 20,
+  main_st: 24,
+  blend_uv_speed: 28,
+  blend_uv_weights: 32,
+  blend_uv_rotate: 36,
+  blend_st: 40,
+  mask_uv_speed: 44,
+  mask_uv_weights: 48,
+  mask_uv_rotate: 52,
+  mask_st: 56,
+  disturb_uv_speed: 60,
+  disturb_uv_weights: 64,
+  disturb_uv_rotate: 68,
+  disturb_st: 72,
+  near_fade: 76,
+  disturb_intensity: 80,
+  tint_intensity: 82,
+  tint_alpha: 83,
+  blend_mode: 84,
+  use_blend: 85,
+  use_disturb: 86,
+  use_mask: 87,
+  use_fresnel: 88,
+  use_soft_blend: 89,
+  use_near_fade: 90,
+  use_main_as_alpha: 91,
+  use_mask_as_alpha: 92,
+  main_use_disturb: 93,
+  blend_use_disturb: 94,
+  mask_use_disturb: 95,
+  bi_disturb: 96,
+  disturb_is_normal: 97,
+  fresnel_bias: 98,
+  fresnel_power: 99,
+  fresnel_flip: 100,
+  fresnel_affect_opacity: 101,
+  soft_distance: 102,
+  soft_bias: 103,
+  ignore_post_exposure: 104,
+  screen_uv_use_depth: 105,
+  local_pivot_space: 106,
+  pos_y_as_screen_v: 107,
 };
 
 function material(
@@ -248,8 +272,8 @@ describe('HGRP material contract', () => {
     ).toEqual({ base_color: 0, use_gray_as_alpha: 4 });
   });
 
-  it('keeps the HGRPVfxParams byte layout (224 bytes)', () => {
-    expect(HGRP_VFX_PARAMS_LAYOUT.byteSize).toBe(224);
+  it('keeps the HGRPVfxParams byte layout (432 bytes)', () => {
+    expect(HGRP_VFX_PARAMS_LAYOUT.byteSize).toBe(432);
     const actual = Object.fromEntries(
       HGRP_VFX_PARAMS_LAYOUT.fields.map((f) => [f.name, f.offset / 4]),
     );
@@ -922,12 +946,15 @@ describe('packHGRPParams', () => {
     ]);
     expect(hgrpColorParamValue(hdr, [2.24, 2.24, 2.24, 1])).toEqual([2.24, 2.24, 2.24, 1]);
     expect(hgrpColorParamValue(st, [6, 1, -0.23, 0])).toEqual([6, 1, -0.23, 0]);
-    // every _ST / UV vector in the tables is linear; the eye's three [HDR] colors are linear
+    // every _ST / UV vector (speed, weights, rotation matrix) in the tables is linear; the
+    // eye's three [HDR] colors are linear
     for (const struct of HGRP_PARAMS_STRUCTS) {
       for (const field of struct.fields) {
         for (const param of field.params) {
           if (param.kind !== 'color') continue;
-          const isVector = /_ST$|UVSpeed|UVWeights|Vector|_VFXSpecialParam/.test(param.key);
+          const isVector = /_ST$|UVSpeed|UVWeights|UVRotateMat|Vector|_VFXSpecialParam/.test(
+            param.key,
+          );
           const isHdr = ['_MatcapColor', '_EyeHighLightColor', '_EyeScatteringColor'].includes(
             param.key,
           );
@@ -972,9 +999,12 @@ describe('packHGRPParams', () => {
           packed.subarray(field.offset / 4, field.offset / 4 + expected.length),
         );
         // float32 in the buffer vs float64 here: a decoded HDR value (pow 2.2 of a large
-        // input) only agrees to ~7 significant digits
+        // input) only agrees to ~7 significant digits, so the tolerance scales with the value
         for (let k = 0; k < expected.length; k++) {
-          expect(actual[k], `${param.key}[${k}]`).toBeCloseTo(expected[k], 2);
+          const tolerance = Math.max(1e-3, Math.abs(expected[k]) * 1e-6);
+          expect(Math.abs(actual[k] - expected[k]), `${param.key}[${k}]`).toBeLessThanOrEqual(
+            tolerance,
+          );
         }
       }
     }

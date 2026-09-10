@@ -115,6 +115,9 @@ export function validateHGRPContract(): void {
     if (subsystem.drawList && subsystem.tier !== 'static') {
       throw new Error(`HGRP contract: only a static gate routes draw lists (${subsystem.id})`);
     }
+    if (subsystem.drawList && subsystem.drawList.variants.length === 0) {
+      throw new Error(`HGRP contract: draw-list subsystem ${subsystem.id} names no variant`);
+    }
     if (subsystem.wgsl) {
       if (subsystem.tier !== 'static') {
         throw new Error(`HGRP contract: only a static subsystem has a WGSL hook (${subsystem.id})`);

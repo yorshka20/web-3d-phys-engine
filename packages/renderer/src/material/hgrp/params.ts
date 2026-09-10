@@ -5,6 +5,7 @@ import {
   f32,
   float,
   HGRPParamsStruct,
+  HGRPUniformField,
   readHGRPParam,
   TOGGLE,
   HGRPVec4,
@@ -532,32 +533,98 @@ export const HGRP_MATERIAL_PARAMS: HGRPParamsStruct = {
 
 const DISTURB_U_INTENSITY = float('_DisturbUIntensity1', 0);
 const DISTURB_V_INTENSITY = float('_DisturbVIntensity1', 0);
+const NEAR_FADE_START = float('_NearCameraFadeDistanceStart', 0.001);
+const NEAR_FADE_END = float('_NearCameraFadeDistanceEnd', 10);
+const NEAR_FADE_START2 = float('_NearCameraFadeDistanceStart2', 120);
+const NEAR_FADE_END2 = float('_NearCameraFadeDistanceEnd2', 100);
+const IDENTITY_ROTATION: HGRPVec4 = [1, 0, 0, 1];
+const IDENTITY_ST: HGRPVec4 = [1, 1, 0, 0];
+
+// One sampled layer of the effect shader: how its UV is built (UV set weights, scroll speed,
+// rotation about the UV centre, tiling/offset) and whether the noise field warps it.
+function vfxLayer(
+  name: string,
+  slot: string,
+  speedKey: string,
+  weightsKey: string,
+  rotateKey: string,
+): HGRPUniformField[] {
+  return [
+    vec4(
+      `${name}_uv_speed`,
+      'vfx',
+      vector(speedKey, ZERO4),
+      'xy scroll per second (zw: particle custom data, unused)',
+    ),
+    vec4(
+      `${name}_uv_weights`,
+      'vfx',
+      vector(weightsKey, [1, 0, 0, 0]),
+      'x uv0, y uv1, w screen uv',
+    ),
+    vec4(
+      `${name}_uv_rotate`,
+      'vfx',
+      vector(rotateKey, IDENTITY_ROTATION),
+      '2x2 rotation about the UV centre, rows xy / zw',
+    ),
+    vec4(`${name}_st`, 'vfx', vector(`${slot}_ST`, IDENTITY_ST), 'tiling xy, offset zw'),
+  ];
+}
 
 export const HGRP_VFX_PARAMS: HGRPParamsStruct = {
   structName: 'HGRPVfxParams',
   uniformVar: 'hgrp_vfx',
   variants: ['CharacterNPR_VFX'],
   header:
-    'Uniform block for HGRP/CharacterNPR_VFX. Kept separate from HGRPMaterialParams because\n' +
-    'the effect shader shares no parameter vocabulary with the CharacterNPR family — it has\n' +
-    'no _BaseMap, no ramp, no rim; instead three sampled layers each carrying their own UV\n' +
-    'speed and channel weights.',
+    'Uniform block for HGRP/CharacterNPR_VFX (materials/HGRPVfx.wgsl, transcribed from the\n' +
+    "game's characternpr_vfx fragment). Kept separate from HGRPMaterialParams because the effect\n" +
+    'shader shares no parameter vocabulary with the CharacterNPR family — it has no _BaseMap,\n' +
+    'no ramp, no rim; instead four sampled layers each carrying their own UV set, scroll, rotation\n' +
+    'and tiling, composited under a tint, a fresnel and a soft depth fade.',
   fields: [
-    vec4('tint_color', 'vfx', color('_TintColor', WHITE), 'crimson base glow, a = opacity'),
-    vec4('blend_tint', 'vfx', color('_BlendTint', WHITE), 'HDR warm tint on the flow layer'),
-    vec4('main_uv_speed', 'vfx', vector('_MainTexUVSpeed', ZERO4), 'xy scroll per second'),
+    vec4('tint_color', 'vfx', color('_TintColor', WHITE), 'base tint, a = opacity'),
     vec4(
-      'main_uv_weights',
+      'blend_tint',
       'vfx',
-      vector('_MainTexUVWeights', [1, 0, 0, 0]),
-      'which channels form the scalar',
+      color('_BlendTint', WHITE),
+      'HDR tint on the blend layer, a scales its coverage',
     ),
-    vec4('blend_uv_speed', 'vfx', vector('_BlendTexUVSpeed', ZERO4)),
-    vec4('blend_uv_weights', 'vfx', vector('_BlendTexUVWeights', [1, 0, 0, 0])),
-    vec4('mask_uv_speed', 'vfx', vector('_MaskTexUVSpeed', ZERO4)),
-    vec4('mask_uv_weights', 'vfx', vector('_MaskTexUVWeights', [1, 0, 0, 0])),
-    vec4('disturb_uv_speed', 'vfx', vector('_DisturbUVSpeed1', ZERO4)),
-    vec4('disturb_uv_weights', 'vfx', vector('_DisturbUVWeights1', [1, 0, 0, 0])),
+    vec4(
+      'fresnel_color',
+      'vfx',
+      color('_FresnelColor', WHITE),
+      'rim color, a = how far it replaces the base',
+    ),
+    ...vfxLayer('main', '_MainTex', '_MainTexUVSpeed', '_MainTexUVWeights', '_MainTexUVRotateMat'),
+    ...vfxLayer(
+      'blend',
+      '_BlendTex',
+      '_BlendTexUVSpeed',
+      '_BlendTexUVWeights',
+      '_BlendTexUVRotateMat',
+    ),
+    ...vfxLayer('mask', '_MaskTex', '_MaskTexUVSpeed', '_MaskTexUVWeights', '_MaskTexUVRotateMat'),
+    ...vfxLayer(
+      'disturb',
+      '_DisturbTex1',
+      '_DisturbUVSpeed1',
+      '_DisturbUVWeights1',
+      '_DisturbUVRotateMat1',
+    ),
+    {
+      name: 'near_fade',
+      type: 'vec4',
+      subsystem: 'vfx',
+      params: [NEAR_FADE_START, NEAR_FADE_END, NEAR_FADE_START2, NEAR_FADE_END2],
+      pack: (material) => [
+        readHGRPParam(material, NEAR_FADE_START) as number,
+        readHGRPParam(material, NEAR_FADE_END) as number,
+        readHGRPParam(material, NEAR_FADE_START2) as number,
+        readHGRPParam(material, NEAR_FADE_END2) as number,
+      ],
+      comment: '_NearCameraFadeDistance Start / End / Start2 / End2 (view depth, metres)',
+    },
     {
       name: 'disturb_intensity',
       type: 'vec2',
@@ -569,21 +636,67 @@ export const HGRP_VFX_PARAMS: HGRPParamsStruct = {
       ],
       comment: '_DisturbUIntensity1 / _DisturbVIntensity1',
     },
-    f32('tint_intensity', 'vfx', float('_TintColorIntensity', 1), 'HDR (15 on Laevatian)'),
+    f32('tint_intensity', 'vfx', float('_TintColorIntensity', 1), 'HDR multiplier on the tint rgb'),
     f32('tint_alpha', 'vfx', float('_TintColorAlpha', 1)),
+    f32(
+      'blend_mode',
+      'vfx',
+      float('_BlendMode', 1),
+      '0 alpha (premultiplied), 1 additive: scales the written alpha',
+    ),
     f32('use_blend', 'vfx', float('_UseBlend', 0)),
     f32('use_disturb', 'vfx', float('_UseDisturb', 0)),
     f32('use_mask', 'vfx', float('_UseMask', 0)),
-    f32('use_main_as_alpha', 'vfx', float('_UseMainTexAsAlpha', 0)),
-    f32('use_mask_as_alpha', 'vfx', float('_UseMaskTexAsAlpha', 0)),
-    f32('main_use_disturb', 'vfx', float('_MainTexUseDisturb', 0)),
+    f32('use_fresnel', 'vfx', float('_UseFresnel', 0)),
+    f32('use_soft_blend', 'vfx', float('_UseSoftBlend', 0)),
+    f32('use_near_fade', 'vfx', float('_UseNearCameraFade', 0)),
+    f32('use_main_as_alpha', 'vfx', float('_UseMainTexAsAlpha', 1)),
+    f32('use_mask_as_alpha', 'vfx', float('_UseMaskTexAsAlpha', 1)),
+    f32('main_use_disturb', 'vfx', float('_MainTexUseDisturb', 1)),
     f32('blend_use_disturb', 'vfx', float('_BlendTexUseDisturb', 0)),
     f32('mask_use_disturb', 'vfx', float('_MaskTexUseDisturb', 0)),
-    // _ExpIntensity / _ExpThreshold: an exposure-style sharpening whose formula did not
-    // survive the rip. Packed so a GUI can A/B them, deliberately not wired into a guessed
-    // expression — the same call made for _HairAddTintColor.
-    f32('exp_intensity', 'vfx', float('_ExpIntensity', 0)),
-    f32('exp_threshold', 'vfx', float('_ExpThreshold', 0)),
+    f32(
+      'bi_disturb',
+      'vfx',
+      float('_Bi_Disturb', 0),
+      'noise read as signed (2x - 1) instead of [0, 1]',
+    ),
+    f32(
+      'disturb_is_normal',
+      'vfx',
+      float('_DisturbTex1Normal', 0),
+      'noise texture is a normal map: offset from its (a, g)',
+    ),
+    f32('fresnel_bias', 'vfx', float('_FresnelBias', 0)),
+    f32('fresnel_power', 'vfx', float('_FresnelPower', 1)),
+    f32(
+      'fresnel_flip',
+      'vfx',
+      float('_FresnelFlip', 0.001),
+      'lerp between 1 - f (edges) and f (facing)',
+    ),
+    f32('fresnel_affect_opacity', 'vfx', float('_FresnelAffectOpacity', 1)),
+    f32(
+      'soft_distance',
+      'vfx',
+      float('_SoftDistance', 0.001),
+      'view-depth span of the fade against the scene depth, metres',
+    ),
+    f32('soft_bias', 'vfx', float('_SoftBias', 0)),
+    f32(
+      'ignore_post_exposure',
+      'vfx',
+      float('_IgnorePostExposure', 1),
+      'written pre-divided by the exposure, so the post pass leaves it as authored',
+    ),
+    f32('screen_uv_use_depth', 'vfx', float('_ScreenUVUseDepth', 1)),
+    f32(
+      'local_pivot_space',
+      'vfx',
+      float('_LocalPivortSpace', 0),
+      "screen uv from the view-space offset to the object's origin",
+    ),
+    f32('pos_y_as_screen_v', 'vfx', float('_UsePosYAsScreenV', 0)),
   ],
 };
 

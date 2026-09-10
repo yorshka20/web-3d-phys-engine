@@ -1,6 +1,10 @@
 import type { HGRPMaterialDescriptor } from './descriptor';
 import { HGRP_PARAMS_STRUCTS } from './params';
-import { hgrpSubsystemAppliesTo, hgrpSubsystemMissingTextures } from './permutation';
+import {
+  hgrpDrawListGateOn,
+  hgrpSubsystemAppliesTo,
+  hgrpSubsystemMissingTextures,
+} from './permutation';
 import { float, HGRPParam, HGRPVec4, TOGGLE } from './primitives';
 import { HGRP_SUBSYSTEMS, hgrpSubsystem, HGRPSubsystem, HGRPSubsystemId } from './subsystems';
 
@@ -94,13 +98,16 @@ type HGRPTunableMaterial = Pick<
 
 // Whether the subsystem shades the material right now. Gateless subsystems always do. A static
 // one does when the material's permutation carries it — which also settles a variant it does
-// not apply to, whatever the preset says of its gate. A static gate that never enters a
-// permutation (draw-list only, the outline) and a numeric gate are read off the preset value.
+// not apply to, whatever the preset says of its gate. A draw-list gate (the outline) is on when
+// its pass exists for the variant and the preset sets it; a numeric gate is read off the preset.
 function subsystemOn(subsystem: HGRPSubsystem, material: HGRPTunableMaterial): boolean {
   if (!subsystem.gate) {
     return true;
   }
-  if (subsystem.tier === 'static' && !subsystem.drawList) {
+  if (subsystem.drawList) {
+    return hgrpDrawListGateOn(material, subsystem.id);
+  }
+  if (subsystem.tier === 'static') {
     return material.permutation.enabled.includes(subsystem.id);
   }
   return material.floats[subsystem.gate] === 1;
@@ -108,10 +115,13 @@ function subsystemOn(subsystem: HGRPSubsystem, material: HGRPTunableMaterial): b
 
 // Whether flipping the subsystem's gate can change the material. A static gate needs the
 // subsystem to apply to the variant and every texture it samples to be present or have a
-// stand-in — the permutation drops it otherwise, and the toggle would be dead. A draw-list
-// gate and a numeric gate always can.
+// stand-in — the permutation drops it otherwise, and the toggle would be dead. A draw-list gate
+// needs the variant's shader to carry the pass; a numeric gate always can.
 function gateReachable(subsystem: HGRPSubsystem, material: HGRPTunableMaterial): boolean {
-  if (subsystem.tier !== 'static' || subsystem.drawList) {
+  if (subsystem.drawList) {
+    return subsystem.drawList.variants.includes(material.variant);
+  }
+  if (subsystem.tier !== 'static') {
     return true;
   }
   return (

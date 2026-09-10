@@ -5,7 +5,6 @@ import {
   HGRP_TUNABLE_COLORS,
   HGRP_TUNABLE_FLOATS,
   hgrpMaterialTunables,
-  hgrpOptionalLayerFlag,
   hgrpRefreshPermutation,
   HGRPCharacterFlags,
   HGRPMaterialDescriptor,
@@ -431,7 +430,7 @@ function addMaterialWidgets(
       // loadHGRPCharacter. A character with no gated layer gets no dead switch.
       const gated = new Map<keyof HGRPCharacterFlags, HGRPMaterialDescriptor[]>();
       for (const material of materials) {
-        const flag = hgrpOptionalLayerFlag(material.variant);
+        const flag = material.gate;
         if (!flag) continue;
         const group = gated.get(flag) ?? [];
         group.push(material);

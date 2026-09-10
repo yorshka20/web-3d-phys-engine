@@ -81,10 +81,13 @@ export interface HGRPSubsystem {
   variants?: Partial<Record<HGRPShaderVariant, HGRPSubsystemVariantOverride>>;
   wgsl?: HGRPSubsystemHook;
   // The gate routes draw lists (DrawListBuilder / a pass stage reads it) rather than, or as
-  // well as, selecting shader code. A static gate gets a calibration toggle only when something
-  // consumes it — a hook or the draw lists; a slot-only subsystem awaiting its implementation
-  // (HGRP_UNIMPLEMENTED_SLOTS) shows no dead switch.
-  drawList?: true;
+  // well as, selecting shader code, and only the listed variants' shaders carry the pass that
+  // reads it: a material asset keeps the property whatever shader it is on (jsspsi's effect
+  // materials carry _EnableOutline 1 though the effect shader has a single pass), so the gate
+  // is read only where the pass exists (hgrpDrawListGateOn). A static gate gets a calibration
+  // toggle only when something consumes it — a hook or the draw lists; a slot-only subsystem
+  // awaiting its implementation (HGRP_UNIMPLEMENTED_SLOTS) shows no dead switch.
+  drawList?: { variants: readonly HGRPShaderVariant[] };
 }
 
 // Declaration order is the calibration GUI's widget order (params grouped by feature) and the
@@ -230,13 +233,16 @@ export const HGRP_SUBSYSTEMS: readonly HGRPSubsystem[] = [
     },
   },
   // Draw-list gate: the outline pass binds _OutlineMask in its own layout, so the subsystem
-  // shapes no variant's shader and stays out of the permutation (permutation.ts).
+  // shapes no variant's shader and stays out of the permutation (permutation.ts). The pass is
+  // the CharacterNPR family's second pass; the effect and shadow-shell shaders have none.
   {
     id: 'outline',
     gate: '_EnableOutline',
     tier: 'static',
     textures: ['_OutlineMask'],
-    drawList: true,
+    drawList: {
+      variants: ['CharacterNPR', 'CharacterNPR_Skin', 'CharacterNPR_Hair', 'CharacterNPR_Eye'],
+    },
   },
   { id: 'hairBand' },
   {

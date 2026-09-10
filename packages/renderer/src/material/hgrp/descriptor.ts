@@ -40,22 +40,25 @@ export interface HGRPPresetMaterial {
 // Per-character switches that decide whether an optional material layer is drawn at all.
 // They belong to the character, not the scene: two characters in one frame can differ.
 export interface HGRPCharacterFlags {
-  // The game only renders the CharacterNPR_VFX layer once a character's max potential is
-  // unlocked, so its materials load disabled unless this is set.
+  // The game renders a character's max-potential effect (Laevatian's glow ring) only once
+  // that potential is unlocked, so those materials load disabled unless this is set.
   maxPotential?: boolean;
 }
 
-// Which flag, if any, gates a variant. Single source for both the load-time decision and
-// the calibration UI's toggle — a second copy of this mapping is how the two drift apart.
-const OPTIONAL_LAYER_FLAG: Partial<Record<HGRPShaderVariant, keyof HGRPCharacterFlags>> = {
-  CharacterNPR_VFX: 'maxPotential',
-};
-
-export function hgrpOptionalLayerFlag(
-  variant: HGRPShaderVariant,
-): keyof HGRPCharacterFlags | undefined {
-  return OPTIONAL_LAYER_FLAG[variant];
+// Which flag, if any, gates a material. The export carries no per-renderer state, and the
+// effect shader (CharacterNPR_VFX) is also what a character's permanent energy parts use —
+// jsspsi's wings and tail fin — so the variant cannot be the gate; the max-potential materials
+// are the ones the game names `toppotential`. Single source for both the load-time decision
+// and the calibration UI's toggle (HGRPMaterialDescriptor.gate).
+export function hgrpOptionalLayerFlag(materialName: string): keyof HGRPCharacterFlags | undefined {
+  return /toppotential/i.test(materialName) ? 'maxPotential' : undefined;
 }
+
+// The pipeline's own default material, which the export reports on the effect-overlay copies
+// of a character's meshes (jsspsi's `vfxpart_*`: the horns, wings and fin duplicated for a
+// runtime effect) — the game assigns their real material at run time, from data the export
+// does not carry. Drawn as anything they would be a white film over the authored meshes.
+const HGRP_PLACEHOLDER_SHADER = 'HGRP/Lit';
 
 export interface HGRPPreset {
   schemaVersion: number;
@@ -171,6 +174,9 @@ export interface HGRPMaterialDescriptor extends BaseMaterial {
   // draw list reads this boolean and nothing else — it must never test a character or
   // material name to decide what to draw.
   enabled: boolean;
+  // The character flag that switches this material, resolved at load (hgrpOptionalLayerFlag);
+  // undefined for a material that is always drawn.
+  gate?: keyof HGRPCharacterFlags;
   // Skin-joint index (palette order) whose posed frame is this material's object space, or
   // undefined for the model's own frame. The face shader reads the light and the camera in
   // object space (SDF mirror and yaw, highlight offset; formulas §2), and in the game that
@@ -272,7 +278,13 @@ export function createHGRPMaterialFromPreset(
   // which is the same failure mode as a missing texture quietly resolving to white.
   const variantName = preset.shader.split('/').pop();
   const isKnownVariant = !!variantName && variantName in HGRP_SHADER_ID_BY_VARIANT;
-  if (!isKnownVariant) {
+  const placeholder = preset.shader === HGRP_PLACEHOLDER_SHADER;
+  if (placeholder) {
+    console.log(
+      `[hgrp] ${materialName}: the pipeline default material (${preset.shader}) — an effect part ` +
+        'whose material the game assigns at run time; not drawn',
+    );
+  } else if (!isKnownVariant) {
     console.warn(
       `[hgrp] ${materialName}: shader "${preset.shader}" has no variant implementation, ` +
         'falling back to CharacterNPR — shading will be wrong for this material',
@@ -281,7 +293,7 @@ export function createHGRPMaterialFromPreset(
   const variant: HGRPShaderVariant = isKnownVariant
     ? (variantName as HGRPShaderVariant)
     : 'CharacterNPR';
-  const gateFlag = hgrpOptionalLayerFlag(variant);
+  const gateFlag = hgrpOptionalLayerFlag(materialName);
 
   // Unity material semantics: _SurfaceType 1 = transparent, _Cull 0 = two-sided (2 =
   // back-face culling). Cutout has TWO gates in HGRP: _AlphaClip and _EnableAlphaTest
@@ -314,7 +326,8 @@ export function createHGRPMaterialFromPreset(
     blendMode: overlayShadow ? 'multiply' : hgrpBlendMode(floats),
     eyeLayer: hgrpEyeLayer(variant, floats),
     permutation: { variant, enabled: [] },
-    enabled: gateFlag === undefined || flags[gateFlag] === true,
+    enabled: !placeholder && (gateFlag === undefined || flags[gateFlag] === true),
+    gate: gateFlag,
   };
   hgrpRefreshPermutation(material);
   return material;

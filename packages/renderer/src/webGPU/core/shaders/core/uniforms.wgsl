@@ -45,7 +45,8 @@ struct SceneLighting {
     // _CharacterParams7 (xyz): hemisphere bias, scale, floor
     hemi_params: vec4<f32>,
     // Cubemap stand-in (sceneSettings.envGradient / envRadiance): x up/down contrast of the
-    // hemisphere, y its radiance
+    // hemisphere, y its radiance; z the scene exposure the post pass multiplies in
+    // (sceneSettings.exposure), for a material that must come out as authored regardless
     env_stand_in: vec4<f32>,
 }
 

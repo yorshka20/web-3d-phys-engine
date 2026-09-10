@@ -169,6 +169,6 @@ export function packSceneLighting(out: Float32Array = new Float32Array(28)): Flo
   out.set(sceneSettings.ambientColor, 12);
   out.set(g.hemiAxis, 16);
   out.set(g.hemiParams, 20);
-  out.set([sceneSettings.envGradient, sceneSettings.envRadiance, 0, 0], 24);
+  out.set([sceneSettings.envGradient, sceneSettings.envRadiance, sceneSettings.exposure, 0], 24);
   return out;
 }

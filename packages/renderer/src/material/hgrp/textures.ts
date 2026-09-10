@@ -121,11 +121,11 @@ export const HGRP_TEXTURE_SLOTS_BY_VARIANT: Readonly<Record<HGRPShaderVariant, r
       '_LineMap',
     ],
     CharacterNPR_Eye: ['_BaseMap', '_DiffRampMap', '_MatcapTex', '_ShadowLutTex'],
-    // Effect layers, each sampled with its own UV speed and channel weights: _MainTex is the
-    // base pattern (absent on Laevatian's material -> the white default leaves it a no-op),
-    // _BlendTex the emissive flow, _DisturbTex1 the noise that warps both, _MaskTex the
-    // UV-space stencil confining the effect to the mesh's UV island. No _BaseMap/_DiffRampMap:
-    // the effect shader has no base color and no ramp.
+    // Effect layers, each sampled on its own UV set with its own scroll, rotation and tiling:
+    // _MainTex the base pattern (usually read as alpha only; absent on Laevatian's material ->
+    // the white default leaves it a no-op), _BlendTex the emissive flow, _DisturbTex1 the noise
+    // that warps the others, _MaskTex the alpha stencil. No _BaseMap/_DiffRampMap: the effect
+    // shader has no base color and no ramp.
     CharacterNPR_VFX: ['_MainTex', '_BlendTex', '_DisturbTex1', '_MaskTex'],
     // The shadow shells: one mask, read as the multiply density (materials/HGRPOverlayShadow.wgsl)
     CharacterNPR_OverlayShadow: ['_BaseMap'],

@@ -2,6 +2,7 @@ import { FrameData, RenderData } from '../../../frame/types';
 import {
   HGRPMaterialDescriptor,
   HGRP_STENCIL_EYE_BIT,
+  hgrpDrawListGateOn,
   hgrpPermutationEnables,
   hgrpStencilRef,
   hgrpStencilRole,
@@ -231,10 +232,12 @@ function route(renderable: RenderData, lists: DrawLists, viewMatrix: Float32Arra
 
   const isBlend = renderable.material.alphaMode === 'blend';
 
-  // `_EnableOutline` alone decides whether a material outlines at all; which of the two hull
-  // lists it joins is a separate question about depth availability, not about outlining.
-  // Gating this on the opaque branch silently dropped every blend material's outline.
-  if (material?.floats._EnableOutline === 1) {
+  // The outline gate decides whether a material outlines at all — read through the contract,
+  // which knows which variants' shaders have the pass (an effect material keeps the property
+  // without the pass). Which of the two hull lists it joins is a separate question about depth
+  // availability, not about outlining. Gating this on the opaque branch silently dropped every
+  // blend material's outline.
+  if (material && hgrpDrawListGateOn(material, 'outline')) {
     (isBlend ? lists.transparentOutline : lists.outline).push(
       stageDraw(renderable, STAGE_TAG.outline),
     );
