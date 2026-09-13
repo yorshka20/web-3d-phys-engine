@@ -53,6 +53,7 @@ export class WebGPURenderSystem extends System {
 
   private dpr: number = 1;
   private coarseMode: boolean = false;
+  private resizeObserver?: ResizeObserver;
 
   // New 3D camera system
   private activeCameraEntity?: Entity;
@@ -67,11 +68,13 @@ export class WebGPURenderSystem extends System {
 
     this.rootElement = rootElement;
     const dpr = this.getDPR();
+    this.dpr = dpr;
     this.viewport = [0, 0, rootElement.clientWidth * dpr, rootElement.clientHeight * dpr];
 
     this.canvas = this.createCanvas();
     markSceneSurface(this.canvas);
     this.rootElement.appendChild(this.canvas);
+    this.observeSize();
 
     // Initialize global uniforms and render stats
     this.globalUniforms = {
@@ -110,19 +113,39 @@ export class WebGPURenderSystem extends System {
   }
 
   onDestroy(): void {
+    this.resizeObserver?.disconnect();
+    window.removeEventListener('resize', this.onWindowResize);
     this.renderer.destroy();
   }
 
   private createCanvas(): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
-    const dpr = this.getDPR();
-
-    canvas.width = this.rootElement.clientWidth * dpr;
-    canvas.height = this.rootElement.clientHeight * dpr;
-    canvas.style.width = `${this.rootElement.clientWidth}px`;
-    canvas.style.height = `${this.rootElement.clientHeight}px`;
-
+    this.applyCanvasSize(canvas);
     return canvas;
+  }
+
+  /**
+   * Sizes the canvas to the root element at the current device pixel ratio, and reports whether
+   * that changed anything. The backing store is what matters: WebGPU's swapchain follows
+   * canvas.width/height with no reconfigure, and the projection's aspect ratio is read off the
+   * same pair, so the picture cannot disagree with the surface it is drawn on.
+   */
+  private applyCanvasSize(canvas: HTMLCanvasElement): boolean {
+    const dpr = this.getDPR();
+    const cssWidth = Math.max(this.rootElement.clientWidth, 1);
+    const cssHeight = Math.max(this.rootElement.clientHeight, 1);
+    const width = Math.max(Math.round(cssWidth * dpr), 1);
+    const height = Math.max(Math.round(cssHeight * dpr), 1);
+    if (canvas.width === width && canvas.height === height && this.dpr === dpr) {
+      return false;
+    }
+
+    this.dpr = dpr;
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    return true;
   }
 
   private getDPR(): number {
@@ -160,11 +183,36 @@ export class WebGPURenderSystem extends System {
     return this.renderer;
   }
 
+  /**
+   * Resizes the canvas to the root element and hands the renderer its new target size. The
+   * canvas is the authority: the projection's aspect ratio is read off its backing store
+   * (updateCameraMatrices), so the picture cannot disagree with the surface it is drawn on.
+   * Idempotent — the observer calls it for every layout change, including ones that do not
+   * change the pixel size.
+   */
+  /**
+   * The root element (or the device pixel ratio) changed. Idempotent: the observer fires for
+   * every layout change, most of which do not change the pixel size.
+   */
   onResize(): void {
-    this.renderer.onResize();
-    this.setViewport([0, 0, window.innerWidth, window.innerHeight]);
-    this.globalUniforms.screenSize = [this.rootElement.clientWidth, this.rootElement.clientHeight];
+    if (!this.applyCanvasSize(this.canvas)) {
+      return;
+    }
+    this.setViewport([0, 0, this.canvas.width, this.canvas.height]);
+    this.globalUniforms.screenSize = [this.canvas.width / this.dpr, this.canvas.height / this.dpr];
+    // Absent until the async init has built it; the canvas it will read is already correct.
+    this.renderer?.onResize();
   }
+
+  private observeSize(): void {
+    // The element's own size changes (a resized window, a changed layout) and, separately, the
+    // device pixel ratio does — moving the window to another display fires no ResizeObserver.
+    this.resizeObserver = new ResizeObserver(() => this.onResize());
+    this.resizeObserver.observe(this.rootElement);
+    window.addEventListener('resize', this.onWindowResize);
+  }
+
+  private readonly onWindowResize = (): void => this.onResize();
 
   setCoarseMode(coarse: boolean): void {
     this.coarseMode = coarse;
@@ -670,7 +718,9 @@ export class WebGPURenderSystem extends System {
     const position = transformComponent.getPosition();
     const target = cameraComponent.getTarget();
     const up = cameraComponent.getUp();
-    const aspectRatio = this.rootElement.clientWidth / this.rootElement.clientHeight;
+    // The render target's own aspect, not the element's: they agree only while the canvas
+    // is in sync, and a mismatch is what stretches the picture during a resize.
+    const aspectRatio = this.canvas.width / this.canvas.height;
 
     // Calculate view matrix
     const viewMatrix = mat4.create();

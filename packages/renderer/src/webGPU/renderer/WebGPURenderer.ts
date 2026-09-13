@@ -1223,10 +1223,15 @@ export class WebGPURenderer implements IWebGPURenderer {
     return;
   }
 
+  /**
+   * The canvas has a new pixel size (WebGPURenderSystem owns that). Every canvas-sized target is
+   * recreated as a set; the passes hold them through closures and key their own resources —
+   * bind groups, the TAA history, the bloom chain — on the input texture's identity, so they
+   * rebuild themselves on the next frame. Pipelines are NOT invalidated: a render pipeline is
+   * built from formats and shaders, none of which the canvas size touches, and dropping the
+   * cache here would recompile every HGRP permutation on every frame of a window drag.
+   */
   onResize(): void {
-    // Every canvas-sized target is recreated as a set; the shared resources above are cached
-    // by id, so re-running them would be a no-op.
     this.sizedTextures = this.createSizedTextures();
-    this.pipelineManager.clearCache();
   }
 }
