@@ -29,7 +29,11 @@ export interface Camera3DProps {
 export class Camera3DComponent extends Component {
   static componentName = 'Camera';
 
-  fov = 90; // Field of view in degrees
+  // Vertical field of view in degrees. 50 is the mainstream 3D-viewport default (three.js's
+  // PerspectiveCamera, a ~40 mm lens); a game's character screen uses a longer lens still. The
+  // 90 this used to be is a first-person-shooter-wide angle whose edge stretching is visible on
+  // anything near the frame border.
+  fov = 50;
   facing = 0; // Angle in degrees (yaw rotation)
 
   // 3d properties
@@ -73,7 +77,7 @@ export class Camera3DComponent extends Component {
     super('Camera');
 
     // use provided values or defaults
-    this.fov = props.fov ?? 90;
+    this.fov = props.fov ?? 50;
     this.facing = props.facing ?? 0;
     this.pitch = props.pitch ?? 0;
     this.projectionMode = props.projectionMode ?? 'perspective';

@@ -71,10 +71,14 @@ function resolveStage(): Stage {
 const stage: Stage = resolveStage();
 
 // The gltf test scene is laid out around the origin; the default framing looks at [0, 10, 8].
+// Distances are paired with the lens: halving the field of view doubles the distance that
+// frames the same subject (d = d0 * tan(fov0/2) / tan(fov/2)), so these were rescaled with the
+// default lens going from 90 to 50 degrees. The character stage takes a longer lens still —
+// a showcase screen frames a face without the edge stretch a wide angle gives it.
 const stageCameraConfig: Partial<Record<Stage, CameraConfig>> = {
-  gltfModel: { target: [0, 0.5, 0], distance: 16, elevationDegrees: 18 },
-  endfield: { target: [0, 10, 0], distance: 28, elevationDegrees: 8 },
-  hgrp: { target: [0, -0.2, 0], distance: 2.4, elevationDegrees: 8 },
+  gltfModel: { target: [0, 0.5, 0], distance: 34, elevationDegrees: 18 },
+  endfield: { target: [0, 10, 0], distance: 60, elevationDegrees: 8 },
+  hgrp: { target: [0, -0.2, 0], distance: 9, elevationDegrees: 8, fov: 30 },
 };
 
 async function main() {
@@ -182,12 +186,12 @@ function create3DCamera(world: World, config: CameraConfig = {}) {
   const {
     // Position and orientation
     target = [0, 10, 8],
-    distance = 12,
+    distance = 26,
     azimuthDegrees = 0,
     elevationDegrees = 10,
 
     // Camera properties
-    fov = 90,
+    fov = 50,
     aspectRatio = 16 / 9,
     near = 0.1,
     far = 1000,
