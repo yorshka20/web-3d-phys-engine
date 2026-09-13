@@ -308,10 +308,13 @@ Current state that is easy to misread as bugs or dead code — check here before
   `.npmrc`, so a phantom dependency fails to resolve instead of silently working). Root
   package.json holds tooling only. ecs/renderer deliberately hold no workspace dependency on
   each other. No peerDependencies — nothing here has host-singleton semantics.
-- Known pre-existing test rot: pool tests fail with `ComponentClass.poolConfig` on undefined
-  (a `ComponentPoolList` entry is undefined under Vitest's SSR module order — same barrel-cycle
-  disease as the ShaderCompiler case in Domain Notes); several `PerformanceSystem` assertions
-  drifted from evolved constants. The renderer suite is green as of 2026-09-03 — the 12
+- Known pre-existing test rot: **all three ecs test files fail at import** with
+  `ReferenceError: GPUShaderStage is not defined` — `core/standardMaterialLayout.ts` evaluates
+  `GPUShaderStage.VERTEX` at module scope and the jsdom environment has no WebGPU globals; the
+  edge into it is `BindGroupManager`. Behind that: pool tests fail with
+  `ComponentClass.poolConfig` on undefined (a `ComponentPoolList` entry is undefined under
+  Vitest's SSR module order — same barrel-cycle disease as the ShaderCompiler case in Domain
+  Notes); several `PerformanceSystem` assertions drifted from evolved constants. The renderer suite is green as of 2026-09-03 — the 12
   failing `decorators/tests/*` asserted the DI machinery that the same day's refactor removed
   (constructor interception, factory/singleton registration, child containers, service
   metadata), and were replaced by `decorators/__tests__/di.test.ts`.
