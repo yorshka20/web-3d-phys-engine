@@ -49,6 +49,13 @@ struct SceneLighting {
     // (sceneSettings.exposure), for a material that must come out as authored regardless;
     // w the number of lights the punctual light buffer holds (renderer/sceneLights.ts)
     env_stand_in: vec4<f32>,
+    // The character shadow map's light camera (passes/CharacterShadowPass.ts), zero-to-one depth
+    light_view_proj: mat4x4<f32>,
+    // x: one shadow-map texel in uv; y: depth bias in the volume's normalized depth;
+    // z: strength; w: 1 when the map holds this frame's casters
+    shadow_params: vec4<f32>,
+    // x: the lookup's normal offset in world units; yzw unused
+    shadow_params2: vec4<f32>,
 }
 
 // One light of the character light rig, as renderer/sceneLights.ts packs it — the game's

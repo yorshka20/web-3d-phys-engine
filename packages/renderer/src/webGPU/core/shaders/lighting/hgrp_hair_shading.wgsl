@@ -37,7 +37,9 @@ fn hgrp_shade_hair(input: GLTFVertexOutput) -> vec4<f32> {
         input.uv0,
     );
     let view_dir = normalize(mvp.camera_pos - input.world_position);
-    let surface = hgrp_metallic_gloss(input.uv0);
+    var surface = hgrp_metallic_gloss(input.uv0);
+    surface.b = surface.b *
+        hgrp_character_shadow(input.world_position, normalize(input.world_normal));
     // The hair shader's diffuse fraction is 0.96 whatever the surface map's R holds — its
     // metallic is folded to zero in the decompiled code (hair variant b126) and R selects the
     // strand direction below — so the core sees no metallic here.

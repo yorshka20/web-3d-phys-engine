@@ -50,8 +50,10 @@ fn hgrp_shade_eye(
     let shade_nl = clamp(dot(n_shade, light_h) + scene_lighting.light_dir.w, -1.0, 1.0);
     let ramp = hgrp_ramp(shade_nl);
     let ramp_view = hgrp_ramp(dot(n_shade, hgrp_cam_dir())).a;
-    // No surface map on the eye: occlusion 1, metallic 0
-    let blend = hgrp_shade_blend(albedo, shadow_color, ramp, ramp_view, 1.0, 0.0);
+    // No surface map on the eye, so its lighting ceiling is the character's own shadow alone
+    // (the hair reaches the eyes as readily as the face); metallic 0
+    let occlusion = hgrp_character_shadow(world_position, n);
+    let blend = hgrp_shade_blend(albedo, shadow_color, ramp, ramp_view, occlusion, 0.0);
     let light = hgrp_light(hgrp_horizontal(n_shade), scene_lighting.env_color.rgb, blend.w2);
 
     let color = light * blend.col + matcap.color * (light * hgrp_shade_spec(blend.w2));

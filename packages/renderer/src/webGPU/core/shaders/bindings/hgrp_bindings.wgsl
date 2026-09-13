@@ -23,3 +23,7 @@
 // and only the first scene_lighting.env_stand_in.w entries hold this frame's lights, so the
 // count comes from the uniform rather than from arrayLength.
 @group(3) @binding(3) var<storage, read> punctual_lights: array<HGRPPunctualLight>;
+// The character self-shadow map (lighting/hgrp_shadow.wgsl): depth from the key light, read
+// through a comparison sampler so the hardware does the depth test and filters the result.
+@group(3) @binding(4) var character_shadow_map: texture_depth_2d;
+@group(3) @binding(5) var character_shadow_sampler: sampler_comparison;

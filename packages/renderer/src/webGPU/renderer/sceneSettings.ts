@@ -79,6 +79,22 @@ export const sceneSettings = {
   envGradient: 0.5,
   envRadiance: 1.0,
 
+  // Character self-shadow (passes/CharacterShadowPass.ts). The game's shading multiplies its
+  // lighting ceiling by `_ScreenSpaceShadowMask.y`, so a character's own shadows — hair on the
+  // face, a sleeve on an arm — enter through that term; the captured frame turns the
+  // DIRECTIONAL shadow off for characters (`_CharacterParams1.z = 1`), so this is the only
+  // shadow a character has.
+  shadow: {
+    enabled: true,
+    // Depth bias in the light volume's normalized depth, against surface acne
+    depthBias: 0.0015,
+    // Normal offset in shadow-map texels: walks the lookup off the surface it belongs to,
+    // which removes the acne a flat depth bias cannot without detaching contact shadows
+    normalBias: 1.5,
+    // 0 leaves the shading unshadowed, 1 applies the map as sampled
+    strength: 1,
+  },
+
   // Material debug view (generated/hgrp_debug_<permutation>.wgsl): show one texture slot of
   // every HGRP material instead of its shading, so what each map controls can be seen on the
   // mesh. 'off' = shade normally. Materials whose permutation does not bind the slot show
@@ -153,12 +169,18 @@ export const HGRP_CHARACTER_GLOBALS = {
   rampBias: -0.4,
 } as const;
 
-// SceneLighting uniform block (core/uniforms.wgsl): seven vec4s in struct order.
-export const SCENE_LIGHTING_BYTE_SIZE = 112;
+// SceneLighting uniform block (core/uniforms.wgsl): seven vec4s, the shadow map's light
+// view-projection (a mat4) and two shadow parameter rows, in struct order.
+export const SCENE_LIGHTING_BYTE_SIZE = 208;
 
 export function packSceneLighting(
-  out: Float32Array = new Float32Array(28),
+  out: Float32Array = new Float32Array(SCENE_LIGHTING_BYTE_SIZE / 4),
   lightCount = 0,
+  shadow?: {
+    lightViewProj: ArrayLike<number>;
+    params: readonly [number, number, number, number];
+    normalOffset: number;
+  },
 ): Float32Array {
   const g = HGRP_CHARACTER_GLOBALS;
   const [dx, dy, dz] = sceneSettings.lightDirection;
@@ -176,5 +198,12 @@ export function packSceneLighting(
     [sceneSettings.envGradient, sceneSettings.envRadiance, sceneSettings.exposure, lightCount],
     24,
   );
+  if (shadow) {
+    out.set(shadow.lightViewProj as ArrayLike<number>, 28);
+    out.set(shadow.params, 44);
+    out.set([shadow.normalOffset, 0, 0, 0], 48);
+  } else {
+    out.fill(0, 28, 52);
+  }
   return out;
 }

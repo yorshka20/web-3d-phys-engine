@@ -57,6 +57,17 @@ export function getOrCreateHGRPFrameBindGroupLayout(
         visibility: GPUShaderStage.FRAGMENT,
         buffer: { type: 'read-only-storage' },
       },
+      {
+        // The character self-shadow map and its comparison sampler
+        binding: 4,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'depth' },
+      },
+      {
+        binding: 5,
+        visibility: GPUShaderStage.FRAGMENT,
+        sampler: { type: 'comparison' },
+      },
     ],
     label: HGRP_FRAME_BIND_GROUP_LAYOUT_ID,
   });

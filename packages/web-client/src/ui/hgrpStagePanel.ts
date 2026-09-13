@@ -137,7 +137,21 @@ function addLightingWidgets(pane: Pane): void {
       sceneSettings.clearColor = [ev.value.r, ev.value.g, ev.value.b];
     });
 
+  addShadowWidgets(lighting);
   addLightRigWidgets(lighting);
+}
+
+// The character's own shadow (passes/CharacterShadowPass.ts): the term the game's shading reads
+// as its lighting ceiling, which is what puts the hair's shadow on the face. `strength` at 0
+// gives back the unshadowed picture for an A/B; the two biases trade surface acne against
+// shadows detaching from their contact point.
+function addShadowWidgets(parent: ReturnType<Pane['addFolder']>): void {
+  lazyFolder(parent, { title: 'Character shadow', key: 'hgrp-shadow' }, (folder) => {
+    folder.addBinding(sceneSettings.shadow, 'enabled');
+    folder.addBinding(sceneSettings.shadow, 'strength', { min: 0, max: 1, step: 0.01 });
+    folder.addBinding(sceneSettings.shadow, 'depthBias', { min: 0, max: 0.01, step: 0.0001 });
+    folder.addBinding(sceneSettings.shadow, 'normalBias', { min: 0, max: 6, step: 0.1 });
+  });
 }
 
 // The characters' own light rigs (stages/hgrp/lightRig.ts): the game's per-character Character

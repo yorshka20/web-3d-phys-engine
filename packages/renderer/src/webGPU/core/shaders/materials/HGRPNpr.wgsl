@@ -22,7 +22,10 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // the surface occlusion and the transmission lift enters the ramp coordinate.
     let fur = hgrp_fur(input.uv0, input.uv1.x, normalize(input.world_normal), n, view_dir);
     var surface = hgrp_metallic_gloss(input.uv0);
-    surface.b = surface.b * fur.ao;
+    // The lighting ceiling is the surface map's authored occlusion times the fur root's times
+    // the character's own shadow — the game's `P.b x _ScreenSpaceShadowMask.y` (formulas §1.5)
+    surface.b = surface.b * fur.ao *
+        hgrp_character_shadow(input.world_position, normalize(input.world_normal));
 
     // The silk coverage rewrites the albedo and the shadow color as a pair before the shade
     // blend (formulas §1.12); with _Pantyhose off it is the identity.

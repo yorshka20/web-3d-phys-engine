@@ -42,6 +42,7 @@ import { BindGroupLayoutVisibility, BufferType, RenderBatch } from '../core/type
 import { BlitPass } from './passes/BlitPass';
 import { BloomPass } from './passes/BloomPass';
 import { DebugViewPass } from './passes/DebugViewPass';
+import { CharacterShadowPass } from './passes/CharacterShadowPass';
 import { DepthPrepass } from './passes/DepthPrepass';
 import { ForwardPass } from './passes/ForwardPass';
 import { FXAAPass } from './passes/FXAAPass';
@@ -63,6 +64,7 @@ import {
 
 /** The frame's pass chain, in execution order. */
 interface FramePasses {
+  characterShadowPass: CharacterShadowPass;
   depthPrepass: DepthPrepass;
   forwardPass: ForwardPass;
   bloomPass: BloomPass;
@@ -72,6 +74,11 @@ interface FramePasses {
   debugViewPass: DebugViewPass;
   blitPass: BlitPass;
 }
+
+// The character shadow map. Square and canvas-independent: its resolution is the light
+// volume's, and the volume is fitted to the characters (CharacterShadowPass).
+const CHARACTER_SHADOW_MAP_SIZE = 2048;
+const CHARACTER_SHADOW_FORMAT: GPUTextureFormat = 'depth32float';
 
 /** The render targets whose size follows the canvas; recreated as a set on resize. */
 interface SizedTextures {
@@ -127,6 +134,7 @@ export class WebGPURenderer implements IWebGPURenderer {
   @Inject(ServiceTokens.MATERIAL_BINDER) private accessor materialBinder!: MaterialBinder;
 
   // frame orchestration (renderer-private, constructor-wired)
+  private readonly characterShadowPass: CharacterShadowPass;
   private readonly depthPrepass: DepthPrepass;
   private readonly forwardPass: ForwardPass;
   private readonly bloomPass: BloomPass;
@@ -150,6 +158,9 @@ export class WebGPURenderer implements IWebGPURenderer {
   // frame; the count travels in the SceneLighting uniform
   private punctualLightBuffer?: GPUBuffer;
   private readonly punctualLightData = new Float32Array(SCENE_LIGHT_CAPACITY * SCENE_LIGHT_FLOATS);
+  // Character self-shadow map (group 3 binding 4), written by CharacterShadowPass
+  private characterShadowMap?: GPUTexture;
+  private characterShadowSampler?: GPUSampler;
 
   // batch rendering
   private readonly renderBatches: Map<string, RenderBatch>;
@@ -239,6 +250,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.fxaaSource = this.sizedTextures.ldr;
 
     const passes = this.createPasses();
+    this.characterShadowPass = passes.characterShadowPass;
     this.depthPrepass = passes.depthPrepass;
     this.forwardPass = passes.forwardPass;
     this.bloomPass = passes.bloomPass;
@@ -367,6 +379,12 @@ export class WebGPURenderer implements IWebGPURenderer {
     const depthPrepass = new DepthPrepass({
       getDepthView: () => this.sizedTextures.prepassDepth.createView(),
     });
+    // Not a sized target: the shadow map's resolution is the volume's, not the canvas's
+    const characterShadowPass = new CharacterShadowPass({
+      getShadowView: () => this.getCharacterShadowMap().createView(),
+      getShadowMapSize: () => CHARACTER_SHADOW_MAP_SIZE,
+      getShadowFormat: () => CHARACTER_SHADOW_FORMAT,
+    });
     const bloomPass = new BloomPass({
       getInputTexture: () => this.sizedTextures.sceneColor,
       getDepthStencilTexture: () => this.sizedTextures.depth,
@@ -396,6 +414,7 @@ export class WebGPURenderer implements IWebGPURenderer {
     });
 
     return {
+      characterShadowPass,
       depthPrepass,
       forwardPass,
       bloomPass,
@@ -872,8 +891,10 @@ export class WebGPURenderer implements IWebGPURenderer {
       (2 * jitterY) / canvas.height,
     );
 
-    // The light rig first: its count is what the SceneLighting uniform carries to the shading.
+    // The light rig and the shadow volume first: the SceneLighting uniform carries the rig's
+    // count and the shadow map's light camera to the shading.
     const lightCount = packSceneLights(this.punctualLightData);
+    this.characterShadowPass.prepare(frameData);
     if (lightCount > 0) {
       this.device.queue.writeBuffer(
         this.getPunctualLightBuffer(),
@@ -886,13 +907,18 @@ export class WebGPURenderer implements IWebGPURenderer {
     this.device.queue.writeBuffer(
       this.getSceneLightingBuffer(),
       0,
-      packSceneLighting(this.sceneLightingData, lightCount),
+      packSceneLighting(this.sceneLightingData, lightCount, {
+        lightViewProj: this.characterShadowPass.lightViewProj,
+        params: this.characterShadowPass.shadowParams(),
+        normalOffset: this.characterShadowPass.normalOffset(),
+      }),
     );
     this.device.queue.writeBuffer(
       this.getDebugViewBuffer(),
       0,
       packHGRPDebugView(this.debugViewData),
     );
+    this.characterShadowPass.execute(commandEncoder, frameData);
     this.depthPrepass.execute(commandEncoder, frameData);
     await this.forwardPass.execute(commandEncoder, frameData);
     if (debugView === 'off' || debugView === 'diff') {
@@ -945,6 +971,8 @@ export class WebGPURenderer implements IWebGPURenderer {
           { binding: 1, resource: { buffer: this.getSceneLightingBuffer() } },
           { binding: 2, resource: { buffer: this.getDebugViewBuffer() } },
           { binding: 3, resource: { buffer: this.getPunctualLightBuffer() } },
+          { binding: 4, resource: this.getCharacterShadowMap().createView() },
+          { binding: 5, resource: this.getCharacterShadowSampler() },
         ],
       });
       this.hgrpFrameBindGroupTexture = this.sizedTextures.prepassDepth;
@@ -961,6 +989,34 @@ export class WebGPURenderer implements IWebGPURenderer {
       });
     }
     return this.debugViewBuffer;
+  }
+
+  private getCharacterShadowMap(): GPUTexture {
+    if (!this.characterShadowMap) {
+      this.characterShadowMap = this.device.createTexture({
+        label: 'characterShadowMap',
+        size: [CHARACTER_SHADOW_MAP_SIZE, CHARACTER_SHADOW_MAP_SIZE],
+        format: CHARACTER_SHADOW_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+    }
+    return this.characterShadowMap;
+  }
+
+  // Comparison sampler: the hardware does the depth test per tap, so a 3x3 PCF filters the
+  // comparison results rather than the depths.
+  private getCharacterShadowSampler(): GPUSampler {
+    if (!this.characterShadowSampler) {
+      this.characterShadowSampler = this.device.createSampler({
+        label: 'characterShadowSampler',
+        compare: 'less',
+        magFilter: 'linear',
+        minFilter: 'linear',
+        addressModeU: 'clamp-to-edge',
+        addressModeV: 'clamp-to-edge',
+      });
+    }
+    return this.characterShadowSampler;
   }
 
   // Allocated at its capacity once: the bind group is cached across frames, so the buffer's

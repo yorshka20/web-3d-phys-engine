@@ -17,7 +17,13 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
         input.uv0,
     );
     let view_dir = normalize(mvp.camera_pos - input.world_position);
-    let inputs = hgrp_shade_inputs(input.uv0, n, view_dir, 0.0);
+    var inputs = hgrp_shade_inputs(input.uv0, n, view_dir, 0.0);
+    // The skin variants sample the diffuse ramp ONCE (b96 / b135): there is no view ramp on
+    // skin, only on cloth, and their blend reads `clamp(ao + ramp.a, 0, 1)` where cloth reads
+    // `clamp(ao x rampV + ramp.a, 0, 1)`. A view ramp of 1 makes the shared blend that, which
+    // with ao 1 keeps skin off the deep tier entirely — the game's bare skin never darkens
+    // at grazing angles.
+    inputs.ramp_view = 1.0;
     // No surface map on skin: the hook's off-stub yields the material's scalars, so the
     // lighting ceiling stays 1. The decompiled skin variants put _BaseMap.a where cloth has
     // _MetallicGlossMap.b (b96: ao = base.a x screen shadow), but the ripped D maps' alpha is
@@ -25,7 +31,10 @@ fn fs_main(input: GLTFVertexOutput) -> @location(0) vec4<f32> {
     // Pelica's a two-level region mask, both with a uniform light albedo underneath), and the
     // game shows no shadow on forward-facing bare skin — its texture importer drops the alpha,
     // so the shader reads 1. Learnings hgrp-decompiled-formulas.md §2.
-    let surface = hgrp_metallic_gloss(input.uv0);
+    var surface = hgrp_metallic_gloss(input.uv0);
+    // ...which leaves the ceiling to the character's own shadow, the term the game reads there
+    // (lighting/hgrp_shadow.wgsl): hair onto the face, a sleeve onto an arm.
+    surface.b = hgrp_character_shadow(input.world_position, normalize(input.world_normal));
     let core = hgrp_shade_lit(inputs, hgrp_horizontal(n), scene_lighting.env_color.rgb, surface);
 
     // Specular slot (formulas §2): F0 = lerp(0.04 x _Specular x SDF mask G, albedo, _Metallic),
