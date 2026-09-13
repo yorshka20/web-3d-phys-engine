@@ -26,10 +26,18 @@ import { hgrpSlotOwners } from './subsystems';
 // §1.6), i.e. the LUT is authored in display space, and its output is display space too — read
 // raw, the skin LUT turns a 0.03 albedo into a 0.20 shadow color, a shadow six times brighter
 // than the lit surface, while decoded it gives 0.034, the albedo tinted warm (probe
-// 2026-09-03-5). _SpecRampMap is the specular COLOR the F0 is multiplied by and _DiffRampMap's
-// rgb is a color tint (its alpha, the lit weight, is unaffected by the format either way):
-// Unity imports color textures as sRGB unless told otherwise, and nothing in the shader undoes
-// that.
+// 2026-09-03-5). _SpecRampMap is the specular COLOR the F0 is multiplied by: Unity imports
+// color textures as sRGB unless told otherwise, and nothing in the shader undoes that.
+//
+// _DiffRampMap is the exception, and it is a measured one: its rgb is not displayed, it is a
+// HUE NUDGE — `col x lerp(1, rgb, chroma)` renormalized back to col's luma (§1.7), with
+// `chroma = max(rgb) - min(rgb)` measuring the texel's own saturation. Decoding the strip to
+// linear inflates both terms: at the body ramp's terminator (u 0.59, raw 236/156/121) chroma
+// goes 0.45 -> 0.65 and the tint (0.97, 0.83, 0.76) -> (0.90, 0.57, 0.48), which halves green
+// and blue and paints a saturated orange band along the terminator — a vertical stripe down a
+// cylindrical upper arm, which the game does not have (bare skin reads bright and untinted
+// in-game, user 2026-09-11). Read raw, the same texel is the gentle warm shift the formula's
+// shape implies. The alpha, the lit weight, is unaffected by the format either way.
 //
 // A slot's `unset` names the texture the game's shader Properties block substitutes when a
 // material leaves the slot empty (`= "white" {}` / `= "black" {}`), for the slots where that
@@ -44,7 +52,7 @@ export interface HGRPTextureSlot {
 
 export const HGRP_TEXTURE_SLOTS: Readonly<Record<string, HGRPTextureSlot>> = {
   _BaseMap: { srgb: true },
-  _DiffRampMap: { srgb: true },
+  _DiffRampMap: { srgb: false },
   _BumpMap: { srgb: false },
   _ShadowLutTex: { srgb: true },
   _SDFLightmap: { srgb: false },
