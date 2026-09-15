@@ -70,7 +70,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
+import { mat4, quat, vec3 } from 'gl-matrix';
 import { glbPathsBelow, readBindPose, writeClipGlb } from './clip-glb.mjs';
+import { fbxHierarchy, fbxPathsBelow } from './fbx-anim.mjs';
+import { fbxMeshClusterBinds, fbxRestPose, readFbx } from './fbx-read.mjs';
 import {
   actorOfAnimator,
   avatarBinding,
@@ -238,6 +241,268 @@ async function embedBaseColor(glbPath, exported, texDir) {
 // a channel the mesh lacks stays absent, which the loader reads as zeros — the same value a
 // missing vertex stream has in Unity.
 const UV_SETS_EXTRA = 'hgrpUvSets';
+
+// A Unity SkinnedMeshRenderer carries its own bindposes, so two meshes on one skeleton may
+// have been skinned in different frames or poses, and the export keeps the difference in each
+// mesh's skin clusters (TransformLink = the bone's world matrix at bind time, per mesh):
+// Typhoea's tail is bound upright while its VFX copies and the stones at its root were bound
+// with the joints turned a quarter turn about x — the whole file has one such frame — and
+// liino / lizhiyan / wulfa / antal bind a few meshes in another POSE, bone by bone. Blender
+// gives an armature one rest pose, built from one cluster per bone, and skins every mesh with
+// it: a mesh bound elsewhere deforms as if its bind frame were the armature's (the tail's VFX
+// copy lands in front of the character, rotated 90 degrees), and a bone that only such meshes
+// bind gets its rest itself placed in the other frame, a metre from its parent.
+//
+// glTF has the game's semantics available — a skin per mesh, the same joints with their own
+// inverse bind matrices — so, in the glb's rest frame (equal to the FBX bind world of the
+// clusters Blender used, to 1e-6):
+//   1. the file's frames: for a bone with several distinct cluster binds, the one nearest the
+//      FBX Pose node (the hierarchy's bind pose, exact for the accessory joints, a posed
+//      difference for fingers) is the body's, and each other one is a frame F = c x body^-1;
+//   2. a bone's body bind is F^-1 x c over its candidates and the frames, the one nearest the
+//      Pose — a frame other than identity only on a clear match, so a bone the Pose holds in
+//      another pose keeps its cluster as is;
+//   3. a joint whose glb rest is not that bind is moved onto it (the shared skin's inverse
+//      bind follows; clip-glb.mjs readBindPose then takes the glb rest as such a joint's bind);
+//   4. a mesh with a cluster that disagrees with a joint's rest gets its own skin,
+//      IBM_mesh = IBM_shared x rest x TL_mesh^-1, and sits at rest where rest x TL_mesh^-1
+//      puts it — on the tail — following the joints from there.
+// A character whose clusters all agree with the rest is left untouched.
+const BIND_FRAME_TOLERANCE = 1e-3;
+// How close F^-1 x cluster must come to the Pose for a frame other than identity to be believed
+const BIND_FRAME_MATCH = 0.1;
+
+function matrixDeviation(a, b) {
+  let deviation = 0;
+  for (let i = 0; i < 16; i++) deviation = Math.max(deviation, Math.abs(a[i] - b[i]));
+  return deviation;
+}
+
+const IDENTITY = mat4.create();
+
+function describeRotation(m) {
+  const axis = vec3.create();
+  const angle = (quat.getAxisAngle(axis, mat4.getRotation(quat.create(), m)) * 180) / Math.PI;
+  const t = mat4.getTranslation(vec3.create(), m);
+  return (
+    `${angle.toFixed(1)} deg about [${Array.from(axis, (v) => v.toFixed(2)).join(', ')}], ` +
+    `offset [${Array.from(t, (v) => v.toFixed(3)).join(', ')}] m`
+  );
+}
+
+function describeFrameChange(transforms) {
+  const uniform = transforms.every(
+    (transform) => matrixDeviation(transform, transforms[0]) < BIND_FRAME_TOLERANCE,
+  );
+  return uniform ? `one frame: ${describeRotation(transforms[0])}` : 'a different pose per joint';
+}
+
+async function alignBindFrames(glbPath, fbxPath) {
+  const tree = readFbx(fbxPath);
+  const hierarchy = fbxHierarchy(tree);
+  if (hierarchy.roots.length !== 1) {
+    throw new Error(`${fbxPath}: expected one root node, found ${hierarchy.roots.length}`);
+  }
+  const fbxPaths = fbxPathsBelow(hierarchy.roots[0]);
+  const fbxPathOfId = new Map([...fbxPaths].map(([path, node]) => [node.id, path]));
+  const meshBinds = fbxMeshClusterBinds(tree);
+  const pose = fbxRestPose(tree);
+
+  const io = new NodeIO();
+  const doc = await io.read(glbPath);
+  const root = doc.getRoot();
+  const tops = (root.getDefaultScene() ?? root.listScenes()[0])?.listChildren() ?? [];
+  if (tops.length !== 1) {
+    throw new Error(`${glbPath}: expected one scene root, found ${tops.length}`);
+  }
+  const glbPaths = glbPathsBelow(tops[0]);
+  const skins = root.listSkins();
+  if (skins.length !== 1) {
+    throw new Error(`${glbPath}: expected one skin from Blender, found ${skins.length}`);
+  }
+  const shared = skins[0];
+  const joints = shared.listJoints();
+  const jointIndex = new Map(joints.map((joint, i) => [joint, i]));
+  const sharedIbm = Float32Array.from(shared.getInverseBindMatrices().getArray());
+  const jointOfBone = (boneId) => {
+    const joint = glbPaths.byPath.get(fbxPathOfId.get(boneId));
+    return joint && jointIndex.has(joint) ? joint : undefined;
+  };
+  const parentOf = new Map();
+  for (const node of root.listNodes())
+    for (const child of node.listChildren()) parentOf.set(child, node);
+  const worlds = new Map();
+  const restWorlds = () => {
+    const local = mat4.create();
+    const stack = [[tops[0], undefined]];
+    while (stack.length > 0) {
+      const [node, parent] = stack.pop();
+      mat4.fromRotationTranslationScale(
+        local,
+        node.getRotation(),
+        node.getTranslation(),
+        node.getScale(),
+      );
+      const world = mat4.create();
+      if (parent) mat4.multiply(world, worlds.get(parent), local);
+      else mat4.copy(world, local);
+      worlds.set(node, world);
+      for (const child of node.listChildren()) stack.push([child, node]);
+    }
+  };
+  restWorlds();
+
+  // The distinct cluster binds of every joint, with the meshes holding each
+  const candidates = new Map();
+  for (const [mesh, bones] of meshBinds) {
+    for (const { boneId, link } of bones) {
+      const joint = jointOfBone(boneId);
+      if (!joint) continue;
+      const known = candidates.get(joint) ?? [];
+      const same = known.find(
+        (candidate) => matrixDeviation(candidate.link, link) < BIND_FRAME_TOLERANCE,
+      );
+      if (same) same.meshes.push(mesh);
+      else known.push({ link, meshes: [mesh] });
+      candidates.set(joint, known);
+    }
+  }
+  const poseOf = (joint) => pose.get(joint.getName());
+
+  const frames = [IDENTITY];
+  for (const [joint, known] of candidates) {
+    const target = poseOf(joint);
+    if (known.length < 2 || !target) continue;
+    const body = known.reduce((a, b) =>
+      matrixDeviation(a.link, target) <= matrixDeviation(b.link, target) ? a : b,
+    );
+    for (const candidate of known) {
+      if (candidate === body) continue;
+      const frame = mat4.multiply(
+        mat4.create(),
+        candidate.link,
+        mat4.invert(mat4.create(), body.link),
+      );
+      if (!frames.some((f) => matrixDeviation(f, frame) < BIND_FRAME_TOLERANCE)) frames.push(frame);
+    }
+  }
+  const report = [];
+  if (frames.length > 1) {
+    report.push(
+      `${frames.length - 1} other bind frame(s): ${frames.slice(1).map(describeRotation).join('; ')}`,
+    );
+  }
+
+  const binds = new Map();
+  for (const [joint, known] of candidates) {
+    const target = poseOf(joint) ?? worlds.get(joint);
+    let best;
+    for (const candidate of known) {
+      for (const [index, frame] of frames.entries()) {
+        const bind = mat4.multiply(
+          mat4.create(),
+          mat4.invert(mat4.create(), frame),
+          candidate.link,
+        );
+        const deviation = matrixDeviation(bind, target);
+        if (index > 0 && deviation > BIND_FRAME_MATCH) continue;
+        if (!best || deviation < best.deviation - 1e-6)
+          best = { bind, deviation, index, candidate };
+      }
+    }
+    binds.set(joint, best);
+  }
+
+  let changed = false;
+  const depth = (node) => {
+    let d = 0;
+    for (let n = node; parentOf.get(n); n = parentOf.get(n)) d++;
+    return d;
+  };
+  const moved = joints
+    .filter(
+      (joint) =>
+        binds.has(joint) &&
+        matrixDeviation(worlds.get(joint), binds.get(joint).bind) > BIND_FRAME_TOLERANCE,
+    )
+    .sort((a, b) => depth(a) - depth(b));
+  for (const joint of moved) {
+    const { bind, index, candidate } = binds.get(joint);
+    const from = mat4.getTranslation(vec3.create(), worlds.get(joint));
+    const local = mat4.multiply(
+      mat4.create(),
+      mat4.invert(mat4.create(), worlds.get(parentOf.get(joint))),
+      bind,
+    );
+    joint.setTranslation(Array.from(mat4.getTranslation(vec3.create(), local)));
+    joint.setRotation(Array.from(mat4.getRotation(quat.create(), local)));
+    joint.setScale(Array.from(mat4.getScaling(vec3.create(), local)));
+    restWorlds();
+    mat4.invert(
+      sharedIbm.subarray(jointIndex.get(joint) * 16, jointIndex.get(joint) * 16 + 16),
+      bind,
+    );
+    changed = true;
+    report.push(
+      `${joint.getName()}: rest built from ${candidate.meshes.map((m) => m.replace(/^S_actor_/, '')).join('+')} in frame ${index}, ` +
+        `moved ${vec3.distance(from, mat4.getTranslation(vec3.create(), bind)).toFixed(3)} m onto the skeleton's`,
+    );
+  }
+
+  for (const node of root.listNodes()) {
+    if (!node.getMesh() || node.getSkin() !== shared) continue;
+    const bones = meshBinds.get(node.getName());
+    if (!bones) {
+      report.push(`${node.getName()}: no skin clusters in the FBX, shared skin kept`);
+      continue;
+    }
+    const corrections = [];
+    for (const { boneId, boneName, link } of bones) {
+      const joint = jointOfBone(boneId);
+      if (!joint) {
+        report.push(`${node.getName()}: cluster bone ${boneName} is not a glb joint`);
+        continue;
+      }
+      const transform = mat4.multiply(
+        mat4.create(),
+        worlds.get(joint),
+        mat4.invert(mat4.create(), link),
+      );
+      if (matrixDeviation(transform, IDENTITY) > BIND_FRAME_TOLERANCE) {
+        corrections.push({ jointIdx: jointIndex.get(joint), transform });
+      }
+    }
+    if (corrections.length === 0) continue;
+
+    const ibm = Float32Array.from(sharedIbm);
+    for (const { jointIdx, transform } of corrections) {
+      const own = ibm.subarray(jointIdx * 16, jointIdx * 16 + 16);
+      mat4.multiply(own, own, transform);
+    }
+    const skin = doc
+      .createSkin(`${node.getName()}_skin`)
+      .setInverseBindMatrices(
+        doc
+          .createAccessor(`${node.getName()}_ibm`)
+          .setType('MAT4')
+          .setArray(ibm)
+          .setBuffer(root.listBuffers()[0]),
+      )
+      .setSkeleton(shared.getSkeleton());
+    for (const joint of joints) skin.addJoint(joint);
+    node.setSkin(skin);
+    changed = true;
+    report.push(
+      `${node.getName()}: ${corrections.length} of ${bones.length} joints bound in another frame ` +
+        `(${describeFrameChange(corrections.map((c) => c.transform))}) -> own skin`,
+    );
+  }
+  if (changed) {
+    shared.getInverseBindMatrices().setArray(sharedIbm);
+    await io.write(glbPath, doc);
+  }
+  return report;
+}
 
 async function slotUvSets(glbPath) {
   const io = new NodeIO();
@@ -773,6 +1038,7 @@ for (const actor of actors) {
       failed = true;
       continue;
     }
+    for (const line of await alignBindFrames(glbPath, fbx)) console.log(`[skins] ${line}`);
     for (const line of await slotUvSets(glbPath)) console.log(`[uv] ${line}`);
 
     const { copied, converted } = copyTextures(path.join(actorDir, 'textures'), texDir);

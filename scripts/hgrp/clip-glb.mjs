@@ -235,8 +235,8 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
       const glbNode = glbPaths.byPath.get(pathOfId.get(node.id));
       const rest = glbNode ? glbRest.get(glbNode) : undefined;
       let best = candidates[0];
-      if (rest && candidates.length > 1) {
-        let bestDifference = Infinity;
+      let bestDifference = rest ? Infinity : 0;
+      if (rest) {
         for (const candidate of candidates) {
           let difference = 0;
           for (let i = 0; i < 16; i++)
@@ -246,9 +246,16 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
             best = candidate;
           }
         }
-        if (bestDifference > 1e-3) ambiguous.push(`${node.name} (${bestDifference.toFixed(3)})`);
       }
-      world = mat4.clone(best);
+      // A joint none of whose clusters matches the glb's rest was moved onto its parent's frame
+      // by the converter (convert.mjs alignBindFrames: only meshes bound in another frame held
+      // it), so the glb rest IS its bind — the clusters describe those meshes, not the skeleton
+      if (bestDifference > 1e-3) {
+        ambiguous.push(`${node.name} (${bestDifference.toFixed(3)})`);
+        world = mat4.clone(rest);
+      } else {
+        world = mat4.clone(best);
+      }
       skinned++;
     } else {
       quaternionFromEulerXYZ(r, node.rotation);
@@ -262,8 +269,8 @@ export async function readBindPose(modelFbxPath, modelGlbPath) {
   }
   if (ambiguous.length > 0) {
     console.warn(
-      `[clips] ${ambiguous.length} bones have several cluster binds and none matches the glb rest ` +
-        `(first: ${ambiguous.slice(0, 3).join(', ')})`,
+      `[clips] ${ambiguous.length} bones have no cluster bind matching the glb rest; the glb rest ` +
+        `is their bind (first: ${ambiguous.slice(0, 3).join(', ')})`,
     );
   }
   const byPath = new Map();

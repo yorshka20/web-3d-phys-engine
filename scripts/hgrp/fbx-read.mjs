@@ -206,3 +206,51 @@ export function fbxUnitScale(tree) {
   }
   return undefined;
 }
+
+/**
+ * The skin clusters' bind matrices PER MESH: mesh model name -> [{ boneId, boneName, link }],
+ * link = the cluster's TransformLink (the bone's world matrix at bind time, 16 numbers in the
+ * gl-matrix layout). A Unity SkinnedMeshRenderer carries its own bindposes, and the export
+ * keeps them apart: a mesh skinned in another frame or pose than the body (the tail's VFX
+ * copies of a character, bound with the tail joints turned a quarter turn) lists different
+ * TransformLinks for the same bones. Blender's importer can give an armature only one rest
+ * pose, so a converter that wants such a mesh to deform like the game has to read the
+ * difference from here. Bones are identified by id as well as name: a prop can bring a second
+ * skeleton whose bone names repeat the body's.
+ */
+export function fbxMeshClusterBinds(tree) {
+  const objects = fbxObjects(tree);
+  const byId = new Map(objects.map((object) => [object.props[0], object]));
+  const parentsOf = new Map();
+  const connections = tree.nodes.find((node) => node.name === 'Connections')?.children ?? [];
+  for (const connection of connections) {
+    if (connection.props[0] !== 'OO') continue;
+    const parents = parentsOf.get(connection.props[1]) ?? [];
+    parents.push(connection.props[2]);
+    parentsOf.set(connection.props[1], parents);
+  }
+  const binds = new Map();
+  for (const cluster of objects) {
+    if (cluster.name !== 'Deformer' || cluster.props[2] !== 'Cluster') continue;
+    const link = fbxChildren(cluster, 'TransformLink')[0]?.props[0];
+    if (!link || link.length !== 16) continue;
+    const boneId = connections.find(
+      (connection) =>
+        connection.props[0] === 'OO' &&
+        connection.props[2] === cluster.props[0] &&
+        byId.get(connection.props[1])?.name === 'Model',
+    )?.props[1];
+    // cluster -> Skin deformer -> Geometry -> mesh Model
+    let owners = [cluster.props[0]];
+    for (let depth = 0; depth < 3; depth++) {
+      owners = owners.flatMap((id) => parentsOf.get(id) ?? []);
+    }
+    const meshId = owners.find((id) => byId.get(id)?.name === 'Model');
+    if (boneId === undefined || meshId === undefined) continue;
+    const meshName = objectName(byId.get(meshId));
+    const bones = binds.get(meshName) ?? [];
+    bones.push({ boneId, boneName: objectName(byId.get(boneId)), link: Float64Array.from(link) });
+    binds.set(meshName, bones);
+  }
+  return binds;
+}

@@ -66,18 +66,38 @@ takes about a minute (Blender), its 30-odd clips about 15 s more; yvonne's 75 cl
    `TEXCOORD_0/1`; each set is moved back to `TEXCOORD_<channel>` — `TEXCOORD_1` is Unity's
    `uv2` (the fur layer fraction, the VFX mask's second UV set), `TEXCOORD_2` Unity's `uv3` —
    and a channel the mesh lacks stays absent, which the loader reads as zeros like Unity does.
-2. **Texture copy** (`convert.mjs`): copies `textures/*.png`. Anything without a PNG magic
+2. **Bind frames** (`convert.mjs` `alignBindFrames`): a Unity SkinnedMeshRenderer carries its
+   own bindposes, and the export keeps them apart in each mesh's skin clusters — Typhoea's tail
+   is bound upright while its VFX copies and the stones at its root were bound with the joints
+   turned 90° about x (one such frame per file), and liino / lizhiyan / wulfa / antal bind a
+   few meshes in another *pose*, bone by bone. Blender gives an armature one rest pose and
+   skins every mesh with it, so such a mesh came out rotated (the tail's VFX copy in front of
+   the character) and a joint only such meshes bind had its rest placed in the other frame, a
+   metre from its parent. This step reads the clusters per mesh (`fbx-read.mjs
+   fbxMeshClusterBinds`) and the FBX `Pose` node: a bone with several distinct binds tells the
+   file's frame (the bind nearest the Pose is the body's, the other is `F × body`), every
+   bone's body bind is the candidate-and-frame combination nearest the Pose (a frame other
+   than identity only on a clear match, so a bone the Pose merely holds in another pose keeps
+   its cluster), a joint whose glb rest is not that bind is moved onto it (with the shared
+   skin's inverse bind; `readBindPose` then takes the glb rest as such a joint's bind), and
+   every mesh with a cluster that disagrees with a joint's rest gets its own glTF skin — the
+   same joints, `IBM = IBM_shared × rest × TL_mesh⁻¹` — which the engine already drives per
+   instance (`skinIndex`). The log lines `[skins] <joint>: rest built from <mesh> in frame 1,
+   moved 1.387 m onto the skeleton's` and `[skins] <mesh>: N of M joints bound in another
+   frame (one frame: 90.0 deg about ...) -> own skin` are the check; a character whose clusters
+   all agree logs nothing and keeps one skin.
+3. **Texture copy** (`convert.mjs`): copies `textures/*.png`. Anything without a PNG magic
    number is converted via `sips` (the first rip mislabeled TGA files; this export ships PNGs).
-3. **BaseColor embedding** (`convert.mjs`): embeds each material's `_BaseMap` (from preset.json)
+4. **BaseColor embedding** (`convert.mjs`): embeds each material's `_BaseMap` (from preset.json)
    as the glTF `baseColorTexture` (deduplicated — materials share images), so the generic
    glTF/PBR path renders a textured preview.
-4. **`material-preset.mjs`**: writes the export's preset.json scoped to the materials the GLB
+5. **`material-preset.mjs`**: writes the export's preset.json scoped to the materials the GLB
    references (postmodel exports carry every LOD's `M_actor_lod_*` material), completing texture
    tiling/offset from the Unity material objects in `raw/materials_<model>/` as
    `colors["<slot>_ST"] = [sx, sy, ox, oy]` for non-identity transforms — the one field the
    export does not write yet; an `_ST` the export does write is kept and checked. Everything
    else in the file is the export's, verbatim.
-5. **Fur shell layers** (`convert.mjs` `rebuildFurLayers`): the game's fur shader reads each
+6. **Fur shell layers** (`convert.mjs` `rebuildFurLayers`): the game's fur shader reads each
    shell's layer fraction (root 0 .. tip 1) from the mesh's second UV set. The export now carries
    it (`UV1` on the fur meshes) and a source `TEXCOORD_1` is kept as is; the rebuild below is
    for a fur mesh without one. The shells themselves are in the mesh
@@ -91,12 +111,12 @@ takes about a minute (Blender), its 30-odd clips about 15 s more; yvonne's 75 cl
    from tip. The log line `[fur] ... 19 shells over 464 stacks` is the check. The attribute is
    tagged in the primitive's extras so `--preset-only` recomputes it; a source that carries
    `TEXCOORD_1` is left alone.
-6. **Verification gate** (`convert.mjs`): re-reads the GLB with gltf-transform and fails the
+7. **Verification gate** (`convert.mjs`): re-reads the GLB with gltf-transform and fails the
    run if any primitive lacks `TEXCOORD_0`/`TANGENT`/`COLOR_0`, a skinned mesh lacks
    `JOINTS_0`/`WEIGHTS_0`, or the skin has no inverse bind matrices. A mesh on a node without a
    skin is a rigid prop (a weapon parented to a hand joint) and is listed as `rigid=`. It also
    prints mesh/joint/morph/material counts.
-7. **Clips** (`clip-glb.mjs`, see below): every `clips/<clip>.fbx` the manifest marks `ok` is
+8. **Clips** (`clip-glb.mjs`, see below): every `clips/<clip>.fbx` the manifest marks `ok` is
    baked onto the character's skeleton as `clips/<clip>.glb`. After the last character, the
    `_common/<bodyType>` sets are baked on the actor their manifest names.
 
