@@ -253,9 +253,11 @@ fields; the uniform struct itself is shared by every permutation of a variant.
 
 Wiring is fully explicit in `main.ts`: construct `Game`, `world.addSystem(...)` each system,
 create camera/plane/coordinate entities, load a stage from `src/stages/`, `game.initialize()`,
-`game.start()`. Svelte 5 **with runes** is used only for a floating overlay panel
-(`ui/mountEntityPanel.svelte.ts`, `F` key toggles); the canvas itself is created imperatively by
-`WebGPURenderSystem`. State shared with Svelte from plain TS must live in `.svelte.ts` files.
+`game.start()`. Svelte 5 **with runes** is used only for the showcase overlay
+(`ui/showcase/`: character strip, clip transport, look/view presets, mounted by the HGRP stage);
+the canvas itself is created imperatively by `WebGPURenderSystem`. State shared with Svelte
+from plain TS must live in `.svelte.ts` files (`ui/showcase/state.svelte.ts`). Keyboard
+shortcuts are declared in one table, `ui/shortcuts.ts` (`?` lists them); `H` hides every overlay.
 
 **`main.ts` mounts no tweakpane pane** (user convention, 2026-09-03) — the global camera panel is
 the one exception; every other pane is mounted by the stage that owns its content, via
