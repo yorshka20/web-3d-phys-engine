@@ -359,6 +359,7 @@ export class PMXMaterialProcessor {
       height,
       format: 'rgba8unorm',
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      mipmaps: false,
     });
 
     // upload data to GPU

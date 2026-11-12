@@ -10,7 +10,8 @@
 // indexes it by the sRGB-ENCODED albedo (hgrp-decompiled-formulas.md §1.6), so the lookup
 // encodes its linear input first, and the texture is created as an sRGB format so sampling
 // decodes the output (material/hgrp/textures.ts has the probe that settled it). Use a clamp
-// sampler; the half-texel inset keeps linear filtering inside one slice.
+// sampler; the half-texel inset keeps linear filtering inside one slice, and level 0 (the
+// game's SampleLevel) keeps the mip chain out of a lookup that is not an image.
 fn hgrp_sample_shadow_lut(
     lut: texture_2d<f32>,
     lut_sampler: sampler,
@@ -24,8 +25,8 @@ fn hgrp_sample_shadow_lut(
     let v = (0.5 + (1.0 - c.g) * 31.0) / 32.0;
     let u0 = (s0 * 32.0 + 0.5 + c.r * 31.0) / 1024.0;
     let u1 = (s1 * 32.0 + 0.5 + c.r * 31.0) / 1024.0;
-    let col0 = textureSample(lut, lut_sampler, vec2<f32>(u0, v)).rgb;
-    let col1 = textureSample(lut, lut_sampler, vec2<f32>(u1, v)).rgb;
+    let col0 = textureSampleLevel(lut, lut_sampler, vec2<f32>(u0, v), 0.0).rgb;
+    let col1 = textureSampleLevel(lut, lut_sampler, vec2<f32>(u1, v), 0.0).rgb;
     return mix(col0, col1, f);
 }
 

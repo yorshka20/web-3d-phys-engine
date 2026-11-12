@@ -60,6 +60,7 @@ export interface SamplerDescriptor {
   addressMode: GPUAddressMode;
   magFilter: GPUFilterMode;
   minFilter: GPUFilterMode;
+  mipmapFilter?: GPUMipmapFilterMode;
 }
 
 export interface TextureDescriptor {
@@ -69,6 +70,9 @@ export interface TextureDescriptor {
   format: GPUTextureFormat;
   usage: GPUTextureUsageFlags;
   initialData?: GPUCopyExternalImageSource;
+  // A full mip chain, generated from the uploaded image, unless false: a lookup table (a toon
+  // ramp read at an explicit level) has no use for one
+  mipmaps?: boolean;
 }
 
 export interface PipelineDescriptor {

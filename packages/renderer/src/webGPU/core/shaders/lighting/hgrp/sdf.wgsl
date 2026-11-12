@@ -29,7 +29,7 @@ fn hgrp_shade_coord(
     let light_object = to_object * hgrp_light_dir();
     let mirror = light_object.x > 0.0;
     let uv_sdf = vec2<f32>(select(1.0 - uv0.x, uv0.x, mirror), uv0.y);
-    let sdf = textureSample(sdf_lightmap, ramp_sampler, uv_sdf);
+    let sdf = textureSampleLevel(sdf_lightmap, ramp_sampler, uv_sdf, 0.0);
     let field = (sdf.r + sdf.g) * 0.5;
 
     let light_h = normalize(vec3<f32>(light_object.x, 6.1e-5, light_object.z));

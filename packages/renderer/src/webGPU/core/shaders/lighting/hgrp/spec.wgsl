@@ -4,11 +4,12 @@
 // Kajiya-Kay lobe (§3). v is a Unity texture coordinate — origin at the bottom row — while the
 // texture is uploaded in file row order, so it is flipped here, the same convention the shadow
 // LUT verified against its ripped texture. Half-texel inset on the clamp sampler. Off-stub:
-// white, the game's specColor = F0 without the ramp.
+// white, the game's specColor = F0 without the ramp. Level 0, as the game samples it.
 fn hgrp_spec_ramp_color(u: f32, v: f32) -> vec3<f32> {
-    return textureSample(
+    return textureSampleLevel(
         spec_ramp_map,
         ramp_sampler,
         vec2<f32>(hgrp_ramp_inset(u), hgrp_ramp_inset(1.0 - v)),
+        0.0,
     ).rgb;
 }

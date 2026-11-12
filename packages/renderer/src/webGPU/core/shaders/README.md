@@ -113,6 +113,7 @@ shaders/
 │   └── Pulsewave.wgsl     # Pulsewave effect
 ├── passes/                 # Rendering passes
 │   ├── forward.wgsl       # Forward rendering
+│   ├── mipmap.wgsl        # One mip level from the one above (TextureManager.generateMipmaps)
 │   ├── deferred.wgsl      # Deferred rendering
 │   └── shadow.wgsl        # Shadow mapping
 ├── types/                  # TypeScript definitions
