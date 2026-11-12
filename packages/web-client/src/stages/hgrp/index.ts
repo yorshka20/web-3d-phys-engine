@@ -5,6 +5,7 @@ import { registerDebugTab } from '../../ui/debugPanel';
 import { createHGRPCharacterTab } from '../../ui/hgrpCharacterPanel';
 import { createHGRPStageTab } from '../../ui/hgrpStagePanel';
 import { hgrpStage, loadHGRPCharacter, relayoutHGRPStage, resetHGRPStage } from './characters';
+import { installHGRPFocus } from './focus';
 import { HGRPLightRigSystem } from './lightRig';
 import { HGRPWeaponHideSystem } from './weaponHide';
 
@@ -25,6 +26,8 @@ export async function createHGRPStage(world: World) {
   registerDebugTab(createHGRPStageTab(world));
   world.addSystem(new HGRPWeaponHideSystem());
   world.addSystem(new HGRPLightRigSystem());
+  // The camera keys frame this stage's characters, and a double-click picks one
+  installHGRPFocus(world);
 
   for (const character of hgrpStage.characters) {
     if (character.visible) {

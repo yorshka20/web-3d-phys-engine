@@ -23,8 +23,10 @@ import { Game } from './game/Game';
 import { createGeometryStage } from './stages/geometry';
 import { createGLTFStage } from './stages/gltf';
 import { createHGRPStage } from './stages/hgrp';
+import { installCameraViews } from './ui/camera/views';
 import { mountCameraPanel } from './ui/cameraPanel';
 import { registerDebugTab } from './ui/debugPanel';
+import { mountShortcutHint } from './ui/shortcuts';
 import { createEntityTab } from './ui/entityTab';
 import { createSpawnTab } from './ui/spawnTab';
 // import { createEndfieldStage } from './stages/endfield';
@@ -95,6 +97,9 @@ async function main() {
   world.addSystem(new WebGPURenderSystem(rootElement));
 
   const camera = create3DCamera(world, stageCameraConfig[stage]);
+  // Presets, focus and reset through the orbit system's view API, plus their keys; installed
+  // before the stage so a stage can hand it what to focus on
+  installCameraViews(world, camera);
   createPlane(world);
   createCoordinate(world);
 
@@ -131,8 +136,9 @@ async function main() {
   // Initialize the game
   await game.initialize();
 
-  // Camera parameters, editable (top-left)
+  // Camera parameters, editable (top-left); the key list in the corner
   mountCameraPanel(camera);
+  mountShortcutHint();
 
   game.start();
 
@@ -269,13 +275,10 @@ function create3DCamera(world: World, config: CameraConfig = {}) {
     },
   });
 
-  // Set initial orbit state with custom angles before adding to camera
-  const state = (controlComponent as CameraControlComponent).getOrbitState();
-  if (state) {
-    state.azimuth = azimuth;
-    state.elevation = elevation;
-    state.distance = distance;
-  }
+  // Set initial orbit state with custom angles before adding to camera, and remember it as
+  // the view a reset returns to
+  (controlComponent as CameraControlComponent).updateOrbitState({ azimuth, elevation, distance });
+  (controlComponent as CameraControlComponent).setOrbitHome();
 
   camera.addComponent(controlComponent);
 

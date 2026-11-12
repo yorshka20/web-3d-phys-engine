@@ -1,6 +1,7 @@
 import { Camera3DComponent, CameraControlComponent, Entity, Transform3DComponent } from '@ecs';
 import type { BindingApi } from '@tweakpane/core';
 import { Pane } from 'tweakpane';
+import { CAMERA_VIEW_PRESETS, cameraViews } from './camera/views';
 import { draggable } from './draggable';
 
 /**
@@ -56,15 +57,43 @@ export function mountCameraPanel(camera: Entity): () => void {
     return `${p[0].toFixed(2)}, ${p[1].toFixed(2)}, ${p[2].toFixed(2)}`;
   };
 
+  // The named views and the focus moves (ui/camera/views.ts), ahead of the numbers they
+  // produce. A preset is a goal: the readouts below show the camera arriving.
+  const views = pane.addFolder({ title: 'Views', expanded: true });
+  const chosen = { preset: '' };
+  views
+    .addBinding(chosen, 'preset', {
+      label: 'preset',
+      options: {
+        '…': '',
+        ...Object.fromEntries(
+          CAMERA_VIEW_PRESETS.map((preset) => [
+            preset.key ? `${preset.label} (${preset.key})` : preset.label,
+            preset.id,
+          ]),
+        ),
+      },
+    })
+    .on('change', (ev) => {
+      if (ev.value) cameraViews().preset(ev.value);
+    });
+  views.addButton({ title: 'Frame the character (F)' }).on('click', () => cameraViews().focus());
+  views.addButton({ title: 'Face close-up (G)' }).on('click', () => cameraViews().face());
+  views.addButton({ title: 'Reset the view (Home)' }).on('click', () => cameraViews().reset());
+
   if (orbitConfig) {
     type OrbitConfig = NonNullable<typeof orbitConfig>;
     const pushOrbit = (updates: Partial<OrbitConfig>) =>
       control.updateConfig({ orbit: { ...control.getOrbitConfig()!, ...updates } });
 
-    const pushTarget = () => pushOrbit({ target: [target.x, target.y, target.z] });
+    const pushTarget = () => control.updateOrbitState({ target: [target.x, target.y, target.z] });
     const folder = pane.addFolder({ title: 'Orbit target', expanded: true });
     for (const axis of ['x', 'y', 'z'] as const) {
-      folder.addBinding(target, axis, { step: 0.05 }).on('change', pushTarget);
+      liveBindings.push(
+        folder.addBinding(target, axis, { step: 0.05 }).on('change', (ev) => {
+          if (ev.last) pushTarget();
+        }),
+      );
     }
 
     const live = control.getOrbitState();
@@ -160,6 +189,12 @@ export function mountCameraPanel(camera: Entity): () => void {
         view.distance = live.distance;
         view.azimuth = (live.azimuth * 180) / Math.PI;
         view.elevation = (live.elevation * 180) / Math.PI;
+      }
+      const liveTarget = control.getOrbitConfig()?.target;
+      if (liveTarget) {
+        target.x = liveTarget[0];
+        target.y = liveTarget[1];
+        target.z = liveTarget[2];
       }
       position.value = readPosition();
       distanceBinding?.refresh();

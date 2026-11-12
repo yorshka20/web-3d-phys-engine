@@ -8,6 +8,7 @@ import {
 import {
   CameraControlConfig,
   CameraControlState,
+  OrbitView,
 } from '@ecs/components/rendering/camera/CameraControlTypes';
 import { SystemPriorities } from '@ecs/constants/systemPriorities';
 import { Entity } from '@ecs/core/ecs/Entity';
@@ -17,12 +18,25 @@ import { Vec3 } from '@ecs/types/types';
 import { isSceneSurfaceEvent } from '@ecs/utils/sceneSurface';
 
 /**
+ * A bounding sphere, what the view API frames.
+ */
+export interface BoundingSphere {
+  center: Vec3;
+  radius: number;
+}
+
+/**
  * OrbitCameraControlSystem handles 3D modeling software-style camera controls
  * - Camera always looks at a target point (usually origin)
  * - Mouse drag rotates around the target
  * - WASD keys pan the camera
- * - Mouse wheel zooms in/out
+ * - Mouse wheel zooms in/out, toward the cursor when the config says so
  * - Right mouse button can be used for additional controls
+ *
+ * Input writes the GOAL view on the control component; every tick the rendered view takes
+ * an exponential step toward it (config.damping), so a drag settles instead of stopping
+ * dead and a preset or focus request arrives as a transition. The view API (setView, frame,
+ * resetView) is the one entry for anything that moves the camera programmatically.
  */
 export class OrbitCameraControlSystem extends System {
   private targetIndicator: CameraTargetIndicator | null = null;
@@ -101,6 +115,8 @@ export class OrbitCameraControlSystem extends System {
     // Handle keyboard input for panning
     this.handleKeyboardPanning(entity, transform, input, config, deltaTime);
 
+    this.approachGoal(config, state, deltaTime);
+
     // Update camera position based on orbit parameters
     this.updateCameraPosition(transform, camera, config, state);
 
@@ -128,18 +144,13 @@ export class OrbitCameraControlSystem extends System {
       const sensitivity = config.rotationSensitivity;
 
       // Update azimuth (horizontal rotation around Y axis)
-      state.azimuth -= mouseDeltaX * sensitivity;
+      state.goalAzimuth -= mouseDeltaX * sensitivity;
 
       // Update elevation (vertical rotation around X axis)
-      state.elevation += mouseDeltaY * sensitivity;
+      state.goalElevation += mouseDeltaY * sensitivity;
 
       // Clamp elevation to prevent over-rotation
-      const maxElevation = Math.PI / 2 - 0.1; // 85 degrees
-      state.elevation = Math.max(-maxElevation, Math.min(maxElevation, state.elevation));
-
-      // Normalize azimuth to [-PI, PI]
-      while (state.azimuth > Math.PI) state.azimuth -= 2 * Math.PI;
-      while (state.azimuth < -Math.PI) state.azimuth += 2 * Math.PI;
+      state.goalElevation = clampElevation(state.goalElevation);
     }
 
     // Right mouse button: pan the target
@@ -165,6 +176,8 @@ export class OrbitCameraControlSystem extends System {
     const transform = entity.getComponent<Transform3DComponent>(Transform3DComponent.componentName);
     if (!transform) return;
 
+    const state = control.getOrbitState();
+    if (!state) return;
     const sensitivity = config.panSensitivity;
     const position = transform.getPosition();
     const target = config.target;
@@ -182,9 +195,9 @@ export class OrbitCameraControlSystem extends System {
     const panUpZ = up[2] * deltaY * sensitivity;
 
     // Update target position
-    config.target[0] += panX + panUpX;
-    config.target[1] += panY + panUpY;
-    config.target[2] += panZ + panUpZ;
+    state.goalTarget[0] += panX + panUpX;
+    state.goalTarget[1] += panY + panUpY;
+    state.goalTarget[2] += panZ + panUpZ;
   }
 
   /**
@@ -198,6 +211,10 @@ export class OrbitCameraControlSystem extends System {
     deltaTime: number,
   ): void {
     const inputState = input.getState();
+    const state = entity
+      .getComponent<CameraControlComponent>(CameraControlComponent.componentName)
+      ?.getOrbitState();
+    if (!state) return;
     const baseMoveSpeed = config.moveSpeed || 5.0; // units per second
     const sprintMultiplier = inputState.sprint ? 3.0 : 1.0; // Sprint speed multiplier
     const moveSpeed = baseMoveSpeed * sprintMultiplier;
@@ -248,11 +265,97 @@ export class OrbitCameraControlSystem extends System {
         const normalizedMoveZ = (moveZ / distance) * moveSpeed * deltaTime;
 
         // Move the target point
-        config.target[0] += normalizedMoveX;
-        config.target[1] += normalizedMoveY;
-        config.target[2] += normalizedMoveZ;
+        state.goalTarget[0] += normalizedMoveX;
+        state.goalTarget[1] += normalizedMoveY;
+        state.goalTarget[2] += normalizedMoveZ;
       }
     }
+  }
+
+  /**
+   * One exponential step of the rendered view toward the goal. Azimuth takes the short way
+   * round, and both angles are re-centred together once the rendered one leaves [-PI, PI], so
+   * a drag that keeps turning never accumulates an unbounded angle.
+   */
+  private approachGoal(
+    config: NonNullable<CameraControlConfig['orbit']>,
+    state: NonNullable<CameraControlState['orbit']>,
+    deltaTime: number,
+  ): void {
+    const k = config.damping > 0 ? 1 - Math.exp(-deltaTime / config.damping) : 1;
+    state.azimuth += shortestTurn(state.goalAzimuth - state.azimuth) * k;
+    state.elevation += (state.goalElevation - state.elevation) * k;
+    state.distance += (state.goalDistance - state.distance) * k;
+    const target = config.target;
+    for (let i = 0; i < 3; i++) {
+      target[i] += (state.goalTarget[i] - target[i]) * k;
+    }
+    if (Math.abs(state.azimuth) > Math.PI) {
+      const shift = 2 * Math.PI * Math.round(state.azimuth / (2 * Math.PI));
+      state.azimuth -= shift;
+      state.goalAzimuth -= shift;
+    }
+  }
+
+  /**
+   * Move the camera to (part of) a view. Animated by default — the view becomes the goal
+   * and the damping carries the camera there; `animate: false` lands it this tick.
+   */
+  setView(entity: Entity, view: Partial<OrbitView>, options: { animate?: boolean } = {}): void {
+    const control = entity.getComponent<CameraControlComponent>(
+      CameraControlComponent.componentName,
+    );
+    const config = control?.getOrbitConfig();
+    if (!control || !config || !control.isOrbitMode()) return;
+    const clamped: Partial<OrbitView> = { ...view };
+    if (view.distance !== undefined) {
+      clamped.distance = Math.max(config.minDistance, Math.min(config.maxDistance, view.distance));
+    }
+    if (view.elevation !== undefined) {
+      clamped.elevation = clampElevation(view.elevation);
+    }
+    if (options.animate === false) {
+      control.updateOrbitState(clamped);
+    } else {
+      control.setOrbitGoal(clamped);
+    }
+  }
+
+  /**
+   * Point the camera at a sphere and back off until it fills the view: the distance that
+   * puts the sphere's silhouette at `padding` times the frame height (vertical field of
+   * view). Angles stay unless given.
+   */
+  frame(
+    entity: Entity,
+    sphere: BoundingSphere,
+    options: { azimuth?: number; elevation?: number; padding?: number; animate?: boolean } = {},
+  ): void {
+    const camera = entity.getComponent<Camera3DComponent>(Camera3DComponent.componentName);
+    if (!camera) return;
+    const halfFov = ((camera.fov / 2) * Math.PI) / 180;
+    const padding = options.padding ?? 1.15;
+    const distance = (Math.max(sphere.radius, 1e-3) * padding) / Math.sin(halfFov);
+    this.setView(
+      entity,
+      {
+        target: [sphere.center[0], sphere.center[1], sphere.center[2]],
+        distance,
+        azimuth: options.azimuth,
+        elevation: options.elevation,
+      },
+      options,
+    );
+  }
+
+  /** Back to the view the stage set up (CameraControlComponent.setOrbitHome). */
+  resetView(entity: Entity, options: { animate?: boolean } = {}): void {
+    const control = entity.getComponent<CameraControlComponent>(
+      CameraControlComponent.componentName,
+    );
+    const home = control?.getOrbitHome();
+    if (!home) return;
+    this.setView(entity, home, options);
   }
 
   /**
@@ -376,14 +479,11 @@ export class OrbitCameraControlSystem extends System {
     );
 
     if (distance > 0) {
-      // Calculate elevation (vertical angle)
-      state.elevation = Math.asin(relativeY / distance);
-
-      // Calculate azimuth (horizontal angle)
-      state.azimuth = Math.atan2(relativeX, relativeZ);
-
-      // Update distance
-      state.distance = distance;
+      control.updateOrbitState({
+        elevation: Math.asin(relativeY / distance),
+        azimuth: Math.atan2(relativeX, relativeZ),
+        distance,
+      });
     }
   }
 
@@ -433,10 +533,38 @@ export class OrbitCameraControlSystem extends System {
 
       // Apply zoom with exponential scaling for smoother control
       const zoomFactor = Math.exp(zoomDelta);
-      state.distance *= zoomFactor;
+      const previous = state.goalDistance;
+      state.goalDistance = Math.max(
+        config.minDistance,
+        Math.min(config.maxDistance, state.goalDistance * zoomFactor),
+      );
 
-      // Clamp distance to min/max bounds
-      state.distance = Math.max(config.minDistance, Math.min(config.maxDistance, state.distance));
+      // Dolly toward the cursor: the point under the cursor on the target's plane keeps its
+      // place on screen when the target slides toward it by the share of the distance that
+      // was removed (a focal-plane dolly, which needs no depth).
+      if (config.zoomToCursor && previous > 0) {
+        const camera = entity.getComponent<Camera3DComponent>(Camera3DComponent.componentName);
+        const surface = event.target as HTMLElement;
+        if (camera && surface.getBoundingClientRect) {
+          const rect = surface.getBoundingClientRect();
+          const ndcX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          const ndcY = 1 - ((event.clientY - rect.top) / rect.height) * 2;
+          const underCursor = pointOnTargetPlane(
+            state.goalTarget,
+            state.goalAzimuth,
+            state.goalElevation,
+            previous,
+            camera.fov,
+            camera.getAspectRatio(),
+            ndcX,
+            ndcY,
+          );
+          const share = 1 - state.goalDistance / previous;
+          for (let i = 0; i < 3; i++) {
+            state.goalTarget[i] += (underCursor[i] - state.goalTarget[i]) * share;
+          }
+        }
+      }
     }
   };
 
@@ -461,10 +589,10 @@ export class OrbitCameraControlSystem extends System {
 
     // Apply zoom with exponential scaling for smoother control
     const zoomFactor = Math.exp(zoomDelta);
-    state.distance *= zoomFactor;
-
-    // Clamp distance to min/max bounds
-    state.distance = Math.max(config.minDistance, Math.min(config.maxDistance, state.distance));
+    state.goalDistance = Math.max(
+      config.minDistance,
+      Math.min(config.maxDistance, state.goalDistance * zoomFactor),
+    );
   }
 
   /**
@@ -476,12 +604,7 @@ export class OrbitCameraControlSystem extends System {
     );
     if (!control || !control.isOrbitMode()) return;
 
-    const config = control.getOrbitConfig();
-    if (config) {
-      config.target[0] = target[0];
-      config.target[1] = target[1];
-      config.target[2] = target[2];
-    }
+    control.updateOrbitState({ target: [target[0], target[1], target[2]] });
   }
 
   /**
@@ -497,7 +620,9 @@ export class OrbitCameraControlSystem extends System {
     const state = control.getOrbitState();
 
     if (config && state) {
-      state.distance = Math.max(config.minDistance, Math.min(config.maxDistance, distance));
+      control.updateOrbitState({
+        distance: Math.max(config.minDistance, Math.min(config.maxDistance, distance)),
+      });
     }
   }
 
@@ -534,4 +659,92 @@ export class OrbitCameraControlSystem extends System {
   getTargetIndicator(): CameraTargetIndicator | null {
     return this.targetIndicator;
   }
+}
+
+const MAX_ELEVATION = Math.PI / 2 - 0.1; // 85 degrees
+
+function clampElevation(elevation: number): number {
+  return Math.max(-MAX_ELEVATION, Math.min(MAX_ELEVATION, elevation));
+}
+
+// The signed angle, in (-PI, PI], that turns by `delta` the short way round
+function shortestTurn(delta: number): number {
+  const twoPi = 2 * Math.PI;
+  return delta - twoPi * Math.round(delta / twoPi);
+}
+
+/**
+ * The camera basis for an orbit view: unit forward (camera to target), right and up.
+ */
+export function orbitBasis(
+  azimuth: number,
+  elevation: number,
+): { forward: Vec3; right: Vec3; up: Vec3 } {
+  const forward: Vec3 = [
+    -Math.cos(elevation) * Math.sin(azimuth),
+    -Math.sin(elevation),
+    -Math.cos(elevation) * Math.cos(azimuth),
+  ];
+  // Right = forward x worldUp, up = right x forward (both unit: forward is never vertical,
+  // the elevation clamp keeps it 5 degrees off)
+  const right: Vec3 = [-forward[2], 0, forward[0]];
+  const rightLength = Math.hypot(right[0], right[2]);
+  right[0] /= rightLength;
+  right[2] /= rightLength;
+  const up: Vec3 = [
+    right[1] * forward[2] - right[2] * forward[1],
+    right[2] * forward[0] - right[0] * forward[2],
+    right[0] * forward[1] - right[1] * forward[0],
+  ];
+  return { forward, right, up };
+}
+
+/**
+ * The world point a screen position (NDC, y up) sees on the plane through the target that
+ * faces the camera, for a perspective lens of `fov` degrees (vertical).
+ */
+export function pointOnTargetPlane(
+  target: Vec3,
+  azimuth: number,
+  elevation: number,
+  distance: number,
+  fov: number,
+  aspectRatio: number,
+  ndcX: number,
+  ndcY: number,
+): Vec3 {
+  const { right, up } = orbitBasis(azimuth, elevation);
+  const halfHeight = Math.tan(((fov / 2) * Math.PI) / 180) * distance;
+  const halfWidth = halfHeight * aspectRatio;
+  return [
+    target[0] + right[0] * ndcX * halfWidth + up[0] * ndcY * halfHeight,
+    target[1] + right[1] * ndcX * halfWidth + up[1] * ndcY * halfHeight,
+    target[2] + right[2] * ndcX * halfWidth + up[2] * ndcY * halfHeight,
+  ];
+}
+
+/**
+ * The world-space ray a screen position (NDC, y up) casts from an orbit camera.
+ */
+export function orbitRay(
+  azimuth: number,
+  elevation: number,
+  fov: number,
+  aspectRatio: number,
+  ndcX: number,
+  ndcY: number,
+): Vec3 {
+  const { forward, right, up } = orbitBasis(azimuth, elevation);
+  const halfHeight = Math.tan(((fov / 2) * Math.PI) / 180);
+  const halfWidth = halfHeight * aspectRatio;
+  const direction: Vec3 = [
+    forward[0] + right[0] * ndcX * halfWidth + up[0] * ndcY * halfHeight,
+    forward[1] + right[1] * ndcX * halfWidth + up[1] * ndcY * halfHeight,
+    forward[2] + right[2] * ndcX * halfWidth + up[2] * ndcY * halfHeight,
+  ];
+  const length = Math.hypot(direction[0], direction[1], direction[2]);
+  direction[0] /= length;
+  direction[1] /= length;
+  direction[2] /= length;
+  return direction;
 }

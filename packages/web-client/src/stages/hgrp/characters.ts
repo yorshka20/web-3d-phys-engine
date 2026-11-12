@@ -10,7 +10,7 @@ import { AssetLoader, assetRegistry } from '@renderer';
 import { GLTFModel } from '@renderer/assets/GltfModel';
 import { attachHumanoidRig } from '@renderer/assets/humanoid/binding';
 import { HGRPCharacterFlags, HGRPPreset } from '@renderer/material/hgrp';
-import { quat, vec3 } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { loadHGRPLightRig } from './lightRig';
 
@@ -82,6 +82,8 @@ export interface HGRPStageCharacter {
   anchor: readonly [number, number, number];
   // Footprint along X, what the row layout spaces the characters by
   width: number;
+  // Bind-pose bounds in model space, what the camera frames; known once the model is loaded
+  bounds: ModelBounds | undefined;
   // Layout-space ground point of the slot (y is always 0), assigned by the row layout
   slot: readonly [number, number, number];
   // Calibration-panel adjustments, in layout metres / degrees / a multiplier on globalScale
@@ -267,6 +269,7 @@ function readRoster(): HGRPStageCharacter[] {
         visible: DEFAULT_CHARACTER_FOLDERS.includes(folder),
         anchor: [0, 0, 0],
         width: 0,
+        bounds: undefined,
         slot: [0, 0, 0],
         offset: { x: 0, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
@@ -317,9 +320,73 @@ export function onHGRPStageChange(listener: () => void): () => void {
   };
 }
 
-interface ModelBounds {
+export interface ModelBounds {
   min: [number, number, number];
   max: [number, number, number];
+}
+
+export interface WorldSphere {
+  center: [number, number, number];
+  radius: number;
+}
+
+const scratchPoint = vec3.create();
+const scratchMatrix = mat4.create();
+
+function worldMatrixOf(character: HGRPStageCharacter): Float32Array | undefined {
+  return character.entity
+    ?.getComponent<Transform3DComponent>(Transform3DComponent.componentName)
+    ?.getWorldMatrix();
+}
+
+/**
+ * The character's bind-pose bounds as a world-space sphere: the box centre through the
+ * entity's transform, the half-diagonal scaled by the world scale. A sphere is what the
+ * camera frames and what a double-click picks against — the pose moves limbs, but the
+ * bind-pose box of a standing character stays a fair envelope for both.
+ */
+export function hgrpCharacterSphere(character: HGRPStageCharacter): WorldSphere | undefined {
+  const bounds = character.bounds;
+  const world = worldMatrixOf(character);
+  if (!bounds || !world) return undefined;
+  const { min, max } = bounds;
+  vec3.set(scratchPoint, (min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
+  vec3.transformMat4(scratchPoint, scratchPoint, world);
+  const worldScale = hgrpStage.globalScale * character.scale;
+  const radius = (vec3.distance(min, max) / 2) * worldScale;
+  return { center: [scratchPoint[0], scratchPoint[1], scratchPoint[2]], radius };
+}
+
+// The export's head joint; the face materials already shade in its frame
+const HEAD_JOINT = 'Bip001_Head';
+
+/**
+ * A world-space sphere around the character's head, posed as it is this frame: the head
+ * joint's position from the skeleton's composed node matrices, with a radius taken as a share
+ * of the character's height. Undefined until the first animation tick has composed the pose.
+ */
+export function hgrpCharacterHeadSphere(character: HGRPStageCharacter): WorldSphere | undefined {
+  const bounds = character.bounds;
+  const world = worldMatrixOf(character);
+  const skeleton = character.entity?.getComponent<SkeletonComponent>(
+    SkeletonComponent.componentName,
+  );
+  const model = assetRegistry.getAssetDescriptor<'gltf'>(character.assetId)?.rawData as
+    | GLTFModel
+    | undefined;
+  const index = model?.nodes?.findIndex((node) => node.name === HEAD_JOINT) ?? -1;
+  if (!bounds || !world || !skeleton?.worldMatrices || index < 0) return undefined;
+  mat4.multiply(
+    scratchMatrix,
+    world,
+    skeleton.worldMatrices.subarray(index * 16, index * 16 + 16) as Float32Array,
+  );
+  const worldScale = hgrpStage.globalScale * character.scale;
+  const height = bounds.max[1] - bounds.min[1];
+  return {
+    center: [scratchMatrix[12], scratchMatrix[13], scratchMatrix[14]],
+    radius: height * 0.09 * worldScale,
+  };
 }
 
 /**
@@ -474,6 +541,7 @@ export function loadHGRPCharacter(world: World, character: HGRPStageCharacter): 
       await AssetLoader.loadGLTFClips(character.assetId, [first]);
     }
     const { min, max } = modelBounds(model);
+    character.bounds = { min, max };
     character.anchor = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2];
     character.width = max[0] - min[0];
     // After the anchor: the light rig's ground origin is placed on the model's feet

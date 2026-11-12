@@ -1,14 +1,17 @@
 import { Component } from '@ecs/core/ecs/Component';
+import { Vec3 } from '@ecs/types/types';
 import {
   CameraControlConfig,
+  CameraControlConfigUpdate,
   CameraControlMode,
   CameraControlState,
   DEFAULT_CAMERA_CONTROLS,
+  OrbitView,
 } from './CameraControlTypes';
 
 export interface CameraControlProps {
   mode?: CameraControlMode;
-  config?: Partial<CameraControlConfig>;
+  config?: CameraControlConfigUpdate;
 }
 
 export class CameraControlComponent extends Component {
@@ -16,6 +19,8 @@ export class CameraControlComponent extends Component {
 
   private config: CameraControlConfig;
   private state: CameraControlState;
+  // The view `resetOrbitView` returns to: the one the stage set up, remembered on request
+  private orbitHome?: OrbitView;
 
   constructor(props: CameraControlProps = {}) {
     super('CameraControl');
@@ -50,7 +55,7 @@ export class CameraControlComponent extends Component {
   /**
    * Update configuration
    */
-  updateConfig(updates: Partial<CameraControlConfig>): void {
+  updateConfig(updates: CameraControlConfigUpdate): void {
     this.config = this.mergeConfig(this.config, updates);
   }
 
@@ -142,13 +147,89 @@ export class CameraControlComponent extends Component {
   }
 
   /**
-   * Update orbit state
+   * Set part of the orbit view immediately: the rendered view and its goal both take the
+   * value, so a widget's edit is not smoothed. `target` lands in the orbit config, which is
+   * where the look-at reads it.
    */
-  updateOrbitState(updates: Partial<CameraControlState['orbit']>): void {
-    if (!this.state.orbit) {
-      this.state.orbit = { azimuth: 0, elevation: 0, distance: 10 };
+  updateOrbitState(updates: Partial<OrbitView>): void {
+    const orbit = this.ensureOrbitState();
+    if (updates.azimuth !== undefined) {
+      orbit.azimuth = orbit.goalAzimuth = updates.azimuth;
     }
-    this.state.orbit = { ...this.state.orbit, ...updates };
+    if (updates.elevation !== undefined) {
+      orbit.elevation = orbit.goalElevation = updates.elevation;
+    }
+    if (updates.distance !== undefined) {
+      orbit.distance = orbit.goalDistance = updates.distance;
+    }
+    if (updates.target !== undefined) {
+      this.writeTarget(updates.target);
+      orbit.goalTarget = [updates.target[0], updates.target[1], updates.target[2]];
+    }
+  }
+
+  /**
+   * Set part of the orbit view as a goal the rendered view approaches over the config's
+   * damping time: what presets, focusing and the input write.
+   */
+  setOrbitGoal(updates: Partial<OrbitView>): void {
+    const orbit = this.ensureOrbitState();
+    if (updates.azimuth !== undefined) orbit.goalAzimuth = updates.azimuth;
+    if (updates.elevation !== undefined) orbit.goalElevation = updates.elevation;
+    if (updates.distance !== undefined) orbit.goalDistance = updates.distance;
+    if (updates.target !== undefined) {
+      orbit.goalTarget = [updates.target[0], updates.target[1], updates.target[2]];
+    }
+  }
+
+  /** The orbit view the goal describes (where the camera is heading, or already is). */
+  getOrbitGoal(): OrbitView | undefined {
+    const orbit = this.state.orbit;
+    if (!orbit) return undefined;
+    return {
+      azimuth: orbit.goalAzimuth,
+      elevation: orbit.goalElevation,
+      distance: orbit.goalDistance,
+      target: [orbit.goalTarget[0], orbit.goalTarget[1], orbit.goalTarget[2]],
+    };
+  }
+
+  /** Remember the current goal (or `view`) as the view a reset returns to. */
+  setOrbitHome(view?: OrbitView): void {
+    const home = view ?? this.getOrbitGoal();
+    if (home) {
+      this.orbitHome = { ...home, target: [home.target[0], home.target[1], home.target[2]] };
+    }
+  }
+
+  getOrbitHome(): OrbitView | undefined {
+    return this.orbitHome;
+  }
+
+  private ensureOrbitState(): NonNullable<CameraControlState['orbit']> {
+    if (!this.state.orbit) {
+      const distance = this.config.orbit?.distance ?? 10;
+      const target = this.config.orbit?.target ?? [0, 0, 0];
+      this.state.orbit = {
+        azimuth: 0,
+        elevation: 0,
+        distance,
+        goalAzimuth: 0,
+        goalElevation: 0,
+        goalDistance: distance,
+        goalTarget: [target[0], target[1], target[2]],
+      };
+    }
+    return this.state.orbit;
+  }
+
+  // In place: the orbit system pans by mutating this array, and the camera panel reads it
+  private writeTarget(target: Vec3): void {
+    const orbit = this.config.orbit;
+    if (!orbit) return;
+    orbit.target[0] = target[0];
+    orbit.target[1] = target[1];
+    orbit.target[2] = target[2];
   }
 
   /**
@@ -218,15 +299,22 @@ export class CameraControlComponent extends Component {
           fps: { yaw: 0, pitch: 0, roll: 0 },
         };
 
-      case 'orbit':
+      case 'orbit': {
+        const distance = this.config.orbit?.distance ?? 10;
+        const target = this.config.orbit?.target ?? [0, 0, 0];
         return {
           ...baseState,
           orbit: {
             azimuth: 0,
             elevation: 0,
-            distance: this.config.orbit?.distance ?? 10,
+            distance,
+            goalAzimuth: 0,
+            goalElevation: 0,
+            goalDistance: distance,
+            goalTarget: [target[0], target[1], target[2]],
           },
         };
+      }
 
       case 'free':
         return {
@@ -246,7 +334,7 @@ export class CameraControlComponent extends Component {
    */
   private mergeConfig(
     base: CameraControlConfig,
-    updates: Partial<CameraControlConfig>,
+    updates: CameraControlConfigUpdate,
   ): CameraControlConfig {
     // Helper to merge nested config objects
     const mergeNested = <T extends object>(a?: T, b?: Partial<T>): T | undefined => {
@@ -271,5 +359,6 @@ export class CameraControlComponent extends Component {
     super.reset();
     this.config = DEFAULT_CAMERA_CONTROLS.fps;
     this.state = this.createInitialState();
+    this.orbitHome = undefined;
   }
 }
