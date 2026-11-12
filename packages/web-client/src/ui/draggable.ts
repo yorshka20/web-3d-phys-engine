@@ -5,7 +5,13 @@
 // A handle that is itself a button (tweakpane's title bar folds the pane when clicked) would
 // fire that click at the end of a drag, so a drag that actually moved swallows the next
 // click on the way out.
-export function draggable(node: HTMLElement, params: { handle?: string } = {}) {
+export interface DraggableParams {
+  handle?: string;
+  // Where the element landed, in page pixels, once a drag that moved it ends
+  onDrop?: (left: number, top: number) => void;
+}
+
+export function draggable(node: HTMLElement, params: DraggableParams = {}) {
   const pos = { x: 0, y: 0 };
   let dragging = false;
   let moved = false;
@@ -60,6 +66,9 @@ export function draggable(node: HTMLElement, params: { handle?: string } = {}) {
     if (moved && handleEl) {
       handleEl.addEventListener('click', swallowClick, { capture: true, once: true });
     }
+    if (moved) {
+      params.onDrop?.(pos.x, pos.y);
+    }
   }
 
   node.style.position = 'fixed';
@@ -78,7 +87,7 @@ export function draggable(node: HTMLElement, params: { handle?: string } = {}) {
   }
 
   return {
-    update(newParams: { handle?: string }) {
+    update(newParams: DraggableParams) {
       params = newParams;
       if (handleEl) handleEl.removeEventListener('mousedown', onMouseDown);
       getHandle();

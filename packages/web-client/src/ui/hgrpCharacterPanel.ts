@@ -264,7 +264,7 @@ function addCharacterFolder(
   character: HGRPStageCharacter,
   expanded: boolean,
   registerScrub: (scrub: () => void) => void,
-): void {
+): FolderApi {
   const materials = collectHGRPMaterials(character.assetId);
   const storageKey = `hgrp-shading-${character.assetId}`;
   const pristine = presetBaseline(character, materials);
@@ -275,7 +275,7 @@ function addCharacterFolder(
     );
   }
 
-  lazyFolder(
+  const folder = lazyFolder(
     pane,
     {
       title: character.label + (edited ? ' · OVERRIDES' : ''),
@@ -293,10 +293,14 @@ function addCharacterFolder(
       addTransformWidgets(folder, character);
       addAnimationWidgets(folder, character, registerScrub);
       if (materials.length > 0) {
-        addMaterialWidgets(folder, character, materials, pristine, storageKey);
+        addMaterialWidgets(folder, character, materials, pristine, storageKey, () => {
+          const edited = describeOverrides(pristine, snapshotState(materials)).length > 0;
+          folder.title = character.label + (edited ? ' · OVERRIDES' : '');
+        });
       }
     },
   );
+  return folder;
 }
 
 function addTransformWidgets(folder: FolderApi, character: HGRPStageCharacter): void {
@@ -419,11 +423,56 @@ function addMaterialWidgets(
   materials: HGRPMaterialDescriptor[],
   pristine: HGRPShadingState,
   storageKey: string,
+  onOverridesChange: () => void,
 ): void {
   lazyFolder(
     folder,
     { title: 'Materials', key: `hgrp:${character.assetId}:materials` },
     (section) => {
+      // The whole-set actions first, where they are seen before the sliders start — a
+      // material list runs to twenty folders, and a button under them is a button nobody
+      // finds. Persistence is EXPLICIT ('Save overrides'): live tweaks are session-only, so
+      // experiments never silently shadow the authoritative preset values across reloads.
+      const persist = () => {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(snapshotState(materials)));
+        } catch (error) {
+          console.warn('[hgrpCharacterPanel] Failed to persist to localStorage:', error);
+        }
+        onOverridesChange();
+      };
+      // Widget value objects mirror the descriptors; after a bulk apply (import/reset) each built
+      // material folder rebuilds its widgets from the descriptors — a bulk apply can flip gates,
+      // which changes which widgets the material has at all. A material folder that was never
+      // expanded has no widgets and no syncer — it reads the descriptors when it is finally
+      // built.
+      const syncers: (() => void)[] = [];
+      const syncWidgets = () => {
+        for (const sync of syncers) {
+          sync();
+        }
+        onOverridesChange();
+      };
+      section.addButton({ title: 'Save overrides' }).on('click', () => persist());
+      section.addButton({ title: 'Export JSON' }).on('click', () => {
+        exportState(snapshotState(materials), character.assetId);
+      });
+      section.addButton({ title: 'Import JSON' }).on('click', () =>
+        importState((imported) => {
+          applyState(materials, imported);
+          syncWidgets();
+        }),
+      );
+      section.addButton({ title: 'Reset to preset' }).on('click', () => {
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {
+          // storage unavailable — reset still applies in-memory
+        }
+        applyState(materials, pristine);
+        syncWidgets();
+      });
+
       // Optional layers this character actually has (HGRPCharacterFlags). The toggle flips the
       // descriptors the draw list already reads every frame, so it takes effect immediately;
       // it is session-only, since the load-time source of truth is the flag passed to
@@ -444,23 +493,6 @@ function addMaterialWidgets(
           }
         });
       }
-
-      // Persistence is EXPLICIT ('Save overrides' button): live tweaks are session-only, so
-      // experiments never silently shadow the authoritative preset values across reloads.
-      const persist = () => {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(snapshotState(materials)));
-        } catch (error) {
-          console.warn('[hgrpCharacterPanel] Failed to persist to localStorage:', error);
-        }
-      };
-
-      // Widget value objects mirror the descriptors; after a bulk apply (import/reset) each built
-      // material folder rebuilds its widgets from the descriptors — a bulk apply can flip gates,
-      // which changes which widgets the material has at all. A material folder that was never
-      // expanded has no widgets and no syncer — it reads the descriptors when it is finally
-      // built.
-      const syncers: (() => void)[] = [];
 
       for (const material of materials) {
         const initial = hgrpMaterialTunables(material);
@@ -549,32 +581,6 @@ function addMaterialWidgets(
           });
         });
       }
-
-      const syncWidgets = () => {
-        for (const sync of syncers) {
-          sync();
-        }
-      };
-
-      section.addButton({ title: 'Save overrides' }).on('click', () => persist());
-      section.addButton({ title: 'Export JSON' }).on('click', () => {
-        exportState(snapshotState(materials), character.assetId);
-      });
-      section.addButton({ title: 'Import JSON' }).on('click', () =>
-        importState((imported) => {
-          applyState(materials, imported);
-          syncWidgets();
-        }),
-      );
-      section.addButton({ title: 'Reset to preset' }).on('click', () => {
-        try {
-          localStorage.removeItem(storageKey);
-        } catch {
-          // storage unavailable — reset still applies in-memory
-        }
-        applyState(materials, pristine);
-        syncWidgets();
-      });
     },
   );
 }

@@ -1,4 +1,5 @@
 import { draggable } from './draggable';
+import { registerShortcut } from './shortcuts';
 
 // Tabs contributed to the single debug panel (toggled with P). A stage registers whatever
 // belongs to it — the PMX shading params, the HGRP calibration knobs — so nothing mounts for
@@ -139,6 +140,35 @@ interface DebugPanel {
 
 let panel: DebugPanel | undefined;
 
+// What the user arranged, kept across reloads: whether the panel was open, which tab, and
+// where it was dragged to. The widgets inside are rebuilt from their own module state.
+const STORAGE_KEY = 'debug-panel';
+
+interface PanelMemory {
+  visible: boolean;
+  tab: string;
+  left?: number;
+  top?: number;
+}
+
+function readMemory(): PanelMemory {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as PanelMemory;
+  } catch {
+    // unreadable storage: start from the defaults
+  }
+  return { visible: false, tab: '' };
+}
+
+function writeMemory(memory: PanelMemory): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
+  } catch {
+    // storage unavailable: the arrangement lasts the session
+  }
+}
+
 function createDebugPanel(): DebugPanel {
   const style = document.createElement('style');
   style.textContent = STYLE;
@@ -161,12 +191,26 @@ function createDebugPanel(): DebugPanel {
 
   const rail = panelElement.querySelector('.dp-rail') as HTMLElement;
   const content = panelElement.querySelector('.dp-content') as HTMLElement;
-  draggable(panelElement, { handle: '.dp-header' });
+  const memory = readMemory();
+  if (memory.left !== undefined && memory.top !== undefined) {
+    panelElement.style.left = `${Math.max(0, Math.min(memory.left, window.innerWidth - 60))}px`;
+    panelElement.style.top = `${Math.max(0, Math.min(memory.top, window.innerHeight - 40))}px`;
+    panelElement.style.right = '';
+  }
+  draggable(panelElement, {
+    handle: '.dp-header',
+    onDrop: (left, top) => remember({ left, top }),
+  });
 
   const entries: TabEntry[] = [];
   let activeIndex = 0;
   let visible = false;
   let frame = 0;
+
+  function remember(changes: Partial<PanelMemory>): void {
+    Object.assign(memory, changes);
+    writeMemory(memory);
+  }
 
   // Exactly one tab's widget tree exists at a time, and only while the panel is open: a pane
   // off screen is pure cost — a fully built HGRP character tab is ~18k DOM nodes and ~12k
@@ -204,6 +248,7 @@ function createDebugPanel(): DebugPanel {
 
   function select(index: number): void {
     activeIndex = index;
+    if (entries[index]) remember({ tab: entries[index].tab.id });
     entries.forEach((entry, i) => {
       entry.button.classList.toggle('active', i === index);
       entry.host.hidden = i !== index;
@@ -221,6 +266,7 @@ function createDebugPanel(): DebugPanel {
     visible = next;
     panelElement.hidden = !next;
     hint.hidden = next;
+    remember({ visible: next });
     const entry = entries[activeIndex];
     if (entry) {
       if (next) {
@@ -255,18 +301,22 @@ function createDebugPanel(): DebugPanel {
     const entry: TabEntry = { tab, button, host, ticks: [] };
     entries.push(entry);
     button.addEventListener('click', () => select(entries.indexOf(entry)));
-    select(activeIndex);
+    // The remembered tab wins when it turns up; until then the first registered one shows
+    select(tab.id === memory.tab ? entries.length - 1 : activeIndex);
+    if (entries.length === 1 && memory.visible) {
+      setVisible(true);
+    }
   }
 
   hint.addEventListener('click', () => setVisible(true));
   (panelElement.querySelector('.dp-close') as HTMLElement).addEventListener('click', () =>
     setVisible(false),
   );
-  window.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.code !== 'KeyP') return;
-    const target = e.target as HTMLElement | null;
-    if (target && /INPUT|SELECT|TEXTAREA/.test(target.tagName)) return;
-    setVisible(panelElement.hidden);
+  registerShortcut({
+    code: 'KeyP',
+    key: 'P',
+    description: 'Open or close the debug panel',
+    handler: () => setVisible(panelElement.hidden),
   });
 
   return { addTab };

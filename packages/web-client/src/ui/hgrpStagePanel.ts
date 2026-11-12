@@ -17,6 +17,15 @@ import {
   setHGRPCharacterVisible,
 } from '../stages/hgrp/characters';
 import { hgrpLightRig } from '../stages/hgrp/lightRig';
+import {
+  applyLookPreset,
+  exportLook,
+  importLook,
+  lookPresets,
+  onLookPresetsChange,
+  removeLookPreset,
+  saveLookPreset,
+} from '../stages/hgrp/lookPresets';
 import type { DebugTab } from './debugPanel';
 import { lazyFolder } from './lazyFolder';
 
@@ -36,6 +45,7 @@ export function createHGRPStageTab(world: World): DebugTab {
 function mountPane(container: HTMLElement, world: World): () => void {
   const pane = new Pane({ container });
 
+  const unsubscribeLooks = addLookWidgets(pane);
   addCharacterSwitches(pane, world);
 
   pane
@@ -75,7 +85,60 @@ function mountPane(container: HTMLElement, world: World): () => void {
   const legend = { heat: 'blue 1/16 · 1/4 · green 1 · yellow 4 · red 16 · white = bloom edge' };
   debug.addBinding(legend, 'heat', { readonly: true, interval: 0 });
 
-  return () => pane.dispose();
+  return () => {
+    unsubscribeLooks();
+    pane.dispose();
+  };
+}
+
+// The look (stages/hgrp/lookPresets.ts) above the knobs it bundles: pick one and every
+// lighting and post widget below follows; save keeps what the knobs say under a name. The
+// dropdown's selection is session state the panel keeps in module scope, since the pane is
+// rebuilt each time the tab is shown.
+const lookState = { preset: 'studio' };
+
+function addLookWidgets(pane: Pane): () => void {
+  const folder = pane.addFolder({ title: 'Look', expanded: true });
+  const options = () =>
+    Object.fromEntries(
+      lookPresets().map((preset) => [
+        preset.builtin ? preset.label : `${preset.label} (saved)`,
+        preset.id,
+      ]),
+    );
+  let picker = folder.addBinding(lookState, 'preset', { label: 'look', options: options() });
+  const rebuildPicker = () => {
+    const index = folder.children.indexOf(picker);
+    picker.dispose();
+    picker = folder.addBinding(lookState, 'preset', { label: 'look', options: options(), index });
+    picker.on('change', onPick);
+  };
+  const onPick = () => {
+    if (applyLookPreset(lookState.preset)) pane.refresh();
+  };
+  picker.on('change', onPick);
+
+  folder.addButton({ title: 'Save look as…' }).on('click', () => {
+    const label = window.prompt('Name for this look', 'My look');
+    if (label === null) return;
+    lookState.preset = saveLookPreset(label).id;
+    picker.refresh();
+  });
+  folder.addButton({ title: 'Delete saved look' }).on('click', () => {
+    const preset = lookPresets().find((entry) => entry.id === lookState.preset);
+    if (!preset || preset.builtin) return;
+    removeLookPreset(preset.id);
+    lookState.preset = 'studio';
+    picker.refresh();
+  });
+  folder.addButton({ title: 'Export JSON' }).on('click', () => {
+    const preset = lookPresets().find((entry) => entry.id === lookState.preset);
+    exportLook(preset?.label ?? 'look');
+  });
+  folder.addButton({ title: 'Import JSON' }).on('click', () => importLook(() => pane.refresh()));
+
+  const unsubscribe = onLookPresetsChange(rebuildPicker);
+  return unsubscribe;
 }
 
 // One switch per converted character under assets/hgrp. Switching one on for the first time

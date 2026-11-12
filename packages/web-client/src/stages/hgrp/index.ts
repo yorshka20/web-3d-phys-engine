@@ -7,6 +7,7 @@ import { createHGRPStageTab } from '../../ui/hgrpStagePanel';
 import { hgrpStage, loadHGRPCharacter, relayoutHGRPStage, resetHGRPStage } from './characters';
 import { installHGRPFocus } from './focus';
 import { HGRPLightRigSystem } from './lightRig';
+import { captureStudioLook } from './lookPresets';
 import { HGRPWeaponHideSystem } from './weaponHide';
 
 // Stage B: the converted HGRP characters render through the HGRP material family — materials
@@ -16,6 +17,8 @@ export async function createHGRPStage(world: World) {
   // Bright studio backdrop (linear light, pre-tonemap) — the in-game character showcase
   // sits on a light grey ground, and look comparison against screenshots needs it
   sceneSettings.clearColor = [0.7, 0.7, 0.73];
+  // The calibrated defaults are the Studio look; every other look is a variant of it
+  captureStudioLook();
 
   resetHGRPStage();
 
