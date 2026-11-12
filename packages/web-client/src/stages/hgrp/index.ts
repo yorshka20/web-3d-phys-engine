@@ -2,6 +2,7 @@ import { World } from '@ecs/core/ecs/World';
 import { sceneSettings } from '@renderer/webGPU/renderer/sceneSettings';
 
 import { registerDebugTab } from '../../ui/debugPanel';
+import { mountShowcase } from '../../ui/showcase/mount';
 import { createHGRPCharacterTab } from '../../ui/hgrpCharacterPanel';
 import { createHGRPStageTab } from '../../ui/hgrpStagePanel';
 import { hgrpStage, loadHGRPCharacter, relayoutHGRPStage, resetHGRPStage } from './characters';
@@ -31,6 +32,8 @@ export async function createHGRPStage(world: World) {
   world.addSystem(new HGRPLightRigSystem());
   // The camera keys frame this stage's characters, and a double-click picks one
   installHGRPFocus(world);
+  // The showcase overlay: the stage's characters and clips, for showing rather than tuning
+  mountShowcase(world);
 
   for (const character of hgrpStage.characters) {
     if (character.visible) {
