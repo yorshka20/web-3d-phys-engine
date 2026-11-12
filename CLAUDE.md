@@ -451,7 +451,8 @@ answer depends on knowing the history of this change, delete it.
 
 **Keep them short**: a conventional-commit subject plus at most a few sentences of prose on what
 changed and why. Root-cause analyses, benchmark numbers, design trade-offs go into this session's
-`.claude-workbook/` file, and the commit body points at it (`See workbook YYYY-MM-DD-N.`).
+kb workbook file (`_kb/workbook/YYYY-MM/YYYY-MM-DD-<topic>.md`), and the commit body points at it
+(`See workbook YYYY-MM-DD-<topic>.`).
 Body ≤ 5 lines of prose; no bullet lists, tables, code blocks, or logs.
 
 Write the workbook entry first, then write the commit against it, so the analysis exists in
@@ -468,72 +469,49 @@ Anything the user states as a convention, preference, or working agreement goes 
   architecture, conventions, comment style, commit style, testing, workflow.
 - **`docs/`** — tracked decision records (e.g. `docs/toolchain.md`). A durable technical
   conclusion belongs there, referenced from here.
+- **`_kb/CLAUDE.md`** (the knowledge base, see Workflow below) — how the project's *documents*
+  are organized: roadmap, tasks, workbook, learnings, design, TODO. Rules about documentation
+  live there, rules about code and delivery live here.
 
 **Never** record such a rule only in an agent's private memory store — it is machine-local and
 invisible to other agents.
 
 **Terminology (user convention, 2026-08-31)**: when the user says “文档” unqualified, it means
-the `.claude-learnings/` notes — the internal documentation we read ourselves. `docs/` is the
+the `_kb/learnings/` notes — the internal documentation we read ourselves. `docs/` is the
 outward-facing documentation. “写进文档 / 文档里有吗” targets learnings unless `docs/` is
 named explicitly; keep learnings current with the code, with pointers into `docs/` where a
 tracked record exists.
 
-## Workflow: Workbook & Learnings
+## Workflow: Knowledge Base (`_kb/`)
 
-`.claude-workbook/`, `.claude-learnings/`, and `/ROADMAP.md` are **gitignored, local-only
-notes** — never `git add` them. Delivery relies on tracked code and docs.
+The project's working documents — roadmap, tasks, workbook, learnings, design docs, TODO —
+live in the shared knowledge base repo `ai-knowledge-base`, in its `web-3d-phys-engine/`
+folder, which this repo sees through the **local-only symlink `_kb/`** (ignored via
+`.git/info/exclude`, never tracked). Nothing of it goes into this repo; delivery relies on
+tracked code and `docs/`. The old `.claude-workbook/`, `.claude-learnings/` and `ROADMAP.md`
+were migrated there on 2026-11-13 (file names kept; mapping in
+`_kb/workbook/2026-11/2026-11-13-kb-migration.md`).
 
-**One workbook file per session** (user convention, 2026-09-02): a session opens its own
-`YYYY-MM/YYYY-MM-DD.md` and appends to it as work lands; a second session on the same day
-opens `YYYY-MM-DD-2.md`, a third `-3`, and so on. Never append to a previous session's file
-— its content is that session's record and commit messages already point at it.
-
-### When starting work
-
-1. Read this file.
-2. Read `.claude-workbook/index.md` — past work (index first, then specific dated reports).
-3. Read `.claude-learnings/index.md` — key project details (index first, then relevant scopes).
-4. Scan `/ROADMAP.md`'s active section to pick the next step.
-
-### When work is done
-
-1. **Workbook**: record the work in this session's file `YYYY-MM/YYYY-MM-DD[-N].md` (problem,
-   root cause, solution, files, verification), add a line for the file to that month's
-   `YYYY-MM/index.md`. New month → new folder + month index + one line in the top-level
-   `index.md`.
-2. **Learnings**: write newly discovered key details into the matching scope file (or a new
-   scope), update its `index.md`.
-3. **Roadmap**: move finished items to ✅ in the scope file (with workbook date / commit hash);
-   remove them from `/ROADMAP.md`'s active section. Record newly discovered requirements in
-   `/ROADMAP.md` first, then expand in the scope file.
-
-### Rules
-
-- **Capture learnings during exploration, not only at delivery.** Any reusable fact uncovered
+- **How documents are organized is defined in `_kb/CLAUDE.md`** — read it at the start of
+  every session, after this file. It holds the task-folder layout (`tasks/NN-<code>/`), the
+  roadmap/TODO tables and their archives, the workbook naming (`YYYY-MM-DD-<topic>.md`), the
+  handoff template, the index rules, and the kb commit convention
+  (`web-3d-phys-engine: <area>: <what changed>`).
+- **If `_kb` is missing** (new machine, new worktree), run from the repo root:
+  `bash /Users/yorshka/code/ai-knowledge-base/kb-link.sh web-3d-phys-engine`.
+- **Session start**: this file → `_kb/CLAUDE.md` → `_kb/ROADMAP.md` → the focused task's
+  `plan.md` / `roadmap.md` / latest handoff → `_kb/workbook/index.md` and
+  `_kb/learnings/index.md`, opening only the relevant entries
+  (`grep -rn "keyword" _kb/workbook/`).
+- **Session end**: workbook entry (with a `Task: <code>` line), learnings deltas, roadmap/TODO
+  status, `python3 ../_shared/scripts/kb-roadmap.py .` from the kb project folder, a handoff
+  if the task is not finished, then commit the kb (agents may commit and push the kb; the
+  code repo is pushed only when the user asks).
+- **Capture learnings during exploration, not only at delivery**: any reusable fact uncovered
   while reading code — a caching/keying mechanism, a hidden coupling, a runtime ordering
-  constraint, a third-party API surface — goes into the matching `.claude-learnings/` scope
-  file in the same session, even when it was not the goal of the investigation. The learnings
-  directory is an architecture map that fills in across sessions: the next investigation must
-  be able to start from notes instead of re-reading the same code.
-- **`index.md` is a pure pointer layer, not a content summary.** One line per file:
-  `- [name](file.md) — <one-line hook>`. **No dated deltas in an index** — deltas go in the body
-  of scope/daily files. Update an index line only when a file's overall theme changes. Keep each
-  index readable in one sitting (≲ 60 lines / ≲ 4KB).
-- **Workbook**: folders by month `YYYY-MM/`; search primarily with
-  `grep -rn "keyword" .claude-workbook/`, don't read everything. Top-level index lists months
-  only; month index lists days (one short line each); full content lives only in daily files.
-- **Learnings**: split by scope, add scopes as needed. Each scope file keeps at its top a Roadmap
-  table (and a TOC once it exceeds ~600 lines / 20KB). Dated deltas, design details, and pitfalls
-  go in the body.
-- **Roadmap format** (user convention, 2026-09-03): `/ROADMAP.md` groups active items under a
-  `## <priority>` heading and gives each one a `### <status> · <title>` section — a paragraph
-  or a short bullet list saying what it is, what is missing and how to do it, then a final
-  `→` line pointing at the scope file that holds the detail. **Not a table**: status and
-  priority are one glyph each while the task text runs to a paragraph, which a table renders
-  unreadably. Priorities are 🔴 P0 / 🟡 P1 / 🟢 P2 / ⚪ P3, statuses
-  ✅ DONE / 🚧 WIP / 📋 TODO / 💭 DESIGN. `/ROADMAP.md` lists only currently-active items;
-  completed items live only in the scope files. A scope file's own roadmap table may stay
-  tabular while its rows stay short — once a row grows to a paragraph, split it the same way.
+  constraint, a third-party API surface — goes into the matching `_kb/learnings/` scope file
+  in the same session. The learnings directory is an architecture map that fills in across
+  sessions: the next investigation must start from notes instead of re-reading the same code.
 
 ## Domain Notes
 

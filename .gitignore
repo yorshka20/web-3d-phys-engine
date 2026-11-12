@@ -100,7 +100,7 @@ jspm_packages/
 *.local.md
 
 packages/web-client/assets/
-# Claude local-only working notes (see CLAUDE.md "Workflow")
+# Former local-only working notes (migrated to the _kb knowledge base, 2026-11-13; kept so stray copies never get tracked)
 .claude-workbook/
 .claude-learnings/
 ROADMAP.md
